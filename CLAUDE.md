@@ -217,9 +217,20 @@ Those two failing requests were also what made the wrong domain visible at all.
 ## The games are copied, and the copies are checked
 
 `game/`, `scenes/`, `maps/` and `avatars/` are not in this repository. `setup.sh`
-copies them out of `../game-simple-lobby`, `../game-hungario` and `../game-g2gfast` —
+copies them out of `../game-simple-lobby`, `../game-hungario`, `../game-g2gfast`,
+`../game-playground` and `../game-arena` — the list is `setup.sh`'s `GAMES` and this
+sentence is prose about it, not a second copy; `tools/check.sh` and
+`tools/package_check.sh` both READ that list rather than repeating it, which is the fix
+for the time all three had gone stale together —
 copied rather than linked because they are compiled into this build, and gitignored
 because the siblings are the record of what they should contain.
+
+**Only `scenes/*.tscn` is copied, not the scripts beside them.** A game's server-scene
+script therefore has to live in its `game/` directory; one under `scenes/` never reaches
+this build, and the failure is three steps removed from the cause — the scene fails to
+load with "referenced non-existent resource", the module refuses to load because no game
+registered itself, and the server reports "the game loaded but its module did not".
+game-arena's `arena_server.gd` was in `scenes/` for exactly one run.
 
 The failure that arrangement allows is a **stale copy**, and it is invisible from either
 side: a game is fixed in its own repository, `setup.sh` is not re-run, and this project boots
