@@ -1,0 +1,7 @@
+# A builtin game that names a client_scene. Refused, because DotClientLink refuses
+# every absolute res:// path outside dot-cloud's mount — so the client would refuse
+# it, never report loaded, and be timed out in LOADING with no other symptom.
+name: Broken
+kind: builtin
+scene: res://scenes/room_server.tscn
+client_scene: res://scenes/room_client.tscn

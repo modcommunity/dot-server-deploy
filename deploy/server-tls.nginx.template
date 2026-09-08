@@ -1,0 +1,85 @@
+# TLS in front of a dot-server, for @DOMAIN@:@PUBLIC_PORT@ -> @BACKEND@
+#
+# Rendered from deploy/server-tls.nginx.template by deploy/install-server-tls.sh.
+# Edit the template, not the installed copy.
+#
+# WHY THIS EXISTS. A page served over HTTPS may not open a `ws://` socket:
+# browsers block it as mixed content and report a generic connection failure that
+# names no cause. dot-server has no TLS of its own -- certificates and renewal are
+# deployment, not code -- so terminating here and proxying plaintext to the
+# loopback is what makes `wss://@DOMAIN@:@PUBLIC_PORT@` reachable from a page.
+#
+# WHY A PORT AND NOT A PATH. website-city's boot descriptor carries a HOST and a
+# PORT and has no notion of a WebSocket path, which is correct: a server's
+# published address is the one every other client dials too, and a desktop client
+# has no idea what an nginx location is. So one listener per server.
+#
+# AND WHY THE CERTIFICATE MATTERS MORE HERE THAN ANYWHERE. A certificate error on
+# a WebSocket handshake raises no interstitial and offers no click-through. The
+# connection fails, and the game reports that it cannot reach a server that is
+# running. There is nothing for the player to accept, because nothing asks.
+
+server {
+    listen @PUBLIC_PORT@ ssl;
+    http2 on;
+
+    ssl_certificate     @SSL_CERT@;
+    ssl_certificate_key @SSL_KEY@;
+
+    server_name @DOMAIN@;
+
+    access_log /var/log/nginx/@LOG_NAME@_access.log;
+    error_log  /var/log/nginx/@LOG_NAME@_error.log;
+
+    # THE BARE ROOT IS AN ADDRESS, AND HAS TO BE.
+    #
+    # dot-server's WebSocket listener answers on `/game` (DotTransportWebSocket
+    # .path), and what a client is HANDED is a host and a port: website-city's
+    # boot descriptor has no notion of a path, deliberately -- a server's
+    # published address is the one every other client dials too, and a desktop
+    # client has no idea what an nginx location is. That is the whole reason
+    # there is one listener per server rather than one path per server.
+    #
+    # So a client that dials `wss://host:port` with no path is not
+    # misconfigured; it is using the address it was given. Without this it gets
+    # a connection the game server closes during the handshake, which surfaces
+    # as "could not reach the server" about a server that is running -- the
+    # single most misleading failure this file exists to prevent.
+    #
+    # An exact-match location, so a client that DOES send `/game` is untouched:
+    # a prefix `location /` with a URI in `proxy_pass` would rewrite that to
+    # `/gamegame`.
+    location = / {
+        include proxy_params;
+        proxy_pass http://@BACKEND@/game;
+
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+
+        proxy_read_timeout 86400s;
+        proxy_send_timeout 86400s;
+
+        proxy_buffering off;
+        access_log off;
+    }
+
+    location / {
+        include proxy_params;
+        proxy_pass http://@BACKEND@;
+
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+
+        # A game session is a long-lived socket with long idle gaps -- a player
+        # reading the chat sends nothing for minutes. The default 60s read timeout
+        # would drop them, and the disconnect would look like the game's fault.
+        proxy_read_timeout 86400s;
+        proxy_send_timeout 86400s;
+
+        # Snapshots are already small and latency matters more than packing.
+        proxy_buffering off;
+        access_log off;
+    }
+}

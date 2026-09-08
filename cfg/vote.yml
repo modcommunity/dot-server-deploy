@@ -1,0 +1,113 @@
+# Voting for the next GAME.
+#
+#     !nominate g2gfast          a player asks for it
+#     !rtv                       enough players ask to move on
+#     !votefor 2                 the ballot opens and everybody chooses
+#     !timeleft   !nextmap       what a player types to find out
+#
+# This is dot-vote's DotVoteRules, so every setting below is documented on the
+# property of the same name and layers the way everything else in this family
+# layers: these defaults < this file < DOT_VOTE_* < --vote-*.
+#
+# ENUMS ARE WRITTEN BY NAME. `method: instant_runoff`, not `method: 2`. A config
+# file full of enum indices is one nobody can read or diff, and renumbering an enum
+# would silently change what a server does.
+#
+# TURN IT OFF with `enabled: false`. A server running one game has nothing to vote
+# about and this is not an error.
+
+enabled: true
+
+# --- Which games ----------------------------------------------------------
+#
+# Not a DotVoteRules setting: this is TMC's, because "which of the things in
+# content/ are games a player would choose" is a question about this deployment.
+#
+# The lobby is this server's home screen rather than a game. "Vote to go back to
+# the menu" is not something anybody votes for, and leaving it on the ballot means
+# a server that occasionally votes itself into having nothing to play.
+vote_exclude: [lobby]
+
+# --- When a vote happens --------------------------------------------------
+
+trigger: time_limit
+
+# How long a game runs before the players are asked again.
+#
+# A GAME can override this in its own game.yml, under `metadata: vote:
+# time_limit_sec:`, which is where it belongs: forty minutes of surf and ten
+# minutes of a lobby-sized deathmatch are not the same number and never will be.
+duration_sec: 2400
+
+# The ballot opens this long BEFORE the time is up, so the change happens on time
+# rather than starting a two-minute vote when the game is already over.
+vote_lead_sec: 180
+
+warn_at_sec: "600,300,60,30"
+
+# Nothing may open another ballot for this long after one closes. Without it a vote
+# that fails for want of a quorum is followed immediately by another one.
+vote_cooldown_sec: 60
+
+# --- Rock the vote --------------------------------------------------------
+
+rtv_enabled: true
+rtv_fraction: 0.6
+rtv_min_players: 2
+
+# No rtv in the first five minutes of a game. Otherwise the first thing that happens
+# every time the game changes is somebody asking to change it again.
+rtv_delay_sec: 300
+
+rtv_outcome: open_vote
+
+# --- Nominations ----------------------------------------------------------
+
+nominations_enabled: true
+nominations_per_player: 1
+nominations_max: 8
+
+# Ballot places kept for what players asked for. The rest are filled by `fill`
+# below, which is what stops three organised players deciding every game.
+nomination_slots: 3
+
+# --- The ballot -----------------------------------------------------------
+
+max_options: 5
+fill: least_recently_played
+
+include_extend: true
+include_keep: false
+
+vote_duration_sec: 30
+close_when_all_voted: true
+
+# --- Counting -------------------------------------------------------------
+#
+# Plurality is the default and the one everybody understands. `instant_runoff` is
+# the one worth trying on a server with five games and no clear favourite: it
+# transfers a ballot whose first choice is eliminated instead of throwing it away.
+method: plurality
+tie_break: nomination_order
+
+# Fraction of the players in the game who must vote for the result to stand. 0 turns
+# it off; a server where most people ignore the vote wants it off, because otherwise
+# nothing ever passes.
+quorum: 0.0
+on_no_quorum: winner_anyway
+
+# --- History --------------------------------------------------------------
+
+# Games excluded after being played. Deliberately small: there are five games here,
+# and a cooldown of five would exclude all of them. dot-vote clamps it against the
+# pool anyway, and says so in the log when it does.
+cooldown: 1
+cooldown_mode: plays
+
+# --- Applying -------------------------------------------------------------
+#
+# A game change puts every client through signon and, for a delivered game, a
+# download. `end_of_time` means the vote finishes early and the change still happens
+# exactly when the game was going to end.
+apply: end_of_time
+apply_delay_sec: 5

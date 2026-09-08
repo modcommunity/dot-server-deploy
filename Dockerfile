@@ -1,0 +1,129 @@
+# A TMC server in a container.
+#
+#   docker compose up -d          from this directory
+#
+# BUILD CONTEXT IS THE PARENT DIRECTORY, not this one. Every dot-* addon is its own
+# repository and there is no way to clone the tree at once, so the addons this project
+# needs are siblings rather than subdirectories. docker-compose.yml sets
+# `context: ..` for that reason; building by hand needs the same:
+#
+#   docker build -f dot-server-setup-test/Dockerfile -t tmc-server ..
+#
+# If you have vendored the addons into ./addons/ instead -- which is what a release
+# tarball looks like -- the sibling copy below finds nothing and setup.sh uses what is
+# already there.
+
+# --- Stage 1: the runtime ---------------------------------------------------
+#
+# Downloaded and CHECKSUMMED here rather than by setup.sh. A script that fetches a
+# binary has to verify a signature, and that is a different program with different
+# risks -- but an image build is exactly where that work belongs, once, pinned.
+
+FROM debian:bookworm-slim AS runtime
+
+ARG GODOT_VERSION=4.7.2-stable
+ARG GODOT_SHA256=cadd3204e728a35d3f13adb7fd0d7902636b79f6b95c40c265eb73b6c35329e4
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates curl unzip \
+ && rm -rf /var/lib/apt/lists/*
+
+RUN curl -fsSL -o /tmp/godot.zip \
+      "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}/Godot_v${GODOT_VERSION}_linux.x86_64.zip" \
+ && echo "${GODOT_SHA256}  /tmp/godot.zip" | sha256sum -c - \
+ && unzip -q /tmp/godot.zip -d /tmp/godot \
+ && install -m 0755 "/tmp/godot/Godot_v${GODOT_VERSION}_linux.x86_64" /usr/local/bin/godot \
+ && rm -rf /tmp/godot /tmp/godot.zip \
+ && godot --version
+
+# --- Stage 2: the project ---------------------------------------------------
+#
+# setup.sh runs at BUILD time, so the image ships an imported project. Godot's import
+# pass registers every class_name global; without it the identifier does not resolve,
+# the scene fails to load, and the process HANGS rather than exiting -- which in a
+# container is a healthcheck that never fails and a server that never starts.
+
+FROM runtime AS build
+
+WORKDIR /src
+COPY . /src
+
+WORKDIR /src/dot-server-setup-test
+# --vendor COPIES the addons rather than linking them. Every dot-* addon is a sibling
+# repository, and the final stage copies only this project -- so a symlink out of it
+# dangles, every dot-* class_name is unresolved at once, and the server dies at
+# startup with what reads as a broken project rather than a dangling link. Found by
+# running the container.
+RUN ./setup.sh --godot /usr/local/bin/godot --vendor
+
+# The configuration generated during the build is thrown away. cfg/ is a volume at
+# run time and the RCON password printed into a build log is a password in a build
+# log -- the entrypoint generates one on first run instead, into the mounted volume,
+# where it survives a rebuild.
+RUN rm -rf cfg data
+
+# Proves the image can actually serve before it is tagged. A build that succeeds and
+# an image that cannot boot are the same thing from CI's point of view, and this is
+# the cheapest place to tell them apart.
+RUN mkdir -p cfg data && ./setup.sh --godot /usr/local/bin/godot --no-import --check \
+ && rm -rf cfg data
+
+# --- Stage 3: what actually runs --------------------------------------------
+
+FROM debian:bookworm-slim
+
+# libfontconfig1 is not optional even headless. Godot's headless display driver draws
+# nothing, and the binary still links fontconfig at load time — so without it the
+# process dies with "libfontconfig.so.1: cannot open shared object file" before a
+# single line of GDScript runs. Found by running the container; the build stage did
+# not catch it because that stage has the runtime image's own dependencies.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates libfontconfig1 \
+ && rm -rf /var/lib/apt/lists/*
+
+COPY --from=runtime /usr/local/bin/godot /usr/local/bin/godot
+COPY --from=build /src/dot-server-setup-test /srv/tmc
+
+# A writable home for whatever uid ends up running this.
+#
+# The container has no passwd entry for the uid the compose file supplies, so `$HOME`
+# resolves to `/` — and Godot then tries to create `/.local/share/godot/app_userdata`
+# for `user://`, fails, and crashes with a signal 11 several errors later. Fontconfig
+# fails the same way looking for a cache directory. Mode 0777 rather than an owner,
+# because the uid is not known until the container starts: this is the same shape as
+# supporting an arbitrary uid anywhere else.
+#
+# `user://` is only ever logs here — everything the server means to keep goes to the
+# data directory, which is a mount.
+ENV HOME=/home/tmc \
+    XDG_CACHE_HOME=/home/tmc/.cache \
+    XDG_DATA_HOME=/home/tmc/.local/share
+
+RUN mkdir -p /home/tmc/.cache /home/tmc/.local/share \
+ && chmod -R 0777 /home/tmc
+
+WORKDIR /srv/tmc
+
+# Not root, and no user baked in either. `cfg/` and `data/` are bind mounts owned by
+# whoever runs this on the host, and a uid chosen here will not be theirs — the
+# server then cannot write its own generated config, its admin file or its audit log,
+# and says so with a permission error that reads as a broken image.
+#
+# docker-compose.yml sets `user:` from the host's own uid instead. Running without
+# one at all would be running as root, which for a process that accepts connections
+# from strangers is the wrong default, so the compose file is where it is decided and
+# `USER 1000:1000` here is the fallback for a plain `docker run`.
+USER 1000:1000
+
+# The game port, and RCON on the next one up. Both are what cfg/net.yml says by
+# default; change them there and change the mapping in docker-compose.yml to match.
+EXPOSE 6064/tcp 6065/tcp
+
+# A container's PID 1 should be the server, so ctrl-c and `docker stop` reach it
+# rather than a wrapper that has to forward them. ./server execs Godot for the same
+# reason.
+ENTRYPOINT ["./docker-entrypoint.sh"]
+CMD ["run"]
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD ["/srv/tmc/docker-healthcheck.sh"]

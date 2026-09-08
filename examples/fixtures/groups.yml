@@ -1,0 +1,7 @@
+groups:
+  owner:
+    is_root: true
+    immunity: 100
+  admin:
+    immunity: 80
+    permissions: [kick, ban, mute]

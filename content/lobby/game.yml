@@ -1,0 +1,28 @@
+# The lobby. What a player lands in, and what the server runs when it is not
+# running anything else.
+#
+# kind: builtin  -- the code is compiled into this build.
+#
+# It is builtin rather than a pack on purpose, and the reason is measured rather
+# than assumed: a mounted dot-cloud pack's `class_name` globals are NOT registered
+# in the host, so every cross-file type reference inside a pack fails to compile.
+# The pack mounts, its scenes load, and every script in it is dead. A game meant to
+# be delivered has to reference its own files by path -- preload("res://x.gd") and
+# extends "res://x.gd" both work -- and the lobby is written in the family's
+# ordinary style because it is the one game that is always here.
+#
+# Note that `client_scene` is deliberately absent. DotClientLink refuses every
+# absolute res:// path outside dot-cloud's mount, so naming one here would have
+# every client refuse it, never report loaded, and be timed out in LOADING with no
+# other symptom.
+
+name: The Room
+content_id: a_room       # which built-in client shows this; see client/shell.gd
+version: 0.1.0
+kind: builtin
+default: true
+
+scene: res://scenes/room_server.tscn
+module: res://game/room_module.gd
+
+max_players: 64

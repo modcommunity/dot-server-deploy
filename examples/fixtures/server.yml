@@ -1,0 +1,12 @@
+# A fixture, not a template. examples/selftest.gd asserts on every value here, so
+# changing one changes a check — which is the point: these are the exact keys an
+# operator writes, checked against the exact settings they are supposed to reach.
+sv_name: "Fixture Server"
+sv_maxplayers: 12
+sv_tickrate: 30
+sv_game: "lobby"
+sv_tags: [fixture, test]
+
+# Not a setting this layer knows. Handed to the console, because a module registers
+# cvars that cannot be known at read time.
+room_pellets: 400

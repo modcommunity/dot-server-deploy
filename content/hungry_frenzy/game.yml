@@ -1,0 +1,14 @@
+# Hungry: Frenzy. The same game, faster and denser.
+#
+#     changelevel hungry_frenzy
+#
+# Shares a module with hungry_classic — see that directory's game.yml.
+
+name: "Hungario: Frenzy"
+content_id: hungry       # shared with hungry_classic: one client, two modes
+version: 0.1.0
+kind: builtin
+max_players: 32
+
+scene: res://game/modes/frenzy.tscn
+module: res://game/hungry_module.gd

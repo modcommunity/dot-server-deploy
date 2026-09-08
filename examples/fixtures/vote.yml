@@ -1,0 +1,21 @@
+# A fixture for examples/selftest.tscn: one of every kind of setting vote.yml can
+# carry, so the translation is checked rather than assumed.
+enabled: true
+vote_exclude: [lobby, playground]
+
+trigger: rtv_only
+duration_sec: 900
+vote_lead_sec: 60
+
+method: instant_runoff
+tie_break: LEAST-RECENTLY-PLAYED
+fill: weighted
+apply: immediate
+
+warn_at_sec: "120,30"
+rtv_fraction: 0.75
+max_options: 4
+nomination_slots: 2
+
+# A key nothing recognises. Reported, never fatal — DotConfig's rule.
+vote_nonsense: 12

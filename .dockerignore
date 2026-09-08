@@ -1,0 +1,9 @@
+# The build context is the parent directory, so these patterns are relative to it.
+**/.git
+**/.godot
+**/data
+**/build
+**/web/build
+**/*.pck
+**/export_presets.cfg
+**/node_modules

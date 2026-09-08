@@ -1,0 +1,288 @@
+<!doctype html>
+<!--
+  A page that hosts the TMC client shell and hands it a server address.
+
+  One export serves every server: the address comes from ?server=wss://host:port, so a
+  link is the whole of "click here and play". The shell knows nothing about any
+  particular game -- the server decides what it loads.
+
+  Deliberately dependency-free and deliberately small. Everything here is either required
+  by the export or is one of the things a browser gets wrong by default:
+
+  - The canvas must be sized in CSS *and* have its backing store sized in device pixels,
+    or the game is blurry on every phone and every scaled display.
+  - `touch-action: none` on the canvas, or a drag scrolls the page instead of steering the
+    game, and there is no way to play at all on a phone.
+  - The loading state has to be visible before the WASM arrives: a 20 MB download on a
+    phone is several seconds of blank white, which people read as a broken link.
+
+  Replace SERVER_DEFAULT and drop this beside the exported index.js / index.wasm /
+  index.pck. `./server export-web` writes those; this file is copied beside them.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>TMC</title>
+<style>
+  /*
+   * THE BOOT SCREEN IS THE FIRST FRAME OF THE GAME, not a placeholder in front of it.
+   * Forty megabytes of engine arrive before Godot draws anything, so this page is on
+   * screen for several seconds on a good connection and much longer on a phone -- long
+   * enough that a grey box with the word "Loading" is most of a stranger's impression.
+   * It is painted to match the shell's own sky (see `client/menu_backdrop.gd`), so the
+   * handover from page to engine is a starfield that stays put rather than a cut.
+   *
+   * Every part of it is CSS. An image would be another request in front of the download
+   * this screen exists to report on.
+   */
+  :root { color-scheme: dark; --accent: #5cabff; --sky: #08090f; }
+  html, body {
+    margin: 0; padding: 0; height: 100%; overflow: hidden;
+    background: var(--sky); color: #e8eaee;
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  #canvas {
+    display: block; width: 100%; height: 100%;
+    /* Without this a drag scrolls the page and the game is unplayable on a phone. */
+    touch-action: none;
+    outline: none;
+  }
+  #status {
+    position: fixed; inset: 0; display: grid; place-items: center;
+    text-align: center; padding: 24px;
+    background:
+      radial-gradient(120% 80% at 50% 0%, rgba(74, 62, 156, .30), transparent 62%),
+      radial-gradient(90% 60% at 50% 100%, rgba(30, 92, 178, .16), transparent 60%),
+      var(--sky);
+  }
+  /* The stars: dots painted by a background, which is a starfield for no requests and no
+     script. They breathe rather than blink -- a boot screen that flashes reads as broken. */
+  #status::before {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background-image:
+      radial-gradient(1.6px 1.6px at 12% 22%, rgba(255,255,255,.90), transparent),
+      radial-gradient(1.2px 1.2px at 27% 68%, rgba(200,220,255,.70), transparent),
+      radial-gradient(1.8px 1.8px at 41% 14%, rgba(255,255,255,.85), transparent),
+      radial-gradient(1.1px 1.1px at 55% 82%, rgba(255,240,220,.65), transparent),
+      radial-gradient(1.5px 1.5px at 68% 34%, rgba(255,255,255,.80), transparent),
+      radial-gradient(1.0px 1.0px at 76% 58%, rgba(200,220,255,.55), transparent),
+      radial-gradient(2.0px 2.0px at 88% 18%, rgba(255,255,255,.95), transparent),
+      radial-gradient(1.3px 1.3px at 92% 74%, rgba(220,235,255,.60), transparent),
+      radial-gradient(1.1px 1.1px at 8% 86%, rgba(255,255,255,.55), transparent),
+      radial-gradient(1.4px 1.4px at 34% 44%, rgba(255,255,255,.45), transparent),
+      radial-gradient(1.2px 1.2px at 62% 6%, rgba(255,255,255,.50), transparent),
+      radial-gradient(1.6px 1.6px at 18% 52%, rgba(255,255,255,.40), transparent);
+    animation: breathe 7s ease-in-out infinite;
+  }
+  @keyframes breathe { 0%, 100% { opacity: .72 } 50% { opacity: 1 } }
+  /* Above the stars. Without this the ::before layer paints over the text. */
+  #status > div { position: relative; z-index: 1; }
+  #status.hidden { display: none; }
+  #mark {
+    font-size: 44px; font-weight: 600; letter-spacing: .18em;
+    /* Letter-spacing adds a trailing gap, which is what pulls a centred wordmark off
+       centre by half a space. The indent puts it back. */
+    text-indent: .18em;
+    color: #eef2ff; text-shadow: 0 0 26px rgba(92,171,255,.55);
+  }
+  #message { color: #aab3c5; margin-top: 2px; }
+  #bar {
+    width: min(320px, 70vw); height: 5px; margin: 18px auto 0;
+    background: rgba(255,255,255,.06); border-radius: 999px; overflow: hidden;
+    box-shadow: inset 0 0 0 1px rgba(120,170,255,.18);
+  }
+  #bar > div {
+    height: 100%; width: 0; border-radius: 999px;
+    background: linear-gradient(90deg, #3f7fe0, var(--accent));
+    box-shadow: 0 0 12px rgba(92,171,255,.75);
+    transition: width .2s;
+  }
+  /* No Content-Length means no percentage, and a bar frozen at zero looks like a hang.
+     A sweep says "still going" without claiming to know how far. */
+  #bar.sweep > div {
+    width: 38%; transition: none;
+    animation: sweep 1.15s ease-in-out infinite;
+  }
+  @keyframes sweep {
+    0% { margin-left: -40% } 100% { margin-left: 100% }
+  }
+  .dim { color: #8b919b; font-size: 13px; margin-top: 12px; }
+  .error { color: #ff6b63; max-width: 40ch; }
+</style>
+</head>
+<body>
+<canvas id="canvas" tabindex="0">Your browser does not support the canvas element.</canvas>
+
+<div id="status">
+  <div>
+    <div id="mark">TMC</div>
+    <div id="message">Loading&#8230;</div>
+    <div id="bar"><div></div></div>
+    <div class="dim" id="detail"></div>
+  </div>
+</div>
+
+<script src="index.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  // Where to connect when the URL does not say. Replace with your own.
+  var SERVER_DEFAULT = "wss://localhost:6064";
+
+  /*
+   * THE IDENTITY HANDOFF FROM THE SITE.
+   *
+   * The site's player knows who is playing; this document does not, and cannot
+   * be told through the URL -- a single-use credential in a query string ends up
+   * in history, in the referrer of every request this page makes, and in any log
+   * that records frame sources. So the loader posts it to us instead, and the
+   * only thing we do with it is park it on a global the game reads
+   * (`DotAuthWebHandoff`).
+   *
+   * Two rules, both small and both load-bearing:
+   *
+   *   * **Only the parent may send it.** `event.source !== window.parent` is
+   *     rejected, so another frame on the page cannot inject a code of its own
+   *     choosing. It could only inject one it already holds -- so this buys
+   *     little on its own, and costs one comparison.
+   *   * **We announce readiness rather than waiting to be found.** The engine's
+   *     WASM takes seconds to arrive, and the loader has no way to know when
+   *     this script ran. It posts on frame load AND on this ping, so whichever
+   *     happens second still delivers.
+   */
+  var framed = false;
+  try {
+    framed = !!window.parent && window.parent !== window;
+  } catch (e) {
+    /* A parent we may not even compare against. Treat it as none. */
+  }
+
+  /*
+   * ALWAYS AN OBJECT, NEVER null, and it carries `pending` until the real block
+   * lands.
+   *
+   * The game reads this through Godot's `get_interface`, which resolves
+   * `window[name]` and wraps OBJECTS -- it cannot read a null, a boolean or a
+   * string, and it cannot ask us a question, because `JavaScriptBridge.eval` is
+   * a JavaScript eval and this page's CSP grants `wasm-unsafe-eval` and not
+   * `unsafe-eval`. So the two states a game has to tell apart -- "not yet" and
+   * "there is nobody to send one" -- are published as data here rather than
+   * derived over there: `{pending:true}` means keep waiting, `{}` means give up
+   * and play as a guest.
+   */
+  window.__TMC_AUTH__ = framed ? { pending: true } : {};
+
+  window.addEventListener("message", function (event) {
+    if (event.source !== window.parent) return;
+
+    var data = event.data;
+    if (!data || data.type !== "tmc.auth") return;
+
+    window.__TMC_AUTH__ = data.auth || {};
+  });
+
+  if (framed) {
+    try {
+      window.parent.postMessage({ type: "tmc.auth.ready" }, "*");
+    } catch (e) {
+      /* A parent that will not take a message. Play as a guest. */
+      window.__TMC_AUTH__ = {};
+    }
+  }
+
+  var canvas  = document.getElementById("canvas");
+  var status  = document.getElementById("status");
+  var message = document.getElementById("message");
+  var detail  = document.getElementById("detail");
+  var bar     = document.getElementById("bar");
+  var fill    = document.querySelector("#bar > div");
+
+  // The server comes from the query string, so one export serves every server.
+  //
+  // Validated rather than passed through: this string ends up as a connection target,
+  // and accepting anything from a URL somebody else can craft is how a link to your game
+  // becomes a link to theirs
+  // -- and the shell is a real client, so "theirs" would be a server collecting names
+  // and chat from people who thought they were on yours.
+  function serverFromQuery() {
+    var raw = new URLSearchParams(location.search).get("server");
+    if (!raw) return SERVER_DEFAULT;
+
+    try {
+      var url = new URL(raw);
+      if (url.protocol !== "wss:" && url.protocol !== "ws:") return SERVER_DEFAULT;
+      return url.toString();
+    } catch (e) {
+      return SERVER_DEFAULT;
+    }
+  }
+
+  var server = serverFromQuery();
+
+  // A page served over HTTPS may not open an insecure WebSocket. The browser blocks it as
+  // mixed content and reports a generic connection failure, so say it here instead.
+  if (location.protocol === "https:" && server.indexOf("ws://") === 0) {
+    message.textContent = "This server cannot be reached from a secure page.";
+    detail.className = "error";
+    detail.textContent =
+      "The page is on HTTPS and the server address is ws://, which browsers block. " +
+      "The server needs a certificate and a wss:// address.";
+    return;
+  }
+
+  // The canvas needs its backing store in device pixels, not CSS pixels, or the game is
+  // blurry on every phone and every scaled display.
+  function resize() {
+    var ratio = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width  = Math.floor(canvas.clientWidth  * ratio);
+    canvas.height = Math.floor(canvas.clientHeight * ratio);
+  }
+  window.addEventListener("resize", resize);
+  resize();
+
+  var engine = new Engine({
+    canvas: canvas,
+    // The base name of the export, and NOT optional. Everything the engine fetches
+    // after index.js is derived from it -- index.wasm, index.pck, the worklets -- so
+    // without it the first request is for "/.pck", which 404s, and the loading overlay
+    // sits there for ever with no error the page can see. It has to match the export
+    // path's basename; `./server export-web` writes index.html, so it is "index".
+    executable: "index",
+    canvasResizePolicy: 0,          // this page owns the size; see resize() above
+    // The launcher reads the query string first in a browser, so this pair is a
+    // belt-and-braces for a host that serves the export without this page.
+    args: ["--", "--connect", server],
+    focusCanvas: true,
+  });
+
+  engine.startGame({
+    onProgress: function (loaded, total) {
+      if (total > 0) {
+        bar.classList.remove("sweep");
+        fill.style.width = ((loaded / total) * 100).toFixed(1) + "%";
+        detail.textContent =
+          (loaded / 1048576).toFixed(1) + " of " + (total / 1048576).toFixed(1) + " MB";
+      } else {
+        // Not every server sends a Content-Length, and without one there is no
+        // percentage to show. The bar sweeps instead of sitting at zero, which is the
+        // difference between "working" and "hung" to somebody watching it.
+        bar.classList.add("sweep");
+        // textContent, so an entity would arrive on screen as its own source. It was
+        // "Downloading&#8230;" here, in full, for exactly that reason.
+        detail.textContent = "Downloading\u2026";
+      }
+    },
+  }).then(function () {
+    status.classList.add("hidden");
+    canvas.focus();
+  }).catch(function (error) {
+    message.textContent = "This did not load.";
+    detail.className = "error";
+    detail.textContent = String(error);
+  });
+})();
+</script>
+</body>
+</html>

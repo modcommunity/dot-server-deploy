@@ -1,0 +1,46 @@
+# playground. A physics sandbox in the shape the genre grew up on: hold Q for a menu of
+# props, NPCs and weapons, click one and it is yours; a physics gun that holds and
+# freezes, a gravity gun that punts. Plus a jump course on pg_lobby's bonus track,
+# because a jump course is not a movement genre and it is what says the timer is not a
+# surf-and-bhop thing.
+#
+#     changelevel playground
+#
+# kind: builtin -- the code is compiled into this build, for the reason
+# content/lobby/game.yml sets out at length: a mounted dot-cloud pack's `class_name`
+# globals are not registered in the host, so every cross-file type reference inside a
+# pack fails to compile. game-playground is written in the family's ordinary style and
+# would be dead in a pack.
+#
+# NOTE that its PROPS are a different question and are already answered the other way:
+# every entity and every weapon in the catalogue is named by PATH
+# (`meta.script: res://game/entities/npc_wanderer.gd`), which is exactly the shape a
+# delivered pack can use. The game shell is builtin; the things you spawn need not be.
+#
+# THE SCENE IS ALMOST EMPTY, ON PURPOSE. res://scenes/pg_server.tscn is a Playground
+# under a plain Node, and Playground registers itself under `playground` in _ready() --
+# which is what playground_module.gd looks it up by. The operator's surface is the cvars
+# below and the layered PlaygroundConfig, like every DotConfig in the family.
+#
+# ONE GAME ID, THREE MAPS. pg_lobby, pg_surf_intro and pg_bhop_intro are a rotation
+# rather than three games: they are the same game on different geometry, and switching
+# between them is dot-map's business rather than dot-server's. Changing a MAP replaces
+# the world and nothing else; changing a GAME replaces the module, the netcode and every
+# client's scene and puts everybody through signon.
+
+name: Playground
+content_id: playground
+version: 0.1.0
+kind: builtin
+max_players: 32
+
+scene: res://scenes/pg_server.tscn
+module: res://game/playground_module.gd
+
+# Set when this game is loaded, and only while it is loaded.
+#
+# A sandbox is not a records server, so the map runs until somebody votes it out rather
+# than on a timer: people building a thing do not want the map changed under them at
+# thirty minutes. 0 disables the limit.
+cvars:
+  pg_map_seconds: "0"

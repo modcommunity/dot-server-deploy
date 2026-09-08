@@ -1,0 +1,22 @@
+# Hungry: Classic. An agar.io-shaped free-for-all — eat food, eat players, do not
+# be eaten.
+#
+# The first non-lobby game on this server, and the one an operator switches to:
+#
+#     changelevel hungry_classic
+#
+# TWO DIRECTORIES, ONE MODULE. Hungry is one game with two modes, and dot-server's
+# unit of "what is running" is a game id — so each mode is its own directory here
+# and both name the same module. TmcHost compares module PATHS rather than game ids
+# when the game changes, so switching between these two rebinds the module in place
+# instead of unloading and reloading it, which would drop every connected player for
+# no reason.
+
+name: "Hungario: Classic"
+content_id: hungry       # shared with hungry_frenzy: one client, two modes
+version: 0.1.0
+kind: builtin
+max_players: 32
+
+scene: res://game/modes/classic.tscn
+module: res://game/hungry_module.gd

@@ -1,0 +1,3 @@
+# General server settings
+sv_name: "TMC Test Server"
+sv_maxplayers: 64

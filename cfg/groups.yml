@@ -1,0 +1,17 @@
+groups:
+  owner:
+    is_root: true
+  admin:
+    permissions:
+      - "kick"
+      - "ban"
+      - "mute"
+      - "warn"
+      - "announce"
+      - "change"
+  moderator:
+    permissions:
+      - "kick"
+      - "mute"
+      - "warn"
+      - "announce"

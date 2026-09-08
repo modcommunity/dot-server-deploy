@@ -1,0 +1,125 @@
+<!doctype html>
+<!--
+  A stand-in for website-city's in-browser player, so the loader can be checked
+  without the site running.
+
+  It reproduces that player's contract exactly and nothing else: a #tmc-game-canvas
+  to mount into, a GameBootDescriptorT on window.__TMC_GAME__ assigned BEFORE the
+  script is appended, and a Close button that calls window.__TMC_GAME_API__.destroy()
+  the way the real player does on unmount.
+
+  The descriptor's shape is src/lib/game/loader.ts's. Keep them in step: a harness
+  that drifts is a harness that passes while the real thing fails.
+
+    ./server export-web --base http://127.0.0.1:8099/
+    (cd web/build && python3 -m http.server 8099)
+    open http://127.0.0.1:8099/loader-test.html?host=127.0.0.1&port=6064
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TMC loader harness</title>
+<style>
+  :root { color-scheme: dark; }
+  html, body { margin:0; height:100%; background:#0e1013; color:#e8eaee;
+               font:14px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif; }
+  #bar { display:flex; gap:12px; align-items:center; padding:8px 12px;
+         border-bottom:1px solid #23262c; }
+  #bar code { color:#8b919b; }
+  #tmc-game-canvas { position:relative; width:100%; height:calc(100% - 41px); }
+  button { background:#23262c; color:#e8eaee; border:1px solid #34383f;
+           border-radius:4px; padding:4px 10px; cursor:pointer; }
+</style>
+</head>
+<body>
+
+<div id="bar">
+  <strong>loader harness</strong>
+  <code id="target"></code>
+  <button id="close">Close (destroy)</button>
+</div>
+
+<div id="tmc-game-canvas"></div>
+
+<script>
+(function () {
+  "use strict";
+
+  var q = new URLSearchParams(location.search);
+  var host = q.get("host") || "127.0.0.1";
+  var port = Number(q.get("port") || 6064);
+
+  // src/lib/game/loader.ts's GameBootDescriptorT. `server: null` is the play-centre
+  // case — an app launched with no server to dial — and is worth being able to try,
+  // because the shell has to show its own address box rather than fail.
+  var boot = {
+    version: 1,
+    app: { id: 1, name: "TMC (Godot)", appId: null, gameType: null },
+    server: q.get("noserver") ? null : {
+      id: 1,
+      name: "TMC Test Server",
+      host: host,
+      ip4: host,
+      ip6: null,
+      port: port,
+      portQuery: port,
+      hostName: host,
+      map: null,
+      gameMode: null,
+      connectUrl: null,
+    },
+    party: null,
+    locale: "en",
+    options: {},
+    /*
+     * `boot.game` — where the site says this app's published build lives.
+     *
+     * Null here by default, which makes the loader fall back to the stamped
+     * @ENGINE_BASE@ and exercises the standalone path this harness is served from.
+     * Pass ?game=<url> to try the published path instead — but note the loader
+     * REFUSES a build on the page's own origin, so a useful test needs a second
+     * host (a different port is not enough; the origin comparison includes it, so
+     * 127.0.0.1:8100 works while 127.0.0.1:8099 correctly does not).
+     */
+    game: (function () {
+      var u = q.get("game");
+      if (!u) return null;
+
+      var parsed;
+      try { parsed = new URL(u, location.href); } catch (e) { return null; }
+
+      var dir = parsed.href.slice(0, parsed.href.lastIndexOf("/"));
+
+      return {
+        url: parsed.href,
+        origin: parsed.origin,
+        base: dir,
+        build: q.get("build") || "harness",
+      };
+    })(),
+  };
+
+  document.getElementById("target").textContent =
+    boot.server ? host + ":" + port : "(no server — app launch)";
+
+  // Assigned BEFORE the script is appended: a loader is entitled to read it
+  // synchronously on evaluation, and the real player does the same.
+  window.__TMC_GAME__ = boot;
+
+  var script = document.createElement("script");
+  script.src = "tmc-loader.js";
+  script.async = true;
+  document.body.appendChild(script);
+
+  document.getElementById("close").addEventListener("click", function () {
+    try { window.__TMC_GAME_API__ && window.__TMC_GAME_API__.destroy(); }
+    catch (e) { console.error("destroy() threw:", e); }
+    script.remove();
+    delete window.__TMC_GAME__;
+    delete window.__TMC_GAME_API__;
+  });
+})();
+</script>
+</body>
+</html>

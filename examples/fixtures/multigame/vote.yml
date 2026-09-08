@@ -1,0 +1,30 @@
+# A fixture for examples/multigame.tscn, which votes a real game change.
+#
+# Everything is short or off: the suite drives the clock itself and a real
+# thirty-second ballot would make one check take thirty seconds.
+enabled: true
+vote_exclude: [lobby]
+
+trigger: time_limit
+duration_sec: 60
+vote_lead_sec: 30
+vote_duration_sec: 5
+vote_cooldown_sec: 0
+
+rtv_enabled: true
+rtv_fraction: 0.6
+rtv_min_players: 1
+rtv_delay_sec: 0
+
+nomination_slots: 2
+max_options: 4
+include_extend: false
+cooldown: 0
+# Nobody is connected in this suite, and a ballot refused for that reason is
+# indistinguishable from a vote system that does not work.
+min_players_to_vote: 0
+
+# Applied the moment the ballot closes. `end_of_time` is the shipped default and is
+# what cfg/vote.yml uses; here the point is the change, not the waiting.
+apply: immediate
+apply_delay_sec: 0

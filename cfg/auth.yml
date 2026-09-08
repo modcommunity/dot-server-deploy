@@ -1,0 +1,8 @@
+backend:
+  type: "rest"
+  url: "http://localhost:8000"
+  timeout: 30
+  retries: 3
+  verify:
+    type: "jwt"
+    secret: "your_jwt_secret"

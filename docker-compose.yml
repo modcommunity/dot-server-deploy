@@ -1,0 +1,85 @@
+# A TMC server, in one command.
+#
+#   docker compose up -d        start it
+#   docker compose logs -f      watch it
+#   docker compose down         stop it
+#
+# The build context is the PARENT directory, not this one. Every dot-* addon is its own
+# repository and there is no way to clone the tree at once, so the addons this project
+# needs are siblings rather than subdirectories. Dockerfile explains it at more length.
+
+services:
+  server:
+    build:
+      context: ..
+      dockerfile: dot-server-setup-test/Dockerfile
+    image: tmc-server:latest
+    container_name: tmc-server
+    restart: unless-stopped
+
+    # Host networking is NOT used, deliberately. It works and it makes the container
+    # able to reach everything on the host's network, which for a process that accepts
+    # connections from strangers is the wrong default. Publish the two ports instead.
+    ports:
+      # The game. WebSocket, because a browser has no UDP and Godot's web template does
+      # not ship ENetMultiplayerPeer at all -- so a server that expects browser clients
+      # listens on WebSocket, and then all of its clients do.
+      - "6064:6064/tcp"
+      # RCON. Bound to loopback on the host: it is a remote console, and the password is
+      # the only thing between it and whoever finds the port. Reach it through an SSH
+      # tunnel, or put an address allow-list in cfg/rcon.yml and widen this deliberately.
+      - "127.0.0.1:6065:6065/tcp"
+
+    # The host's own uid, so the bind mounts below are writable by the server and the
+    # files it creates are editable by you. A uid baked into the image cannot be
+    # yours, and the symptom is the server refusing to write its own generated config
+    # with a permission error that reads as a broken image.
+    #
+    #   UID=$(id -u) GID=$(id -g) docker compose up -d
+    #
+    # 1000:1000 is the default because it is the first user on almost every Linux
+    # install. It is deliberately not root.
+    user: "${UID:-1000}:${GID:-1000}"
+
+    volumes:
+      # Read-write: the first run writes cfg/ into it, including an RCON password
+      # generated once. That is setup.sh's "never overwrite a config that exists" rule
+      # reached from a container's direction — an image rebuild must not throw away
+      # the settings an operator has been using.
+      - ./cfg:/srv/tmc/cfg
+      # Read-only. The server never writes to its content, and saying so here is what
+      # stops a compromised game from rewriting itself.
+      - ./content:/srv/tmc/content:ro
+      # Everything the server writes: admins, bans, the audit log, the generated config.
+      - ./data:/srv/tmc/data
+
+    environment:
+      # Only what a deployment genuinely decides from outside. There is no
+      # TMC_RCON_PASSWORD and there will not be: an environment variable is readable by
+      # every other process in the container and appears in `docker inspect`, which is
+      # exactly why DotConfig refuses secrets from the environment.
+      TMC_PORT: "6064"
+      # TMC_NAME: "My server"
+      # TMC_MAX_PLAYERS: "64"
+      # TMC_GAME: "lobby"
+
+    # A game server should not be able to write anywhere but its data directory, and
+    # should not be able to gain privileges it did not start with.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+    # A simulation loop plus one socket. The limits are here so a runaway is a container
+    # that gets killed rather than a box that stops responding -- raise them for a busy
+    # server rather than removing them.
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

@@ -1,0 +1,103 @@
+# @GAME_DOMAIN@ -- THE GAME CONTENT ORIGIN.
+#
+# Rendered from deploy/game-origin.nginx.template by deploy/install-game-origin.sh.
+# Edit the template, not the installed copy.
+#
+# ------------------------------------------------- Why this is its own domain
+#
+# Delivered game content EXECUTES: a dot-cloud pack can carry scripts, which is
+# why dot-cloud signs manifests. Script running in the SITE's origin can read
+# every non-HttpOnly cookie and localStorage key, call the site's API with the
+# viewer's session and read the responses, scrape the DOM of a signed-in page,
+# and register a service worker that outlives the tab and intercepts later
+# requests. The same-origin policy is the only thing that stops any of it, and it
+# keys on scheme + host + port -- so a PATH on the site's domain would have been
+# no boundary whatsoever. A path is not an origin.
+#
+# It is a separate registrable domain rather than a subdomain of the site, and
+# that part is not fussiness:
+#
+#   - a subdomain can SET a `Domain=.example.net` cookie the site then receives.
+#     Auth.js session cookies carry the `__Secure-` prefix, which requires HTTPS
+#     but does NOT forbid `Domain=`, so a hostile sibling can shadow one and toss
+#     the viewer into somebody else's session;
+#   - SameSite is same-SITE, so a sibling's requests to the API carry Lax and
+#     Strict cookies as though they were first-party;
+#   - Safe Browsing and mail blocklists act on the registrable domain, so one bad
+#     upload takes the main site down with it.
+#
+# Which is why user content lives on googleusercontent.com and
+# githubusercontent.com rather than on a subdomain of the product.
+#
+# NOTHING HERE MAY EVER SET A COOKIE. It serves static files; that is all it is
+# for, and the moment it needs a session it has stopped being a sandbox.
+
+server {
+    listen 443 ssl;
+    http2 on;
+
+    ssl_certificate     @SSL_CERT@;
+    ssl_certificate_key @SSL_KEY@;
+
+    server_name @GAME_DOMAIN@ www.@GAME_DOMAIN@;
+
+    access_log /var/log/nginx/@GAME_DOMAIN@_access.log;
+    error_log  /var/log/nginx/@GAME_DOMAIN@_error.log;
+
+    gzip on;
+    gzip_proxied any;
+    # text/html is always gzipped; naming it here is a duplicate nginx warns about.
+    gzip_types application/javascript application/wasm text/css application/json;
+    gzip_vary on;
+    gzip_comp_level 5;
+
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "no-referrer" always;
+
+    location /game/ {
+        alias @WEB_ROOT@/;
+
+        # NO `types` BLOCK HERE. Opening one inside a location REPLACES the whole
+        # mime.types map rather than adding to it, so every extension left out of
+        # it silently becomes the default type -- which served embed.html as
+        # application/octet-stream and made the browser download the page instead
+        # of rendering it. nginx's own mime.types already maps html, js and wasm;
+        # only .pck is unknown, and octet-stream is right for it.
+        default_type application/octet-stream;
+
+        # WHO MAY FRAME THE GAME. This is the one direction the same-origin policy
+        # does not cover -- any page may frame any URL unless told otherwise -- so
+        # without it another site could embed our player and dress it up as their
+        # own.
+        #
+        # The rest of the policy binds the GAME, which is the untrusted party.
+        # `wasm-unsafe-eval` rather than `unsafe-eval`: the Godot runtime has to
+        # compile WebAssembly and nothing here needs to eval JavaScript.
+        # `connect-src` stays broad deliberately -- a game dials whatever server
+        # the player chose, and that is the feature, not an oversight.
+        add_header Content-Security-Policy "default-src 'self' blob: data:; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' data: blob:; worker-src 'self' blob:; connect-src 'self' https: wss:; frame-ancestors @SITE_ORIGINS@; base-uri 'none'; form-action 'none'" always;
+
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Cross-Origin-Resource-Policy "cross-origin" always;
+
+        # A development build changes on every export; caching it is how you spend
+        # an afternoon debugging the previous one. Raise this for a real deployment
+        # -- the engine is content-addressed by id/version, so it is safe to.
+        add_header Cache-Control "@CACHE_CONTROL@" always;
+    }
+
+    location = / {
+        default_type text/plain;
+        return 200 "@GAME_DOMAIN@ serves game content only.\n";
+    }
+
+    location / {
+        return 404;
+    }
+}
+
+server {
+    listen 80;
+    server_name @GAME_DOMAIN@ www.@GAME_DOMAIN@;
+    return 301 https://$host$request_uri;
+}

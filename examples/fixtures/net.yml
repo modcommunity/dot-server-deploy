@@ -1,0 +1,7 @@
+net_bind_ip: "127.0.0.1"
+net_port: 27099
+net_public_ip: "203.0.113.7"
+
+net_max_bps: 500000
+net_max_pps: 60
+net_max_update_rate: 30

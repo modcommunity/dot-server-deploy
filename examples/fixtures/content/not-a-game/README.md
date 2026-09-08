@@ -1,0 +1,3 @@
+No game.yml, so this is skipped and reported rather than treated as a game. It is what
+a half-finished upload looks like, and also what a README sitting in content/ looks
+like, and an operator should be able to tell which.

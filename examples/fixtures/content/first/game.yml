@@ -1,0 +1,5 @@
+name: The First
+version: 1.0.0
+kind: builtin
+scene: res://scenes/room_server.tscn
+module: res://game/room_module.gd

@@ -1,0 +1,46 @@
+# g2gfast. A bunny-hop and surf timer server, in the shape the genre grew up on:
+# the movement cvars under their own names, a timer counted in ticks with sub-tick
+# zone crossings, styles, records, and a replay bot running the server record.
+#
+#     changelevel g2gfast
+#
+# kind: builtin -- the code is compiled into this build, for the reason
+# content/lobby/game.yml sets out at length: a mounted dot-cloud pack's `class_name`
+# globals are not registered in the host, so every cross-file type reference inside
+# a pack fails to compile. game-g2gfast is written in the family's ordinary style
+# and would be dead in a pack.
+#
+# THE SCENE IS ALMOST EMPTY, ON PURPOSE. res://scenes/g2g_server.tscn is a G2GGame
+# under a plain Node, and G2GGame registers itself under `g2g_game` in _ready() --
+# which is what g2g_module.gd looks it up by. Nothing else is configured there:
+# the operator's surface is the cvars below and the movement cvars the module
+# registers, layered under G2G_* and --g2g-* like every DotConfig in the family. A
+# scene full of defaults would be a fourth copy of them.
+#
+# NOT TWO GAME IDS. Hungry is here twice because its two modes are two presets of
+# one world. Bhop and surf are not modes -- they are the same game on different
+# geometry with a different sv_airaccelerate, and a timer server runs a ROTATION
+# rather than a mode. Both maps are in the catalogue and `g2g_map` switches them.
+
+name: g2gfast
+content_id: g2gfast
+version: 0.1.0
+kind: builtin
+max_players: 32
+
+scene: res://scenes/g2g_server.tscn
+module: res://game/g2g_module.gd
+
+# Set when this game is loaded, and only while it is loaded. These are the module's
+# own cvars in the genre's units, which is the whole point of them: an operator who
+# has run one of these servers reads this block without being told anything.
+#
+# 1000 is the bunny-hop figure. A surf-only server runs 150 -- see the note above
+# about why that is a cvar and a rotation rather than a second game id here.
+cvars:
+  sv_airaccelerate: "1000"
+  sv_autobunnyhopping: "1"
+  sv_enablebunnyhopping: "1"
+  sv_gravity: "800"
+  sv_allow_thirdperson: "1"
+  sv_replay_bot: "1"

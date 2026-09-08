@@ -1,0 +1,60 @@
+# arena. The reference game: a 3D dev-textured deathmatch, and the only place
+# dot-fps-controller, dot-combat, dot-loadout, dot-match and dot-ui run in one process.
+#
+#     changelevel arena
+#
+# WHY IT IS HERE AND NOT ONLY IN ITS OWN REPOSITORY. game-arena has had a netcode bridge
+# and a headless suite since it was written and no client anybody could sit down at: no
+# camera rig, no input sampling, no renderer. It was the reference game with nothing to
+# reference. Adding it here is what turned that around, and — exactly as this family's
+# own rule predicts — building the deployment shape found two bugs in it that its own
+# suites could not see:
+#
+#   * `ArenaModule` looked its session up by `peer_id`, which `client_spawn` does not
+#     carry, so NOBODY EVER JOINED a dedicated arena server. Silently: a null session is
+#     a legitimate thing to find.
+#   * `ArenaPlayerNet._net_state_applied` moved the node on the PREDICTED entity, which
+#     is what reconciliation reads as "what the client is showing". The measured
+#     correction becomes the whole replay distance.
+#
+# kind: builtin -- the code is compiled into this build, for the reason
+# content/lobby/game.yml sets out at length: a mounted dot-cloud pack's `class_name`
+# globals are not registered in the host, so every cross-file type reference inside a
+# pack fails to compile, and game-arena is written in the family's ordinary style.
+#
+# ONE MAP, AND THAT IS THE GAME. `dm_box` is an ArenaMap -- a list of AABBs that becomes
+# meshes, static bodies and analytic trace geometry from ONE description, so the server's
+# idea of a wall cannot drift from the one clients can see. There is no dot-map rotation
+# here on purpose: this game's geometry IS its gameplay, and a rotation would be the
+# thing to add after a second map exists rather than before.
+
+name: Arena
+content_id: arena
+version: 0.1.0
+kind: builtin
+max_players: 16
+
+scene: res://scenes/arena_server.tscn
+module: res://game/arena_module.gd
+
+# Set when this game is loaded, and only while it is loaded.
+#
+# 64 rather than the 128 the timer servers run: a deathmatch is judged by whether a shot
+# hit, not by a time to the millisecond, and lag compensation does the work a higher tick
+# rate would. 64 still divides the netcode's snapshot rate of 32, which is the constraint
+# that actually matters -- an uneven send spacing arrives as jitter no interpolator can
+# remove.
+cvars:
+  arena_scorelimit: "25"
+
+  # ONE, not the game's own default of two.
+  #
+  # A deathmatch wants two players before a round means anything, and this is a public
+  # demonstration server that is empty most of the time. At two, the first person to
+  # open it connects, sits in WARMUP for ever, never spawns, and sees a HUD saying
+  # WARMUP over an empty arena -- which is indistinguishable from a broken server and
+  # is the only thing most visitors will ever see of it.
+  #
+  # At one they spawn, walk around a real map with real weapons, and the round starts
+  # properly the moment somebody else arrives.
+  arena_minplayers: "1"

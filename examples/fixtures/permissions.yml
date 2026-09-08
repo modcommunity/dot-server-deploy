@@ -1,0 +1,9 @@
+users:
+  # The short form: a name and a group, because that is the common case.
+  boss: owner
+
+  # The long form, with an extra flag and an immunity of its own.
+  helper:
+    group: admin
+    permissions: [slay]
+    immunity: 42
