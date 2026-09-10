@@ -180,12 +180,22 @@ step "games"
 # reference as an absolute res:// path and there is no relative form, so
 # game-g2gfast's res://maps/surf_g2g_intro.gd only resolves if its maps/ becomes
 # THIS project's maps/.
+#
+# [b]A game that grows a top-level directory has to be added here, and nothing
+# reports it if it is not.[/b] game-arena and game-g2gfast both gained npcs/ and
+# props/ when the NPC and prop layers landed; a build vendored without them mounts,
+# loads every scene, and refuses every spawn with "that NPC's content is not loaded on
+# this server" -- which is dot-npc answering correctly a question nobody meant to ask.
+# The refusal is a legitimate answer, so nothing errors.
+#
+# Filenames are prefixed per game (`arena_grunt.tscn`, `g2g_stalker.tscn`) so the two
+# can share one flattened directory, which is the collision check below.
 GAMES=(
     "game-simple-lobby:the lobby"
     "game-hungario:hungry"
-    "game-g2gfast:g2gfast:maps avatars"
+    "game-g2gfast:g2gfast:maps avatars npcs props"
     "game-playground:playground:maps"
-    "game-arena:arena:maps"
+    "game-arena:arena:maps avatars npcs props"
 )
 
 # --- Resolve before destroying ---------------------------------------------

@@ -4,14 +4,20 @@
 # Every dot-* addon is a separate repository. setup.sh links or copies them in.
 /addons/
 
-# The games, copied in by setup.sh from ../game-simple-lobby, ../game-hungario and
-# ../game-g2gfast. They are compiled into this build on purpose; content/lobby/game.yml
-# says why. maps/ and avatars/ are g2gfast's, and are top-level for the reason setup.sh
-# gives: a .tscn names its scripts by absolute res:// path and there is no relative form.
+# The games, copied in by setup.sh from the five game repositories beside this one.
+# They are compiled into this build on purpose; content/lobby/game.yml says why.
+#
+# Everything below game/ and scenes/ is a top-level directory some game owns, and it is
+# top-level for the reason setup.sh gives: a .tscn names its scripts by absolute res://
+# path and there is no relative form, so a game's maps/ has to become THIS project's
+# maps/. The list here has to match setup.sh's GAMES entries — a directory vendored and
+# not ignored is a build's generated output committed as source.
 /game/
 /scenes/
 /maps/
 /avatars/
+/npcs/
+/props/
 
 # Written per deployment by demo.sh before the export, naming the backbone the web
 # player signs in against. Not tracked, because it is a deployment's answer and not
