@@ -107,7 +107,8 @@ ADDONS=(dot_core dot_net dot_server dot_2d dot_ui dot_auth dot_cloud
         dot_fps_controller dot_timer dot_map dot_leaderboard dot_stats
         dot_props dot_vote dot_combat
         dot_chat dot_voice dot_moderation dot_browser
-        dot_npc dot_npc_ai dot_npc_ai_director dot_vehicle dot_achievements)
+        dot_npc dot_npc_ai dot_npc_ai_director dot_vehicle dot_achievements
+        dot_objective dot_effects dot_spectate dot_economy)
 
 step "dot-* addons"
 mkdir -p addons

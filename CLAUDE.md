@@ -337,6 +337,20 @@ would have refused every spawn with "that NPC's content is not loaded on this se
 which is a correct answer to a question nobody meant to ask. They are in `game/` now, with
 the game's own prefix.
 
+## Four more addons in the vendoring list
+
+`ADDONS` in `setup.sh` gained `dot_objective`, `dot_effects`, `dot_spectate` and
+`dot_economy`, because the games that name them are the games this vendors.
+
+**This is the third time that list has gone stale and the second time in this file.**
+The failure is always the same and always looks like something else: a game that gains a
+dependency and is not added here vendors, imports, and then fails to compile every script
+that names the missing class — dozens of "not declared in the current scope" errors in
+files nobody touched, which reads as a broken project rather than as one missing folder.
+
+`tools/package_check.sh` reads the list out of `setup.sh` rather than repeating it, which
+is what stopped the previous two.
+
 ## Things deliberately not here
 
 - **A downloadable game.** The pack path is understood and the constraint that shapes it is
