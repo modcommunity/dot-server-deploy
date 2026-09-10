@@ -309,6 +309,34 @@ browser.** It loads the export in a real Chromium, connects it to a real server,
 reports the WebSocket, the console and a screenshot. Three of the bugs above are its, and
 none of them was reachable any other way.
 
+## Two lists this project keeps, and both went stale in one pass
+
+`setup.sh` carries the list of **addons** every vendored game needs and the list of
+**games** to vendor, and this tree's most repeated bug is two copies of one list. Both bit
+in the same afternoon when three games gained every addon in the family:
+
+- **The addon list was nine short.** A game that gains a dependency and is not added here
+  vendors, imports, and then fails to compile every script that names the missing class —
+  dozens of "not declared in the current scope" errors in files nobody touched, which
+  reads as a broken project rather than as one missing folder.
+- **`content/` was one game short.** `HungryModule` registers three modes and this project
+  described two, so the server registered a game it could not list, offer or vote for.
+  `examples/live_switch.tscn` caught it as *"7 of 6"* — and said nothing else, which is a
+  failure nobody can act on. It names them now.
+
+And the collision check earned its place: **game-simple-lobby added a `game/prop.tscn` and
+game-playground already had one.** Every built-in game is flattened into one `game/`
+directory, because a `.tscn` names its scripts by absolute `res://` path and there is no
+relative form — so two games sharing a filename means one silently overwrites the other,
+and the failure is invisible until something loads. The check refused the build instead.
+
+The same flattening has a second edge that is easier to miss: **a game's `content/` is not
+vendored.** game-hungario put its NPC bodies and brains there and they mounted perfectly in
+a developer checkout; in the deployment they would simply have been absent, and dot-npc
+would have refused every spawn with "that NPC's content is not loaded on this server" —
+which is a correct answer to a question nobody meant to ask. They are in `game/` now, with
+the game's own prefix.
+
 ## Things deliberately not here
 
 - **A downloadable game.** The pack path is understood and the constraint that shapes it is

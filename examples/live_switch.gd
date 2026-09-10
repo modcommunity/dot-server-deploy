@@ -293,8 +293,11 @@ func _test_still_serving() -> void:
 	var expected: int = _host.content.games.size()
 	_check(
 		_server().games.game_ids().size() == expected,
-		"every game in content/ is still registered (%d of %d)"
-			% [_server().games.game_ids().size(), expected]
+		"every game in content/ is still registered (%d of %d): %s"
+			% [
+				_server().games.game_ids().size(), expected,
+				str(_server().games.game_ids()),
+			]
 	)
 
 	var module := _server().modules.get_module("room") as RoomModule

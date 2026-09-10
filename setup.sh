@@ -98,10 +98,16 @@ esac
 # type reference in its module into a parse error, and a module that will not parse is
 # a module that does not load: `changelevel hungry_classic` swapped the world and left
 # the lobby's module driving it.
+# Every addon any vendored game names. A game that gains a dependency and is not added
+# here vendors, imports, and then fails to compile every script that names the missing
+# class — dozens of "not declared in the current scope" errors in files nobody touched,
+# which reads as a broken project rather than as one missing folder.
 ADDONS=(dot_core dot_net dot_server dot_2d dot_ui dot_auth dot_cloud
         dot_user dot_user_avatar dot_platform dot_loadout dot_match
         dot_fps_controller dot_timer dot_map dot_leaderboard dot_stats
-        dot_props dot_vote dot_combat)
+        dot_props dot_vote dot_combat
+        dot_chat dot_voice dot_moderation dot_browser
+        dot_npc dot_npc_ai dot_npc_ai_director dot_vehicle dot_achievements)
 
 step "dot-* addons"
 mkdir -p addons
@@ -275,7 +281,23 @@ for entry in "${GAMES[@]}"; do
         while read -r f; do
             rel="${f#"$src"/}"
             if [ -e "$ROOT/$rel" ]; then
-                die "$repo and an earlier game both provide $rel.
+                # Byte-identical is not a collision. Two games legitimately ship the
+                # same third-party asset -- both arena and g2gfast use Kenney's
+                # character GLBs, copied from one source -- and vendoring them into
+                # the shared tree would otherwise be refused, or force a per-game copy
+                # of every byte. The rule this guards is "one of them silently loses a
+                # script", and a file that is the same file loses nothing.
+                if cmp -s "$f" "$ROOT/$rel"; then
+                    continue
+                fi
+                # Godot regenerates these for THIS project on the --import below, and
+                # mints a fresh uid per project while doing it -- so two games' copies
+                # of the same asset always differ here and never mean anything. The
+                # asset itself is compared above; this is its bookkeeping.
+                case "$rel" in
+                    *.import|*.uid) continue ;;
+                esac
+                die "$repo and an earlier game both provide $rel, with different contents.
 
     Every built-in game shares one game/ directory, because a .tscn names its
     scripts by absolute res:// path. Rename one of them." 4

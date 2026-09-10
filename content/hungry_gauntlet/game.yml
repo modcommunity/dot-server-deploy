@@ -1,0 +1,26 @@
+# Hungario: Gauntlet. A five-to-one corridor.
+#
+#     changelevel hungry_gauntlet
+#
+# Shares a module with hungry_classic — see that directory's game.yml.
+#
+# WHY THIS DIRECTORY EXISTS: `HungryModule._register_games()` registers all three modes
+# when it loads, and a mode with no `game.yml` here is one this deployment registers and
+# then cannot describe — `content/` is what the host reads to build its listing, its
+# client table and its vote source. The symptom was seven registered games against six in
+# content/, and `examples/live_switch.tscn` counted them and said only the numbers; it
+# names them now, because a count with no list is a failure nobody can act on.
+#
+# The gauntlet is not a third set of dials on the same square: it removes the third and
+# fourth directions. Being caught in a square is a failure of speed; in a corridor there
+# is nowhere sideways to run, and splitting to get past somebody becomes the move rather
+# than an alternative to it.
+
+name: "Hungario: Gauntlet"
+content_id: hungry       # shared with hungry_classic: one client, three modes
+version: 0.1.0
+kind: builtin
+max_players: 32
+
+scene: res://game/modes/gauntlet.tscn
+module: res://game/hungry_module.gd
