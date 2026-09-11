@@ -7,7 +7,7 @@
 # needs are siblings rather than subdirectories. docker-compose.yml sets
 # `context: ..` for that reason; building by hand needs the same:
 #
-#   docker build -f dot-server-setup-test/Dockerfile -t tmc-server ..
+#   docker build -f dot-server-deploy/Dockerfile -t tmc-server ..
 #
 # If you have vendored the addons into ./addons/ instead -- which is what a release
 # tarball looks like -- the sibling copy below finds nothing and setup.sh uses what is
@@ -48,7 +48,7 @@ FROM runtime AS build
 WORKDIR /src
 COPY . /src
 
-WORKDIR /src/dot-server-setup-test
+WORKDIR /src/dot-server-deploy
 # --vendor COPIES the addons rather than linking them. Every dot-* addon is a sibling
 # repository, and the final stage copies only this project -- so a symlink out of it
 # dangles, every dot-* class_name is unresolved at once, and the server dies at
@@ -82,7 +82,7 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/*
 
 COPY --from=runtime /usr/local/bin/godot /usr/local/bin/godot
-COPY --from=build /src/dot-server-setup-test /srv/tmc
+COPY --from=build /src/dot-server-deploy /srv/tmc
 
 # A writable home for whatever uid ends up running this.
 #

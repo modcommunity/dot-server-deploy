@@ -1,4 +1,4 @@
-# dot-server-setup-test
+# dot-server-deploy
 
 TMC's server tool: a Godot project that boots a dot-server from `cfg/` and `content/`, and
 a browser client shell. Read `../../CLAUDE.md` first for the family-wide rules; this file

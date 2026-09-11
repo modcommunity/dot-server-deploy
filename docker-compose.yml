@@ -12,7 +12,7 @@ services:
   server:
     build:
       context: ..
-      dockerfile: dot-server-setup-test/Dockerfile
+      dockerfile: dot-server-deploy/Dockerfile
     image: tmc-server:latest
     container_name: tmc-server
     restart: unless-stopped

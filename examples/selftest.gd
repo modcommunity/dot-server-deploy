@@ -30,7 +30,7 @@ func _ready() -> void:
 
 
 func _run() -> void:
-	print("dot-server-setup-test")
+	print("dot-server-deploy")
 
 	_test_yaml_scalars()
 	_test_yaml_structure()

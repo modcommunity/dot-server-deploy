@@ -51,7 +51,7 @@ func _ready() -> void:
 
 
 func _run() -> void:
-	print("dot-server-setup-test: changing games under a live client")
+	print("dot-server-deploy: changing games under a live client")
 
 	DotPaths.remove_tree(DATA)
 
