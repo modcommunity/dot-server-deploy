@@ -17,5 +17,5 @@
 
 rcon_password: ""
 rcon_port: 0            # 0 uses the game port + 1
-rcon_allowed: []        # empty allows any address
+rcon_allowed: ["127.0.0.1"]   # localhost only; these servers face the internet
 rcon_websocket: false   # for a browser-based admin panel
