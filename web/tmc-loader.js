@@ -262,6 +262,26 @@
     return;
   }
 
+  /*
+   * The origin every message to and from the frame is checked against.
+   *
+   * `entry.origin` and NOT `gameLoc.origin`: the published descriptor is only one
+   * of the two ways a location gets here, and a standalone deployment reaches this
+   * line with `boot.game` null and the stamp in `entry` — so reading the descriptor
+   * would be undefined exactly where the stamp is doing the work. The two are
+   * already proven equal above when both exist, which is what makes taking the one
+   * that is always present safe rather than merely convenient.
+   *
+   * It is a `var` at all because it was a reference and nothing else: `sendAuth`
+   * targeted `baseOrigin`, no line declared it, and reading an undeclared
+   * identifier THROWS. Inside `sendAuth` the throw landed in the `try` whose catch
+   * is documented as "a frame that is gone or not yet navigated", so the post was
+   * swallowed; in the `tmc.auth.ready` listener it killed the handler. The auth
+   * block reached the frame by neither route, and a member already signed into the
+   * site was seated as a guest with nothing failing anywhere the player could see.
+   */
+  var baseOrigin = entry.origin;
+
   var address = serverAddress(entry.protocol);
   var src = entry.href;
   if (address)
