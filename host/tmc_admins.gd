@@ -27,6 +27,12 @@ var _group_flags: Dictionary = {}
 ## Group name -> immunity.
 var _group_immunity: Dictionary = {}
 
+## Permission names written in the config that dot-server does not recognise.
+##
+## Reported once at boot, never enforced. See the warning in [method from] for why this is
+## a warning rather than a refusal, and for the three names that made it worth having.
+var unknown_flags: PackedStringArray = PackedStringArray()
+
 ## Lower-cased identifier -> {flags, immunity}.
 ##
 ## Lower-cased because an operator typing a name into a config file and a player typing one
@@ -69,6 +75,7 @@ static func from(groups: Dictionary, users: Dictionary) -> DotResult:
 		source._group_immunity[group_name] = int(
 			row.get("immunity", 100 if bool(row.get("is_root", false)) else 0)
 		)
+		source._note_unknown(group_name, flags)
 
 	for name in users.keys():
 		var user := String(name).to_lower()
@@ -112,10 +119,31 @@ static func from(groups: Dictionary, users: Dictionary) -> DotResult:
 				})
 
 		source._users[user] = {"flags": flags, "immunity": immunity}
+		source._note_unknown(user, flags)
 
 	DotLog.info(CHANNEL, "admins loaded", {
 		"groups": source._group_flags.size(), "users": source._users.size(),
 	})
+
+	if not source.unknown_flags.is_empty():
+		# A warning rather than a refusal, for the reason above: a game defines its own
+		# flags -- `slay`, `noclip` -- and this file cannot know them, so refusing to boot
+		# over one would leave a server unmoderated rather than under-moderated.
+		#
+		# But SILENCE was worse than either. `cfg/groups.yml` shipped `warn`, `announce`
+		# and `change`, none of which is a flag, so the `admin` group granted kick, ban and
+		# mute and nothing else -- no map change, no admin chat, not even `generic`. Every
+		# one of those reads as a correctly configured group that mysteriously does not
+		# work, which is this family's own "a setting that read differently and behaved
+		# identically" wearing an operator's clothes.
+		DotLog.warn(
+			CHANNEL,
+			"%d permission name(s) are not flags dot-server knows" % source.unknown_flags.size(),
+			{
+				"names": ", ".join(source.unknown_flags),
+				"note": "a game may define its own; check the spelling if you did not",
+			}
+		)
 
 	return DotResult.success(source)
 
@@ -203,3 +231,13 @@ func describe_lines() -> PackedStringArray:
 		])
 
 	return out
+
+
+## Records any flag in [param flags] that is not one dot-server defines.
+##
+## Deduplicated, because one misspelling in a group is repeated by every user in it and a
+## warning naming `change` four times is a warning nobody reads to the end of.
+func _note_unknown(_who: String, flags: PackedStringArray) -> void:
+	for flag in DotAdminFlags.unknown(flags):
+		if not unknown_flags.has(flag):
+			unknown_flags.append(flag)

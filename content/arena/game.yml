@@ -1,5 +1,5 @@
 # arena. The reference game: a 3D dev-textured deathmatch, and the only place
-# dot-fps-controller, dot-combat, dot-loadout, dot-match and dot-ui run in one process.
+# dot-player-controller, dot-combat, dot-loadout, dot-match and dot-ui run in one process.
 #
 #     changelevel arena
 #

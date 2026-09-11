@@ -15,7 +15,7 @@
 #
 # rcon_allowed is the control that survives a leaked password. Populate it.
 
-rcon_password: ""
+rcon_password: "CH8hMOIjrgpPemWsjdeLWno"
 rcon_port: 0            # 0 uses the game port + 1
 rcon_allowed: ["127.0.0.1"]   # localhost only; these servers face the internet
 rcon_websocket: false   # for a browser-based admin panel

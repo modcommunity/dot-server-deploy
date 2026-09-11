@@ -1,3 +1,48 @@
+# Who is in which group.
+#
+# A key is matched against a player's uid, their username, and their display name, in that
+# order, lower-cased — so write whichever of the three you know. `groups.yml` says what each
+# group may do.
+#
+#     users:
+#       gamemann:                 # by name, for somebody who plays here
+#         group: owner
+#       backbone:clx8f2k0kd:      # by uid, for somebody who does not
+#         group: admin
+#
+# WRITING A UID, AND WHY YOU WOULD
+#
+# A name only reaches somebody who is CONNECTED: a name is matched off the identity their
+# connection carries. A command typed on the website is sent by somebody who is not in the
+# game at all, and all the server is given is a uid — `backbone:` plus their site id, which
+# is not a number anybody can read off their profile.
+#
+# So the way to find it is to use it once and read the log. Type `/map` into the server's
+# chat box on the website; the server answers with a refusal and writes a line saying
+# exactly which key to add:
+#
+#     inf chat.relay  a relayed command was refused  uid=backbone:clx8f2k0kd command=map
+#                     fix=add 'backbone:clx8f2k0kd' to the server's admin file with the
+#                     'rcon' flag
+#
+# Paste that uid in below, restart, and the same command works. There is deliberately no
+# way to grant it by the name shown beside the message: a display name is a string the
+# person can change on their own profile page, and a permission keyed on one is a
+# permission anybody can take by renaming themselves.
 users:
   gamemann:
+    group: owner
+
+  # The same person, by UID, which is what a command typed on the WEBSITE resolves to.
+  #
+  # `gamemann` above already covers them in game, because a connected player's identity
+  # carries their username. A relayed line carries neither a username nor a name — only
+  # `backbone:` plus the site's account id — so without this entry every `/map` typed in
+  # the site's chat box is refused while the same person, connected, is an owner.
+  #
+  # Two entries for one person is the honest shape rather than a wart. The site lets a
+  # member change their username, and the old handle is then free for anybody to take, so
+  # a name and an id are not interchangeable keys: the name is convenient and the id is
+  # durable, and the remote path is the one that has to be the durable one.
+  backbone:cmrhhfvmr00000jrpmj4o0ss4:
     group: owner

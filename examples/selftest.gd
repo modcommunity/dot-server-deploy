@@ -258,7 +258,7 @@ func _test_config() -> void:
 	)
 
 	_check(config.groups.size() == 2, "groups.yml is read (%d)" % config.groups.size())
-	_check(config.users.size() == 2, "and permissions.yml (%d)" % config.users.size())
+	_check(config.users.size() == 3, "and permissions.yml (%d)" % config.users.size())
 	_check(
 		String(TmcYaml.at(config.auth, "backend.type", "")) == "rest",
 		"and auth.yml is kept whole for whoever reads it"
@@ -286,7 +286,16 @@ func _test_admins() -> void:
 
 	var admins := built.value as TmcAdmins
 
-	_check(admins.user_count() == 2, "with both users")
+	_check(admins.user_count() == 3, "with every user")
+
+	# A uid key, which contains a colon. Read naively it would be the key `backbone` with
+	# a value, and every command relayed from the website would grant nothing to anybody.
+	var by_uid := admins.lookup(_identity("backbone:cmrhhfvmr00000jrpmj4o0ss4"))
+	_check(by_uid.ok, "a uid key survives the colon in it")
+	_check(
+		by_uid.ok and PackedStringArray(by_uid.value["flags"]).has("kick"),
+		"with the group it names, rather than a truncated key that matches nothing"
+	)
 	_check(
 		Array(admins.group_names()) == ["admin", "owner"],
 		"and both groups (%s)" % [admins.group_names()]
@@ -323,6 +332,46 @@ func _test_admins() -> void:
 	_check(admins.lookup(_identity("BOSS")).ok, "a name matches whatever its case")
 	_check(not admins.lookup(_identity("nobody")).ok, "and a stranger is not listed")
 	_check(not admins.lookup(null).ok, "nor is a null identity, which is not a crash")
+
+	# A permission name that is not a flag is REPORTED, never refused.
+	#
+	# Refusing would be worse: a game defines its own flags -- the fixture's `slay` is one
+	# -- and this file cannot know them. But silence was worse than either. `cfg/groups.yml`
+	# shipped `warn`, `announce` and `change`, none of which is a flag, so the group called
+	# `admin` granted kick, ban and mute and could not change the map, use admin chat, or
+	# be recognised as staff. Every one of those reads as a correctly configured group that
+	# mysteriously does not work.
+	_check(
+		Array(admins.unknown_flags).has("slay"),
+		"a name that is not a flag is reported (%s)" % [admins.unknown_flags]
+	)
+	_check(
+		not Array(admins.unknown_flags).has("kick"),
+		"and a real one is not, which is the half that makes the warning worth reading"
+	)
+
+	var typo := TmcAdmins.from(
+		{"staff": {"permissions": ["kick", "change", "announce"]}},
+		{"one": "staff", "two": "staff"}
+	)
+	_check(typo.ok, "a group with a misspelled permission still builds")
+	var typo_source := typo.value as TmcAdmins
+	_check(
+		Array(typo_source.unknown_flags).has("change")
+			and Array(typo_source.unknown_flags).has("announce"),
+		"both misspellings are named (%s)" % [typo_source.unknown_flags]
+	)
+	# Deduplicated: one misspelling in a group is repeated by every user in it, and a
+	# warning naming `change` three times is one nobody reads to the end of.
+	_check(
+		typo_source.unknown_flags.size() == 2,
+		"once each, however many people are in the group (%d)"
+			% typo_source.unknown_flags.size()
+	)
+	_check(
+		Array(typo_source.lookup(_identity("one")).value["flags"]).has("kick"),
+		"and the flags that ARE real still work, so a typo costs one permission and not all of them"
+	)
 	_done()
 
 

@@ -1,17 +1,60 @@
+# Groups, as sets of permissions.
+#
+# What an operator writes is roles; what dot-server checks is FLAGS. `TmcAdmins` is the
+# translation, and the flag names below have to be dot-server's own — an unrecognised one
+# is reported at boot and then grants nothing, because a game may define flags this file
+# has never heard of and refusing to boot over one would leave a server unmoderated.
+#
+# The flags that exist:
+#
+#   root        everything, including bypassing immunity
+#   generic     recognised as staff
+#   reservation join a full server
+#   kick ban unban mute
+#   changemap   change the game or the map
+#   cvar        change console variables        cheats  change cheat-flagged ones
+#   config      execute config files            modules load and unload modules
+#   rcon        drive this server from outside the game
+#   chat        use admin chat                  vote    start and end votes
+#   password    bypass the server password      logs    read logs and the audit trail
+#   admin       manage other admins
+#
+# THREE OF THE NAMES HERE WERE NOT FLAGS, and every one of them was silent. `warn`,
+# `announce` and `change` were written in good faith and matched nothing, so the `admin`
+# group below granted kick, ban and mute — and could not change the map, could not use
+# admin chat, was not recognised as staff, and could not run a command relayed from the
+# website. Nothing errored: an unknown flag is exactly what a game's own flag looks like.
+# It is the same shape as `admin_add <uid> moderator`, which made an admin holding a flag
+# called "moderator" that granted nothing. `TmcAdmins` now names unknown flags at boot.
 groups:
   owner:
     is_root: true
+
+  # A full administrator of this server, in game and from the website.
+  #
+  # `rcon` is what a relayed command is checked against — `DotChatRelay.command_flag` —
+  # so without it a site administrator can type `/map` and be refused for ever while
+  # holding every other permission. It is not a second password: RCON authentication is
+  # still the RCON password, and this only decides who may drive the server once past it.
   admin:
     permissions:
+      - "generic"
       - "kick"
       - "ban"
+      - "unban"
       - "mute"
-      - "warn"
-      - "announce"
-      - "change"
+      - "changemap"
+      - "cvar"
+      - "chat"
+      - "vote"
+      - "rcon"
+    immunity: 60
+
+  # In-game only, deliberately: a moderator handles people, not the server.
   moderator:
     permissions:
+      - "generic"
       - "kick"
       - "mute"
-      - "warn"
-      - "announce"
+      - "chat"
+    immunity: 20

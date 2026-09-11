@@ -85,9 +85,40 @@ GAME2_PUBLIC_PORT="${TMC_DEMO_GAME2_PUBLIC_PORT:-6065}"
 GAME2="${TMC_DEMO_GAME2-hungry_classic}"
 GAME2_NAME="${TMC_DEMO_GAME2_NAME:-TMC Hungry Server}"
 
+# THE WEBSITE CHAT RELAY, and the one thing about it worth an operator's attention.
+#
+# Every server started here gets these in its environment, which works because
+# DotChatRelayConfig is a DotConfig and a DotConfig is layered -- exported defaults, a JSON
+# file, the environment, then argv. (It was NOT layered until recently: the games built the
+# config with `new()` and read `.enabled` off it, so these variables reached nothing and the
+# relay could not be turned on by any documented route, in any of the five games.)
+#
+#   ENABLED         carry chat between this server and its room on the site, both ways.
+#   ALLOW_COMMANDS  let a line beginning with `/` or `!` run as a console command.
+#   COMMAND_SOURCE  2 is RCON. 3, the default, is CHAT.
+#
+# COMMAND_SOURCE is the decision, and it is deliberate rather than convenient. At CHAT a
+# relayed command reaches only what a connected player could type -- and several games here
+# deliberately withhold `with_chat()` from their map change, because a map change destroys
+# every run in progress and a records server does not let a player do that by typing. At
+# RCON it reaches what an operator at a remote console reaches, which is what "my site
+# admins are administrators of this server" actually means.
+#
+# It is NOT a promotion. The uid is still resolved from the site author, the permission
+# answer is still this server's own `data/admins.json` through the same flags, and a person
+# with no entry there can still do nothing at all. What changes is which commands are on
+# the table, not who may pull them.
+#
+# The relay stays off regardless unless `data/listing.json` holds a server-scoped
+# integration token: with no credential there is no backbone client, and a relay with no
+# backbone client refuses to start rather than polling a URL it cannot authenticate to.
+export DOT_CHAT_RELAY_ENABLED="${TMC_DEMO_RELAY:-1}"
+export DOT_CHAT_RELAY_ALLOW_COMMANDS="${TMC_DEMO_RELAY_COMMANDS:-1}"
+export DOT_CHAT_RELAY_COMMAND_SOURCE="${TMC_DEMO_RELAY_SOURCE:-2}"
+
 # A THIRD SERVER, and the first one in this demonstration that is not a 2D game.
 #
-# g2gfast is the bunny-hop and surf timer: dot-fps-controller, dot-timer, dot-map and
+# g2gfast is the bunny-hop and surf timer: dot-player-controller, dot-timer, dot-map and
 # dot-leaderboard in one process, which is four addons the other two servers never
 # load. It is here because a server browser showing two games of the same shape proves
 # less than one showing two of different shapes, and because the timer is the part of
@@ -116,7 +147,7 @@ GAME3_TICKRATE="${TMC_DEMO_GAME3_TICKRATE:-128}"
 
 # A FOURTH SERVER, and the first one here that is not a race against a clock.
 #
-# playground is the physics sandbox: dot-props, dot-fps-controller, dot-timer, dot-map
+# playground is the physics sandbox: dot-props, dot-player-controller, dot-timer, dot-map
 # and dot-leaderboard in one process. It is here because the three servers above are all
 # somebody trying to WIN something, and a server browser that only ever shows competitive
 # games says nothing about whether this platform can carry the other kind. It is also the
@@ -138,7 +169,7 @@ GAME4_TICKRATE="${TMC_DEMO_GAME4_TICKRATE:-128}"
 
 # A FIFTH SERVER, and the one that took the longest to be able to run at all.
 #
-# arena is the family's REFERENCE game -- the only place dot-fps-controller, dot-combat,
+# arena is the family's REFERENCE game -- the only place dot-player-controller, dot-combat,
 # dot-loadout, dot-match and dot-ui are all present at once -- and until now it was the
 # reference game with nothing to sit down at. It had a netcode bridge, a headless suite
 # that played a whole deathmatch, and no camera rig, no input sampling and no renderer.
@@ -379,8 +410,21 @@ do_up() {
     # wire format or a scene while both look healthy. That is a whole evening: the
     # server ticks, the client connects, signon completes, and not one game message
     # crosses.
+    # [b]Every vendored directory, and every file type, not just the scripts.[/b] This
+    # watched `game scenes client host` for `.gd` and `.tscn` alone, and a browser
+    # client is made of more than its scripts: the maps are 60 MB of data under
+    # `maps/imported/`, the prototype textures are PNGs under `textures/`, and the
+    # avatars and props are scenes and images too. Re-import a map or drop in a texture
+    # and nothing here was newer, so the export was declared up to date and the browser
+    # kept serving the old .pck -- while the SERVER, which runs the project directly,
+    # had the new one. That is the same server-and-browser divergence the paragraph
+    # above is about, arriving through the assets instead of through the code.
+    #
+    # `.uid` and `.import` are excluded because `setup.sh` deletes and regenerates them
+    # on every run, so including them would rebuild a 110 MB export every time.
     local newest stale=0
-    newest="$(find game scenes client host -type f \( -name '*.gd' -o -name '*.tscn' \) \
+    newest="$(find game scenes client host maps textures avatars npcs props \
+        -type f ! -name '*.uid' ! -name '*.import' \
         -newer web/build/index.wasm -print -quit 2>/dev/null)"
 
     if [ ! -f web/build/index.wasm ]; then

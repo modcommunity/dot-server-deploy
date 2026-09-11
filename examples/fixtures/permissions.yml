@@ -7,3 +7,14 @@ users:
     group: admin
     permissions: [slay]
     immunity: 42
+
+  # A uid, which is what a command relayed from the website resolves to.
+  #
+  # The key CONTAINS A COLON, and that is the whole reason this line is in the fixture.
+  # YAML's rule -- and `TmcYaml._split_key`'s -- is that a colon separates a key from a
+  # value only when a space or the end of the line follows it, which is what makes
+  # `url: http://host:8000` parse. Read naively, this line would be the key `backbone`
+  # with the value `cmrh...:`, and the whole website command path would silently grant
+  # nothing to anybody.
+  backbone:cmrhhfvmr00000jrpmj4o0ss4:
+    group: admin

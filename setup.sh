@@ -102,13 +102,16 @@ esac
 # here vendors, imports, and then fails to compile every script that names the missing
 # class — dozens of "not declared in the current scope" errors in files nobody touched,
 # which reads as a broken project rather than as one missing folder.
-ADDONS=(dot_core dot_net dot_server dot_2d dot_ui dot_auth dot_cloud
-        dot_user dot_user_avatar dot_platform dot_loadout dot_match
-        dot_fps_controller dot_timer dot_map dot_leaderboard dot_stats
-        dot_props dot_vote dot_combat
-        dot_chat dot_voice dot_moderation dot_browser
-        dot_npc dot_npc_ai dot_npc_ai_director dot_vehicle dot_achievements
-        dot_objective dot_effects dot_spectate dot_economy)
+ADDONS=(dot_core dot_net dot_server dot_2d dot_ui dot_auth dot_cloud dot_user
+        dot_user_avatar dot_platform dot_loadout dot_match
+        dot_player_controller dot_timer dot_map dot_leaderboard dot_stats
+        dot_props dot_vote dot_combat dot_chat dot_voice dot_moderation
+        dot_browser dot_npc dot_npc_ai dot_npc_ai_director dot_vehicle
+        dot_achievements dot_objective dot_effects dot_spectate dot_economy
+        dot_randomness dot_settings dot_console dot_audio dot_fx
+        dot_procedural_generation dot_inventory dot_peer_to_peer dot_weapon
+        dot_physics dot_spawn dot_team dot_player dot_player_class
+        dot_player_char)
 
 step "dot-* addons"
 mkdir -p addons
@@ -197,10 +200,16 @@ step "games"
 #
 # Filenames are prefixed per game (`arena_grunt.tscn`, `g2g_stalker.tscn`) so the two
 # can share one flattened directory, which is the collision check below.
+#
+# g2gfast's `textures/` is the newest of these and is the same shape of omission:
+# `G2GTextures` looks its prototype set up at the fixed path `res://textures/prototype`
+# and falls back to a generated grid when it is not there, so a build without it draws
+# every map -- imported ones included, which is most of what that server runs -- in a
+# different texture set from the one the developer looked at, and reports nothing.
 GAMES=(
     "game-simple-lobby:the lobby"
     "game-hungario:hungry"
-    "game-g2gfast:g2gfast:maps avatars npcs props"
+    "game-g2gfast:g2gfast:maps avatars npcs props textures"
     "game-playground:playground:maps"
     "game-arena:arena:maps avatars npcs props"
 )
