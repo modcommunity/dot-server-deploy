@@ -50,6 +50,10 @@ var server: DotServer = null
 ## Voting for the next game, or null when `vote.yml` turns it off.
 var votes: TmcVote = null
 
+## Reports this server's own state to its site listing. Never null; it reports nothing
+## when there is no token, which is every LAN deployment and every test.
+var listing: TmcReport = null
+
 var _config_dir := "cfg"
 var _content_dir := "content"
 
@@ -393,6 +397,13 @@ func _boot() -> bool:
 	# running — a vote system that starts on no game at all has no clock, nothing on
 	# cooldown, and offers the game everybody is playing on its own first ballot.
 	votes = TmcVote.install(self, server, config.vote, config.vote_exclude)
+
+	# Last, and after the first game is loaded, because the first report goes out
+	# immediately and a server reporting "no game" before it has one is a listing that
+	# blinks on every restart.
+	listing = TmcReport.install(
+		self, server, content, "%s/listing.json" % _data_dir
+	)
 
 	return true
 
