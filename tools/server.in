@@ -223,6 +223,34 @@ case "$COMMAND" in
         "$GODOT" --headless --path "$PROJECT" \
             --export-release "Web" "$PROJECT/web/build/index.html" || exit $?
 
+        # An imported map is a .json manifest AND a .bin of vertices, and only one of
+        # the two is a Godot resource.
+        #
+        # The Web preset exports "all_resources", which means every file the engine has
+        # a loader for. Godot 4 loads .json, so every manifest reached the pack; nothing
+        # loads .bin, so not one byte of map geometry did -- and G2GBspMap reads the
+        # manifest FIRST, so a browser client on an imported map built a spawn point, a
+        # zone set, a start line and a pit over nothing at all. It connected, signed on,
+        # spawned, and drew sky in every direction, which is a shape this family has
+        # shipped three times.
+        #
+        # `include_filter` is the only thing that carries a non-resource, and
+        # export_presets.cfg is deliberately NOT in this repository -- so this checks the
+        # pack rather than trusting a file that may not exist on the machine doing the
+        # export. It needs, at minimum:
+        #
+        #   include_filter="maps/*.bin"
+        #
+        missing=0
+        while IFS= read -r bin; do
+            rel="${bin#"$PROJECT"/}"
+            grep -qF "$rel" "$PROJECT/web/build/index.pck" || {
+                printf '  %sthe export is missing %s%s\n' "$RED" "$rel" "$OFF" >&2
+                missing=$((missing + 1))
+            }
+        done < <(find "$PROJECT/maps" -name '*.bin' 2>/dev/null)
+        [ "$missing" -eq 0 ] || die "$missing map geometry file(s) did not reach the export -- add include_filter=\"maps/*.bin\" to export_presets.cfg" 3
+
         # The standalone page, which takes ?server= from the URL.
         [ -f "$PROJECT/web/embed.html" ] && cp "$PROJECT/web/embed.html" "$PROJECT/web/build/embed.html"
 
