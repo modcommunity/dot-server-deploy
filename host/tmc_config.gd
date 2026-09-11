@@ -56,7 +56,13 @@ const BOOT_KEYS := {
 	"rcon_websocket": "rcon_websocket",
 	"query_enabled": "query_enabled",
 	"query_websocket": "query_websocket",
+	"query_port": "query_port",
+	# The one setting a reverse-proxied server cannot do without: nginx forwards the
+	# game's WebSocket and cannot forward UDP, so a query listener sharing
+	# `net_bind_ip` binds loopback and no tracker on earth can reach it.
+	"query_bind_ip": "query_bind_address",
 	"a2s_enabled": "a2s_enabled",
+	"a2s_port": "a2s_port",
 	"content_manifest_url": "content_manifest_url",
 }
 

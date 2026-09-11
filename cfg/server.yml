@@ -1,3 +1,19 @@
 # General server settings
 sv_name: "TMC Test Server"
 sv_maxplayers: 64
+# Server queries.
+#
+# `query_enabled` is on by dot-server's own default and answers the dot query
+# protocol (DQP). `a2s_enabled` adds the twenty-year-old one beside it on the same
+# socket — told apart by the first four bytes — because the trackers, uptime
+# monitors and server browsers that already exist speak A2S and nothing else. TMC's
+# own scanner is one of them.
+#
+# `query_bind_ip` is the setting a reverse-proxied server cannot do without.
+# `net_bind_ip` is loopback here because nginx terminates TLS in front of the game,
+# and nginx forwards a WebSocket but CANNOT forward UDP — so a query listener
+# sharing that setting is listening where nothing can ask it, and a tracker cannot
+# tell that from a server that is down. `*` puts the query port, and only the query
+# port, on every interface. RCON deliberately does not follow it.
+a2s_enabled: true
+query_bind_ip: "*"
