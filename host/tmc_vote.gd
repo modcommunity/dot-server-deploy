@@ -11,11 +11,26 @@ extends Node
 ## players ask.
 ##
 ## [codeblock]
-## !nominate g2gfast
-## !rtv
+## !game_nominate g2gfast
+## !game_rtv
 ## Vote: g2gfast, playground, hungry_frenzy (30s)
-## !votefor 1
+## !game_vote 1
 ## [/codeblock]
+##
+## [b]Every one of those is prefixed, and the prefix is the whole reason this works.[/b]
+## A game loaded out of `content/` may run a vote of its own — g2gfast votes for the
+## next MAP, which is what a records server has always done — and that game's module
+## registers `rtv`, `nominate`, `timeleft` and `nextmap` before this file is ever
+## installed. [DotConsole] keeps the first registration of a name and returns it, so an
+## unprefixed game vote does not fail: it silently gets four dead commands and nine live
+## ones, and a player types `!nominate arena`, is told there is no such map, then types
+## `!nominations` and is shown an empty GAME ballot. Worse, those four names belong to
+## the game's module, so the first `changelevel` away takes them out of the console for
+## the rest of the process and nothing puts them back.
+##
+## So the server-level vote namespaces itself and the game keeps the names players'
+## fingers already know. [code]!rtv[/code] is always about what the game in front of you
+## is doing; [code]!game_rtv[/code] is always about which game is next.
 ##
 ## Everything about how that behaves is `cfg/vote.yml`, which is a [DotVoteRules] and
 ## therefore the same fifty-five settings dot-vote documents. This file is only the
@@ -30,6 +45,17 @@ const CHANNEL := "tmc.vote"
 
 ## Games never offered on a ballot, unless `vote.yml` says otherwise.
 const DEFAULT_EXCLUDED := ["lobby"]
+
+## What every console command of the server-level vote is called.
+##
+## See the class documentation: a game's own vote gets the bare names.
+const COMMAND_PREFIX := "game_"
+
+## The two roles whose default name would be a lie on a vote about games.
+##
+## `nextmap` is not a map here, and `votefor` next to `game_` reads as a verb phrase
+## nobody types twice. Everything else keeps dot-vote's own name behind the prefix.
+const COMMAND_NAMES := {"nextmap": "next", "vote": "vote"}
 
 var director: DotVoteDirector = null
 var source: DotVoteGameSource = null
@@ -83,13 +109,33 @@ static func install(
 	# operator typing `changelevel`, which must reset the clock and everybody's
 	# rock-the-vote just the same. See DotVoteDirector.begin_on_apply.
 	votes.director.begin_on_apply = false
+	# `dot_vote_director` belongs to whatever the loaded game registers, not to this.
+	# DotRegistry is last-wins, so leaving this on means every game's own vote is
+	# quietly displaced in the registry by the server's the moment the host boots —
+	# and a HUD that resolves the service to draw the ballot in front of the player
+	# would draw the wrong one. This director is reached through TmcVote, which the
+	# host holds, so it needs no global name at all.
+	votes.director.register_service = false
 
 	votes._wire()
 
 	host.add_child(votes)
 	votes.add_child(votes.director)
 
-	votes.commands = DotVoteCommands.install(p_server.console, votes.director)
+	votes.commands = DotVoteCommands.new()
+	votes.commands.director = votes.director
+	votes.commands.prefix = COMMAND_PREFIX
+	votes.commands.names = COMMAND_NAMES
+
+	var bound := votes.commands.bind(p_server.console)
+
+	# Not fatal, and not silent either. A vote nobody can type at still runs on its
+	# time limit, which is most of the feature; an operator who cannot see why
+	# `!game_rtv` does nothing has no way to find out otherwise.
+	if not bound.ok:
+		DotLog.error(CHANNEL, "the vote commands did not register", {
+			"why": bound.error.message,
+		})
 
 	p_server.games.game_loaded.connect(votes._on_game_loaded)
 	p_server.client_disconnected.connect(votes._on_client_left)

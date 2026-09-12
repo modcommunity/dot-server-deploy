@@ -1,9 +1,16 @@
 # Voting for the next GAME.
 #
-#     !nominate g2gfast          a player asks for it
-#     !rtv                       enough players ask to move on
-#     !votefor 2                 the ballot opens and everybody chooses
-#     !timeleft   !nextmap       what a player types to find out
+#     !game_nominate g2gfast     a player asks for it
+#     !game_rtv                  enough players ask to move on
+#     !game_vote 2               the ballot opens and everybody chooses
+#     !game_timeleft  !game_next what a player types to find out
+#
+# EVERY ONE OF THEM IS PREFIXED, and that is not decoration. A game in content/ may
+# run a vote of its own for its own MAPS, and those already answer to !rtv,
+# !nominate, !timeleft and !nextmap. The console keeps whichever registered first,
+# so an unprefixed vote here would take four dead commands and leave the player
+# talking to two systems at once. !rtv is about the game in front of you;
+# !game_rtv is about which game is next.
 #
 # This is dot-vote's DotVoteRules, so every setting below is documented on the
 # property of the same name and layers the way everything else in this family

@@ -54,6 +54,7 @@ func _run() -> void:
 		await _test_switch_between_modes()
 		await _test_switch_back()
 		await _test_unknown_game()
+		await _test_finds_a_map_session()
 		await _test_vote_changes_the_game()
 
 	_teardown()
@@ -169,6 +170,52 @@ func _teardown() -> void:
 
 
 # --- Sections --------------------------------------------------------------
+
+func _test_finds_a_map_session() -> void:
+	_section("`+map` finds the thing it has to talk to")
+
+	# [b]The whole of `sv_map` rests on one duck-typed lookup, and a duck-typed lookup
+	# that stops matching returns null rather than failing.[/b] `_find_map_session`
+	# walks the loaded game looking for something that answers `change_to` and
+	# `change_to_map`; the day a game builds its session under a different node, or
+	# dot-map renames a method, the only symptom is a `+map` that goes back to being
+	# silently ignored — which is the exact bug this setting exists to fix.
+	#
+	# So both directions are checked: that the predicate still matches a real
+	# [DotMapSession], and that it does not match something else in a real game's tree.
+	#
+	# Through `call` because `tmc_host.gd` declares no `class_name` — it is a host
+	# script the scene owns, not a type anything is meant to reference by name.
+	var probe := Node.new()
+	probe.name = "MapProbe"
+	var session := DotMapSession.new()
+	session.name = "Session"
+	probe.add_child(session)
+	add_child(probe)
+
+	_check(
+		_host.call("_find_map_session", probe) == session,
+		"a real DotMapSession still answers the duck-typed predicate",
+		"if this fails, dot-map renamed a method and `--map` now does nothing at all"
+	)
+
+	remove_child(probe)
+	probe.free()
+
+	# The server is on the lobby here, which genuinely has no maps. A false positive is
+	# worse than no match: it would send `change_to` to whatever answered.
+	_check(
+		_at_game("lobby"),
+		"the server is on the lobby for the negative case (%s)"
+			% _server().games.current_content_id()
+	)
+	_check(
+		_host.call("_find_map_session", _server().games) == null,
+		"and nothing in a game with no maps is mistaken for a map session"
+	)
+
+	_done()
+
 
 func _test_registered() -> void:
 	_section("what the server can run")
@@ -458,8 +505,18 @@ func _test_vote_changes_the_game() -> void:
 
 	# Opened through the real console command, which is how an operator does it — and
 	# which fails if dot-vote's commands stopped being registered on this server.
-	var opened := await _console("revote")
-	_check(opened.ok, "an operator opens the ballot with `revote`", str(opened.error))
+	#
+	# [b]Spelled out of TmcVote.COMMAND_PREFIX rather than typed.[/b] The prefix is
+	# what keeps this vote from taking four command names a loaded game's own map vote
+	# already answers to, and a test that hardcoded `revote` would still pass on the
+	# day somebody dropped the prefix and reintroduced that collision.
+	var revote := "%srevote" % TmcVote.COMMAND_PREFIX
+	var opened := await _console(revote)
+	_check(opened.ok, "an operator opens the ballot with `%s`" % revote, str(opened.error))
+	_check(
+		_server().console.find_command("revote") == null,
+		"and the bare `revote` is left alone for a game's own vote to claim"
+	)
 	_check(
 		director.is_voting(),
 		"which opens a ballot rather than changing the game blind"

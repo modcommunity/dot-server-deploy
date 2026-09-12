@@ -88,6 +88,11 @@ function Show-Usage {
     --name TEXT         Server name shown in listings.
     --max-players N
     --game ID           Load this game at boot instead of the default.
+    --map ID            Start that game on this map instead of its own default.
+                        `+map ID` after a -- does the same thing and is the
+                        spelling every other dedicated server uses. A game that
+                        has no maps, or has not got this one, says so and boots
+                        on its default anyway.
 
     --config DIR        Where the YAML lives.            (cfg)
     --content DIR       Where the games live.            (content)
@@ -110,6 +115,13 @@ function Show-Usage {
   Anything after -- is handed to the server console once it is up:
 
     .\server.ps1 -- +sv_cheats 1 +changelevel lobby
+
+  With one exception, and it is the one worth knowing: `+map ID` is read by the
+  HOST, not by the console. The console's +command half runs when the listener
+  opens, which is before any game is loaded, so the `map` command it would be
+  looking for belongs to a module that does not exist yet.
+
+    .\server.ps1 --game g2gfast -- +map bhop_g2g_intro
 
   Secrets are deliberately NOT options. argv is readable by every other process on
   the machine and ends up in pasted bug reports, which is why DotConfig refuses
@@ -179,7 +191,7 @@ while ($i -lt $rest.Count) {
     if ($name -in @('dry-run', 'dryrun')) { $DryRun = $true; $i += 1; continue }
 
     if ($name -in @('port', 'bind', 'name', 'max-players', 'maxplayers', 'game',
-                    'base', 'config', 'content', 'data', 'godot')) {
+                    'map', 'base', 'config', 'content', 'data', 'godot')) {
         if (-not $hasValue) { Die "$token needs a value" }
         switch ($name) {
             'base'    { $EngineBase = $value }

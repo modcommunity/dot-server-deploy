@@ -124,6 +124,20 @@ var vote_exclude: PackedStringArray = PackedStringArray()
 ## The game to load at boot, or "" for whatever the content directory says is first.
 var initial_game: String = ""
 
+## The map to start that game on, or "" for the game's own default.
+##
+## `sv_map` in the YAML, `--map` on the command line, and `+map` after a `--` for the
+## muscle memory of every other dedicated server. [b]It is a request, not a
+## guarantee.[/b] A game decides whether it has maps at all — a lobby and an arena of
+## built geometry do not — and the id has to be in that game's catalogue. Both are
+## reported and neither is fatal: a server that refused to boot because one argument
+## named a map that is not there is a server an operator cannot get back.
+##
+## Deliberately NOT a per-game setting. `--g2g-initial-map` already exists and always
+## has; what did not exist was a way to say it without knowing which game's config
+## prefix to spell, which is the whole difficulty on a box that runs seven of them.
+var initial_map: String = ""
+
 ## The app's URL segment on the website, reported in a query as the game's name.
 ##
 ## `sv_query_app` in the YAML. Empty falls back to the running game's id, which is
@@ -248,6 +262,14 @@ func _apply_settings(file: String, tree: Dictionary) -> DotResult:
 
 		if name == "sv_game":
 			initial_game = String(value)
+			continue
+
+		if name == "sv_map":
+			# Not passed through as a console line for the same reason `sv_query_app`
+			# is not: there is no `map` cvar or command at this level to receive it.
+			# The one that exists belongs to whichever game is loaded, which at the
+			# time the startup config runs is none of them.
+			initial_map = String(value)
 			continue
 
 		if name == "sv_query_app":
@@ -414,6 +436,10 @@ func describe_lines() -> PackedStringArray:
 	# saying out loud rather than leaving as a blank.
 	out.append("game     : %s" % (
 		initial_game if initial_game != "" else "(content default)"))
+	# Here for the same reason `game` is, and it was about to repeat the same mistake:
+	# a setting worth having is worth being able to read back without booting.
+	out.append("map      : %s" % (
+		initial_map if initial_map != "" else "(the game's default)"))
 	out.append("rcon     : %s" % ("on, port %d" % server.effective_rcon_port() if server.rcon_password != "" else "off"))
 	out.append("groups   : %d" % groups.size())
 	out.append("admins   : %d" % users.size())

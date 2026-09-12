@@ -14,7 +14,7 @@ extends Node
 
 const CFG := "res://examples/fixtures"
 
-const CHECKS := 87
+const CHECKS := 89
 
 var _passed := 0
 var _failed := 0
@@ -255,6 +255,18 @@ func _test_config() -> void:
 	)
 	_check(config.public_address == "203.0.113.7", "net_public_ip is kept for the join line")
 	_check(config.initial_game == "lobby", "sv_game names the boot game")
+	# [b]Its own key, and not a console line.[/b] `sv_map` has no cvar and no command
+	# behind it at this level — the `map` command belongs to whichever game is loaded,
+	# and at read time that is none of them. So the check that matters is the negative
+	# one below it: a key this parser did not claim would end up queued for a console
+	# that will never have a `map`, which is exactly how it behaved before it was a
+	# setting at all.
+	_check(config.initial_map == "fixture_map", "sv_map names the boot map (%s)"
+		% config.initial_map)
+	_check(
+		not config.console_lines.has("sv_map fixture_map"),
+		"and is not queued for a console that has no `map` to give it to"
+	)
 	_check(
 		Array(config.server.tags) == ["fixture", "test"],
 		"sv_tags becomes a list (%s)" % [config.server.tags]

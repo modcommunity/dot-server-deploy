@@ -59,6 +59,8 @@ Two consequences worth keeping:
   one is the YAML. It exists because "what did my configuration actually become" is the
   question an operator has when a setting appears not to work.
 
+**`sv_map` is a third consequence, and it is the exception that shows the rule.** Almost everything in `cfg/` reaches dot-server as a console line, and two settings cannot: `sv_query_app`, because the cvar that would take it is registered by the query host after the startup config runs, and `sv_map`, because there is no `map` command at this level at all. The one that exists belongs to whichever game is loaded, and when the console's `+command` half runs — after the listener, which is already as late as dot-server can make it — this host has not loaded a game yet. So `./server -- +map bhop_g2g_intro` was parsed, logged, dispatched into a console with no `map` in it, and dropped: the server booted on the game's own default map and said nothing about the argument. `TmcHost` reads `+map` out of argv itself now, alongside `--map` and `TMC_MAP`, and applies it after the game is up through a duck-typed `change_to` — `has_method`, not `is DotMapSession`, for the reason dot-vote's map source gives. **It loads two maps at boot and that is the honest cost:** a game's map session is built by the game's own scene from the game's own config, so the first map is chosen before anything here can say otherwise, and reaching into a scene that has not been instantiated yet to change a value it is about to read is the kind of thing that works until a game builds its session somewhere else.
+
 `TmcYaml` is deliberately small and refuses everything outside its subset with a file and
 a line: tabs, duplicate keys, anchors, aliases, tags, block scalars, inline mappings,
 document markers. A complete YAML parser is a large program with a long history of parser
@@ -76,8 +78,10 @@ project there was nowhere a server ran more than one. There are five games in
 only thing missing was letting the players ask.
 
 ```
-!nominate g2gfast        !rtv        !votefor 2        !timeleft        !nextmap
+!game_nominate g2gfast   !game_rtv   !game_vote 2      !game_timeleft   !game_next
 ```
+
+**The `game_` prefix is load-bearing.** A game in `content/` may run a vote of its own — one of them votes for the next *map*, which is what that genre has always done — and its module registers `rtv`, `nominate`, `timeleft` and `nextmap` before `TmcVote.install` ever runs. `DotConsole.register_command` keeps the first registration of a name and hands it back, so an unprefixed server vote does not fail loudly: it gets four dead commands and nine live ones, and a player nominating a game is told there is no such map while `!nominations` shows them an empty ballot. The four names also belong to the game's module, so the first `changelevel` away unregisters them for the rest of the process. `!rtv` is about the game in front of you; `!game_rtv` is about which game is next. For the same reason this director sets `register_service = false` — `dot_vote_director` in `DotRegistry` belongs to the loaded game's vote, and the registry is last-wins.
 
 The engine is **dot-vote**, and the whole of the policy is `vote.yml`, which is a
 `DotVoteRules` and therefore layers `defaults < vote.yml < DOT_VOTE_* < --vote-*` like

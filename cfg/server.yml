@@ -13,6 +13,24 @@ sv_maxplayers: 64
 # what this content directory actually has.
 sv_game: ""
 
+# Which map that game starts on.
+#
+# Empty means the game's own default, which is the normal case: a game that has maps
+# names one in its own config and that is where the reasoning about which one lives.
+# This is for a box that runs the same game as another and should come up somewhere
+# else -- a second surf server on the same content, say.
+#
+# `./server --map <id>`, TMC_MAP, and `./server -- +map <id>` all override this. The
+# last of those is the spelling every other dedicated server uses and is why this
+# setting exists at all; it used to be accepted, dispatched into a console that had
+# no game loaded yet, and dropped without a word.
+#
+# A GAME DECIDES WHETHER IT HAS MAPS. A lobby and an arena of built geometry do not,
+# and neither does a game whose catalogue has never heard of this id. Both are a line
+# in the log and not a refusal to boot -- an operator's typo should not cost a server
+# that is already full of people.
+sv_map: ""
+
 # The app's URL segment on the website, reported in a query as the game's name.
 #
 # Unique and lowercase because the site already made it so, which is the whole

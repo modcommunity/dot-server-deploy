@@ -578,6 +578,11 @@ sv_tickrate: 60
 # default. A server with no game at all is legitimate and runs empty.
 sv_game: ""
 
+# The map that game starts on. Empty uses the game's own default, which is the
+# normal case. `--map`, TMC_MAP and `-- +map <id>` all override it. A game that has
+# no maps, or has not got this one, says so in the log and boots on its default.
+sv_map: ""
+
 # The app's URL segment on the website, reported in a query as the game's name.
 #
 # Unique and lowercase because the site already made it so, which is the whole

@@ -66,6 +66,7 @@ OPT_BIND="${TMC_BIND:-}"
 OPT_NAME="${TMC_NAME:-}"
 OPT_MAX_PLAYERS="${TMC_MAX_PLAYERS:-}"
 OPT_GAME="${TMC_GAME:-}"
+OPT_MAP="${TMC_MAP:-}"
 
 RED=$'\033[31m'; YLW=$'\033[33m'; DIM=$'\033[2m'; BLD=$'\033[1m'; OFF=$'\033[0m'
 
@@ -98,6 +99,11 @@ usage() {
     --name TEXT         Server name shown in listings.
     --max-players N
     --game ID           Load this game at boot instead of the default.
+    --map ID            Start that game on this map instead of its own default.
+                        `+map ID` after a -- does the same thing and is the
+                        spelling every other dedicated server uses. A game that
+                        has no maps, or has not got this one, says so and boots
+                        on its default anyway.
 
     --config DIR        Where the YAML lives.            (cfg)
     --content DIR       Where the games live.            (content)
@@ -126,6 +132,14 @@ usage() {
 
     ./server -- +sv_cheats 1 +changelevel lobby
 
+  With one exception, and it is the one worth knowing: `+map ID` is read by the
+  HOST, not by the console. The console's +command half runs when the listener
+  opens, which is before any game is loaded, so the `map` command it would be
+  looking for belongs to a module that does not exist yet -- which is why it did
+  nothing at all until it was made an option in its own right.
+
+    ./server --game g2gfast -- +map bhop_g2g_intro
+
   Where the configuration actually lives
 
   IN cfg/, AS YAML. `cfg/net.yml` has net_port and net_bind_ip; `cfg/server.yml`
@@ -151,6 +165,7 @@ usage() {
     TMC_NAME            --name                TMC_DATA_DIR      --data
     TMC_MAX_PLAYERS     --max-players         TMC_GODOT         --godot
     TMC_GAME            --game                TMC_ENGINE_BASE   --base
+    TMC_MAP             --map
     TMC_VERBOSE         --verbose (set to anything)
 
   Which means a TMC_PORT left set in an environment file makes cfg/net.yml look
@@ -195,6 +210,7 @@ while [ $# -gt 0 ]; do
         --name)        [ $# -ge 2 ] || die "$1 needs a value"; OPT_NAME="$2";        shift 2 ;;
         --max-players) [ $# -ge 2 ] || die "$1 needs a value"; OPT_MAX_PLAYERS="$2"; shift 2 ;;
         --game)        [ $# -ge 2 ] || die "$1 needs a value"; OPT_GAME="$2";        shift 2 ;;
+        --map)         [ $# -ge 2 ] || die "$1 needs a value"; OPT_MAP="$2";         shift 2 ;;
         --base)    ENGINE_BASE="${2:-}"; shift 2 ;;
         --config)  CONFIG_DIR="${2:-}";  shift 2 ;;
         --content) CONTENT_DIR="${2:-}"; shift 2 ;;
@@ -219,6 +235,7 @@ done
 [ -n "$OPT_NAME" ]        && OVERRIDES+=(--name "$OPT_NAME")
 [ -n "$OPT_MAX_PLAYERS" ] && OVERRIDES+=(--max-players "$OPT_MAX_PLAYERS")
 [ -n "$OPT_GAME" ]        && OVERRIDES+=(--game "$OPT_GAME")
+[ -n "$OPT_MAP" ]         && OVERRIDES+=(--map "$OPT_MAP")
 
 # --- The runtime -----------------------------------------------------------
 

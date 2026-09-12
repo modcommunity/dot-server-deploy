@@ -273,6 +273,25 @@ func _apply_overrides(args: PackedStringArray) -> void:
 	if game != "":
 		config.initial_game = game
 
+	# [b]Two spellings, and the second one is the reason this exists.[/b] `--map` is
+	# the flag `server` and TMC_MAP hand down, matching `--game` beside it; `+map` is
+	# what the fingers of anybody who has run a dedicated server type, and what
+	# dot-server's own command-line documentation has used as its example all along.
+	#
+	# `+map` reaches here rather than the console on purpose. DotConsole runs the
+	# `+command` half after the listener opens — which is still BEFORE this host has
+	# loaded a game, so the `map` command the statement is looking for belongs to a
+	# module that does not exist yet. It was parsed, dispatched, found nothing, and
+	# returned a DotResult nobody read: the server booted on the game's default map
+	# and said nothing about the argument it had just thrown away.
+	#
+	# `--map` wins a disagreement because it is the explicit one, and because it is
+	# the one a unit file sets through TMC_MAP where a typo is expensive to find.
+	var map_id := _value(args, "--map", _value(args, "+map", ""))
+
+	if map_id != "":
+		config.initial_map = map_id
+
 	for flag in ["--rcon-password", "--password"]:
 		if flag in args:
 			DotLog.warn(CHANNEL, "a secret on the command line is refused", {
@@ -406,6 +425,10 @@ func _boot() -> bool:
 		_die(EXIT_CONTENT, "The game loaded but its module did not. See the log above.")
 		return false
 
+	# Before the vote, because the vote's clock and its play history are about to be
+	# told what is running and this is what is running.
+	await _apply_initial_map()
+
 	# After the first game is loaded, because the director has to be told what is
 	# running — a vote system that starts on no game at all has no clock, nothing on
 	# cooldown, and offers the game everybody is playing on its own first ballot.
@@ -534,6 +557,69 @@ func _on_game_loaded(_content_key: String) -> void:
 	server.games.reapply_descriptor_cvars()
 
 
+## Puts the boot on `sv_map` / `--map` / `+map`, once the game that owns it is up.
+##
+## [b]After the game rather than instead of it, and that is not free.[/b] A game's map
+## session is built by the game's own scene and reads the game's own config, so the
+## first map is chosen and loaded before anything in this host can say otherwise. The
+## honest consequence is that a server given `+map` loads two maps at boot and the
+## game's own default is briefly the current one. The alternative — reaching into a
+## scene that has not been instantiated yet to change a value it is about to read — is
+## the kind of thing that works until a game builds its session somewhere else.
+##
+## Nothing here is fatal. A game with no maps, and a map that is not in the catalogue,
+## are both an operator's typo on a server that is otherwise up and full of people.
+func _apply_initial_map() -> void:
+	if config.initial_map == "":
+		return
+
+	var session := _find_map_session(server.games)
+
+	if session == null:
+		DotLog.warn(CHANNEL, "a map was asked for and this game has no maps", {
+			"map": config.initial_map,
+			"game": server.games.current_content_id(),
+			"why": "not every game has a catalogue; a lobby and a built arena do not",
+		})
+		return
+
+	var changed: Variant = await session.call("change_to", StringName(config.initial_map))
+
+	if changed is DotResult and not (changed as DotResult).ok:
+		DotLog.error(CHANNEL, "could not start on the map that was asked for", {
+			"map": config.initial_map,
+			"why": (changed as DotResult).error.message,
+		})
+		return
+
+	DotLog.info(CHANNEL, "starting on the map that was asked for", {
+		"map": config.initial_map,
+	})
+
+
+## The loaded game's map session, or null.
+##
+## [b]Duck-typed, like everything else that crosses into a game.[/b] `has_method` and
+## `call` rather than `is DotMapSession`: this host has no business requiring that a
+## game use dot-map, and a game with a session of its own that answers `change_to` is
+## as much of a map session as this needs. It is the same contract dot-vote's map
+## source has always used for the same reason.
+static func _find_map_session(root: Node) -> Object:
+	if root == null:
+		return null
+
+	for child in root.get_children():
+		if child.has_method("change_to") and child.has_method("change_to_map"):
+			return child
+
+		var found := _find_map_session(child)
+
+		if found != null:
+			return found
+
+	return null
+
+
 ## The lines an operator reads to find out whether it worked.
 ##
 ## [b]Every address, including a LAN one.[/b] "It says it started and my friend cannot
@@ -558,9 +644,10 @@ func _announce() -> void:
 	print("  games   : %s" % ", ".join(content.ids()))
 	print("  voting  : %s" % (
 		"off" if votes == null
-		else "%s, %s per game, !rtv at %d%%" % [
+		else "%s, %s per game, !%srtv at %d%%" % [
 			votes.rules_summary(),
 			votes.director.clock.formatted_remaining(),
+			TmcVote.COMMAND_PREFIX,
 			int(config.vote.rtv_fraction * 100.0),
 		]
 	))
