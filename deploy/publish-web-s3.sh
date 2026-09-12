@@ -72,9 +72,15 @@ PREFIX="${TMC_S3_PREFIX:-game/}"
 ENDPOINT="${TMC_S3_ENDPOINT:-}"
 PUBLIC_BASE="${TMC_S3_PUBLIC_BASE:-}"
 CACHE_CONTROL="${TMC_S3_CACHE_CONTROL:-no-store}"
-SOURCE="$ROOT/web/build"
-GZIP=""
-USE_CLI=""
+SOURCE="${TMC_S3_SOURCE:-$ROOT/web/build}"
+# Set to anything to turn on. These are the two that change what is UPLOADED rather than
+# where it goes, so they belong in a deployment's environment beside the bucket name --
+# a box that pre-compresses does it on every publish or on none of them, never per run.
+GZIP="${TMC_S3_GZIP:+1}"
+USE_CLI="${TMC_S3_USE_CLI:+1}"
+# --dry-run is deliberately NOT an environment variable. It is the flag a person types to
+# find out what would happen, and a deployment that had it set by accident would report
+# success having uploaded nothing.
 DRY_RUN=""
 
 while [ $# -gt 0 ]; do

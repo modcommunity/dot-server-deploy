@@ -23,21 +23,48 @@ while [ -L "$SELF" ]; do
 done
 PROJECT="$(cd -P "$(dirname "$SELF")" && pwd)"
 
+# [b]Every option here is also an environment variable, because this runs on a box
+# nobody is typing at.[/b] A deployment is a machine with a unit file or a container on
+# it, and a setting that can only arrive as an argument has to be baked into whatever
+# invokes the script -- which puts the configuration of the server in a file that is not
+# the server's, in a format that is not this one's, on every host separately.
+#
+# The layering is the family's, and the direction matters: **baked default, then
+# environment, then command line.** An argument always wins, so a person debugging on
+# the box can override the unit file for one run without editing it.
+#
+# TMC_RCON_PASSWORD IS DELIBERATELY NOT ONE OF THESE, and neither is any other secret.
+# See the note at the end of --help: `DotConfig` refuses secrets from the environment as
+# well as from argv, because both are readable by other processes on the machine --
+# `/proc/<pid>/environ` for one and `ps` for the other -- and both end up in pasted bug
+# reports. The password lives in cfg/rcon.yml, which is a file with a mode on it.
+
 # The runtime setup.sh found. Re-resolved when it has since moved, because a baked path
 # that silently stops working is worse than a search that takes a millisecond.
-GODOT="@GODOT@"
+GODOT="${TMC_GODOT:-@GODOT@}"
 
 # Where the exported engine will be served from. Baked into the loader by
 # `export-web`; see web/tmc-loader.js for why it cannot be discovered at runtime.
-ENGINE_BASE=""
+ENGINE_BASE="${TMC_ENGINE_BASE:-}"
 
-CONFIG_DIR="cfg"
-CONTENT_DIR="content"
-DATA_DIR="data"
+CONFIG_DIR="${TMC_CONFIG_DIR:-cfg}"
+CONTENT_DIR="${TMC_CONTENT_DIR:-content}"
+DATA_DIR="${TMC_DATA_DIR:-data}"
 COMMAND="run"
 VERBOSE=""
+[ -n "${TMC_VERBOSE:-}" ] && VERBOSE="--verbose"
 PASSTHROUGH=()
 OVERRIDES=()
+
+# The five settings that are passed through to the server rather than used here. Held in
+# variables rather than appended to OVERRIDES as they are seen, so that an argument
+# REPLACES the environment instead of being appended after it -- two `--port` flags on
+# one command line is not a thing to make the other side arbitrate.
+OPT_PORT="${TMC_PORT:-}"
+OPT_BIND="${TMC_BIND:-}"
+OPT_NAME="${TMC_NAME:-}"
+OPT_MAX_PLAYERS="${TMC_MAX_PLAYERS:-}"
+OPT_GAME="${TMC_GAME:-}"
 
 RED=$'\033[31m'; YLW=$'\033[33m'; DIM=$'\033[2m'; OFF=$'\033[0m'
 
@@ -89,9 +116,28 @@ usage() {
 
     ./server -- +sv_cheats 1 +changelevel lobby
 
-  Secrets are deliberately NOT options. argv is readable by every other process on
-  the machine and ends up in pasted bug reports, which is why DotConfig refuses
-  secrets from argv and the environment too. rcon_password lives in cfg/rcon.yml.
+  Environment
+
+  Every option above is also an environment variable, for a box nobody is typing
+  at. An argument beats the environment, which beats the baked default.
+
+    TMC_PORT            --port                TMC_CONFIG_DIR    --config
+    TMC_BIND            --bind                TMC_CONTENT_DIR   --content
+    TMC_NAME            --name                TMC_DATA_DIR      --data
+    TMC_MAX_PLAYERS     --max-players         TMC_GODOT         --godot
+    TMC_GAME            --game                TMC_ENGINE_BASE   --base
+    TMC_VERBOSE         --verbose (set to anything)
+
+  So a unit file or a container needs no arguments at all:
+
+    Environment=TMC_PORT=6090 TMC_GAME=g2gfast TMC_BIND=0.0.0.0
+    ExecStart=/srv/dot-server-deploy/server
+
+  Secrets are deliberately NOT options, and NOT environment variables either.
+  argv is readable by every other process on the machine via ps, the environment
+  is readable via /proc/<pid>/environ, and both end up in pasted bug reports --
+  which is why DotConfig refuses secrets from argv and the environment alike.
+  rcon_password lives in cfg/rcon.yml, which is a file with a mode on it.
 USAGE
 }
 
@@ -104,9 +150,11 @@ esac
 
 while [ $# -gt 0 ]; do
     case "$1" in
-        --port|--bind|--name|--max-players|--game)
-            [ $# -ge 2 ] || die "$1 needs a value"
-            OVERRIDES+=("$1" "$2"); shift 2 ;;
+        --port)        [ $# -ge 2 ] || die "$1 needs a value"; OPT_PORT="$2";        shift 2 ;;
+        --bind)        [ $# -ge 2 ] || die "$1 needs a value"; OPT_BIND="$2";        shift 2 ;;
+        --name)        [ $# -ge 2 ] || die "$1 needs a value"; OPT_NAME="$2";        shift 2 ;;
+        --max-players) [ $# -ge 2 ] || die "$1 needs a value"; OPT_MAX_PLAYERS="$2"; shift 2 ;;
+        --game)        [ $# -ge 2 ] || die "$1 needs a value"; OPT_GAME="$2";        shift 2 ;;
         --base)    ENGINE_BASE="${2:-}"; shift 2 ;;
         --config)  CONFIG_DIR="${2:-}";  shift 2 ;;
         --content) CONTENT_DIR="${2:-}"; shift 2 ;;
@@ -121,6 +169,15 @@ while [ $# -gt 0 ]; do
         *) die "unknown option: $1  (./server --help)" ;;
     esac
 done
+
+# Built here rather than during parsing: see OPT_* above. An empty value is absent
+# rather than a flag with nothing after it, which is how "the environment did not set
+# this" and "somebody asked for the empty string" stay different.
+[ -n "$OPT_PORT" ]        && OVERRIDES+=(--port "$OPT_PORT")
+[ -n "$OPT_BIND" ]        && OVERRIDES+=(--bind "$OPT_BIND")
+[ -n "$OPT_NAME" ]        && OVERRIDES+=(--name "$OPT_NAME")
+[ -n "$OPT_MAX_PLAYERS" ] && OVERRIDES+=(--max-players "$OPT_MAX_PLAYERS")
+[ -n "$OPT_GAME" ]        && OVERRIDES+=(--game "$OPT_GAME")
 
 # --- The runtime -----------------------------------------------------------
 

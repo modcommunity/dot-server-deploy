@@ -54,3 +54,6 @@ node_modules/
 /addons/dot_player_controller
 /addons/dot_player
 /.play/
+
+# Filled in from deploy/env.example. Never committed.
+/.env
