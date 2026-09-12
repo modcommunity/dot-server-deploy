@@ -1,0 +1,122 @@
+{
+    "_comment": "A Pterodactyl egg for one dot-server. Import under Nests > a nest > Import Egg. Every setting is an environment variable because ./server takes all of them that way -- see deploy/env.example. rcon_password is deliberately NOT a variable here: it is a secret, and Pterodactyl both displays variables in the panel and puts them in the container environment, where any process in the container can read them. It goes in cfg/rcon.yml, which is a file with a mode on it.",
+    "meta": {
+        "version": "PTDL_v2",
+        "update_url": null
+    },
+    "exported_at": "2026-09-11T23:30:00+00:00",
+    "name": "dot-server",
+    "author": "noreply@anthropic.com",
+    "description": "A dot-server running one game out of its content directory. The bhop/surf timer, the deathmatch, the sandbox and the lobby all ship in one build; TMC_GAME picks which one boots, and it can be changed live over RCON without a restart.",
+    "features": null,
+    "docker_images": {
+        "Debian 12": "ghcr.io/parkervcp/yolks:debian"
+    },
+    "file_denylist": [],
+    "startup": "./server",
+    "config": {
+        "files": "{}",
+        "startup": "{\"done\": \"server   ready\"}",
+        "logs": "{}",
+        "stop": "^C"
+    },
+    "scripts": {
+        "installation": {
+            "script": "#!/bin/bash\n# Installs a dot-server into /mnt/server.\n#\n# Godot is fetched here rather than baked into the image so the runtime version is\n# a panel variable: this tree tracks Godot closely, and an egg pinned to an image\n# tag goes stale the week the engine moves.\nset -euo pipefail\n\napt-get update -qq\napt-get install -y -qq --no-install-recommends git curl unzip ca-certificates >/dev/null\n\nmkdir -p /mnt/server\ncd /mnt/server\n\n# --- the runtime -------------------------------------------------------------\nGODOT_VERSION=\"${GODOT_VERSION:-4.7.2-stable}\"\nGODOT_ZIP=\"Godot_v${GODOT_VERSION}_linux.x86_64.zip\"\nGODOT_URL=\"https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}/${GODOT_ZIP}\"\n\necho \"[install] godot ${GODOT_VERSION}\"\ncurl -fsSL -o /tmp/godot.zip \"$GODOT_URL\"\nunzip -oq /tmp/godot.zip -d /tmp/godot\nmkdir -p /mnt/server/.runtime\nfind /tmp/godot -type f -name 'Godot_v*' -exec mv {} /mnt/server/.runtime/godot ';'\nchmod +x /mnt/server/.runtime/godot\n\n# --- the server --------------------------------------------------------------\n# A shallow clone: the history of this repository is of no use on a game box and\n# is most of the download.\nREPO=\"${DEPLOY_REPO:-https://github.com/modcommunity/dot-server-deploy.git}\"\nBRANCH=\"${DEPLOY_BRANCH:-main}\"\n\nif [ -d .git ]; then\n    echo \"[install] updating an existing checkout\"\n    git fetch --depth 1 origin \"$BRANCH\"\n    git reset --hard \"origin/$BRANCH\"\nelse\n    echo \"[install] cloning $REPO ($BRANCH)\"\n    git clone --depth 1 --branch \"$BRANCH\" \"$REPO\" /tmp/deploy\n    # Copied rather than cloned in place: /mnt/server is not empty by the time this\n    # runs -- the runtime above is already in it -- and git clone refuses that.\n    cp -a /tmp/deploy/. /mnt/server/\n    rm -rf /tmp/deploy\nfi\n\n# --- vendor, and write ./server ----------------------------------------------\n# setup.sh bakes the runtime path it FINDS into ./server, so it has to see ours.\nexport PATH=\"/mnt/server/.runtime:$PATH\"\nexport GODOT=\"/mnt/server/.runtime/godot\"\n\nchmod +x setup.sh\n./setup.sh\n\necho\necho \"[install] done. cfg/ holds the YAML; put rcon_password in cfg/rcon.yml.\"\n",
+            "container": "ghcr.io/parkervcp/installers:debian",
+            "entrypoint": "bash"
+        }
+    },
+    "variables": [
+        {
+            "name": "Game",
+            "description": "Which game in content/ boots. g2gfast is the bhop/surf timer. Also in this build: arena, playground, lobby, hungry_classic.",
+            "env_variable": "TMC_GAME",
+            "default_value": "g2gfast",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|string|max:64",
+            "field_type": "text"
+        },
+        {
+            "name": "Port",
+            "description": "The game port. RCON is always this plus one, so two servers a single port apart collide on RCON and nowhere else -- leave a gap of at least 2.",
+            "env_variable": "TMC_PORT",
+            "default_value": "6090",
+            "user_viewable": true,
+            "user_editable": false,
+            "rules": "required|integer|between:1024,65535",
+            "field_type": "text"
+        },
+        {
+            "name": "Bind address",
+            "description": "Interface to bind. 0.0.0.0 is every one, which is what a container wants.",
+            "env_variable": "TMC_BIND",
+            "default_value": "0.0.0.0",
+            "user_viewable": true,
+            "user_editable": false,
+            "rules": "required|string|max:64",
+            "field_type": "text"
+        },
+        {
+            "name": "Server name",
+            "description": "Shown in listings and in the browser client.",
+            "env_variable": "TMC_NAME",
+            "default_value": "TMC Bhop/Surf Server",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|string|max:96",
+            "field_type": "text"
+        },
+        {
+            "name": "Max players",
+            "description": "Slot count.",
+            "env_variable": "TMC_MAX_PLAYERS",
+            "default_value": "64",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|integer|between:1,256",
+            "field_type": "text"
+        },
+        {
+            "name": "Godot version",
+            "description": "The runtime tag fetched at install, as it appears in the engine's own release URLs. Changing it needs a reinstall.",
+            "env_variable": "GODOT_VERSION",
+            "default_value": "4.7.2-stable",
+            "user_viewable": true,
+            "user_editable": false,
+            "rules": "required|string|max:32",
+            "field_type": "text"
+        },
+        {
+            "name": "Deploy repository",
+            "description": "Where the server is cloned from at install.",
+            "env_variable": "DEPLOY_REPO",
+            "default_value": "https://github.com/modcommunity/dot-server-deploy.git",
+            "user_viewable": true,
+            "user_editable": false,
+            "rules": "required|string|max:255",
+            "field_type": "text"
+        },
+        {
+            "name": "Deploy branch",
+            "description": "Branch to check out at install.",
+            "env_variable": "DEPLOY_BRANCH",
+            "default_value": "main",
+            "user_viewable": true,
+            "user_editable": false,
+            "rules": "required|string|max:64",
+            "field_type": "text"
+        },
+        {
+            "name": "Verbose logging",
+            "description": "Set to 1 for debug logging. Empty for normal.",
+            "env_variable": "TMC_VERBOSE",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string|max:8",
+            "field_type": "text"
+        }
+    ]
+}
