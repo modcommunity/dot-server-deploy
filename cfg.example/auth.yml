@@ -1,0 +1,26 @@
+# Authentication.
+#
+# Absent or disabled, everybody arrives as a guest with a per-device id through
+# DotGuestIdentity, and the server works. That is the simplest deployment there is
+# and it is deliberately a supported one.
+#
+# WORTH KNOWING: DotAdminManager refuses permissions to any unauthenticated
+# session -- a guest uid is a random per-device string, so granting anything to one
+# grants it to anyone. Until this is wired up, cfg/permissions.yml has no effect and
+# the local console is the only administrator. That is correct, and it looks exactly
+# like the file being ignored.
+
+enabled: false
+
+backend:
+  type: "rest"
+  url: "http://localhost:8000"
+  timeout: 30
+  retries: 3
+  verify:
+    type: "jwt"
+    # A connect ticket is verified offline against a public key. A server operator
+    # holds a public key and nothing else, which is what makes third-party servers
+    # safe to allow at all. Never a shared secret: a secret that verifies a ticket
+    # also MINTS one, so every operator holding it can forge any player's identity.
+    public_key_file: "cfg/issuer.pub.pem"

@@ -39,6 +39,20 @@ style. `content/lobby/game.yml` says so where somebody will read it.
 It is the same shape as the constraint dot-cloud already documents for avatar packs — "the
 pack is data, the code ships in the build" — reached from further along.
 
+## `cfg/` is written by setup, and `cfg.example/` is what is tracked
+
+**A configuration file an operator edits in place cannot also be a file git is tracking.** The seven `cfg/*.yml` were committed, and setup.sh carried a second copy of each one in a heredoc for a tarball with no checkout, and setup.ps1 carried a third for Windows. Three consequences, all of them found on a live box rather than reasoned about:
+
+`git pull` on a running server stopped. *"Your local changes to the following files would be overwritten by merge: cfg/server.yml"* — and what it was refusing to merge was a default nobody wanted, over an answer somebody had chosen for that deployment. The operator's options were to stash their own configuration or to commit a box's port into the repository, and both had been done.
+
+**The copies drifted, silently, in the direction that grants nothing.** The committed `groups.yml` carried dot-server's real flag names, having been fixed when the `warn`/`announce`/`change` bug was found; both setup scripts still wrote the three names that match no flag and grant nothing while erroring nowhere. `vote.yml` existed only in the checkout, so a tarball install had no game voting at all and no file saying it could. The committed `server.yml` had gained `content_urls` and `query_bind_ip` and lost `sv_password`, `sv_tickrate` and `sv_tags`, because it was not a template any more — it was one server's answer, being edited by whoever was on that box.
+
+**And a generated secret reached a public repository.** setup.sh generates an RCON password on first run, writes it 0600, and prints it once. Run that where git is watching a tracked `cfg/rcon.yml` and the next `git add -A` publishes it, beneath a comment block explaining that the file ships empty because a password in a public repository is a password everybody has. `rcon_allowed: ["127.0.0.1"]` is why it was a rotation rather than an incident, which is the argument for that default and not for the mistake.
+
+So: `cfg.example/` is tracked and is the only copy. `cfg/` is gitignored, written file by file on first run by whichever setup script ran, and **never overwritten** — an upgrade that regenerated a config would throw away the edits on the one run nobody is watching. The cost of never overwriting is that a template which *gains* a setting is invisible, so both scripts finish by naming the keys the templates have that your files do not mention, treating a commented-out key as answered. `rcon_password: "@RCON_PASSWORD@"` is a placeholder substituted on the way in, so the tracked file has no secret in it even for one run.
+
+The Windows script's comment said a shared source would be a third format and two scripts agreeing by construction was not worth inventing one. The shared source turned out not to be a format at all — it is the files themselves, and both scripts now copy a directory.
+
 ## The configuration is a surface, not a second parser
 
 `cfg/*.yml` compiles to a `.cfg` that dot-server's own console executes, in dot-server's

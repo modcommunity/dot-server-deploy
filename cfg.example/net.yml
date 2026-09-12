@@ -1,22 +1,19 @@
-# Network & Bind
-net_bind_ip: "127.0.0.1"
-net_port: 6070
+# Network & bind.
 
-# Uses Bind IP if not set. Only needed if the server is behind NAT.
+net_bind_ip: "0.0.0.0"
+net_port: 6064
+
+# Uses the bind IP if not set. Only needed if the server is behind NAT. Nothing binds
+# to it -- it is what the join address is printed from and what a listing reports.
 net_public_ip: ""
-# -----------------------------------------
-# Network & Bind
 
 # Performance
 # -----------------------------------------
 # Maximum bytes per second per client.
-net_max_bps: 1000000 
+net_max_bps: 1000000
 
 # Maximum number of packets per second per client.
 net_max_pps: 60
 
 # Max number of network updates per second a client can send or receive.
 net_max_update_rate: 66
-
-# -----------------------------------------
-# Performance

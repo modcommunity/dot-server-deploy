@@ -26,12 +26,14 @@
 #   4. Runs Godot's import pass. Without it every class_name global is unresolved,
 #      every cross-file type reference fails, and the whole thing looks like dozens
 #      of unrelated errors.
-#   5. Writes cfg/*.yml if they are missing, generating an RCON password ONCE if it
-#      writes cfg/rcon.yml at all, and printing it once. A checkout already HAS that
-#      file, shipped with RCON off, so this branch is for a release tarball rather
-#      than a clone. It never overwrites a config file that exists: your edits are
-#      the configuration, and regenerating on upgrade throws them away on the one run
-#      nobody is watching.
+#   5. Copies cfg.example/ into cfg/, file by file, for every file cfg/ does not
+#      already have -- generating an RCON password ONCE if it writes cfg/rcon.yml at
+#      all, and printing it once. cfg/ is NOT in this repository: it is what one
+#      deployment decided, so tracking it made `git pull` on a running box stop on
+#      the operator's own edits. It never overwrites a config file that exists --
+#      your edits are the configuration, and regenerating on upgrade throws them away
+#      on the one run nobody is watching -- so it finishes by NAMING any setting the
+#      templates have gained that your files do not mention.
 #   6. Writes ./server.
 
 set -uo pipefail
@@ -535,12 +537,29 @@ if [ "$DO_IMPORT" -eq 1 ]; then
 fi
 
 # --- 5. Configuration ------------------------------------------------------
+#
+# [b]cfg/ is not in the repository, and that is the whole design of this step.[/b]
+#
+# It used to be: the seven files were committed, and setup.sh carried a second copy
+# of each one in a heredoc for a tarball that had no checkout. So a running server's
+# configuration was a tracked file an operator edits in place, and `git pull` on the
+# box stopped with "your local changes would be overwritten by merge" -- on the one
+# file that is nobody's but that deployment's. The two copies had drifted apart by
+# then as well: the committed groups.yml carried the real dot-server flag names and
+# the heredoc still had the three that were silently not flags, vote.yml existed only
+# in the checkout so a tarball got none of it, and the committed rcon.yml had a live
+# generated password in it, public, because a first run wrote one where git was
+# watching.
+#
+# One copy now, in cfg.example/, which is a template directory and is never read by a
+# running server. This copies what is missing and touches nothing that exists.
 
 step "configuration"
 mkdir -p cfg cfg/content content/global data
 
+[ -d cfg.example ] || die "cfg.example/ is missing; this is not a complete checkout" 1
+
 if [ -f cfg/server.yml ]; then
-    ok "cfg/ already exists and was not touched"
     NEW_CONFIG=0
 else
     NEW_CONFIG=1
@@ -550,107 +569,27 @@ fi
 umask_old="$(umask)"
 umask 077
 
-write_if_missing() {
-    [ -f "$1" ] && return 0
-    cat > "$1"
-    printf '    %s+%s    %s\n' "$GRN" "$OFF" "$1"
-}
+# `cat >` rather than `cp`, deliberately: cp copies the template's own mode bits and
+# would publish a 644 rcon.yml. A redirect creates through the umask above.
+while IFS= read -r template; do
+    rel="${template#cfg.example/}"
+    target="cfg/$rel"
+    [ -f "$target" ] && continue
+    mkdir -p "$(dirname "$target")"
 
-write_if_missing cfg/server.yml <<'YML'
-# General server settings.
-#
-# Anything dot-server exposes as a console variable can go here too, under its own
-# name -- this file is compiled to a .cfg and handed to dot-server's console, which
-# is the parser and the validator. data/from_yaml.cfg is what it became; read that
-# when a setting appears not to work.
+    if [ "$rel" = "rcon.yml" ]; then
+        RCON_PASSWORD="$(head -c 24 /dev/urandom | base64 | tr -d '/+=' | head -c 24)"
+        # The password is substituted into a file that is never tracked. The template
+        # holds a placeholder, so a checkout has nothing to leak and a half-finished
+        # run leaves no password anybody else also has.
+        sed "s|@RCON_PASSWORD@|$RCON_PASSWORD|" "$template" > "$target"
+        NEW_RCON=1
+    else
+        cat "$template" > "$target"
+    fi
 
-sv_name: "TMC Test Server"
-sv_maxplayers: 64
-
-# Empty means anyone may join.
-sv_password: ""
-
-# Simulation rate. Higher is more responsive and costs CPU and bandwidth on every
-# client as well as here. Fixed at boot.
-sv_tickrate: 60
-
-# The game to load at boot. Empty uses whichever content directory is marked
-# default. A server with no game at all is legitimate and runs empty.
-sv_game: ""
-
-# The map that game starts on. Empty uses the game's own default, which is the
-# normal case. `--map`, TMC_MAP and `-- +map <id>` all override it. A game that has
-# no maps, or has not got this one, says so in the log and boots on its default.
-sv_map: ""
-
-# The app's URL segment on the website, reported in a query as the game's name.
-#
-# Unique and lowercase because the site already made it so, which is the whole
-# reason to reuse it rather than invent a second identifier that has to be kept in
-# step. Empty falls back to the running game's id, which is the right answer on a
-# box running one game.
-#
-# DISPLAY ONLY. A server can claim any app it likes, and nothing that has to be
-# certain which app a server belongs to -- a launch resolving a build, a play grant
-# -- reads this. Those ask the backbone, which knows. It is what a listing prints
-# next to the hostname, and it is also A2S's `folder`, which is the field trackers
-# group servers by.
-#
-# `sv_query_app` is also a cvar, so it can be changed on a running server.
-sv_query_app: ""
-
-sv_tags: [lobby, tmc]
-YML
-
-write_if_missing cfg/net.yml <<'YML'
-# Network & Bind
-
-net_bind_ip: "0.0.0.0"
-net_port: 6064
-
-# Uses Bind IP if not set. Only needed if the server is behind NAT. Nothing binds
-# to it -- it is what the join address is printed from and what a listing reports.
-net_public_ip: ""
-
-# Performance
-# -----------------------------------------
-# Maximum bytes per second per client.
-net_max_bps: 1000000
-
-# Maximum number of packets per second per client.
-net_max_pps: 60
-
-# Max number of network updates per second a client can send or receive.
-net_max_update_rate: 66
-YML
-
-write_if_missing cfg/auth.yml <<'YML'
-# Authentication.
-#
-# Absent or disabled, everybody arrives as a guest with a per-device id through
-# DotGuestIdentity, and the server works. That is the simplest deployment there is
-# and it is deliberately a supported one.
-#
-# WORTH KNOWING: DotAdminManager refuses permissions to any unauthenticated
-# session -- a guest uid is a random per-device string, so granting anything to one
-# grants it to anyone. Until this is wired up, cfg/permissions.yml has no effect and
-# the local console is the only administrator. That is correct, and it looks exactly
-# like the file being ignored.
-
-enabled: false
-
-backend:
-  type: "rest"
-  url: "http://localhost:8000"
-  timeout: 30
-  retries: 3
-  verify:
-    type: "jwt"
-    # A connect ticket is verified offline against a public key. A server operator
-    # holds a public key and nothing else, which is what makes third-party servers
-    # safe to allow at all.
-    public_key_file: "cfg/issuer.pub.pem"
-YML
+    printf '    %s+%s    %s\n' "$GRN" "$OFF" "$target"
+done < <(find cfg.example -type f \( -name '*.yml' -o -name '*.md' \) | sort)
 
 # [b]The server's own content trust, derived from the client's.[/b]
 #
@@ -660,10 +599,10 @@ YML
 # trusted_keys are configured" and a server that was told where to download its maps
 # still cannot download one.
 #
-# There was no such file and nothing generated one. The client's half
-# (`client/content.json`) is committed and carries the public key; this writes the same
-# trust where the server reads it, so the two halves cannot disagree about what they
-# will mount.
+# It is generated rather than templated because it is not a setting: the client's half
+# (`client/content.json`) is committed and carries the public key, and this writes the
+# same trust where the server reads it, so the two halves cannot disagree about what
+# they will mount.
 if [ ! -f cfg/content.json ] && [ -f client/content.json ] && command -v python3 >/dev/null 2>&1; then
     python3 -c 'import json,io
 src = json.load(io.open("client/content.json", encoding="utf-8"))
@@ -673,82 +612,32 @@ io.open("cfg/content.json", "w", encoding="utf-8").write(json.dumps({
 }, indent=4) + "\n")' && printf '    %s+%s    %s\n' "$GRN" "$OFF" "cfg/content.json"
 fi
 
-write_if_missing cfg/groups.yml <<'YML'
-# Permission groups.
-#
-# dot-server's model is FLAGS, not roles -- operators do not agree on what a
-# "moderator" is, and a game adds "slay" or "noclip" without coordinating with
-# anybody. This file is the translation: a group is a name for a set of flags.
-#
-# is_root is every flag there is, present and future.
-
-groups:
-  owner:
-    is_root: true
-    immunity: 100
-  admin:
-    immunity: 80
-    permissions:
-      - "kick"
-      - "ban"
-      - "mute"
-      - "warn"
-      - "announce"
-      - "change"
-  moderator:
-    immunity: 50
-    permissions:
-      - "kick"
-      - "mute"
-      - "warn"
-      - "announce"
-YML
-
-write_if_missing cfg/permissions.yml <<'YML'
-# Who is in which group.
-#
-# The key is matched against a player's account uid, username and display name, in
-# that order, case-insensitively -- an operator writes whichever of the three they
-# know.
-#
-# Immunity is separate from flags because "may kick" and "may be kicked" are
-# different questions. Equal immunity cannot act on equal: two admins at the same
-# level kicking each other in a loop has no correct resolution, so it is forbidden
-# rather than raced.
-#
-# See cfg/auth.yml: without authentication this file does nothing.
-
-users:
-  gamemann:
-    group: owner
-YML
-
-if [ ! -f cfg/rcon.yml ]; then
-    RCON_PASSWORD="$(head -c 24 /dev/urandom | base64 | tr -d '/+=' | head -c 24)"
-    cat > cfg/rcon.yml <<YML
-# Remote console.
-#
-# An EMPTY password means the RCON listener does not open at all, which is the right
-# setting for a server nobody administers remotely. There is no configuration that
-# produces an unauthenticated remote console.
-#
-# This password was generated once, when setup.sh first ran, and printed once. Change
-# it here if you like. Do NOT put it in a command line or an environment variable:
-# both are readable by any other process on the machine and both end up in pasted bug
-# reports, which is why ./server refuses --rcon-password outright.
-#
-# rcon_allowed is the control that survives a leaked password. Populate it.
-
-rcon_password: "$RCON_PASSWORD"
-rcon_port: 0            # 0 uses the game port + 1
-rcon_allowed: []        # empty allows any address
-rcon_websocket: false   # for a browser-based admin panel
-YML
-    NEW_RCON=1
-fi
-
 umask "$umask_old"
-[ "$NEW_CONFIG" -eq 1 ] && ok "cfg/ written"
+
+# [b]What an upgrade added, named rather than skipped.[/b]
+#
+# Never overwriting a file that exists is the rule, and the cost of that rule is that
+# a release which ADDS a setting is invisible: the template grows `content_urls`, the
+# box keeps the file it has, and the server looks like it is ignoring documentation
+# that describes a key nobody's config contains. So say so. A key that is present but
+# COMMENTED OUT counts as answered -- an operator who deleted a setting on purpose is
+# not asking to be reminded of it every run.
+for template in cfg.example/*.yml; do
+    target="cfg/$(basename "$template")"
+    [ -f "$target" ] || continue
+    added=""
+    while IFS= read -r key; do
+        grep -qE "^[[:space:]]*#?[[:space:]]*${key}:" "$target" || added="$added $key"
+    done < <(grep -oE '^[a-z_][a-z0-9_]*:' "$template" | tr -d ':')
+    [ -n "$added" ] && printf '    %s~%s    %s has no%s (see %s)\n' \
+        "$YLW" "$OFF" "$target" "$added" "$template"
+done
+
+if [ "$NEW_CONFIG" -eq 1 ]; then
+    ok "cfg/ written from cfg.example/"
+else
+    ok "cfg/ already exists and was not touched"
+fi
 
 # --- 6. ./server -----------------------------------------------------------
 

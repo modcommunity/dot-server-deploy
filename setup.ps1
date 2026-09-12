@@ -294,137 +294,104 @@ if (-not $NoImport) {
 }
 
 # --- 5. Configuration ------------------------------------------------------
+#
+# [b]cfg/ is not in the repository; cfg.example/ is.[/b] setup.sh says why at length.
+# The short version is that a tracked configuration file is one `git pull` on a
+# running server refuses to merge, over the operator's own edits.
+#
+# This script used to carry a second copy of every default as a here-string, with a
+# comment saying a shared source would be a third format and two scripts agreeing by
+# construction was not worth inventing one. The shared source turned out not to be a
+# format at all -- it is the files themselves -- and by the time anybody looked the
+# two copies disagreed about the admin flag names, which is a bug that grants nothing
+# and says nothing.
 
 Step "configuration"
 foreach ($dir in 'cfg','cfg\content','content\global','data') {
     New-Item -ItemType Directory -Force -Path $dir | Out-Null
 }
 
+$templates = Join-Path $Root 'cfg.example'
+if (-not (Test-Path -LiteralPath $templates)) {
+    Die "cfg.example\ is missing; this is not a complete checkout" 1
+}
+
 $newConfig = -not (Test-Path -LiteralPath 'cfg\server.yml')
-
-function Write-IfMissing($path, $text) {
-    if (Test-Path -LiteralPath $path) { return }
-    # UTF8 without a BOM. A BOM at the top of a YAML file is three bytes before
-    # the first key, and every parser that does not strip it reads the first key
-    # name with an invisible character in it -- including this one.
-    [System.IO.File]::WriteAllText(
-        (Join-Path $Root $path), $text, (New-Object System.Text.UTF8Encoding $false))
-    Write-Host "    +    $path" -ForegroundColor Green
-}
-
-# The same defaults setup.sh writes. Kept as one string per file rather than
-# generated from a shared source, because the shared source would be a third
-# format and two scripts that agree by construction is not worth inventing one.
-Write-IfMissing 'cfg\server.yml' @"
-# General server settings.
-#
-# Anything dot-server exposes as a console variable can go here too, under its
-# own name -- this file is compiled to a .cfg and handed to dot-server's console,
-# which is the parser and the validator. data\from_yaml.cfg is what it became;
-# read that when a setting appears not to work.
-
-sv_name: "TMC Test Server"
-sv_maxplayers: 64
-sv_password: ""
-sv_tickrate: 60
-sv_game: ""
-sv_tags: [lobby, tmc]
-"@
-
-Write-IfMissing 'cfg\net.yml' @"
-# Network & Bind
-
-net_bind_ip: "0.0.0.0"
-net_port: 6064
-
-# Uses Bind IP if not set. Only needed if the server is behind NAT. Nothing binds
-# to it -- it is what the join address is printed from.
-net_public_ip: ""
-
-# Performance
-net_max_bps: 1000000
-net_max_pps: 60
-net_max_update_rate: 66
-"@
-
-Write-IfMissing 'cfg\auth.yml' @"
-# Authentication.
-#
-# Absent or disabled, everybody arrives as a guest and the server works.
-#
-# WORTH KNOWING: DotAdminManager refuses permissions to any unauthenticated
-# session -- a guest uid is a random per-device string, so granting anything to
-# one grants it to anyone. Until this is wired up, cfg\permissions.yml has no
-# effect and the local console is the only administrator.
-
-enabled: false
-
-backend:
-  type: "rest"
-  url: "http://localhost:8000"
-  timeout: 30
-  retries: 3
-  verify:
-    type: "jwt"
-    public_key_file: "cfg/issuer.pub.pem"
-"@
-
-Write-IfMissing 'cfg\groups.yml' @"
-# Permission groups.
-#
-# dot-server's model is FLAGS, not roles. This file is the translation: a group
-# is a name for a set of flags. is_root is every flag there is, present and
-# future.
-
-groups:
-  owner:
-    is_root: true
-    immunity: 100
-  admin:
-    immunity: 80
-    permissions: [kick, ban, mute, warn, announce, change]
-  moderator:
-    immunity: 50
-    permissions: [kick, mute, warn, announce]
-"@
-
-Write-IfMissing 'cfg\permissions.yml' @"
-# Who is in which group. The key is matched against a player's account uid,
-# username and display name, case-insensitively.
-#
-# See cfg\auth.yml: without authentication this file does nothing.
-
-users:
-  gamemann:
-    group: owner
-"@
-
 $newRcon = $false
-if (-not (Test-Path -LiteralPath 'cfg\rcon.yml')) {
-    $bytes = New-Object byte[] 18
-    [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
-    $rcon = [Convert]::ToBase64String($bytes) -replace '[/+=]', ''
+$rcon = $null
 
-    Write-IfMissing 'cfg\rcon.yml' @"
-# Remote console.
-#
-# An EMPTY password means the RCON listener does not open at all, which is the
-# right setting for a server nobody administers remotely. There is no
-# configuration that produces an unauthenticated remote console.
-#
-# This password was generated once and printed once. Do NOT put it in a command
-# line or an environment variable: both are readable by any other process on the
-# machine and both end up in pasted bug reports.
+foreach ($template in (Get-ChildItem -LiteralPath $templates -Recurse -File |
+        Where-Object { $_.Extension -in '.yml', '.md' } | Sort-Object FullName)) {
 
-rcon_password: "$rcon"
-rcon_port: 0
-rcon_allowed: []
-rcon_websocket: false
-"@
-    $newRcon = $true
+    $rel = $template.FullName.Substring($templates.Length + 1)
+    $target = Join-Path 'cfg' $rel
+    if (Test-Path -LiteralPath $target) { continue }
+
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent (Join-Path $Root $target)) | Out-Null
+
+    # Read and write as UTF8 without a BOM. A BOM at the top of a YAML file is three
+    # bytes before the first key, and every parser that does not strip it reads the
+    # first key name with an invisible character in it -- including this one. Copy-Item
+    # would preserve the bytes, but Get-Content/Set-Content on this path would not, so
+    # the encoding is stated rather than inherited.
+    $text = [System.IO.File]::ReadAllText($template.FullName)
+
+    if ($rel -eq 'rcon.yml') {
+        $bytes = New-Object byte[] 18
+        [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
+        $rcon = [Convert]::ToBase64String($bytes) -replace '[/+=]', ''
+        $text = $text.Replace('@RCON_PASSWORD@', $rcon)
+        $newRcon = $true
+    }
+
+    [System.IO.File]::WriteAllText(
+        (Join-Path $Root $target), $text, (New-Object System.Text.UTF8Encoding $false))
+    Write-Host "    +    $target" -ForegroundColor Green
 }
 
-if (-not $newConfig) { Ok "cfg\ already exists and was not touched" }
+# The server's own content trust, derived from the client's. setup.sh explains it:
+# DotCloudClient refuses every unsigned manifest, and with no cfg\content.json it
+# starts with no trusted keys at all, so a server told where to download its maps
+# still cannot download one.
+if ((-not (Test-Path -LiteralPath 'cfg\content.json')) -and (Test-Path -LiteralPath 'client\content.json')) {
+    $src = Get-Content -LiteralPath 'client\content.json' -Raw | ConvertFrom-Json
+    $trust = [ordered]@{
+        require_signed_manifests = $true
+        trusted_keys             = $src.trusted_keys
+    }
+    if ($null -ne $src.require_signed_manifests) {
+        $trust.require_signed_manifests = $src.require_signed_manifests
+    }
+    [System.IO.File]::WriteAllText(
+        (Join-Path $Root 'cfg\content.json'),
+        ($trust | ConvertTo-Json -Depth 8) + "`n",
+        (New-Object System.Text.UTF8Encoding $false))
+    Write-Host "    +    cfg\content.json" -ForegroundColor Green
+}
+
+# What an upgrade added, named rather than skipped. Never overwriting a file that
+# exists is the rule; the cost is that a release which ADDS a setting is invisible,
+# so say which ones your files do not mention. A commented-out key counts as
+# answered -- deleting a setting on purpose is not a question.
+foreach ($template in (Get-ChildItem -LiteralPath $templates -File -Filter '*.yml' | Sort-Object Name)) {
+    $target = Join-Path 'cfg' $template.Name
+    if (-not (Test-Path -LiteralPath $target)) { continue }
+
+    $have = Get-Content -LiteralPath $target
+    $added = @()
+    foreach ($line in (Get-Content -LiteralPath $template.FullName)) {
+        if ($line -match '^([a-z_][a-z0-9_]*):') {
+            $key = $Matches[1]
+            if (-not ($have -match "^\s*#?\s*${key}:")) { $added += $key }
+        }
+    }
+    if ($added.Count -gt 0) {
+        Write-Host ("    ~    $target has no " + ($added -join ' ') +
+            " (see cfg.example\" + $template.Name + ")") -ForegroundColor Yellow
+    }
+}
+
+if ($newConfig) { Ok "cfg\ written from cfg.example\" } else { Ok "cfg\ already exists and was not touched" }
 
 # --- 6. server.ps1 / server.cmd -------------------------------------------
 #

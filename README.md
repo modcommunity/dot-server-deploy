@@ -47,7 +47,7 @@ Windows: `setup.bat` (a shim for `setup.ps1`), then `.\server.ps1`. It takes the
 
 ## What it gives a server owner
 
-- **One command to start.** `./setup.sh` finds a Godot runtime — or downloads the pinned one, verified — wires in the addons, writes a commented `cfg/`, and writes `./server`. It never overwrites a config file that already exists. RCON ships off; `cfg/rcon.yml` says how to turn it on.
+- **One command to start.** `./setup.sh` finds a Godot runtime — or downloads the pinned one, verified — wires in the addons, writes a commented `cfg/` from `cfg.example/`, and writes `./server`. It never overwrites a config file that already exists, and it names any setting the templates have gained that your files do not mention, so an upgrade that adds one is visible rather than skipped. `cfg/` is not in this repository: it is what one deployment decided, and a tracked copy is one `git pull` on a running server stops on. RCON reaches loopback only until you widen `rcon_allowed`; `cfg/rcon.yml` says how.
 - **Configuration in YAML**, in files split by subject: `server.yml`, `net.yml`, `rcon.yml`, `auth.yml`, `groups.yml` and `permissions.yml`. Anything dot-server exposes as a console variable can go in them under its own name.
 - **Roles, not flags.** dot-server's permission model is flags, deliberately; `groups.yml` is the translation, so an operator writes `admin: [kick, ban, mute]` and a player gets the flags.
 - **Moderation.** Bans, kicks, mutes, votes and an audit log, all dot-server's, all reachable from the console or over RCON.
@@ -74,7 +74,9 @@ Windows: `setup.bat` (a shim for `setup.ps1`), then `.\server.ps1`. It takes the
 ## The layout
 
 ```
-cfg/                 what an operator edits
+cfg.example/         the defaults, tracked. Copied into cfg/ by setup.sh, never read by a running server
+
+cfg/                 what an operator edits. Written on first run, and not in this repository
   server.yml           name, slots, tickrate, the game to boot
   net.yml              bind address, port, bandwidth
   rcon.yml             remote console. Generated once, printed once
@@ -98,6 +100,8 @@ web/                 the browser build, and the page that takes ?server= from th
 ```
 
 Three directories, and the split is the point: `cfg/` and `content/` are read, `data/` is written. A container mounts the first two read-only and the third read-write, and a systemd unit points `ReadWritePaths` at exactly one directory.
+
+**`cfg/` is written, never pulled.** `setup.sh` copies each file out of `cfg.example/` if and only if `cfg/` has not got it, generating the RCON password on the way past, and every later run leaves what it finds alone. So upgrading a running server is `git pull && ./setup.sh --no-import`: the pull cannot touch your configuration because your configuration is not tracked, and the setup run tells you which new settings the templates have grown. This is the second design — `cfg/*.yml` was committed once, which meant `git pull` on a box stopped with *your local changes to cfg/server.yml would be overwritten by merge* on the one file that was nobody's but that server's, and meant a generated RCON password reached a public repository the first time anybody ran setup where git was watching.
 
 ## Configuration
 
@@ -154,9 +158,36 @@ inf chat.relay  a relayed command was refused  uid=backbone:clx8f2k0kd command=m
                 fix=add 'backbone:clx8f2k0kd' to the server's admin file with the 'rcon' flag
 ```
 
-Paste that into `cfg/permissions.yml` under `users:` with a group, restart, and the same command works. There is deliberately **no** way to grant it by the name shown beside the message: a display name is a string the person can change on their own profile page, and a permission keyed on one is a permission anybody can take by renaming themselves.
+Paste that into `cfg/permissions.yml` under `users:` with a group, restart, and the same command works. The file ships with no `users:` key at all — a name written into a public template is a name anybody can register, and every server that never edited the file would hand that person its owner group — so the first entry adds the key as well as the person. There is deliberately **no** way to grant it by the name shown beside the message: a display name is a string the person can change on their own profile page, and a permission keyed on one is a permission anybody can take by renaming themselves.
 
 Once the relay is up, the server also posts its command table to `POST /api/integration/v1/chat/commands`, and the site's chat box offers those commands when a member types `/`. The list is built at the relay's own source, so what the menu shows is what that person could actually run. Offering a command that will always be refused teaches people the site is broken.
+
+## Upgrading a server that is already running
+
+```bash
+git pull && ./setup.sh --no-import
+```
+
+The pull cannot touch `cfg/`, because `cfg/` is not tracked; the setup run adds any file you have not got and names any setting the templates have grown. Nothing else is needed.
+
+**Once, on a box checked out before this changed**, the pull stops on the configuration it is about to stop tracking:
+
+```
+error: Your local changes to the following files would be overwritten by merge:
+        cfg/server.yml
+```
+
+Git is refusing to delete a file you edited, which is right of it. Put the configuration somewhere it is not looking, take the pull, and put it back:
+
+```bash
+cp -a cfg ../cfg.mine          # your configuration, including the RCON password
+git checkout -- cfg            # let git have its copy back, so the pull can delete it
+git pull
+cp -a ../cfg.mine/. cfg/       # and it is yours again, now untracked
+./setup.sh --no-import
+```
+
+**Then change the RCON password.** Any server set up before this shared one password with everybody who ever cloned the repository, because the first run generated it into a tracked file and it was committed. `rcon_allowed` kept it to loopback, so it is a password to rotate rather than an incident, but rotate it: a long random line in `cfg/rcon.yml`, and a restart.
 
 ## Docker
 

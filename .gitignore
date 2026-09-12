@@ -37,6 +37,20 @@
 # compiled into.
 /data/
 
+# The configuration of THIS deployment. Written on first run by setup.sh from
+# cfg.example/, which is the tracked copy and the only one.
+#
+# It was tracked once and that was the mistake: a file an operator edits in place, in
+# git, means `git pull` on a running server stops with "your local changes to
+# cfg/server.yml would be overwritten by merge" -- and the change it is refusing to
+# merge is a default nobody wanted, over an answer somebody chose. It also put a
+# generated RCON password in a public repository, because setup.sh wrote one where
+# git was watching, and a port and a uid belonging to one box became everybody's
+# defaults.
+#
+# cfg/content.json is generated from client/content.json and is covered by this too.
+/cfg/
+
 # Exports
 /web/build/
 /build/

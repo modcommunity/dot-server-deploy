@@ -7,3 +7,10 @@
 **/*.pck
 **/export_presets.cfg
 **/node_modules
+
+# One deployment's configuration, including its RCON password. Not tracked either, but
+# .dockerignore is what keeps a developer's live cfg/ out of the build context -- the
+# Dockerfile already deletes it after COPY, and by then it has been a layer. cfg.example/
+# is NOT excluded: it is what setup.sh writes a container's cfg/ from, at build and on
+# the first run of a mounted volume.
+**/cfg

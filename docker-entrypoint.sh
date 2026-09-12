@@ -6,6 +6,10 @@
 # is exactly setup.sh's "never overwrite a config file that exists" rule, reached from
 # the direction a container reaches it: an image rebuild must not throw away the
 # settings and the RCON password an operator has been using.
+#
+# What it is populated FROM is cfg.example/, which is in the image because it is in the
+# repository. cfg/ is not in either: it is one deployment's answers, and the volume is
+# where they live.
 
 set -uo pipefail
 cd /srv/tmc || exit 1

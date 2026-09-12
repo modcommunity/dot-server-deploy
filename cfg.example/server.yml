@@ -1,6 +1,19 @@
-# General server settings
+# General server settings.
+#
+# Anything dot-server exposes as a console variable can go here too, under its own
+# name -- this file is compiled to a .cfg and handed to dot-server's console, which
+# is the parser and the validator. data/from_yaml.cfg is what it became; read that
+# when a setting appears not to work.
+
 sv_name: "TMC Test Server"
 sv_maxplayers: 64
+
+# Empty means anyone may join.
+sv_password: ""
+
+# Simulation rate. Higher is more responsive and costs CPU and bandwidth on every
+# client as well as here. Fixed at boot.
+sv_tickrate: 60
 
 # Which game in the content directory boots.
 #
@@ -47,20 +60,22 @@ sv_map: ""
 # `sv_query_app` is also a cvar, so it can be changed on a running server.
 sv_query_app: ""
 
+sv_tags: [lobby, tmc]
+
 # Server queries.
 #
 # `query_enabled` is on by dot-server's own default and answers the dot query
 # protocol (DQP). `a2s_enabled` adds the twenty-year-old one beside it on the same
-# socket — told apart by the first four bytes — because the trackers, uptime
+# socket -- told apart by the first four bytes -- because the trackers, uptime
 # monitors and server browsers that already exist speak A2S and nothing else. TMC's
 # own scanner is one of them.
 #
-# `query_bind_ip` is the setting a reverse-proxied server cannot do without.
-# `net_bind_ip` is loopback here because nginx terminates TLS in front of the game,
-# and nginx forwards a WebSocket but CANNOT forward UDP — so a query listener
-# sharing that setting is listening where nothing can ask it, and a tracker cannot
-# tell that from a server that is down. `*` puts the query port, and only the query
-# port, on every interface. RCON deliberately does not follow it.
+# `query_bind_ip` is the setting a reverse-proxied server cannot do without. Set
+# `net_bind_ip` to loopback when nginx terminates TLS in front of the game, and
+# nginx forwards a WebSocket but CANNOT forward UDP -- so a query listener sharing
+# that setting is listening where nothing can ask it, and a tracker cannot tell that
+# from a server that is down. `*` puts the query port, and only the query port, on
+# every interface. RCON deliberately does not follow it.
 a2s_enabled: true
 query_bind_ip: "*"
 
@@ -76,6 +91,8 @@ query_bind_ip: "*"
 # is not worth a network request.
 #
 # Empty means the network half is off, which is right for a LAN deployment and for a
-# build that ships everything it runs.
+# build that ships everything it runs. A manifest still has to be signed by a key in
+# cfg/content.json whatever the source, so adding a URL here is not by itself a way
+# to be handed somebody else's scripts.
 content_urls:
   - "https://dotgames.org/content"
