@@ -8,6 +8,7 @@
 #   ./setup.sh --godot PATH     use a specific runtime
 #   ./setup.sh --no-download    never fetch a runtime; fail if there is none
 #   ./setup.sh --no-clone       never git clone a sibling; fail if one is missing
+#   ./setup.sh --update         git pull every sibling repository first
 #   ./setup.sh --vendor         COPY the addons instead of linking them
 #
 # WHAT IT DOES, AND WHY EACH STEP IS HERE
@@ -63,6 +64,12 @@ DO_DOWNLOAD=1
 # the parent directory is the run that would otherwise have stopped and printed fifty
 # names at somebody.
 DO_CLONE=1
+
+# Pull every sibling repository before wiring them in.
+#
+# OFF by default: `git pull` on somebody's checkout is not a thing to do because they
+# typed the usual command, and a developer's tree is often mid-change on purpose.
+DO_UPDATE=0
 [ -n "${TMC_NO_CLONE:-}" ] && DO_CLONE=0
 DO_CHECK=0
 VENDOR=0
@@ -73,6 +80,7 @@ while [ $# -gt 0 ]; do
         --no-import) DO_IMPORT=0; shift ;;
         --no-download) DO_DOWNLOAD=0; shift ;;
         --no-clone)    DO_CLONE=0; shift ;;
+        --update)      DO_UPDATE=1; shift ;;
         --check)     DO_CHECK=1; shift ;;
         --vendor)    VENDOR=1; shift ;;
         -h|--help)   sed -n '2,35p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
@@ -184,6 +192,66 @@ fi
 # needs no credential at all.
 GIT_BASE="${TMC_GIT_BASE:-https://github.com/modcommunity}"
 
+## Fast-forward every named repository that is already beside this one.
+##
+## [b]Each addon is its own clone, and `git pull` here pulls only this one.[/b] That is
+## the shape of the family -- fifty-odd repositories, installable separately -- and on a
+## server it is a trap: an operator pulls the deploy repo, re-runs setup, and is still
+## running last week's dot-cloud, because nothing told them the fix was in a sibling.
+## The symptom is a bug that is fixed upstream, fixed in the tree they pulled, and still
+## happening, with a stack trace whose line numbers no longer match any file they can
+## see. It cost a real afternoon.
+##
+## `--ff-only`, never a merge: this is a deploy box, and a setup script that can produce
+## a conflicted working tree is a setup script that can take a server down. A repository
+## with local changes or a diverged branch is reported and skipped, because on the one
+## machine where somebody HAS edited an addon in place, quietly discarding it would be
+## the worse failure.
+update_repos() {
+    command -v git >/dev/null 2>&1 || die "--update needs git, and this machine has none." 4
+
+    local repo dir behind=() failed=()
+
+    for repo in "$@"; do
+        dir="$ROOT/../$repo"
+
+        [ -d "$dir/.git" ] || continue
+
+        if [ -n "$(git -C "$dir" status --porcelain 2>/dev/null)" ]; then
+            printf '    %s..%s   %s (local changes; left alone)\n' "$YLW" "$OFF" "$repo"
+            continue
+        fi
+
+        # [b]Most of these repositories have no upstream configured.[/b] `git pull`
+        # with no tracking branch fails with "no upstream configured for branch
+        # 'main'", which is not a failure to update -- it is a clone that was never
+        # told where it came from, which is most of them here. So the remote and
+        # branch are named explicitly, exactly as `push-github.sh` names the current
+        # branch rather than assuming main.
+        local branch
+        branch="$(git -C "$dir" rev-parse --abbrev-ref HEAD 2>/dev/null)"
+
+        if [ -z "$branch" ] || [ "$branch" = "HEAD" ]; then
+            failed+=("$repo")
+            continue
+        fi
+
+        if git -C "$dir" pull --ff-only --quiet origin "$branch" 2>/dev/null; then
+            behind+=("$repo")
+        else
+            failed+=("$repo")
+        fi
+    done
+
+    ok "${#behind[@]} up to date"
+
+    if [ ${#failed[@]} -gt 0 ]; then
+        warn "could not fast-forward: ${failed[*]}"
+        warn "a diverged branch or no upstream; pull those by hand"
+    fi
+}
+
+
 ## Clone every named repository that is not already beside this one.
 ##
 ## Never touches a checkout that exists -- not even to pull. A setup script that
@@ -291,6 +359,12 @@ resolve_addons() {
         fi
     done
 }
+
+if [ "$DO_UPDATE" -eq 1 ]; then
+    UPDATE_REPOS=()
+    for name in "${ADDONS[@]}"; do UPDATE_REPOS+=("${name//_/-}"); done
+    update_repos "${UPDATE_REPOS[@]}"
+fi
 
 resolve_addons
 
@@ -406,6 +480,12 @@ resolve_games() {
         fi
     done
 }
+
+if [ "$DO_UPDATE" -eq 1 ]; then
+    UPDATE_GAMES=()
+    for entry in "${GAMES[@]}"; do UPDATE_GAMES+=("${entry%%:*}"); done
+    update_repos "${UPDATE_GAMES[@]}"
+fi
 
 resolve_games
 
