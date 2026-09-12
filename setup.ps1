@@ -21,7 +21,11 @@
     symptom is dozens of unrelated parse errors in files you did not touch.
 
 .PARAMETER Godot
-    Path to a Godot 4.4+ executable. Searched for on PATH when not given.
+    Path to a Godot 4.7+ executable. Searched for on PATH when not given, and
+    downloaded -- pinned and checksummed -- when the machine has none.
+
+.PARAMETER NoDownload
+    Never fetch a runtime. Fail instead, the way this script used to.
 
 .PARAMETER Vendor
     Copy the addons instead of linking them. What a release tarball needs, and
@@ -42,6 +46,7 @@
 [CmdletBinding()]
 param(
     [string] $Godot = "",
+    [switch] $NoDownload,
     [switch] $Vendor,
     [switch] $NoImport,
     [switch] $Check
@@ -63,37 +68,148 @@ function Die($text, $code = 1) {
 
 Step "Godot runtime"
 
-$candidates = @($Godot, 'godot', 'godot4', 'Godot') | Where-Object { $_ }
+# The pin, and the digests that prove it. Same version as tools/fetch-godot.sh --
+# this is the Windows half of that script, not a second policy. Digests are from the
+# release's own SHA512-SUMS.txt, read by a person and checked in here; they are NOT
+# fetched from beside the binary, because a checksum served by whoever served the zip
+# is checked by whoever would have had to tamper with both.
+#
+#   curl -fsSL https://github.com/godotengine/godot/releases/download/4.7.2-stable/SHA512-SUMS.txt
+$GodotVersion = '4.7.2-stable'
+$GodotAssets = @{
+    'X64'   = @{ Asset = "Godot_v${GodotVersion}_win64.exe.zip";         Exe = "Godot_v${GodotVersion}_win64_console.exe";         Sha512 = '83decd58fdf67b9d657958a1ae6bf1929c20785315a81effe245874cdc57acb709bf868e00778a96984338c1b29dafdb453c6847747694621c6ecf5da2259993' }
+    'Arm64' = @{ Asset = "Godot_v${GodotVersion}_windows_arm64.exe.zip"; Exe = "Godot_v${GodotVersion}_windows_arm64_console.exe"; Sha512 = '683f8dd9fb087db79dfbbc52d5b2209df98218a4fef0d10d8478ec2230ae8db6032a36929677479b9f9c5a6aa0c51ee359d7e57eb5abbcb6cef4998526dec5a6' }
+}
+
+# The CONSOLE exe, not the plain one. The plain Windows build detaches from the
+# console it was started from, so a headless server started by this launcher prints
+# nothing anywhere -- and a server with no log is a server nobody can operate. The
+# console exe is a 200 KB shim that needs the big one beside it, which is why the
+# unpack below keeps both.
+
+$GodotCache = Join-Path $(if ($env:TMC_GODOT_CACHE) { $env:TMC_GODOT_CACHE } else { Join-Path $env:LOCALAPPDATA 'tmc\godot' }) $GodotVersion
+
+function Test-GodotVersion($path) {
+    if (-not $path) { return $null }
+    $v = (& $path --version 2>$null | Select-Object -First 1)
+    if ($v -match '^(4\.(?:[7-9]|\d\d)|5)\.') { return $v }
+    return $null
+}
+
+function Get-PinnedGodot {
+    # PROCESSOR_ARCHITECTURE rather than RuntimeInformation: it is there in Windows
+    # PowerShell 5.1 on a machine with no newer .NET, which is most of them.
+    $arch = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { 'Arm64' } else { 'X64' }
+    $pin  = $GodotAssets[$arch]
+    $url  = "https://github.com/godotengine/godot/releases/download/$GodotVersion/$($pin.Asset)"
+
+    New-Item -ItemType Directory -Force -Path $GodotCache | Out-Null
+    $zip = Join-Path $GodotCache $pin.Asset
+
+    Write-Host "    downloading $($pin.Asset)" -ForegroundColor DarkGray
+    try {
+        # Invoke-WebRequest's progress bar makes a 120 MB download several times
+        # slower in Windows PowerShell. It is restored in the finally.
+        $prev = $ProgressPreference
+        $ProgressPreference = 'SilentlyContinue'
+        Invoke-WebRequest -Uri $url -OutFile $zip -UseBasicParsing
+    } catch {
+        Die @"
+could not download $url
+
+    $($_.Exception.Message)
+
+    No network, or a proxy in the way. Download it by hand and point at it:
+        .\setup.ps1 -Godot C:\path\to\godot.exe
+"@ 3
+    } finally { $ProgressPreference = $prev }
+
+    # Verified BEFORE anything is unpacked, let alone run. A zip is parsed by a
+    # library, and a file that is not the one we pinned does not get to be parsed.
+    $got = (Get-FileHash -LiteralPath $zip -Algorithm SHA512).Hash.ToLower()
+    if ($got -ne $pin.Sha512) {
+        Remove-Item -LiteralPath $zip -Force -ErrorAction SilentlyContinue
+        Die @"
+CHECKSUM MISMATCH on $($pin.Asset) -- the file has been deleted.
+
+    expected  $($pin.Sha512)
+    got       $got
+
+    A corrupted download, or a file that is not the one this script is pinned to.
+    Re-run once; if it happens again, do NOT work around it. Install Godot
+    yourself from a source you trust and pass it with -Godot.
+"@ 4
+    }
+    Write-Host "    sha512 verified" -ForegroundColor DarkGray
+
+    Expand-Archive -LiteralPath $zip -DestinationPath $GodotCache -Force
+    Remove-Item -LiteralPath $zip -Force -ErrorAction SilentlyContinue
+
+    $target = Join-Path $GodotCache $pin.Exe
+    if (-not (Test-Path -LiteralPath $target -PathType Leaf)) {
+        Die "the archive did not contain $($pin.Exe): the pin and the release layout disagree." 4
+    }
+    return $target
+}
+
 $exe = $null
 
-foreach ($candidate in $candidates) {
-    if (Test-Path -LiteralPath $candidate -PathType Leaf) { $exe = (Resolve-Path $candidate).Path; break }
-    $found = Get-Command $candidate -ErrorAction SilentlyContinue
-    if ($found) { $exe = $found.Source; break }
-}
+if ($Godot) {
+    # An explicit -Godot is not a suggestion: a wrong one that quietly became a
+    # download would be this script ignoring the argument it was handed.
+    if (Test-Path -LiteralPath $Godot -PathType Leaf) { $exe = (Resolve-Path $Godot).Path }
+    else {
+        $found = Get-Command $Godot -ErrorAction SilentlyContinue
+        if ($found) { $exe = $found.Source } else { Die "no runtime at $Godot" 3 }
+    }
+    $version = Test-GodotVersion $exe
+    if (-not $version) {
+        Die "Godot 4.7 or newer is required; $exe is $(& $exe --version 2>&1 | Select-Object -First 1)" 3
+    }
+} else {
+    # The cache first, then PATH: the downloaded one is the version this project is
+    # pinned to, and if the machine's own is fine it was found on the first run and
+    # nothing was ever downloaded.
+    $candidates = @()
+    foreach ($arch in $GodotAssets.Keys) { $candidates += (Join-Path $GodotCache $GodotAssets[$arch].Exe) }
+    $candidates += @('godot', 'godot4', 'Godot')
 
-if (-not $exe) {
-    Die @"
-No Godot runtime found.
+    $tooOld = $null
+    foreach ($candidate in $candidates) {
+        $resolved = $null
+        if (Test-Path -LiteralPath $candidate -PathType Leaf) { $resolved = (Resolve-Path $candidate).Path }
+        else {
+            $found = Get-Command $candidate -ErrorAction SilentlyContinue
+            if ($found) { $resolved = $found.Source }
+        }
+        if (-not $resolved) { continue }
+        $version = Test-GodotVersion $resolved
+        if ($version) { $exe = $resolved; break }
+        $tooOld = "$resolved ($(& $resolved --version 2>&1 | Select-Object -First 1))"
+    }
 
-    Install Godot 4.4 or newer and put it on PATH, or:
+    if (-not $exe) {
+        if ($NoDownload) {
+            Die @"
+No Godot 4.7+ runtime found$(if ($tooOld) { " ($tooOld is too old)" }), and -NoDownload was given.
+
+    Install Godot 4.7 or newer and put it on PATH, or:
         .\setup.ps1 -Godot C:\path\to\godot.exe
-
-    This script deliberately does not download one: fetching a binary means
-    verifying a signature, which is a different program with different risks.
 "@ 3
+        }
+        if ($tooOld) { Warn "$tooOld is too old" }
+        Warn "no Godot 4.7 or newer on this machine; fetching the pinned $GodotVersion"
+        $exe = Get-PinnedGodot
+        $version = Test-GodotVersion $exe
+        if (-not $version) { Die "the fetched runtime does not report a usable version" 3 }
+    }
 }
 
-$version = (& $exe --version 2>$null | Select-Object -First 1)
-if (-not $version) { Die "Could not run $exe --version" 3 }
-if ($version -notmatch '^(4\.(?:[4-9]|\d\d)|5)\.') {
-    Die "Godot 4.4 or newer is required; $exe is $version" 3
-}
 Ok "$exe ($version)"
 
 # --- 2. The addons ---------------------------------------------------------
 
-$addons = @('dot_core','dot_net','dot_server','dot_2d','dot_ui','dot_auth',
+$addons = @('dot_core','dot_net','dot_server','dot_server_query','dot_2d','dot_ui','dot_auth',
             'dot_cloud','dot_user','dot_user_avatar','dot_platform',
             'dot_loadout','dot_match')
 

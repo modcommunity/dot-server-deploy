@@ -15,25 +15,24 @@
 
 # --- Stage 1: the runtime ---------------------------------------------------
 #
-# Downloaded and CHECKSUMMED here rather than by setup.sh. A script that fetches a
-# binary has to verify a signature, and that is a different program with different
-# risks -- but an image build is exactly where that work belongs, once, pinned.
+# The SAME fetcher setup.sh uses, rather than a second copy of the download pinned to
+# a second copy of a digest. There were two, and two pins drift: the image and the
+# host would then be running different engines with nothing saying so. The version and
+# the sha512 live in tools/fetch-godot.sh, in git, and this stage is one line of it.
+#
+# libfontconfig1 is here because the fetcher RUNS the binary to prove it works, and
+# Godot links fontconfig at load time even though --headless draws nothing.
 
 FROM debian:bookworm-slim AS runtime
 
-ARG GODOT_VERSION=4.7.2-stable
-ARG GODOT_SHA256=cadd3204e728a35d3f13adb7fd0d7902636b79f6b95c40c265eb73b6c35329e4
-
 RUN apt-get update \
- && apt-get install -y --no-install-recommends ca-certificates curl unzip \
+ && apt-get install -y --no-install-recommends ca-certificates curl unzip libfontconfig1 \
  && rm -rf /var/lib/apt/lists/*
 
-RUN curl -fsSL -o /tmp/godot.zip \
-      "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}/Godot_v${GODOT_VERSION}_linux.x86_64.zip" \
- && echo "${GODOT_SHA256}  /tmp/godot.zip" | sha256sum -c - \
- && unzip -q /tmp/godot.zip -d /tmp/godot \
- && install -m 0755 "/tmp/godot/Godot_v${GODOT_VERSION}_linux.x86_64" /usr/local/bin/godot \
- && rm -rf /tmp/godot /tmp/godot.zip \
+COPY dot-server-deploy/tools/fetch-godot.sh /tmp/fetch-godot.sh
+
+RUN /tmp/fetch-godot.sh --dest /usr/local/bin \
+ && rm -f /tmp/fetch-godot.sh \
  && godot --version
 
 # --- Stage 2: the project ---------------------------------------------------

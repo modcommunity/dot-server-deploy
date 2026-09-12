@@ -289,6 +289,26 @@ not load, and `changelevel hungry_classic` swapped the world while leaving the l
 module driving it — with the failure visible only as `Could not find type` lines
 scrolling past during a scene change.
 
+## The runtime is fetched now, and the verification is the whole point
+
+`setup.sh` used to stop on a fresh machine with "no Godot runtime found", and the reason it gave was that fetching a binary means verifying a signature, which is a different program with different risks. The reasoning was right and the conclusion was backwards. It made the first step on every new box a manual download from a browser, on a machine that may not have one — and the thing it was avoiding, which is *verification*, is about thirty lines. So the different program was written: `tools/fetch-godot.sh`.
+
+**Three rules, and they are the entire value of it:**
+
+- **One version, pinned.** `GODOT_VERSION=4.7.2-stable`, not `latest`. A digest only means anything against a file that cannot change, and `latest` changes.
+- **The digests are in the script, in git, reviewed by a person.** They are deliberately *not* read from the `SHA512-SUMS.txt` served beside the binary: a checksum fetched from whoever served the zip is checked by whoever would have had to tamper with both, which is one party and therefore no check at all. Trust was established once, by hand, at the version bump; every run since is an equality test against what is checked in.
+- **A mismatch deletes the file and exits non-zero.** There is no `--force`, no "checksum unavailable, continuing", and no path through the script that installs something unverified. The digest also gates the *unpack*, not just the install — a zip is parsed by a C library before anything is executed.
+
+It lands in `~/.cache/tmc/godot/<version>/godot` rather than in the project, so one download serves every checkout on the box and `rm -rf` of a deployment does not cost 150 MB. `TMC_GODOT_CACHE` moves it, and a home directory that cannot be written — a container running as a uid with no passwd entry, which this project already handles elsewhere — falls back to `.godot-runtime/` in the project.
+
+**`--no-download` (or `TMC_NO_DOWNLOAD=1`) restores the old refusal**, for a box with no network or a policy that says binaries arrive one way and it is not this one. An explicit `--godot` never downloads either: a wrong path that quietly became a fetch would be a script ignoring the argument it was handed, and the operator would never learn that the runtime they meant to test was not the one that ran.
+
+**It runs the binary before it reports success, and that check earns its keep on exactly the machine this is for.** Godot links fontconfig at *load* time even though `--headless` draws nothing, so on a minimal server image it dies with `libfontconfig.so.1: cannot open shared object file` before a line of GDScript — the same hole the container hit, which is documented in the Dockerfile. The fetcher reads the missing library out of the failure and prints the `apt-get` / `dnf` / `pacman` line for it, because "cannot open shared object file" on a freshly downloaded binary reads as a bad download and is not one.
+
+**The Dockerfile no longer has its own copy of the download.** It had one, pinned to its own `GODOT_SHA256`, and two pins drift: the image and the host would have been running different engines with nothing saying so. Stage 1 copies `tools/fetch-godot.sh` and runs it with `--dest /usr/local/bin`.
+
+`setup.ps1` does the same thing for Windows with its own digests, because there is no Bash there to share. It takes the **console** exe out of the archive rather than the plain one — the plain Windows build detaches from the console that started it, so a headless server started by the launcher would print its log nowhere.
+
 ## Validating
 
 ```bash
@@ -372,15 +392,14 @@ is what stopped the previous two.
   client to fetch one.
 - **TLS.** A page on HTTPS cannot open `ws://`. Certificates and a reverse proxy are
   deployment.
-- **A server browser.** dot-server answers both query protocols; nothing here asks.
+- **A server browser.** dot-server-query answers both query protocols and `TmcHost`
+  attaches one; nothing here asks. `sv_query_app` in `cfg/server.yml` sets the app
+  slug a listing shows — display only, and the backbone is what a launch actually
+  resolves an app against.
 - **A vote a player can see.** The vote runs and announces itself in chat, which is how
   every server in this genre did it for fifteen years, and it is enough to play with.
   A ballot drawn on screen needs a wire message and a screen, which are dot-net's and
   dot-ui's, and belong in the client shell rather than in the host.
-- **Downloading Godot.** `setup.sh` finds a runtime and does not fetch one — that means
-  verifying a signature, which is a different program with different risks. The Dockerfile
-  *does* fetch one, pinned and checksummed, because an image build is exactly where that
-  work belongs.
 - **Windows beyond `setup.ps1`.** It makes junctions rather than symlinks, and neither it
   nor `server.ps1` has ever been run on Windows from here. There is no PowerShell on the
   machine this was written on, so both are reviewed rather than tested — which is a

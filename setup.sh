@@ -6,13 +6,16 @@
 #   ./setup.sh --check          set up, then boot the server once and shut it down
 #   ./setup.sh --no-import      skip the Godot import pass (fast, for a re-run)
 #   ./setup.sh --godot PATH     use a specific runtime
+#   ./setup.sh --no-download    never fetch a runtime; fail if there is none
 #   ./setup.sh --vendor         COPY the addons instead of linking them
 #
 # WHAT IT DOES, AND WHY EACH STEP IS HERE
 #
-#   1. Finds a Godot 4.7+ runtime. It does not download one: a script that fetches a
-#      binary is a script that has to verify a signature, and that is a different
-#      program with different risks.
+#   1. Finds a Godot 4.7+ runtime, and DOWNLOADS the pinned one when the machine has
+#      none. That download is tools/fetch-godot.sh and the verification is the whole
+#      of it: one pinned version, the sha512 checked into git rather than fetched
+#      from beside the binary, and no path through it that installs something
+#      unverified. `--no-download` keeps the old behaviour of refusing to fetch.
 #   2. Wires in the dot-* addons. Each one is a separate repository and there is no
 #      way to clone the tree at once, so this is the one place that knowledge lives.
 #      Symlinks when the sibling repositories are there, which is a developer
@@ -37,6 +40,11 @@ cd "$ROOT" || exit 1
 
 GODOT_ARG=""
 DO_IMPORT=1
+# A box with no network, or a policy that says binaries arrive one way and it is not
+# this one. TMC_NO_DOWNLOAD is the same switch for a unit file or a CI job, which
+# cannot add an argument to a line somebody else wrote.
+DO_DOWNLOAD=1
+[ -n "${TMC_NO_DOWNLOAD:-}" ] && DO_DOWNLOAD=0
 DO_CHECK=0
 VENDOR=0
 
@@ -44,9 +52,10 @@ while [ $# -gt 0 ]; do
     case "$1" in
         --godot)     GODOT_ARG="${2:-}"; shift 2 ;;
         --no-import) DO_IMPORT=0; shift ;;
+        --no-download) DO_DOWNLOAD=0; shift ;;
         --check)     DO_CHECK=1; shift ;;
         --vendor)    VENDOR=1; shift ;;
-        -h|--help)   sed -n '2,28p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        -h|--help)   sed -n '2,34p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
         *) printf 'unknown option: %s\n' "$1" >&2; exit 2 ;;
     esac
 done
@@ -62,27 +71,79 @@ die()  { printf '\n    %s%s%s\n\n' "$RED" "$1" "$OFF" >&2; exit "${2:-1}"; }
 
 step "Godot runtime"
 
-GODOT=""
-for candidate in "$GODOT_ARG" "${GODOT:-}" godot godot4 Godot; do
-    [ -n "$candidate" ] || continue
-    if command -v "$candidate" >/dev/null 2>&1; then GODOT="$(command -v "$candidate")"; break; fi
-    if [ -x "$candidate" ]; then GODOT="$candidate"; break; fi
-done
+# The pinned version lives in tools/fetch-godot.sh, with the digest that proves it.
+PINNED="$(tools/fetch-godot.sh --version 2>/dev/null)"
+PINNED_CACHE="${TMC_GODOT_CACHE:-${XDG_CACHE_HOME:-${HOME:-/nonexistent}/.cache}/tmc/godot}/${PINNED:-none}/godot"
 
-[ -n "$GODOT" ] || die "No Godot runtime found.
+# Is this thing a runtime new enough to build with? Prints the version when it is,
+# nothing when it is not -- so a caller can test one candidate without dying on it.
+godot_version_ok() {
+    local v
+    v="$("$1" --version 2>/dev/null | head -1)"
+    case "$v" in
+        4.[7-9]*|4.[1-9][0-9]*|5.*) printf '%s' "$v" ;;
+        *) return 1 ;;
+    esac
+}
+
+# An explicit --godot is not a suggestion. A wrong one that silently became a
+# download would be a script quietly ignoring the argument it was given, and the
+# operator would never learn that the runtime they meant to test was not the one
+# that ran.
+if [ -n "$GODOT_ARG" ]; then
+    if command -v "$GODOT_ARG" >/dev/null 2>&1; then GODOT="$(command -v "$GODOT_ARG")"
+    elif [ -x "$GODOT_ARG" ]; then GODOT="$GODOT_ARG"
+    else die "no runtime at $GODOT_ARG" 3
+    fi
+    VERSION="$(godot_version_ok "$GODOT")" \
+        || die "Godot 4.7 or newer is required; $GODOT is $("$GODOT" --version 2>&1 | head -1)" 3
+    ok "$GODOT ($VERSION)"
+else
+    # The cache first, then PATH. The downloaded one is checked BEFORE `godot` on
+    # PATH because it is the version this project is pinned to and the one on PATH
+    # is whatever the box happens to have -- and if the box's is fine, it was found
+    # on the first run and no download ever happened.
+    GODOT=""
+    VERSION=""
+    for candidate in "$PINNED_CACHE" "$ROOT/.godot-runtime/${PINNED:-none}/godot" godot godot4 Godot; do
+        [ -n "$candidate" ] || continue
+        resolved=""
+        if command -v "$candidate" >/dev/null 2>&1; then resolved="$(command -v "$candidate")"
+        elif [ -x "$candidate" ]; then resolved="$candidate"
+        fi
+        [ -n "$resolved" ] || continue
+        if VERSION="$(godot_version_ok "$resolved")"; then GODOT="$resolved"; break; fi
+        # Found and too old. Remembered rather than reported now: it only matters if
+        # nothing better turns up, and "4.4 is too old" above "downloaded 4.7.2" is
+        # an error message about a thing that did not go wrong.
+        TOO_OLD="$resolved ($("$resolved" --version 2>&1 | head -1))"
+    done
+
+    if [ -n "$GODOT" ]; then
+        ok "$GODOT ($VERSION)"
+    elif [ "$DO_DOWNLOAD" -eq 0 ]; then
+        die "No Godot 4.7+ runtime found${TOO_OLD:+ ($TOO_OLD is too old)}, and downloading is off (--no-download / TMC_NO_DOWNLOAD).
 
     Install Godot 4.7 or newer and put it on PATH, or:
-        ./setup.sh --godot /path/to/godot
+        ./setup.sh --godot /path/to/godot" 3
+    else
+        # [b]This used to be where setup.sh gave up[/b], on the grounds that fetching a
+        # binary means verifying it and that is a different program with different
+        # risks. The reasoning was right and the conclusion was backwards: it made
+        # every fresh box a manual download before anything could be tried, and the
+        # verification it was avoiding is thirty lines. tools/fetch-godot.sh IS that
+        # different program -- one pinned version, digests checked into git rather
+        # than fetched beside the binary, and no path through it that installs
+        # something unverified.
+        [ -n "${TOO_OLD:-}" ] && warn "$TOO_OLD is too old"
+        [ -x tools/fetch-godot.sh ] || die "tools/fetch-godot.sh is missing or not executable" 3
 
-    This script deliberately does not download one: fetching a binary means
-    verifying a signature, which is a different program with different risks." 3
-
-VERSION="$("$GODOT" --version 2>/dev/null | head -1)"
-case "$VERSION" in
-    4.[7-9]*|4.[1-9][0-9]*|5.*) ok "$GODOT ($VERSION)" ;;
-    "") die "Could not run $GODOT --version" 3 ;;
-    *)  die "Godot 4.7 or newer is required; $GODOT is $VERSION" 3 ;;
-esac
+        warn "no Godot 4.7 or newer on this machine; fetching the pinned ${PINNED:-runtime}"
+        GODOT="$(tools/fetch-godot.sh)" || exit 3
+        VERSION="$(godot_version_ok "$GODOT")" || die "the fetched runtime does not report a usable version" 3
+        ok "$GODOT ($VERSION)"
+    fi
+fi
 
 # --- 2. The addons ---------------------------------------------------------
 #
@@ -102,7 +163,7 @@ esac
 # here vendors, imports, and then fails to compile every script that names the missing
 # class — dozens of "not declared in the current scope" errors in files nobody touched,
 # which reads as a broken project rather than as one missing folder.
-ADDONS=(dot_core dot_net dot_server dot_2d dot_ui dot_auth dot_cloud dot_user
+ADDONS=(dot_core dot_net dot_server dot_server_query dot_2d dot_ui dot_auth dot_cloud dot_user
         dot_user_avatar dot_platform dot_loadout dot_match
         dot_player_controller dot_timer dot_map dot_leaderboard dot_stats
         dot_props dot_vote dot_combat dot_chat dot_voice dot_moderation
@@ -406,6 +467,22 @@ sv_tickrate: 60
 # The game to load at boot. Empty uses whichever content directory is marked
 # default. A server with no game at all is legitimate and runs empty.
 sv_game: ""
+
+# The app's URL segment on the website, reported in a query as the game's name.
+#
+# Unique and lowercase because the site already made it so, which is the whole
+# reason to reuse it rather than invent a second identifier that has to be kept in
+# step. Empty falls back to the running game's id, which is the right answer on a
+# box running one game.
+#
+# DISPLAY ONLY. A server can claim any app it likes, and nothing that has to be
+# certain which app a server belongs to -- a launch resolving a build, a play grant
+# -- reads this. Those ask the backbone, which knows. It is what a listing prints
+# next to the hostname, and it is also A2S's `folder`, which is the field trackers
+# group servers by.
+#
+# `sv_query_app` is also a cvar, so it can be changed on a running server.
+sv_query_app: ""
 
 sv_tags: [lobby, tmc]
 YML
