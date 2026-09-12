@@ -387,6 +387,15 @@ func describe_lines() -> PackedStringArray:
 	out.append("hostname : %s" % server.hostname)
 	out.append("listen   : %s:%d" % [server.bind_address, server.port])
 	out.append("players  : %d" % server.max_players)
+	# [b]`sv_game` was settable, worked, and was invisible from here.[/b] The parser has
+	# always mapped it onto `initial_game`, the shipped `server.yml` never mentioned it,
+	# and this report -- the one command whose entire job is "show me what my
+	# configuration became" -- did not print it. So the only way to find out which game a
+	# box would boot was to boot it and read the log. Empty is not "nothing": it means the
+	# content directory's own default wins, which is a different statement and is worth
+	# saying out loud rather than leaving as a blank.
+	out.append("game     : %s" % (
+		initial_game if initial_game != "" else "(content default)"))
 	out.append("rcon     : %s" % ("on, port %d" % server.effective_rcon_port() if server.rcon_password != "" else "off"))
 	out.append("groups   : %d" % groups.size())
 	out.append("admins   : %d" % users.size())

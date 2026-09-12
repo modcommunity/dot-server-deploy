@@ -1,6 +1,17 @@
 # General server settings
 sv_name: "TMC Test Server"
 sv_maxplayers: 64
+
+# Which game in the content directory boots.
+#
+# Empty means "whatever content/ says is the default" -- a game marks itself with
+# `default: true` in its descriptor, and failing that the first one found wins. Set
+# it here to pin a box to one game regardless of what is dropped in beside it.
+#
+# `./server --game <id>` and TMC_GAME both override this, and a running server is
+# moved with `changegame <id>` over RCON without a restart. `./server games` lists
+# what this content directory actually has.
+sv_game: ""
 # Server queries.
 #
 # `query_enabled` is on by dot-server's own default and answers the dot query

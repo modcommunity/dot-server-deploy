@@ -116,10 +116,25 @@ usage() {
 
     ./server -- +sv_cheats 1 +changelevel lobby
 
-  Environment
+  Where the configuration actually lives
 
-  Every option above is also an environment variable, for a box nobody is typing
-  at. An argument beats the environment, which beats the baked default.
+  IN cfg/, AS YAML. `cfg/net.yml` has net_port and net_bind_ip; `cfg/server.yml`
+  has sv_name and sv_maxplayers; and so on. That is the normal place to change
+  any of this, and the only one where the comment explaining why survives.
+
+  Four layers, later winning:
+
+    exported defaults  <  cfg/*.yml  <  DOT_SERVER_*  <  command line
+
+  DOT_SERVER_* is dot-server's own environment layer and sits in the RIGHT place
+  -- above the file, below an argument. `DOT_SERVER_SV_MAXPLAYERS=32` is a nudge
+  a `--max-players` still beats. It is the one to reach for on a live box.
+
+  TMC_* is not a fifth layer
+
+  Every option above also reads a TMC_ variable, for a container or a unit file
+  with no cfg/ to edit. Each becomes the matching ARGUMENT, so it lands in the
+  last column and OUTRANKS THE YAML:
 
     TMC_PORT            --port                TMC_CONFIG_DIR    --config
     TMC_BIND            --bind                TMC_CONTENT_DIR   --content
@@ -128,10 +143,16 @@ usage() {
     TMC_GAME            --game                TMC_ENGINE_BASE   --base
     TMC_VERBOSE         --verbose (set to anything)
 
-  So a unit file or a container needs no arguments at all:
+  Which means a TMC_PORT left set in an environment file makes cfg/net.yml look
+  broken: the port is edited, the server restarts, and it binds the old one with
+  nothing saying why. Set them when there is no file to edit, and treat the YAML
+  for that key as dead once you have. deploy/env.example ships them commented
+  out for this reason.
 
-    Environment=TMC_PORT=6090 TMC_GAME=g2gfast TMC_BIND=0.0.0.0
-    ExecStart=/srv/dot-server-deploy/server
+  One server, not a stack
+
+  This starts ONE. `demo.sh` is what stands up five behind nginx, each with its
+  own port and game, and it passes all of this per server itself.
 
   Secrets are deliberately NOT options, and NOT environment variables either.
   argv is readable by every other process on the machine via ps, the environment
