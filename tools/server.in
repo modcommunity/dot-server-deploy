@@ -47,6 +47,7 @@ GODOT="${TMC_GODOT:-@GODOT@}"
 # `export-web`; see web/tmc-loader.js for why it cannot be discovered at runtime.
 ENGINE_BASE="${TMC_ENGINE_BASE:-}"
 
+WANT_ZIP="${TMC_EXPORT_ZIP:+1}"
 CONFIG_DIR="${TMC_CONFIG_DIR:-cfg}"
 CONTENT_DIR="${TMC_CONTENT_DIR:-content}"
 DATA_DIR="${TMC_DATA_DIR:-data}"
@@ -82,7 +83,7 @@ usage() {
     games               List what is in the content directory and exit.
     pack <id>           Publish content/<id> as a signed dot-cloud pack.
     export-web          Build the browser client into web/build, plus the
-                        loader website-city uploads. Takes --base.
+                        loader website-city uploads. Takes --base and --zip.
     stamp-loader        Rewrite web/build/tmc-loader.js with a new --base and
                         nothing else. Moving the engine to another domain is a
                         deployment change, not a rebuild.
@@ -106,6 +107,11 @@ usage() {
                         The loader frames the engine with a sandbox that is only
                         a boundary while the frame is cross-origin, and refuses
                         to start if this resolves to the page's own origin.
+
+    --zip               export-web only. Also write web/build.zip, which is what
+                        the site's app form takes: its publisher accepts one .zip
+                        and rejects a directory. Off by default -- a standalone
+                        deployment serves the directory and does not need a copy.
 
     --godot PATH        Use this runtime.
     --verbose           Debug logging.
@@ -182,6 +188,7 @@ while [ $# -gt 0 ]; do
         --data)    DATA_DIR="${2:-}";    shift 2 ;;
         --godot)   GODOT="${2:-}";       shift 2 ;;
         --verbose) VERBOSE="--verbose";  shift ;;
+        --zip)     WANT_ZIP=1;           shift ;;
         --dry-run) DRY_RUN=1;            shift ;;
         -h|--help) usage; exit 0 ;;
         --) shift; PASSTHROUGH=("$@"); break ;;
@@ -294,7 +301,14 @@ stamp_loader() {
             *) ENGINE_BASE="$ENGINE_BASE/" ;;
         esac
     else
-        printf '  %s--base was not given; the loader will refuse to start%s\n' "$YLW" "$OFF" >&2
+        # Only true of a STANDALONE deployment. The loader prefers `boot.game` --
+        # which the site computes from the app's published build -- and falls back
+        # to this stamp, so an unstamped loader behind a play centre is fine and an
+        # unstamped one serving itself is not. Saying "will refuse to start" flatly
+        # sends somebody hunting for a problem they do not have.
+        printf '  %s--base was not given: the stamp is empty. Fine if the site publishes\n' "$YLW" >&2
+        printf '   this app (its own build location wins); the loader cannot start\n' >&2
+        printf '   without it if you are serving the engine yourself.%s\n' "$OFF" >&2
     fi
 
     sed "s|@ENGINE_BASE@|$ENGINE_BASE|g" "$PROJECT/web/tmc-loader.js" \
@@ -374,6 +388,41 @@ case "$COMMAND" in
         # message naming this flag, which beats a game that fails silently.
         stamp_loader
         printf '  wrote %s\n' "$PROJECT/web/build"
+
+        # [b]The archive the site's publisher takes, because a directory is not one.[/b]
+        # `GAME_PUBLISH` accepts a single .zip and rejects anything else by extension, and
+        # nothing in this repository produced one -- so the documented route from an export
+        # to a published build had a manual `zip -r` in the middle of it that was written
+        # down nowhere. Off by default: the standalone deployment serves web/build as a
+        # directory and has no use for 106 MB of second copy.
+        if [ -n "$WANT_ZIP" ]; then
+            ZIP_PATH="$PROJECT/web/build.zip"
+            rm -f "$ZIP_PATH"
+
+            # Zipped from INSIDE the build directory, so entries are `index.wasm` rather
+            # than `build/index.wasm`. The extractor rejects a path it did not expect and
+            # the publisher would look at a perfectly good archive and find no entry point.
+            if command -v zip >/dev/null 2>&1; then
+                ( cd "$PROJECT/web/build" && zip -qr "$ZIP_PATH" . ) || die "zip failed" 3
+            elif command -v python3 >/dev/null 2>&1; then
+                # No `zip` on a machine that has Godot on it is ordinary enough to handle
+                # rather than to fail on.
+                python3 - "$PROJECT/web/build" "$ZIP_PATH" <<'PY' || die "zip failed" 3
+import os, sys, zipfile
+src, out = sys.argv[1], sys.argv[2]
+with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
+    for root, _dirs, files in os.walk(src):
+        for name in files:
+            full = os.path.join(root, name)
+            z.write(full, os.path.relpath(full, src))
+PY
+            else
+                die "need zip or python3 to build the archive; web/build is ready if you would rather make it yourself" 3
+            fi
+
+            printf '  wrote %s (%s)\n' "$ZIP_PATH" "$(du -h "$ZIP_PATH" | cut -f1)"
+            printf '  upload that in the app form: Play tab, web game build\n'
+        fi
         exit 0
         ;;
     stamp-loader)

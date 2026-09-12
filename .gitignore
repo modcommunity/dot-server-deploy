@@ -41,8 +41,11 @@
 /web/build/
 /build/
 export_presets.cfg
-# The zip web/README.md tells an operator to make out of web/build/ for the
-# site's Web game build field. A 12 MB artifact of a build, not a source of one.
+# The archive for the site's Web game build field, written by
+# `./server export-web --zip`. Tens of megabytes of build output, not a source of
+# one. /build.zip is where the README used to say to make it by hand, and stays
+# ignored so an older checkout does not start offering it as a change.
+/web/build.zip
 /build.zip
 
 # OS

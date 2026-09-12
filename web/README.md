@@ -107,9 +107,10 @@ That ordering is not a preference, it is a correctness requirement. A published 
 So for a site-published game:
 
 ```bash
-./server export-web                          # no --base needed; the site supplies it
-(cd web/build && zip -r ../../build.zip .)   # upload on the Web game build field
+./server export-web --zip                    # no --base needed; the site supplies it
 ```
+
+`--zip` writes `web/build.zip` with the entries at the top level, which is what the publisher expects — zipped from one directory up it would find no entry point in a perfectly good archive. Upload it on the **Web game build** field.
 
 and upload `web/tmc-loader.js` **as-is**, placeholder and all, on the loader field above it. The stamp stays the fallback for the two deployments below, where there is no site to ask.
 
