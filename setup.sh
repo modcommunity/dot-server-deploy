@@ -34,7 +34,12 @@
 #      your edits are the configuration, and regenerating on upgrade throws them away
 #      on the one run nobody is watching -- so it finishes by NAMING any setting the
 #      templates have gained that your files do not mention.
-#   6. Writes ./server.
+#   6. Copies export_presets.example.cfg into export_presets.cfg when there is none,
+#      for the same reason and with the same rule: the editor rewrites that file, so
+#      it is not tracked either -- and an export preset nobody has is what made
+#      `./server export-web` fail on a fresh machine for a preset that existed only
+#      where somebody had made one by hand.
+#   7. Writes ./server.
 
 set -uo pipefail
 
@@ -639,7 +644,36 @@ else
     ok "cfg/ already exists and was not touched"
 fi
 
-# --- 6. ./server -----------------------------------------------------------
+# --- 6. export_presets.cfg -------------------------------------------------
+#
+# [b]An export preset nobody has is a build command that cannot run.[/b] Godot's editor
+# writes and rewrites `export_presets.cfg`, so it is gitignored for the same reason
+# `cfg/` is -- and the consequence was that `./server export-web` on a machine that had
+# never opened this project in an editor failed on a preset named "Web" that existed
+# only on the machine where somebody had made one by hand. `export-native` would have
+# inherited the same hole, three times over.
+#
+# Copied, never overwritten, exactly like cfg/: a preset file is something an operator
+# may have adjusted -- a different icon, an encryption key, an extra platform -- and an
+# upgrade that regenerated it would throw that away on the one run nobody is watching.
+#
+# It lands at the project ROOT and not in cfg/ with the other templates, because Godot
+# reads it from exactly one place: "This project doesn't have an `export_presets.cfg`
+# file at its root." The two files therefore sit side by side and differ only in the
+# word `.example`.
+
+step "export presets"
+
+if [ -f export_presets.cfg ]; then
+    ok "export_presets.cfg already exists and was not touched"
+elif [ -f export_presets.example.cfg ]; then
+    cp export_presets.example.cfg export_presets.cfg
+    ok "export_presets.cfg written from export_presets.example.cfg"
+else
+    warn "export_presets.example.cfg is missing; ./server export-web and export-native will have no presets"
+fi
+
+# --- 7. ./server -----------------------------------------------------------
 
 step "./server"
 

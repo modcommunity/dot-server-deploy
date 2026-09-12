@@ -55,6 +55,7 @@ Windows: `setup.bat` (a shim for `setup.ps1`), then `.\server.ps1`. It takes the
 - **The game, and the map it starts on.** `sv_game` and `sv_map` in `cfg/server.yml`, `--game` and `--map` on the command line, `TMC_GAME` and `TMC_MAP` in a unit file, and `-- +map <id>` for the fingers of anybody who has run a dedicated server before. A game decides whether it has maps at all, so a game with none, and an id its catalogue has never heard of, are both a line in the log rather than a refusal to boot.
 - **The players choose the next game.** `!game_nominate`, `!game_rtv`, `!game_vote`, `!game_timeleft` and `!game_next`, which is the shape every server in this genre has had since 2005, over the games in `content/` rather than over maps. They are prefixed because a game may run a vote of its own over its own maps, and those own the bare `!rtv` and `!nominate` that players' fingers already know. Each game gets its own time limit, in its own `game.yml`. All of it is `cfg/vote.yml`, and `enabled: false` turns it off.
 - **A browser client.** `./server export-web` builds it; one export serves every server, because the address comes from `?server=`.
+- **A native client, for the machines a browser tab is not.** `./server export-native` builds the same shell for Linux, Windows and macOS — one file per platform, the pack inside the executable — and prints the command that publishes each one for the desktop app to install. It is the client and not the server: the presets exclude `host/*`, `client/shell.tscn` is what a player who double-clicks gets, and the server address arrives as `-- --connect <host>:<port>`.
 - **Content you publish yourself.** `./server pack <id>` turns any directory under `content/` into a signed dot-cloud pack in `dist/` — an avatar set, a prop pack, a texture set, a whole game. `content/<id>/pack.json` says what goes in it and where each file lands, so a pack is assembled from wherever the files actually live rather than from whatever happens to sit in one folder:
 
 ```json
@@ -125,6 +126,7 @@ The YAML reader is a deliberately small subset and refuses everything else with 
 ./server config               the resolved configuration
 ./server games                what is in content/
 ./server export-web           build the browser client
+./server export-native        build the native client, for every platform
 ./server --help               every option
 
 ./server --port 27015 --name "My server"

@@ -17,6 +17,12 @@ config/features=PackedStringArray("4.7")
 ; a server operator runs ./server, which names the host scene explicitly.
 run/main_scene="res://client/shell.tscn"
 
+; The macOS bundle is named from the project name, and this project's name is the
+; SERVER tool while the thing macOS installs is the client. A feature-tagged override
+; is the only lever: the exporter resolves project settings through the preset's
+; feature tags, so this renames TMC server.app to TMC.app and nothing else.
+config/name.macos="TMC"
+
 [display]
 
 window/size/viewport_width=1280
@@ -30,3 +36,11 @@ window/stretch/mode="canvas_items"
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
 textures/canvas_textures/default_texture_filter=1
+
+; The macOS export REFUSES a universal or arm64 binary while this is off, and a
+; native build is what the desktop app installs. It costs nothing here: this is an
+; import setting for VRAM-compressed textures and no texture in this project is one
+; -- `grep -l 'compress/mode=[23]' **/*.import` finds none -- so turning it on
+; reimports nothing and adds nothing to any build. s3tc_bptc stays on for the
+; desktop and web presets, which is the other half of the same switch.
+textures/vram_compression/import_etc2_astc=true

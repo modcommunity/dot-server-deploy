@@ -54,6 +54,10 @@ $Command    = 'run'
 $Verbose    = $false
 $DryRun     = $false
 $PackId     = ''
+
+# export-native: which machines to build for, and what the publisher calls the build.
+$NativePlatform = if ($env:TMC_NATIVE_PLATFORM) { $env:TMC_NATIVE_PLATFORM } else { 'all' }
+$BuildVersion   = if ($env:TMC_BUILD_VERSION)   { $env:TMC_BUILD_VERSION }   else { '' }
 $Overrides  = @()
 $Passthrough = @()
 
@@ -78,6 +82,9 @@ function Show-Usage {
     pack <id>           Publish content\<id> as a signed dot-cloud pack.
     export-web          Build the browser client into web\build, plus the
                         loader website-city uploads. Takes --base.
+    export-native       Build the native client the desktop app installs, into
+                        build\, one archive per platform. Takes --platform and
+                        --build-version, and prints the publish command for each.
     stamp-loader        Rewrite web\build\tmc-loader.js with a new --base and
                         nothing else. Moving the engine to another domain is a
                         deployment change, not a rebuild.
@@ -107,6 +114,13 @@ function Show-Usage {
                         a boundary while the frame is cross-origin, and refuses
                         to start if this resolves to the page's own origin.
 
+    --platform TARGET   export-native only. linux, windows, macos, or all.
+
+    --build-version V   export-native only. What the publisher calls this build.
+                        Dotted numeric, because the desktop app COMPARES it to
+                        decide whether an install is out of date. Defaults to
+                        1.<yyyymmdd>.<hhmm> in UTC.
+
     --godot PATH        Use this runtime.
     --verbose           Debug logging.
     --dry-run           Print the command that would run, and exit.
@@ -129,6 +143,171 @@ function Show-Usage {
 '@ | Write-Host
 }
 
+# [b]An imported map must NOT be in the build, and MUST be on the CDN.[/b]
+#
+# This check used to assert the OPPOSITE here, long after the bash launcher's had been
+# turned around, and the divergence is the whole argument against a second
+# implementation: `include_filter="maps/*.bin"` was the right fix when the build was
+# meant to carry map geometry, and it made a 105 MB download in which 66 MB was eight
+# maps so that a player could play one. The same eight are published as dot-cloud packs
+# and fetched on join, so the presets exclude `maps/imported/*` -- and a Windows
+# operator running the export got "8 map geometry file(s) did not reach the export" and
+# a dead stop on a build that was correct.
+#
+# What has to be true now is the other pair, and the second one is the one worth having:
+# a map excluded from the build and never published is a map nobody can reach, and the
+# symptom is a player who connects, spawns, and sees sky in every direction.
+function Test-ExcludedMaps([string]$Pack) {
+    $mapsDir = Join-Path $Project 'maps\imported'
+    if (-not (Test-Path -LiteralPath $Pack)) { return }
+    if (-not (Test-Path -LiteralPath $mapsDir)) { return }
+
+    # ISO-8859-1 keeps one byte to one char, so a search over this string is a search
+    # over the bytes; UTF8 would fold invalid sequences and move every offset. By code
+    # page rather than by `::Latin1`, which is a .NET Core static that Windows
+    # PowerShell 5.1 -- the one shipped with Windows -- does not have.
+    $blob = [System.Text.Encoding]::GetEncoding(28591).GetString([System.IO.File]::ReadAllBytes($Pack))
+    $carried = 0
+    $unpublished = 0
+
+    foreach ($bin in (Get-ChildItem -Recurse -LiteralPath $mapsDir -Filter '*.bin')) {
+        $rel = $bin.FullName.Substring($Project.Length).TrimStart('\', '/').Replace('\', '/')
+        $id = Split-Path -Leaf (Split-Path -Parent $bin.FullName)
+
+        if ($blob.IndexOf($rel) -ge 0) {
+            Write-Host "  the export is carrying $rel, which the CDN already serves" -ForegroundColor Yellow
+            $carried++
+        }
+
+        if (-not (Test-Path -LiteralPath (Join-Path $Project "dist\$id\manifest.json"))) {
+            Write-Host "  $id is not in the build and is not published" -ForegroundColor Red
+            $unpublished++
+        }
+    }
+
+    if ($carried -gt 0) {
+        Write-Host "  $carried map(s) are in the pack as well as on the CDN -- exclude_filter should hold maps/imported/*" -ForegroundColor Yellow
+    }
+    if ($unpublished -gt 0) {
+        # Naming the directory is the point: `pack <id>` publishes content\<id>, and no
+        # imported map has ever lived there.
+        Die "$unpublished map(s) reach nobody: not in the build, not in dist\. Publish them with `".\server.ps1 pack --all --content maps\imported`" -- the map id is the content id and the directory is not content\ -- or drop maps/imported/* from exclude_filter." 3
+    }
+}
+
+# The native client the desktop app installs: one archive per platform, and the command
+# that publishes each. See tools/server.in for why the launch arguments need the bare
+# `--` -- `client\shell.gd` reads the address from OS.get_cmdline_user_args(), which is
+# only what follows one, and Godot 4 ignores an unrecognised argument rather than
+# refusing to start, so the wrong spelling runs perfectly and connects to nothing.
+function Invoke-ExportNative {
+    $targets = switch -Regex ($NativePlatform) {
+        '^(all)$'                     { @('linux', 'windows', 'macos'); break }
+        '^(linux|linux-x64)$'         { @('linux');   break }
+        '^(windows|win|windows-x64)$' { @('windows'); break }
+        '^(macos|mac|osx)$'           { @('macos');   break }
+        default { Die "--platform takes linux, windows, macos or all -- not $NativePlatform" }
+    }
+
+    $presetFile = Join-Path $Project 'export_presets.cfg'
+    if (-not (Test-Path -LiteralPath $presetFile)) {
+        Die "no export_presets.cfg -- the editor rewrites that file so it is not tracked. Copy export_presets.example.cfg over it, or run .\setup.ps1." 5
+    }
+
+    if (-not $BuildVersion) {
+        # Built by pieces rather than as one format string: a custom .NET date format
+        # gives `/` and `:` culture-dependent meanings, and a version that comes out
+        # differently on a machine with another locale is the kind of thing nobody
+        # tests for.
+        $now = (Get-Date).ToUniversalTime()
+        $BuildVersion = '1.' + $now.ToString('yyyyMMdd') + '.' + $now.ToString('HHmm')
+    }
+
+    # Godot caches its text->binary scene conversions here and --import does not
+    # invalidate them; see export-web for the uid story.
+    $cache = Join-Path $Project '.godot\exported'
+    if (Test-Path -LiteralPath $cache) { Remove-Item -Recurse -Force $cache }
+
+    $published = @()
+
+    foreach ($target in $targets) {
+        $spec = switch ($target) {
+            'linux'   { @{ Preset = 'Linux x86_64';   Dir = 'build\linux-x64';   Binary = 'tmc.x86_64';
+                           Entry = 'tmc.x86_64';      Archive = 'build\tmc-linux-x64.zip';   Api = 'LINUX_X64' } }
+            'windows' { @{ Preset = 'Windows x86_64'; Dir = 'build\windows-x64'; Binary = 'tmc.exe';
+                           Entry = 'tmc.exe';         Archive = 'build\tmc-windows-x64.zip'; Api = 'WINDOWS_X64' } }
+            'macos'   { @{ Preset = 'macOS';          Dir = 'build\macos';       Binary = 'tmc.zip';
+                           Entry = 'TMC.app/Contents/MacOS/TMC'; Archive = 'build\tmc-macos.zip'; Api = 'MACOS_UNIVERSAL' } }
+        }
+
+        if ((Get-Content -LiteralPath $presetFile -Raw).IndexOf("name=`"$($spec.Preset)`"") -lt 0) {
+            Die "export_presets.cfg has no preset named `"$($spec.Preset)`". export_presets.example.cfg is the tracked copy that does." 5
+        }
+
+        $outDir = Join-Path $Project $spec.Dir
+        New-Item -ItemType Directory -Path $outDir -Force | Out-Null
+        $binary = Join-Path $outDir $spec.Binary
+        if (Test-Path -LiteralPath $binary) { Remove-Item -Force $binary }
+
+        Write-Host ""
+        Write-Host "  exporting $($spec.Preset)" -ForegroundColor White
+
+        & $Godot --headless --path $Project --export-release $spec.Preset $binary
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+        # Checked rather than trusted: an export can print an error and leave the exit
+        # code alone, which makes the artifact existing the only evidence worth acting
+        # on. `.\server.ps1 pack` naming a scene that was never written and exiting 0 is
+        # the reason this project does not believe an exit code on its own.
+        if (-not (Test-Path -LiteralPath $binary)) {
+            Die "the $($spec.Preset) export produced no $($spec.Dir)\$($spec.Binary) -- export templates missing? .\setup.ps1 installs them" 3
+        }
+
+        Test-ExcludedMaps $binary
+
+        $archive = Join-Path $Project $spec.Archive
+        if (Test-Path -LiteralPath $archive) { Remove-Item -Force $archive }
+
+        if ($target -eq 'macos') {
+            # Godot already wrote a zip holding the .app, with the bundle's mode bits in
+            # it. Repacking it here would drop them, because Compress-Archive has no
+            # concept of a unix mode.
+            Copy-Item -LiteralPath $binary -Destination $archive
+        } else {
+            # Zipped from INSIDE the directory, so the entry is `tmc.exe` and not
+            # `windows-x64\tmc.exe`: --entry is a path inside the archive, and a leading
+            # directory nobody declared is an install that lands and cannot be started.
+            #
+            # A Linux build zipped on Windows loses its +x, which is survivable exactly
+            # because the desktop app re-marks the entry executable after unpacking --
+            # it has to, since a Godot export can arrive without it however it travelled.
+            Compress-Archive -Path (Join-Path $outDir '*') -DestinationPath $archive
+        }
+
+        $size = [math]::Round((Get-Item -LiteralPath $archive).Length / 1MB)
+        Write-Host "  wrote $($spec.Archive) (${size} MB)"
+        $published += ,@($spec.Api, $archive, $spec.Entry)
+    }
+
+    Write-Host ""
+    Write-Host "  publish them from website-city:" -ForegroundColor White
+    Write-Host ""
+
+    foreach ($row in $published) {
+        Write-Host "    npm run app:build:publish -- ``"
+        Write-Host "        --app godot --platform $($row[0]) --version $BuildVersion ``"
+        Write-Host "        --file $($row[1]) ``"
+        Write-Host "        --entry `"$($row[2])`" ``"
+        Write-Host "        --args `"--,--connect,{host}:{port}`""
+        Write-Host ""
+    }
+
+    # `--app godot` is the ENGINE app: a server hangs off it rather than off a game,
+    # because it can change which game it is running while players stay connected, so a
+    # Play press resolves the build from there. Same rule as the web build.
+    exit 0
+}
+
 # --- Arguments -------------------------------------------------------------
 
 $rest = @($args)
@@ -145,7 +324,7 @@ function Get-Tail($Items, [int]$From) {
 
 if ($rest.Count -gt 0) {
     switch -Regex ($rest[0]) {
-        '^(run|check|config|games|export-web|stamp-loader)$' {
+        '^(run|check|config|games|export-web|export-native|stamp-loader)$' {
             $Command = $rest[0]; $rest = Get-Tail $rest 1
         }
         '^pack$' {
@@ -191,10 +370,13 @@ while ($i -lt $rest.Count) {
     if ($name -in @('dry-run', 'dryrun')) { $DryRun = $true; $i += 1; continue }
 
     if ($name -in @('port', 'bind', 'name', 'max-players', 'maxplayers', 'game',
-                    'map', 'base', 'config', 'content', 'data', 'godot')) {
+                    'map', 'base', 'config', 'content', 'data', 'godot',
+                    'platform', 'build-version')) {
         if (-not $hasValue) { Die "$token needs a value" }
         switch ($name) {
-            'base'    { $EngineBase = $value }
+            'base'          { $EngineBase = $value }
+            'platform'      { $NativePlatform = $value }
+            'build-version' { $BuildVersion = $value }
             'config'  { $ConfigDir  = $value }
             'content' { $ContentDir = $value }
             'data'    { $DataDir    = $value }
@@ -397,39 +579,9 @@ switch ($Command) {
             (Join-Path $Project 'web\build\index.html')
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-        # An imported map is a .json manifest AND a .bin of vertices, and only one of
-        # the two is a Godot resource. The Web preset exports "all_resources", which is
-        # every file the engine has a loader for: Godot 4 loads .json, so every manifest
-        # reaches the pack, and nothing loads .bin, so not one byte of map geometry does
-        # -- and G2GBspMap reads the manifest FIRST, so a browser client on an imported
-        # map builds a spawn point, a zone set, a start line and a pit over nothing at
-        # all. It connects, signs on, spawns, and draws sky in every direction.
-        #
-        # include_filter="maps/*.bin" in export_presets.cfg is the fix, and that file is
-        # deliberately not in this repository -- so this checks the pack rather than
-        # trusting a file that may not exist on the machine doing the export.
-        $pck = Join-Path $Project 'web\build\index.pck'
-        $mapsDir = Join-Path $Project 'maps'
-        if ((Test-Path -LiteralPath $pck) -and (Test-Path -LiteralPath $mapsDir)) {
-            $bytes = [System.IO.File]::ReadAllBytes($pck)
-            # ISO-8859-1 keeps one byte to one char, so a search over this string is a
-            # search over the bytes; UTF8 would fold invalid sequences and move every
-            # offset. By code page rather than by `::Latin1`, which is a .NET Core
-            # static that Windows PowerShell 5.1 -- the one shipped with Windows -- does
-            # not have, and whose absence would throw here rather than at parse time.
-            $blob = [System.Text.Encoding]::GetEncoding(28591).GetString($bytes)
-            $missing = 0
-            foreach ($bin in (Get-ChildItem -Recurse -LiteralPath $mapsDir -Filter '*.bin')) {
-                $rel = $bin.FullName.Substring($Project.Length).TrimStart('\', '/').Replace('\', '/')
-                if ($blob.IndexOf($rel) -lt 0) {
-                    Write-Host "  the export is missing $rel" -ForegroundColor Red
-                    $missing++
-                }
-            }
-            if ($missing -gt 0) {
-                Die "$missing map geometry file(s) did not reach the export -- add include_filter=`"maps/*.bin`" to export_presets.cfg" 3
-            }
-        }
+        # The two things that have to be true about a map the preset excluded. Shared
+        # with export-native, which excludes the same directory for the same reason.
+        Test-ExcludedMaps (Join-Path $Project 'web\build\index.pck')
 
         $embed = Join-Path $Project 'web\embed.html'
         if (Test-Path -LiteralPath $embed) {
@@ -440,6 +592,7 @@ switch ($Command) {
         Write-Host "  wrote $(Join-Path $Project 'web\build')"
         exit 0
     }
+    'export-native' { Invoke-ExportNative }
     'stamp-loader' {
         if (-not $EngineBase) { Die 'stamp-loader needs --base https://games.example.net/' }
         Write-Loader

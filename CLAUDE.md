@@ -1,7 +1,7 @@
 # dot-server-deploy
 
 TMC's server tool: a Godot project that boots a dot-server from `cfg/` and `content/`, and
-a browser client shell. Read `../../CLAUDE.md` first for the family-wide rules; this file
+the client shell it exports — for a browser, and now for a desktop the app can install on. Read `../../CLAUDE.md` first for the family-wide rules; this file
 is what is specific to here.
 
 ## Why this project exists
@@ -326,6 +326,34 @@ It lands in `~/.cache/tmc/godot/<version>/godot` rather than in the project, so 
 **The Dockerfile no longer has its own copy of the download.** It had one, pinned to its own `GODOT_SHA256`, and two pins drift: the image and the host would have been running different engines with nothing saying so. Stage 1 copies `tools/fetch-godot.sh` and runs it with `--dest /usr/local/bin`.
 
 `setup.ps1` does the same thing for Windows with its own digests, because there is no Bash there to share. It takes the **console** exe out of the archive rather than the plain one — the plain Windows build detaches from the console that started it, so a headless server started by the launcher would print its log nowhere.
+
+## The native client, and the four things it turns on
+
+`./server export-native` builds the shell for Linux, Windows and macOS, writes one archive per platform into `build/`, and prints the command that publishes each one. It exists because the desktop app installs a *file* and there was nothing to give it: `export_presets.cfg` held exactly one preset — Web — so the browser was the only way anybody could play anything on this platform, and the app's Games tab was right to report that nothing was published for this machine.
+
+**The presets are tracked now, and they were not before.** `export_presets.cfg` is written and rewritten by Godot's editor, so it is gitignored for the same reason `cfg/` is — and the consequence was a build command that only worked where somebody had made a preset by hand. `export_presets.example.cfg` is the tracked copy, `setup.sh` and `setup.ps1` copy it in when there is none, and neither ever overwrites one that exists: a preset file is something an operator may have adjusted, and a regenerating upgrade throws that away on the one run nobody is watching. It is the `cfg.example/` rule, applied to the other file the editor owns.
+
+**The launch arguments need the bare `--`, and that is the part worth remembering.** `client/shell.gd` reads the address from `OS.get_cmdline_user_args()`, which is *only* what follows a `--` on the command line. Godot 4 **silently ignores an argument it does not recognise** rather than refusing to start — measured, not assumed — so `tmc.x86_64 --connect 127.0.0.1:6099` launches perfectly, renders the menu, fills in nothing, and connects to nothing. The published argument template is therefore `--,--connect,{host}:{port}`, and the desktop app's own builder drops the pair cleanly when no server was chosen. A version of this that "works on my machine" and joins nothing is one comma away.
+
+**One file per platform, because an install is a download.** `binary_format/embed_pck=true` puts the pack inside the executable, so there is no second file to lose or to mismatch, and the archive then holds exactly one entry — which is exactly what `--entry` names. The zips carry the mode bits, so the binary arrives executable rather than arriving and failing to start with a permission error that reads like a broken download.
+
+**It is the client, not the server.** Every preset excludes `host/*`, the same way the Web one does. `client/shell.tscn` is the main scene, a player who double-clicks gets a menu and a server address, and an operator runs `./server`. A native build that could also host is a different product and would ship a different preset.
+
+**It publishes under the ENGINE app, for the reason the web build does.** A server hangs off `godot` rather than off a game, because it can change which game it is running while players stay connected — so a Play press resolves the build from there. Publishing the same 80 MB shell again under each game app buys a Library entry per game and costs a copy per game; do it when somebody wants the games listed separately, not by default.
+
+Two engine facts came out of getting macOS to export at all, and both are in `project.godot` rather than in the preset:
+
+- **A universal or arm64 macOS export is refused while `textures/vram_compression/import_etc2_astc` is off.** It is an import setting for VRAM-compressed textures and this project has none — `compress/mode=2` appears in no `.import` file — so turning it on reimports nothing and adds nothing to any build. The alternative was an x86_64-only build published under a column that says `MACOS_UNIVERSAL`, which is a row that lies.
+- **The `.app` bundle is named from the project name**, and this project's name is the *server* tool. `config/name.macos="TMC"` is a feature-tagged override — the exporter resolves project settings through the preset's feature tags — so the bundle is `TMC.app` and the entry is `TMC.app/Contents/MacOS/TMC` rather than a path with a space in it and the wrong word.
+
+Verified by running, on this machine: all three exported, the Linux archive unpacked the way the app unpacks one, and the binary joined a real `./server` — admitted, spawned, in the match, HUD drawing — with the address arriving through `-- --connect`.
+
+### Two bugs this found in the launcher
+
+- **`warn` was called twice and defined nowhere.** Both of `export-web`'s map checks end in `|| warn "..."`, so the message about a build carrying 66 MB it did not need was `warn: command not found`. The condition is rare, which is why nobody hit it, and rare is what a warning is for.
+- **The PowerShell launcher's map check asserted the opposite of the bash one's.** `tools/server.ps1.in` still carried the version from when the build was supposed to *contain* map geometry, so a Windows operator running `export-web` got "8 map geometry file(s) did not reach the export" and a dead stop on a build that was correct. Both now call one function that checks the two things that are actually true, and the fix that message names points at `maps/imported` — `./server pack <id>` alone publishes `content/<id>`, where no imported map has ever lived.
+
+`tools/server.ps1.in` has one more divergence of the same shape, **not** fixed here: its `pack` still runs `res://tools/publish.tscn`, the scene that was never written and that the bash half stopped naming when `./server pack` was rebuilt on `tools/pack.gd` and dot-cloud's CLI. It needs the signing key, the content directory and the `--all` handling that the bash one grew, which is a port and not a patch.
 
 ## Validating
 

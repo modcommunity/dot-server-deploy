@@ -393,7 +393,33 @@ foreach ($template in (Get-ChildItem -LiteralPath $templates -File -Filter '*.ym
 
 if ($newConfig) { Ok "cfg\ written from cfg.example\" } else { Ok "cfg\ already exists and was not touched" }
 
-# --- 6. server.ps1 / server.cmd -------------------------------------------
+# --- 6. export_presets.cfg -------------------------------------------------
+#
+# [b]An export preset nobody has is a build command that cannot run.[/b] Godot's editor
+# rewrites export_presets.cfg, so it is gitignored the way cfg\ is -- and the
+# consequence was that the export commands failed on a fresh machine for a preset that
+# existed only where somebody had made one by hand. Copied, never overwritten, for the
+# same reason the configuration is.
+#
+# It lands at the project ROOT and not in cfg\ with the other templates: Godot reads it
+# from exactly one place -- "This project doesn't have an `export_presets.cfg` file at
+# its root."
+
+Step "export presets"
+
+$presets = Join-Path $Root 'export_presets.cfg'
+$presetTemplate = Join-Path $Root 'export_presets.example.cfg'
+
+if (Test-Path -LiteralPath $presets) {
+    Ok "export_presets.cfg already exists and was not touched"
+} elseif (Test-Path -LiteralPath $presetTemplate) {
+    Copy-Item -LiteralPath $presetTemplate -Destination $presets
+    Ok "export_presets.cfg written from export_presets.example.cfg"
+} else {
+    Warn "export_presets.example.cfg is missing; the export commands will have no presets"
+}
+
+# --- 7. server.ps1 / server.cmd -------------------------------------------
 #
 # [b]server.cmd used to be the whole Windows launcher, and it was nine lines.[/b] It
 # understood `check`, `config` and `games` and handed everything else to Godot unread

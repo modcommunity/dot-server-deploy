@@ -48,6 +48,18 @@ GODOT="${TMC_GODOT:-@GODOT@}"
 ENGINE_BASE="${TMC_ENGINE_BASE:-}"
 
 WANT_ZIP="${TMC_EXPORT_ZIP:+1}"
+
+# Which machines `export-native` builds for, and what the publisher calls the build.
+# Both are read here rather than beside the command, because everything in this block
+# is a default an ARGUMENT overrides -- and a default assigned after the parser has run
+# is a flag that silently does nothing.
+NATIVE_PLATFORM="${TMC_NATIVE_PLATFORM:-all}"
+
+# What the publisher calls this build. Dotted numeric because the app COMPARES it to
+# decide an update, and date-stamped because the alternative is somebody remembering to
+# bump a constant -- a build that ships with the version of the one before it is an
+# update nobody is offered. `1.20260912.1819` compares the way it reads.
+BUILD_VERSION="${TMC_BUILD_VERSION:-}"
 CONFIG_DIR="${TMC_CONFIG_DIR:-cfg}"
 CONTENT_DIR="${TMC_CONTENT_DIR:-content}"
 DATA_DIR="${TMC_DATA_DIR:-data}"
@@ -73,6 +85,14 @@ RED=$'\033[31m'; YLW=$'\033[33m'; DIM=$'\033[2m'; BLD=$'\033[1m'; OFF=$'\033[0m'
 die() { printf '\n  %s%s%s\n\n' "$RED" "$1" "$OFF" >&2; exit "${2:-2}"; }
 note() { printf '  %s%s%s\n' "$DIM" "$1" "$OFF"; }
 
+# [b]This was called twice and defined nowhere.[/b] `export-web`'s two map checks both
+# end in `|| warn "..."`, and with no such function bash printed `warn: command not
+# found` and carried on -- so the one message telling an operator their build carries
+# 66 MB it did not need to was replaced by a line that reads like the script is broken.
+# The condition it guards is rare, which is why nobody hit it, and rare is exactly what
+# a warning is for.
+warn() { printf '  %s%s%s\n' "$YLW" "$1" "$OFF" >&2; }
+
 usage() {
     cat <<'USAGE'
   ./server [command] [options] [-- +consolecommand ...]
@@ -89,6 +109,10 @@ usage() {
     verify <id>         Check dist/<id>'s manifest against keys/content.pub.
     export-web          Build the browser client into web/build, plus the
                         loader website-city uploads. Takes --base and --zip.
+    export-native       Build the native client the desktop app installs, into
+                        build/, one archive per platform. Takes --platform and
+                        --build-version, and prints the publish command for
+                        each.
     stamp-loader        Rewrite web/build/tmc-loader.js with a new --base and
                         nothing else. Moving the engine to another domain is a
                         deployment change, not a rebuild.
@@ -117,6 +141,18 @@ usage() {
                         The loader frames the engine with a sandbox that is only
                         a boundary while the frame is cross-origin, and refuses
                         to start if this resolves to the page's own origin.
+
+    --platform TARGET   export-native only. linux, windows, macos, or all.
+                        The default is all three: a build published for one
+                        machine is a Library entry every other machine is told
+                        nothing about, and the exports are minutes, not hours.
+
+    --build-version V   export-native only. What the publisher calls this build.
+                        Dotted numeric, because the desktop app COMPARES it to
+                        decide whether an install is out of date. The default is
+                        1.<yyyymmdd>.<hhmm> in UTC, which always beats the one
+                        before it -- a constant somebody forgets to bump is an
+                        update nobody is ever offered.
 
     --zip               export-web only. Also write web/build.zip, which is what
                         the site's app form takes: its publisher accepts one .zip
@@ -165,7 +201,8 @@ usage() {
     TMC_NAME            --name                TMC_DATA_DIR      --data
     TMC_MAX_PLAYERS     --max-players         TMC_GODOT         --godot
     TMC_GAME            --game                TMC_ENGINE_BASE   --base
-    TMC_MAP             --map
+    TMC_MAP             --map                 TMC_EXPORT_ZIP    --zip
+    TMC_NATIVE_PLATFORM --platform            TMC_BUILD_VERSION --build-version
     TMC_VERBOSE         --verbose (set to anything)
 
   Which means a TMC_PORT left set in an environment file makes cfg/net.yml look
@@ -190,7 +227,7 @@ USAGE
 # --- Arguments -------------------------------------------------------------
 
 case "${1:-}" in
-    run|check|config|games|export-web|stamp-loader) COMMAND="$1"; shift ;;
+    run|check|config|games|export-web|export-native|stamp-loader) COMMAND="$1"; shift ;;
     pack|publish)
         COMMAND="pack"; shift
         PACK_ID="${1:-}"
@@ -212,6 +249,8 @@ while [ $# -gt 0 ]; do
         --game)        [ $# -ge 2 ] || die "$1 needs a value"; OPT_GAME="$2";        shift 2 ;;
         --map)         [ $# -ge 2 ] || die "$1 needs a value"; OPT_MAP="$2";         shift 2 ;;
         --base)    ENGINE_BASE="${2:-}"; shift 2 ;;
+        --platform) [ $# -ge 2 ] || die "$1 needs a value"; NATIVE_PLATFORM="$2"; shift 2 ;;
+        --build-version) [ $# -ge 2 ] || die "$1 needs a value"; BUILD_VERSION="$2"; shift 2 ;;
         --config)  CONFIG_DIR="${2:-}";  shift 2 ;;
         --content) CONTENT_DIR="${2:-}"; shift 2 ;;
         --data)    DATA_DIR="${2:-}";    shift 2 ;;
@@ -488,6 +527,235 @@ do_verify() {
     exit 0
 }
 
+# --- Native builds ---------------------------------------------------------
+#
+# [b]The desktop app installs a file, and until this command there was nothing to give
+# it.[/b] `export_presets.cfg` held one preset -- Web -- so the browser was the only way
+# to play anything on this platform, and the app's Games tab correctly reported that
+# nothing was published for this machine. The presets now ship in
+# `export_presets.example.cfg`, setup copies them in, and this builds them.
+#
+# [b]One file per platform, because an install is a download.[/b] `binary_format/
+# embed_pck=true` puts the pack inside the executable, so there is no second file to
+# lose, to mismatch, or to forget in an archive -- and the archive then holds exactly
+# one entry, which is the `--entry` the publisher wants.
+#
+# [b]It is the CLIENT, not the server.[/b] Every preset excludes `host/*` exactly as the
+# Web one does: `client/shell.tscn` is the main scene, a player who double-clicks gets a
+# menu and a server address, and an operator runs `./server`. A native build that could
+# also host is a different product and would ship a different preset.
+#
+# THE LAUNCH ARGUMENTS NEED THE BARE `--`, and this is the part that is easy to get
+# wrong twice. `client/shell.gd` reads the address from `OS.get_cmdline_user_args()`,
+# which is *only* what follows a `--` on the command line; Godot 4 silently ignores an
+# argument it does not recognise rather than refusing to start, so
+# `tmc.x86_64 --connect host:port` runs perfectly, shows the menu, and connects to
+# nothing. `--args "--,--connect,{host}:{port}"` is the spelling that works, and the
+# app's own argument builder drops the pair cleanly when no server was chosen.
+
+# [b]An imported map must NOT be in the build, and MUST be on the CDN.[/b] Shared by
+# both export commands, because both presets exclude `maps/imported/*` and both builds
+# reach a player who then has to fetch those maps from the content origin.
+#
+# The second half is the one worth having. A map excluded from the build and never
+# published is a map nobody can reach, and the symptom -- G2GBspMap reads the manifest
+# first, so the spawn point, the zone set, the start line and the pit are built over no
+# geometry at all -- is a player who connects, signs on, spawns, and sees sky in every
+# direction. Reported on a server, a day later, by somebody who thought the map was
+# broken.
+check_excluded_maps() {
+    local pack="$1" carried=0 unpublished=0 bin rel id
+
+    while IFS= read -r bin; do
+        rel="${bin#"$PROJECT"/}"
+        id="$(basename "$(dirname "$bin")")"
+
+        if grep -qF "$rel" "$pack"; then
+            warn "the export is carrying $rel, which the CDN already serves"
+            carried=$((carried + 1))
+        fi
+
+        if [ ! -f "$PROJECT/dist/$id/manifest.json" ]; then
+            printf '  %s%s is not in the build and is not published%s\n' \
+                "$RED" "$id" "$OFF" >&2
+            unpublished=$((unpublished + 1))
+        fi
+    done < <(find "$PROJECT/maps/imported" -name '*.bin' 2>/dev/null)
+
+    [ "$carried" -eq 0 ] || warn "$carried map(s) are in the pack as well as on the CDN -- exclude_filter should hold maps/imported/*"
+    # NAMING THE DIRECTORY IS THE POINT. This said `./server pack <id>` and nothing
+    # else, and that command publishes `content/<id>` -- where no imported map has ever
+    # lived. Every one of them is under `maps/imported/`, so the remedy as written fails
+    # with "no content at content/surf_mesa" and reads like the map is the problem.
+    [ "$unpublished" -eq 0 ] || die "$unpublished map(s) reach nobody: not in the build, not in dist/.
+
+  Publish them -- the map id is the content id, and the directory is not content/:
+
+      ./server pack --all --content maps/imported
+
+  Or put them back in the export by dropping maps/imported/* from exclude_filter." 3
+
+    # Top-level maps/*.bin -- a map that is part of the build rather than content --
+    # would still need carrying, and `all_resources` still will not carry it. There are
+    # none today; this says so rather than leaving the next person to find out.
+    if find "$PROJECT/maps" -maxdepth 2 -name '*.bin' 2>/dev/null | grep -q .; then
+        warn "maps/*.bin outside maps/imported/ exists and needs include_filter to reach the pack"
+    fi
+}
+
+# Zip a directory from INSIDE it, so entries are `tmc.x86_64` rather than
+# `linux-x64/tmc.x86_64`. The publisher's `--entry` is a path inside the archive and the
+# app joins it to wherever it unpacked -- a leading directory nobody declared is an
+# install that lands and then cannot be started.
+#
+# THE MODE BITS TRAVEL. A Godot export that arrives without `+x` fails at launch with a
+# permission error that reads like a broken download; the app re-marks the entry
+# executable for exactly that reason, and a zip that carries the bit means it never has
+# to. `zip` does this for free; the python fallback has to be told, and there is a
+# python fallback because a machine with Godot on it and no `zip` is ordinary enough to
+# handle rather than to fail on.
+zip_dir() {
+    local dir="$1" out="$2"
+
+    rm -f "$out"
+
+    if command -v zip >/dev/null 2>&1; then
+        ( cd "$dir" && zip -qr "$out" . ) || die "zip failed" 3
+    elif command -v python3 >/dev/null 2>&1; then
+        python3 - "$dir" "$out" <<'NATIVE_ZIP_PY' || die "zip failed" 3
+import os, sys, zipfile
+src, out = sys.argv[1], sys.argv[2]
+with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
+    for root, _dirs, files in os.walk(src):
+        for name in files:
+            full = os.path.join(root, name)
+            info = zipfile.ZipInfo.from_file(full, os.path.relpath(full, src))
+            info.compress_type = zipfile.ZIP_DEFLATED
+            info.external_attr = (os.stat(full).st_mode & 0xFFFF) << 16
+            with open(full, "rb") as fh:
+                z.writestr(info, fh.read())
+NATIVE_ZIP_PY
+    else
+        die "need zip or python3 to build the archive" 3
+    fi
+}
+
+do_export_native() {
+    local targets=()
+
+    case "$NATIVE_PLATFORM" in
+        all)                        targets=(linux windows macos) ;;
+        linux|linux-x64|LINUX_X64)  targets=(linux) ;;
+        windows|win|WINDOWS_X64)    targets=(windows) ;;
+        macos|mac|MACOS_UNIVERSAL)  targets=(macos) ;;
+        *) die "--platform takes linux, windows, macos or all -- not $NATIVE_PLATFORM" 2 ;;
+    esac
+
+    [ -f "$PROJECT/export_presets.cfg" ] || die "no export_presets.cfg
+
+  It is not in the repository -- the editor rewrites it, so it is gitignored the
+  way cfg/ is. The tracked copy is export_presets.example.cfg:
+
+      cp export_presets.example.cfg export_presets.cfg
+
+  ./setup.sh does this for you." 5
+
+    [ -n "$BUILD_VERSION" ] || BUILD_VERSION="1.$(date -u +%Y%m%d).$(date -u +%H%M)"
+
+    # Godot caches its text->binary scene conversions in .godot/exported/, and --import
+    # does NOT invalidate them. setup.sh copies each game's .gd files out of its sibling
+    # repository and Godot then mints a FRESH .uid for every one -- so a re-vendored
+    # script gets a new uid while the cached conversion of the scene that references it
+    # still carries the old one, and the build ships a scene pointing at a uid that
+    # exists nowhere. It recovers via the path it also carries, which is why it went
+    # unnoticed in the web build for so long. Nothing headless can see it; not reusing
+    # the cache is cheap.
+    rm -rf "$PROJECT/.godot/exported"
+
+    local target preset outdir binary entry archive api_platform row
+    local published=()
+
+    for target in "${targets[@]}"; do
+        case "$target" in
+            linux)
+                preset="Linux x86_64"; outdir="build/linux-x64"; binary="tmc.x86_64"
+                entry="tmc.x86_64";    archive="build/tmc-linux-x64.zip"
+                api_platform="LINUX_X64" ;;
+            windows)
+                preset="Windows x86_64"; outdir="build/windows-x64"; binary="tmc.exe"
+                entry="tmc.exe";         archive="build/tmc-windows-x64.zip"
+                api_platform="WINDOWS_X64" ;;
+            macos)
+                # Godot writes the .app into a zip of its own when the export path ends
+                # in .zip, and it is the only way to keep a bundle's structure and its
+                # mode bits on a machine that is not a Mac. The bundle is named from the
+                # project name, which is why project.godot carries a `.macos` override:
+                # this project is the SERVER tool and what macOS installs is the client.
+                preset="macOS"; outdir="build/macos"; binary="tmc.zip"
+                entry="TMC.app/Contents/MacOS/TMC"; archive="build/tmc-macos.zip"
+                api_platform="MACOS_UNIVERSAL" ;;
+        esac
+
+        grep -qF "name=\"$preset\"" "$PROJECT/export_presets.cfg" \
+            || die "export_presets.cfg has no preset named \"$preset\". export_presets.example.cfg is the tracked copy that does." 5
+
+        mkdir -p "$PROJECT/$outdir" || die "could not create $PROJECT/$outdir" 5
+
+        printf '\n  %sexporting %s%s\n' "$BLD" "$preset" "$OFF"
+
+        rm -f "$PROJECT/$outdir/$binary"
+        "$GODOT" --headless --path "$PROJECT" \
+            --export-release "$preset" "$PROJECT/$outdir/$binary" || exit $?
+
+        # [b]Checked rather than trusted.[/b] `./server pack` named a scene that was
+        # never written, Godot said "Cannot open file", and the launcher exited 0 --
+        # so every caller was told it had worked. An export can print an error and
+        # leave the exit code alone, which makes the artifact existing the only
+        # evidence worth acting on.
+        [ -s "$PROJECT/$outdir/$binary" ] \
+            || die "the $preset export produced no $outdir/$binary -- export templates for $VERSION missing? ./setup.sh installs them" 3
+
+        check_excluded_maps "$PROJECT/$outdir/$binary"
+
+        if [ "$target" = "macos" ]; then
+            cp "$PROJECT/$outdir/$binary" "$PROJECT/$archive"
+        else
+            zip_dir "$PROJECT/$outdir" "$PROJECT/$archive"
+        fi
+
+        printf '  wrote %s (%s)\n' "$archive" "$(du -h "$PROJECT/$archive" | cut -f1)"
+        published+=("$api_platform|$archive|$entry")
+    done
+
+    # What to do with what was just built. The publisher lives in website-city, because
+    # that is where the database and the CDN credentials are, and printing the command
+    # beats describing it: the version, the entry path and the argument list are all
+    # things this script knows and a person would otherwise be looking up.
+    printf '\n  %spublish them from website-city:%s\n\n' "$BLD" "$OFF"
+
+    for row in "${published[@]}"; do
+        api_platform="${row%%|*}"; row="${row#*|}"
+        archive="${row%%|*}"; entry="${row#*|}"
+
+        printf '    npm run app:build:publish -- \\\n'
+        printf '        --app godot --platform %s --version %s \\\n' "$api_platform" "$BUILD_VERSION"
+        printf '        --file %s/%s \\\n' "$PROJECT" "$archive"
+        printf '        --entry "%s" \\\n' "$entry"
+        printf '        --args "--,--connect,{host}:{port}"\n\n'
+    done
+
+    # `--app godot` is the ENGINE app, and it is deliberate. A server hangs off the
+    # engine app rather than off a game -- it can change which game it is running while
+    # players stay connected -- so a Play press resolves the build from there, exactly
+    # as the web build does. Publishing the same 80 MB shell again under each game app
+    # buys a Library entry per game and costs a copy per game: do that when somebody
+    # wants the games listed separately, not by default.
+    note "--app godot is the engine app: a server belongs to it, and that is what a"
+    note "Play press resolves a build from. See seed-godot-apps.ts."
+
+    exit 0
+}
+
 SCENE="res://host/host.tscn"
 ARGS=(--headless --path "$PROJECT" "$SCENE" --
       --config "$CONFIG_DIR" --content "$CONTENT_DIR" --data "$DATA_DIR")
@@ -498,6 +766,7 @@ case "$COMMAND" in
     games)      ARGS+=(--list-games) ;;
     pack)       do_pack ;;
     verify)     do_verify ;;
+    export-native) do_export_native ;;
     export-web)
         mkdir -p "$PROJECT/web/build"
 
@@ -521,59 +790,10 @@ case "$COMMAND" in
         "$GODOT" --headless --path "$PROJECT" \
             --export-release "Web" "$PROJECT/web/build/index.html" || exit $?
 
-        # [b]An imported map must NOT be in the pack, and MUST be on the CDN.[/b] This
-        # check used to assert the opposite, and the story of it is the whole reason the
-        # exclusion exists.
-        #
-        # An imported map is a .json manifest AND a .bin of vertices, and only one of the
-        # two is a Godot resource. The Web preset exports "all_resources" -- every file
-        # the engine has a loader for -- and Godot 4 loads .json but nothing loads .bin,
-        # so every manifest reached the pack and not one byte of geometry did. G2GBspMap
-        # reads the manifest FIRST, so a browser client built a spawn point, a zone set,
-        # a start line and a pit over nothing at all: it connected, signed on, spawned,
-        # and drew sky in every direction. The fix at the time was an
-        # `include_filter="maps/*.bin"`, and it was the right fix for what the build then
-        # was.
-        #
-        # What it made, though, was a 105 MB download in which 66 MB was eight maps, so
-        # that a player could play one. The same eight are published as dot-cloud packs
-        # and served from the content origin, which is what the delivery network is FOR;
-        # `G2GGame.ensure_map_content` fetches the one a server is running, on join and on
-        # every change. So the preset excludes `maps/imported/*` and this checks the two
-        # things that then have to be true.
-        #
-        # The second is the one worth having. A map excluded from the build and never
-        # published is a map nobody can reach, and the symptom is the same black sky as
-        # before -- reported by a player, on a server, a day later.
-        carried=0
-        unpublished=0
-
-        while IFS= read -r bin; do
-            rel="${bin#"$PROJECT"/}"
-            id="$(basename "$(dirname "$bin")")"
-
-            if grep -qF "$rel" "$PROJECT/web/build/index.pck"; then
-                printf '  %sthe export is carrying %s, which the CDN already serves%s\n' \
-                    "$YLW" "$rel" "$OFF" >&2
-                carried=$((carried + 1))
-            fi
-
-            if [ ! -f "$PROJECT/dist/$id/manifest.json" ]; then
-                printf '  %s%s is not in the build and is not published%s\n' \
-                    "$RED" "$id" "$OFF" >&2
-                unpublished=$((unpublished + 1))
-            fi
-        done < <(find "$PROJECT/maps/imported" -name '*.bin' 2>/dev/null)
-
-        [ "$carried" -eq 0 ] || warn "$carried map(s) are in the pack as well as on the CDN -- exclude_filter should hold maps/imported/*"
-        [ "$unpublished" -eq 0 ] || die "$unpublished map(s) reach nobody: not in the build, not in dist/. Publish them with ./server pack <id>, or put them back in the export." 3
-
-        # Top-level maps/*.bin -- a map that is part of the build rather than content --
-        # would still need carrying, and `all_resources` still will not carry it. There
-        # are none today; this says so rather than leaving the next person to find out.
-        if find "$PROJECT/maps" -maxdepth 2 -name '*.bin' 2>/dev/null | grep -q .; then
-            warn "maps/*.bin outside maps/imported/ exists and needs include_filter to reach the pack"
-        fi
+        # The two things that then have to be true about a map the preset excluded.
+        # Shared with `export-native`, which excludes the same directory for the same
+        # reason -- the story that put the check here is on the function.
+        check_excluded_maps "$PROJECT/web/build/index.pck"
 
         # The standalone page, which takes ?server= from the URL.
         [ -f "$PROJECT/web/embed.html" ] && cp "$PROJECT/web/embed.html" "$PROJECT/web/build/embed.html"
