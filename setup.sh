@@ -163,7 +163,7 @@ fi
 # here vendors, imports, and then fails to compile every script that names the missing
 # class — dozens of "not declared in the current scope" errors in files nobody touched,
 # which reads as a broken project rather than as one missing folder.
-ADDONS=(dot_core dot_net dot_server dot_server_query dot_2d dot_ui dot_auth dot_cloud dot_user
+ADDONS=(dot_core dot_net dot_server dot_server_query dot_server_security dot_2d dot_ui dot_auth dot_cloud dot_user
         dot_user_avatar dot_platform dot_loadout dot_match
         dot_player_controller dot_timer dot_map dot_leaderboard dot_stats
         dot_props dot_vote dot_combat dot_chat dot_voice dot_moderation
