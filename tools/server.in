@@ -350,33 +350,59 @@ case "$COMMAND" in
         "$GODOT" --headless --path "$PROJECT" \
             --export-release "Web" "$PROJECT/web/build/index.html" || exit $?
 
-        # An imported map is a .json manifest AND a .bin of vertices, and only one of
-        # the two is a Godot resource.
+        # [b]An imported map must NOT be in the pack, and MUST be on the CDN.[/b] This
+        # check used to assert the opposite, and the story of it is the whole reason the
+        # exclusion exists.
         #
-        # The Web preset exports "all_resources", which means every file the engine has
-        # a loader for. Godot 4 loads .json, so every manifest reached the pack; nothing
-        # loads .bin, so not one byte of map geometry did -- and G2GBspMap reads the
-        # manifest FIRST, so a browser client on an imported map built a spawn point, a
-        # zone set, a start line and a pit over nothing at all. It connected, signed on,
-        # spawned, and drew sky in every direction, which is a shape this family has
-        # shipped three times.
+        # An imported map is a .json manifest AND a .bin of vertices, and only one of the
+        # two is a Godot resource. The Web preset exports "all_resources" -- every file
+        # the engine has a loader for -- and Godot 4 loads .json but nothing loads .bin,
+        # so every manifest reached the pack and not one byte of geometry did. G2GBspMap
+        # reads the manifest FIRST, so a browser client built a spawn point, a zone set,
+        # a start line and a pit over nothing at all: it connected, signed on, spawned,
+        # and drew sky in every direction. The fix at the time was an
+        # `include_filter="maps/*.bin"`, and it was the right fix for what the build then
+        # was.
         #
-        # `include_filter` is the only thing that carries a non-resource, and
-        # export_presets.cfg is deliberately NOT in this repository -- so this checks the
-        # pack rather than trusting a file that may not exist on the machine doing the
-        # export. It needs, at minimum:
+        # What it made, though, was a 105 MB download in which 66 MB was eight maps, so
+        # that a player could play one. The same eight are published as dot-cloud packs
+        # and served from the content origin, which is what the delivery network is FOR;
+        # `G2GGame.ensure_map_content` fetches the one a server is running, on join and on
+        # every change. So the preset excludes `maps/imported/*` and this checks the two
+        # things that then have to be true.
         #
-        #   include_filter="maps/*.bin"
-        #
-        missing=0
+        # The second is the one worth having. A map excluded from the build and never
+        # published is a map nobody can reach, and the symptom is the same black sky as
+        # before -- reported by a player, on a server, a day later.
+        carried=0
+        unpublished=0
+
         while IFS= read -r bin; do
             rel="${bin#"$PROJECT"/}"
-            grep -qF "$rel" "$PROJECT/web/build/index.pck" || {
-                printf '  %sthe export is missing %s%s\n' "$RED" "$rel" "$OFF" >&2
-                missing=$((missing + 1))
-            }
-        done < <(find "$PROJECT/maps" -name '*.bin' 2>/dev/null)
-        [ "$missing" -eq 0 ] || die "$missing map geometry file(s) did not reach the export -- add include_filter=\"maps/*.bin\" to export_presets.cfg" 3
+            id="$(basename "$(dirname "$bin")")"
+
+            if grep -qF "$rel" "$PROJECT/web/build/index.pck"; then
+                printf '  %sthe export is carrying %s, which the CDN already serves%s\n' \
+                    "$YLW" "$rel" "$OFF" >&2
+                carried=$((carried + 1))
+            fi
+
+            if [ ! -f "$PROJECT/dist/$id/manifest.json" ]; then
+                printf '  %s%s is not in the build and is not published%s\n' \
+                    "$RED" "$id" "$OFF" >&2
+                unpublished=$((unpublished + 1))
+            fi
+        done < <(find "$PROJECT/maps/imported" -name '*.bin' 2>/dev/null)
+
+        [ "$carried" -eq 0 ] || warn "$carried map(s) are in the pack as well as on the CDN -- exclude_filter should hold maps/imported/*"
+        [ "$unpublished" -eq 0 ] || die "$unpublished map(s) reach nobody: not in the build, not in dist/. Publish them with ./server pack <id>, or put them back in the export." 3
+
+        # Top-level maps/*.bin -- a map that is part of the build rather than content --
+        # would still need carrying, and `all_resources` still will not carry it. There
+        # are none today; this says so rather than leaving the next person to find out.
+        if find "$PROJECT/maps" -maxdepth 2 -name '*.bin' 2>/dev/null | grep -q .; then
+            warn "maps/*.bin outside maps/imported/ exists and needs include_filter to reach the pack"
+        fi
 
         # The standalone page, which takes ?server= from the URL.
         [ -f "$PROJECT/web/embed.html" ] && cp "$PROJECT/web/embed.html" "$PROJECT/web/build/embed.html"

@@ -465,6 +465,18 @@ func _ensure_cloud() -> void:
 	# as a URL unless the file is genuinely on disk.
 	_cloud.http_base_urls = PackedStringArray(["/content"])
 
+	# [b]No version segment, because the published layout has none.[/b] The default
+	# template is `{base}/{id}/{version}/manifest.json`, and `DotCloudPublisher` writes
+	# `<id>/manifest.json` — the version is INSIDE the document, and the mount still
+	# namespaces by it, so nothing is lost by leaving it out of the path. With the
+	# default, `ensure()` asks for `/content/surf_mesa/0.0.0/manifest.json`, gets a 404
+	# from a CDN that is serving the map perfectly well one path segment up, and reports
+	# "could not get surf_mesa's manifest" — which reads as missing content.
+	#
+	# This is the path maps take. A game delivered as a pack does not use it: dot-server
+	# hands the client a manifest URL an operator wrote in `game.yml`.
+	_cloud.manifest_url_template = "{base}/{id}/manifest.json"
+
 	add_child(_cloud)
 
 

@@ -441,7 +441,19 @@ func _build_cloud() -> void:
 	# The content directory is searched before the network, so a pack sitting beside the
 	# game that names it needs no web server at all — which is what a LAN deployment and
 	# every test of this are.
-	cloud.local_search_dirs = PackedStringArray([content.root])
+	# `dist/` too, when there is one: it is where `./server pack` writes, so a server
+	# that published a map is a server that has it, and asking the network for something
+	# it produced itself would be absurd. Absent on a deployment that only consumes.
+	var searched := PackedStringArray([content.root])
+	var published := ProjectSettings.globalize_path("res://dist")
+
+	if DirAccess.dir_exists_absolute(published):
+		searched.append(published)
+
+	cloud.local_search_dirs = searched
+	# Same reasoning as `client/shell.gd`: the published layout carries no version
+	# segment, and the default template asks for one.
+	cloud.manifest_url_template = "{base}/{id}/manifest.json"
 	server.add_child(cloud)
 
 
