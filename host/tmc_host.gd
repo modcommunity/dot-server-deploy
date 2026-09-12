@@ -47,6 +47,9 @@ var content: TmcContent = null
 var admins: TmcAdmins = null
 var server: DotServer = null
 
+## The query responder. Answers A2S and DQP; see dot-server-query.
+var query_host: DotQueryHost = null
+
 ## Voting for the next game, or null when `vote.yml` turns it off.
 var votes: TmcVote = null
 
@@ -299,6 +302,16 @@ func _boot() -> bool:
 	# something dot-server has and this format does not belongs.
 	config.server.autoexec_config = "%s/autoexec.cfg" % _config_dir
 	add_child(server)
+
+	# Queries are their own addon now, and a server only answers them if a host is
+	# plugged in. `a2s_enabled: true` ships in cfg/server.yml and TMC's own scanner
+	# speaks A2S, so a deployment without this is one that quietly drops off every
+	# listing it is on.
+	query_host = DotQueryHost.new()
+	query_host.name = "QueryHost"
+	query_host.app_url = config.app_url
+	query_host.server_ref = DotNodeRef.of_path(NodePath("../Server"))
+	add_child(query_host)
 
 	# The YAML's console lines are compiled to a `.cfg` and handed to dot-server's own
 	# startup-config path, which runs after the console exists and before the listener

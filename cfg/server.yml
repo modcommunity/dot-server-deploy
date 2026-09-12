@@ -12,6 +12,23 @@ sv_maxplayers: 64
 # moved with `changegame <id>` over RCON without a restart. `./server games` lists
 # what this content directory actually has.
 sv_game: ""
+
+# The app's URL segment on the website, reported in a query as the game's name.
+#
+# Unique and lowercase because the site already made it so, which is the whole
+# reason to reuse it rather than invent a second identifier that has to be kept in
+# step. Empty falls back to the running game's id, which is the right answer on a
+# box running one game.
+#
+# DISPLAY ONLY. A server can claim any app it likes, and nothing that has to be
+# certain which app a server belongs to -- a launch resolving a build, a play grant
+# -- reads this. Those ask the backbone, which knows. It is what a listing prints
+# next to the hostname, and it is also A2S's `folder`, which is the field trackers
+# group servers by.
+#
+# `sv_query_app` is also a cvar, so it can be changed on a running server.
+sv_query_app: ""
+
 # Server queries.
 #
 # `query_enabled` is on by dot-server's own default and answers the dot query

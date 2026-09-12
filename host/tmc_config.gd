@@ -124,6 +124,16 @@ var vote_exclude: PackedStringArray = PackedStringArray()
 ## The game to load at boot, or "" for whatever the content directory says is first.
 var initial_game: String = ""
 
+## The app's URL segment on the website, reported in a query as the game's name.
+##
+## `sv_query_app` in the YAML. Empty falls back to the running game's id, which is
+## already slug-shaped and is the right answer on a box running one game.
+##
+## [b]Display only.[/b] A server can claim any app it likes; nothing that has to be
+## certain which app a server belongs to — a launch resolving a build, a play grant
+## — reads this. Those ask the backbone, which knows.
+var app_url: String = ""
+
 ## The address a player types, when it is not the one the server binds to.
 ##
 ## Behind NAT the two differ and only the operator knows the difference. Printed in the
@@ -238,6 +248,14 @@ func _apply_settings(file: String, tree: Dictionary) -> DotResult:
 
 		if name == "sv_game":
 			initial_game = String(value)
+			continue
+
+		if name == "sv_query_app":
+			# Not passed through as a console line: the cvar of that name is
+			# registered by the query host, which opens AFTER the startup config
+			# runs, so a `sv_query_app` line in the generated .cfg would name a
+			# cvar that does not exist yet and be reported as unknown.
+			app_url = String(value)
 			continue
 
 		if name == "net_public_ip":
