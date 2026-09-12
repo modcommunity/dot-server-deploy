@@ -4,6 +4,7 @@
 #
 #   ./deploy/publish-web-s3.sh --bucket my-games --region us-east-1
 #   ./deploy/publish-web-s3.sh --bucket my-games --prefix game/ --public-base https://games.example.net/game/
+#   ./deploy/publish-web-s3.sh --bucket my-games --prefix content/ --source dist --content
 #
 # The alternative to `install-game-origin.sh`, which puts nginx in front of a
 # directory on this box. A bucket behind a CDN is the better shape for anything
@@ -76,6 +77,8 @@ SOURCE="${TMC_S3_SOURCE:-$ROOT/web/build}"
 # Set to anything to turn on. These are the two that change what is UPLOADED rather than
 # where it goes, so they belong in a deployment's environment beside the bucket name --
 # a box that pre-compresses does it on every publish or on none of them, never per run.
+# Publishing a dot-cloud content tree rather than a Godot web export. See the guard.
+CONTENT_MODE="${TMC_S3_CONTENT:+1}"
 GZIP="${TMC_S3_GZIP:+1}"
 USE_CLI="${TMC_S3_USE_CLI:+1}"
 # --dry-run is deliberately NOT an environment variable. It is the flag a person types to
@@ -94,6 +97,7 @@ while [ $# -gt 0 ]; do
         --source)      SOURCE="${2:?--source needs a value}"; shift 2 ;;
         --gzip)        GZIP=1; shift ;;
         --use-cli)     USE_CLI=1; shift ;;
+        --content)     CONTENT_MODE=1; shift ;;
         --dry-run)     DRY_RUN=1; shift ;;
         -h|--help)     sed -n '2,52p' "$0"; exit 0 ;;
         *)             die "unknown argument: $1" 2 ;;
@@ -102,7 +106,22 @@ done
 
 [ -n "$BUCKET" ] || die "--bucket is the S3 bucket to publish into" 2
 [ -d "$SOURCE" ] || die "no export at $SOURCE -- run ./server export-web first"
-[ -f "$SOURCE/index.html" ] || die "$SOURCE has no index.html; is it an export?"
+
+# [b]Two things get published to the game origin and only one of them is an export.[/b]
+# The engine is a Godot web build and is checked for its entry document. dot-cloud
+# CONTENT is a different tree -- manifest.json plus content-addressed objects/ -- and it
+# belongs on the same origin because `client/shell.gd` fetches it from a root-relative
+# `/content`, which resolves against whatever origin the engine was framed from.
+#
+# The guard is swapped rather than dropped. Its job is catching "you pointed me at the
+# wrong directory", and that job still exists for content: a tree with no manifest.json
+# anywhere under it is not one, however many files it has.
+if [ -n "$CONTENT_MODE" ]; then
+    find "$SOURCE" -name manifest.json -print -quit 2>/dev/null | grep -q . \
+        || die "$SOURCE has no manifest.json under it; is it a published content tree?"
+else
+    [ -f "$SOURCE/index.html" ] || die "$SOURCE has no index.html; is it an export?"
+fi
 
 # A prefix is a directory, so it ends in a slash and never starts with one.
 PREFIX="${PREFIX#/}"
@@ -314,10 +333,26 @@ trap cleanup EXIT
 failed=0
 count=0
 
-for file in "$SOURCE"/*; do
+# [b]A web export is FLAT; a content tree is not.[/b] The glob that walks one level is
+# right for the first and finds nothing at all in the second -- every entry under `dist`
+# is a directory, so the loop ran zero times and reported success having published
+# nothing. Content is enumerated recursively instead.
+#
+# Process substitution rather than a pipe: a `while read` on the right of a `|` runs in a
+# subshell, so `count` and `failed` would be incremented in a copy and the summary would
+# report zero after a real upload.
+if [ -n "$CONTENT_MODE" ]; then
+    exec 3< <(find "$SOURCE" -type f -print)
+else
+    exec 3< <(for f in "$SOURCE"/*; do [ -f "$f" ] && printf '%s\n' "$f"; done)
+fi
+
+while IFS= read -r file <&3; do
     [ -f "$file" ] || continue
 
-    name="$(basename "$file")"
+    # The path RELATIVE to the source, so nesting survives into the key. Identical to the
+    # basename for a flat export, which is why both modes can share it.
+    name="${file#"$SOURCE"/}"
 
     # Godot writes a `.import` beside every source asset. They are editor
     # bookkeeping, they are not read at runtime, and publishing them tells
