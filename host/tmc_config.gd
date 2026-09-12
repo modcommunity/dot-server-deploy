@@ -138,6 +138,19 @@ var initial_game: String = ""
 ## prefix to spell, which is the whole difficulty on a box that runs seven of them.
 var initial_map: String = ""
 
+## Where this server fetches content it does not have, in order.
+##
+## `content_urls` in the YAML. Empty means the network half is off and only packs
+## already on disk -- under `content/` or `dist/` -- can be used.
+##
+## [b]This is how a cloned server gets its maps.[/b] `maps/imported/` is gitignored in
+## the games that have one, so a deployment stood up by cloning the repositories has the
+## game and none of its maps; they live on the content origin instead, which is what
+## dot-cloud is for. Without this the server could only ever use what was already beside
+## it, while the browser client -- which has always had a base URL -- could download the
+## very map the server was refusing to load.
+var content_urls: PackedStringArray = PackedStringArray()
+
 ## The app's URL segment on the website, reported in a query as the game's name.
 ##
 ## `sv_query_app` in the YAML. Empty falls back to the running game's id, which is
@@ -270,6 +283,21 @@ func _apply_settings(file: String, tree: Dictionary) -> DotResult:
 			# The one that exists belongs to whichever game is loaded, which at the
 			# time the startup config runs is none of them.
 			initial_map = String(value)
+			continue
+
+		if name == "content_urls":
+			# A list, or one string for the common case of a single origin. Not passed
+			# through as a console line: this is dot-cloud's, and dot-server's console
+			# has no cvar for it.
+			if value is Array:
+				for entry in (value as Array):
+					var url := String(entry).strip_edges()
+					if url != "":
+						content_urls.append(url)
+			else:
+				var one := String(value).strip_edges()
+				if one != "":
+					content_urls.append(one)
 			continue
 
 		if name == "sv_query_app":

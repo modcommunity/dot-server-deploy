@@ -63,3 +63,19 @@ sv_query_app: ""
 # port, on every interface. RCON deliberately does not follow it.
 a2s_enabled: true
 query_bind_ip: "*"
+
+# Where this server fetches content it does not have, tried in order.
+#
+# A game's imported maps are not in its repository -- `maps/imported/` is gitignored,
+# because 66 MB of converted geometry does not belong in a git history -- so a server
+# stood up by cloning the repositories has the game and none of its maps. They are
+# published as signed dot-cloud packs instead, and this is where it looks for them.
+#
+# `content/` and `dist/` on this box are searched FIRST and need no entry here: a pack
+# sitting beside the game, or one this server published itself with `./server pack`,
+# is not worth a network request.
+#
+# Empty means the network half is off, which is right for a LAN deployment and for a
+# build that ships everything it runs.
+content_urls:
+  - "https://dotgames.org/content"

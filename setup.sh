@@ -652,6 +652,27 @@ backend:
     public_key_file: "cfg/issuer.pub.pem"
 YML
 
+# [b]The server's own content trust, derived from the client's.[/b]
+#
+# `DotCloudClient` reads `cfg/content.json` and refuses every unsigned manifest --
+# correctly, since a pack can contain scripts. With no such file it starts with
+# `require_signed_manifests: true` and NO keys, so every fetch fails with "no
+# trusted_keys are configured" and a server that was told where to download its maps
+# still cannot download one.
+#
+# There was no such file and nothing generated one. The client's half
+# (`client/content.json`) is committed and carries the public key; this writes the same
+# trust where the server reads it, so the two halves cannot disagree about what they
+# will mount.
+if [ ! -f cfg/content.json ] && [ -f client/content.json ] && command -v python3 >/dev/null 2>&1; then
+    python3 -c 'import json,io
+src = json.load(io.open("client/content.json", encoding="utf-8"))
+io.open("cfg/content.json", "w", encoding="utf-8").write(json.dumps({
+    "require_signed_manifests": src.get("require_signed_manifests", True),
+    "trusted_keys": src.get("trusted_keys", {}),
+}, indent=4) + "\n")' && printf '    %s+%s    %s\n' "$GRN" "$OFF" "cfg/content.json"
+fi
+
 write_if_missing cfg/groups.yml <<'YML'
 # Permission groups.
 #

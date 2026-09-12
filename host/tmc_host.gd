@@ -487,6 +487,28 @@ func _build_cloud() -> void:
 		searched.append(published)
 
 	cloud.local_search_dirs = searched
+
+	# [b]Where to fetch content this box does not have.[/b] Without this the client
+	# could only ever find a pack already on disk -- the comment above says "the content
+	# directory is searched before the network", and there was no network half at all.
+	#
+	# What that cost: `maps/imported/` is gitignored in game-g2gfast, so a server stood
+	# up by cloning the repositories has the game and none of its 66 MB of maps. It boots,
+	# loads g2gfast, and dies on its own default map with "No such map in the catalogue"
+	# -- while all eight of those maps sit published and reachable on the content origin,
+	# which is exactly what dot-cloud is for. The browser client had the base URL and the
+	# server did not, so a player could download a map the server could not.
+	#
+	# A list, and searched in order, because a LAN deployment mirrors the packs somewhere
+	# of its own and should not reach the internet to find them.
+	cloud.http_base_urls = config.content_urls
+
+	if config.content_urls.is_empty():
+		DotLog.info(CHANNEL, "no content urls; this server can only use content it already has", {
+			"searched": searched,
+			"hint": "set content_urls in cfg/server.yml to fetch maps and packs",
+		})
+
 	# Same reasoning as `client/shell.gd`: the published layout carries no version
 	# segment, and the default template asks for one.
 	cloud.manifest_url_template = "{base}/{id}/manifest.json"
@@ -583,6 +605,15 @@ func _apply_initial_map() -> void:
 		})
 		return
 
+	# [b]Fetch it before asking for it.[/b] `change_to` refuses an id the catalogue does
+	# not hold, and a catalogue only holds what is on disk -- so a delivered map is
+	# refused here rather than downloaded, and the refusal reads as an operator's typo.
+	# `G2GGame.change_map` has had this fetch since it was written, with a comment
+	# saying why it must come first; this path does not go through it, so it needed its
+	# own. A game that fetches its own content sees a mount that is already there and
+	# does nothing twice.
+	await _ensure_map_content(StringName(config.initial_map))
+
 	var changed: Variant = await session.call("change_to", StringName(config.initial_map))
 
 	if changed is DotResult and not (changed as DotResult).ok:
@@ -595,6 +626,36 @@ func _apply_initial_map() -> void:
 	DotLog.info(CHANNEL, "starting on the map that was asked for", {
 		"map": config.initial_map,
 	})
+
+
+## Download the content a map lives in, if this deployment can and does not have it.
+##
+## [b]The map id IS the content id.[/b] That is the convention the publisher already
+## follows -- `dist/surf_mesa/` holds a manifest naming `surf_mesa` -- and inventing a
+## second registry to say so would be a third place to keep in step.
+##
+## Every outcome here is non-fatal. No cloud client, no content urls, a pack that is
+## already mounted, a map that ships in the build: all of them mean "carry on", and the
+## refusal that follows from `change_to` is the better message anyway because it names
+## the map.
+func _ensure_map_content(id: StringName) -> void:
+	if id == &"":
+		return
+
+	var cloud := DotRegistry.get_service(&"dot_cloud_client")
+
+	if cloud == null or not cloud.has_method("ensure"):
+		return
+
+	var got: Variant = await cloud.call("ensure", id)
+
+	if got is DotResult and not (got as DotResult).ok:
+		# Info, not a warning: a map that ships in the build is not in dot-cloud and
+		# never will be, so this is the ordinary answer for most servers.
+		DotLog.info(CHANNEL, "no delivered content for this map; using what is here", {
+			"map": String(id),
+			"why": (got as DotResult).error.message,
+		})
 
 
 ## The loaded game's map session, or null.
