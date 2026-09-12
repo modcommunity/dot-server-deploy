@@ -286,10 +286,58 @@ if [ "$COMMAND" = "run" ]; then
 
     if [ -n "$PORT" ] && command -v ss >/dev/null 2>&1; then
         port_busy "$PORT" && die "port $PORT is already in use. Stop what is on it, or ./server --port N" 6
-        # And the RCON listener, which is the game port plus one and is the half nobody
-        # thinks of: two servers a single port apart collide here and nowhere else, and
-        # the message the loser prints names a port that looks free.
-        port_busy "$((PORT + 1))" && die "port $((PORT + 1)) is in use, and that is where RCON listens (the game port plus one)" 6
+        # And the RCON listener, which is the half nobody thinks of: two servers a
+        # single port apart collide here and nowhere else, and the message the loser
+        # prints names a port that looks free.
+        #
+        # [b]`rcon_port` is read, not assumed.[/b] This used to test `PORT + 1` flatly,
+        # which is only the DEFAULT -- `cfg/rcon.yml` ships `rcon_port: 0` with "0 uses
+        # the game port + 1" written beside it, so a number there is an override the
+        # server honours. The launcher did not, so setting it moved the listener and
+        # refused to start anyway, insisting a port the operator had just vacated was
+        # "where RCON listens". A check that contradicts the setting it is checking is
+        # worse than no check.
+        #
+        # Searched across the config files rather than in rcon.yml alone, because every
+        # one of them is merged into the same cvar space and an operator who put it in
+        # server.yml is not wrong.
+        # [b]And RCON may simply be off, in which case nothing binds that port at all.[/b]
+        # `dot_server.gd` starts the listener only when `rcon_password` is non-empty and
+        # `DotRconServer.start` returns early otherwise, so an empty password IS the
+        # documented way to turn it off -- and this check refused to start anyway,
+        # naming a listener that was never going to exist. Reported by an operator who
+        # had disabled RCON, blanked the password, and was still told the port was
+        # needed for it.
+        #
+        # Only whether it is EMPTY is read. The value is a secret and never leaves this
+        # test.
+        RCON_ON=""
+        for f in rcon server net; do
+            [ -n "$RCON_ON" ] && break
+            [ -n "$(cfg_value "$(abs "$CONFIG_DIR")/$f.yml" rcon_password)" ] && RCON_ON=1
+        done
+
+        RCON_PORT=""
+        [ -z "$RCON_ON" ] && RCON_PORT="skip"
+        for f in rcon server net; do
+            [ "$RCON_PORT" = "skip" ] && break
+            [ -n "$RCON_PORT" ] && break
+            RCON_PORT="$(cfg_value "$(abs "$CONFIG_DIR")/$f.yml" rcon_port)"
+            case "$RCON_PORT" in ''|*[!0-9]*|0) RCON_PORT="" ;; esac
+        done
+
+        if [ "$RCON_PORT" = "skip" ]; then
+            RCON_PORT=""
+        elif [ -n "$RCON_PORT" ]; then
+            RCON_WHY="rcon_port"
+        else
+            RCON_PORT="$((PORT + 1))"
+            RCON_WHY="the game port plus one"
+        fi
+
+        [ -n "$RCON_PORT" ] && port_busy "$RCON_PORT" && die "port $RCON_PORT is in use, and that is where RCON listens ($RCON_WHY).
+
+  Set rcon_port in $CONFIG_DIR/rcon.yml to move it, or stop what is on that port." 6
     fi
 fi
 
