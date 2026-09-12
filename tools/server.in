@@ -243,6 +243,23 @@ fi
 
 [ -f "$PROJECT/project.godot" ] || die "no Godot project at $PROJECT" 4
 
+# [b]This file is GENERATED, and `git pull` does not update it.[/b] It is written by
+# setup.sh from tools/server.in and is gitignored, so pulling a fix to the launcher
+# changes the template and leaves the script an operator actually runs exactly as it
+# was. The symptom is a bug that is fixed upstream, fixed in the working tree, and
+# still happening -- with `git log` showing the fix. Reported by an operator who
+# pulled a launcher fix twice and asked whether they needed to run setup again.
+#
+# They did. So it says so, rather than letting them find out.
+#
+# A warning and not a refusal: a newer template is not a broken launcher, and a
+# server that would not start because a file it generates from is newer than itself
+# would be a worse failure than the one this prevents.
+if [ -f "$PROJECT/tools/server.in" ] && [ "$PROJECT/tools/server.in" -nt "$SELF" ]; then
+    printf '  %stools/server.in is newer than this script -- re-run ./setup.sh to regenerate it%s\n' \
+        "$YLW" "$OFF" >&2
+fi
+
 VERSION="$("$GODOT" --version 2>/dev/null | head -1)"
 case "$VERSION" in
     4.[4-9]*|4.[1-9][0-9]*|5.*) ;;
