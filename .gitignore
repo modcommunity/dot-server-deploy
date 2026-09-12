@@ -60,3 +60,15 @@ node_modules/
 
 # Filled in from deploy/env.example. Never committed.
 /.env
+
+# Content signing keys. THE PRIVATE ONE IS A SECRET and is what proves a pack came
+# from us -- a client mounts scripts out of a pack, so anybody holding it can run
+# code on every player who joins a server that serves their content. Ignored BEFORE
+# it is generated, so it cannot arrive in a commit by being written first.
+# The PUBLIC half belongs in client/content.json, which is shipped on purpose.
+/keys/
+
+# Published content packs -- manifest.json + content-addressed objects/, written by
+# `dot_cloud_cli publish`. Build output of a build: megabytes per map, regenerable
+# from maps/ and the signing key, and belonging on a CDN rather than in history.
+/dist/
