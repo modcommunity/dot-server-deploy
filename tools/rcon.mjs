@@ -3,8 +3,17 @@
 // A Source-protocol RCON client, for administering a running server from a script.
 //
 //   node tools/rcon.mjs "changelevel hungry_classic"
-//   node tools/rcon.mjs --host 10.0.0.5 --port 6065 "status"
+//   node tools/rcon.mjs --host 10.0.0.5 --port 6081 "status"
+//   node tools/rcon.mjs --game-port 6080 "status"     # the same server, named by
+//                                                     # the port you already know
 //   TMC_RCON_PASSWORD=... node tools/rcon.mjs "games"
+//
+// `--port` is the RCON port and `--game-port` is the port players connect to, which
+// are one apart and NOT interchangeable. A caller administering several servers knows
+// the second and not the first -- so it converts here, in the one file that already
+// had to state the rule, rather than in every script that has a list of servers. Given
+// a game port off by that one, the connection lands on the NEXT server along, which is
+// a mistake that succeeds often enough to be believed.
 //
 // The password comes from cfg/rcon.yml by default. It is deliberately NOT a command
 // line option: argv is readable by every other process on the machine and ends up in
@@ -31,7 +40,10 @@ const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 
 function usage() {
   console.error(`
-  node tools/rcon.mjs [--host H] [--port N] [--config DIR] <command...>
+  node tools/rcon.mjs [--host H] [--port N | --game-port N] [--config DIR] <command...>
+
+  --port       the RCON port.
+  --game-port  the port players connect to; RCON is that plus one.
 
   Reads the password from <config>/rcon.yml unless TMC_RCON_PASSWORD is set.
 `);
@@ -41,12 +53,14 @@ function usage() {
 const argv = process.argv.slice(2);
 let host = '127.0.0.1';
 let port = 0;
+let gamePort = 0;
 let configDir = path.join(ROOT, 'cfg');
 const words = [];
 
 for (let i = 0; i < argv.length; i++) {
   if (argv[i] === '--host') host = argv[++i];
   else if (argv[i] === '--port') port = Number(argv[++i]);
+  else if (argv[i] === '--game-port') gamePort = Number(argv[++i]);
   else if (argv[i] === '--config') configDir = argv[++i];
   else if (argv[i] === '-h' || argv[i] === '--help') usage();
   else words.push(argv[i]);
@@ -72,6 +86,13 @@ if (!password) {
   console.error(`no RCON password in ${configDir}/rcon.yml and TMC_RCON_PASSWORD is unset`);
   console.error('an empty password means the RCON listener does not open at all');
   process.exit(5);
+}
+
+if (!port && gamePort) {
+  // The one place the +1 lives. A caller with a list of servers has their game ports
+  // and nothing else, and every one of those callers deriving this for itself is how
+  // the rule ends up wrong in one of them.
+  port = gamePort + 1;
 }
 
 if (!port) {

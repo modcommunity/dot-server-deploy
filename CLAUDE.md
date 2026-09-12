@@ -189,6 +189,14 @@ CLAUDE.md describes. `TmcContent` refuses one rather than passing it through, be
 failure it causes — a client that never reports loaded and is timed out for being idle —
 gives no hint where it came from.
 
+**`demo.sh switch` could reach one of its five servers, and `rcon.mjs` had taken `--port` since the day it was written.** The script stands up five servers, names their ports in five pairs of variables, and then hardcoded `$GAME_PORT` in the one command that changes what is running — so the surf timer, the sandbox and the deathmatch were administrable only by a `node tools/rcon.mjs --port ...` line typed by hand, which is exactly the knowledge a script like this exists to hold. The capability was there, the caller was there, and the argument between them was never passed. This tree's own "a value produced correctly and consumed by nothing", arriving as an option nobody handed over.
+
+There was also **no way to change a MAP at all**, on any of them. dot-server gave the plain name `map` to dot-map deliberately, and every game registers its own under its own prefix — `g2g_map`, `pg_map`, `arena_map` — so there is no single command to send and `demo.sh` had none of them. A game change swaps the module, the netcode and the client's scene and puts everybody through signon; a map change swaps the world and nothing else and is what an operator means nine times in ten. The script could do the first and not the second.
+
+**`./server` documented exit code 6 for "port in use" and had never returned it.** A dot-server that cannot bind exits with Godot's own code and one line in the middle of its boot log, so a supervisor reading these codes — which is the entire reason they are documented — restarts it forever against a port somebody else owns. Both launchers check now, and both check the **RCON port as well**: it is the game port plus one, two servers a single port apart collide there and nowhere else, and the message the loser prints names a port `ss` says is free. `demo.sh` has three paragraphs warning about precisely that collision, and the launcher it warns you about could not detect it.
+
+**The Windows launcher was a nine-line batch file, and the README described the Bash one.** `server.cmd` understood `check`, `config` and `games` and handed everything else to Godot unread, so `--port`, `--bind`, `--name`, `--max-players`, `--game`, the directory flags, `--godot`, `--dry-run`, the `--` passthrough, the runtime version check and the refusal of a secret on the command line existed on Linux and macOS and not on Windows. Nothing could report it: every one of those options was correct, tested and reachable — from the other script. `server.ps1` is the launcher now and `server.cmd` forwards to it. Reviewed rather than run: there is no PowerShell on the machine this was written on, which is a weaker claim than anything else in this repository makes.
+
 ## What the web player signs in against, and why it is a file
 
 `client/auth.json`, shipped inside the export, read by `_sign_in()` and gitignored
@@ -373,5 +381,17 @@ is what stopped the previous two.
   verifying a signature, which is a different program with different risks. The Dockerfile
   *does* fetch one, pinned and checksummed, because an image build is exactly where that
   work belongs.
-- **Windows beyond `setup.ps1`.** It makes junctions rather than symlinks and writes
-  `server.cmd`, and it has never been run on Windows from here.
+- **Windows beyond `setup.ps1`.** It makes junctions rather than symlinks, and neither it
+  nor `server.ps1` has ever been run on Windows from here. There is no PowerShell on the
+  machine this was written on, so both are reviewed rather than tested — which is a
+  weaker claim than every other script in this repository can make, and is the thing to
+  fix first if anything Windows-shaped misbehaves.
+
+  `server.ps1` is new and `server.cmd` now forwards to it. The batch file it replaced was
+  nine lines: it understood `check`, `config` and `games` and handed everything else to
+  Godot unread, so `--port`, `--bind`, `--name`, `--max-players`, `--game`, the directory
+  flags, `--godot`, `--dry-run`, the `--` passthrough, the runtime version check, the
+  refusal of a secret on the command line and every meaningful exit code existed on Linux
+  and macOS and not on Windows. **The README documented a launcher that only one of the
+  two platforms had**, which is the kind of gap nothing can report: every one of those
+  options was correct, tested and reachable — from the other script.

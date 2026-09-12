@@ -5,8 +5,23 @@
 #   ./demo.sh up        start everything and print the links
 #   ./demo.sh down      stop everything this started
 #   ./demo.sh status    what is running
-#   ./demo.sh switch <game>   change the running game
-#                             (lobby, hungry_classic, hungry_frenzy, g2gfast)
+#   ./demo.sh servers   the five of them, by name and number
+#
+# Every command below takes a server first, by number (1..5) or by what it runs
+# (lobby, hungry, g2gfast, playground, arena -- surf, sandbox and dm also work).
+# Leave it out and it means server 1, which is what these did before they could
+# mean anything else.
+#
+#   ./demo.sh switch [<server>] <game>      change the GAME: module, netcode and
+#                                           the client's scene, everybody through
+#                                           signon. `games` lists them.
+#   ./demo.sh map    [<server>] [<map>]     change the MAP: the world and nothing
+#                                           else. No map named lists them.
+#   ./demo.sh rcon   [<server>] <command>   anything else the console takes.
+#   ./demo.sh games  [<server>]             what that server can switch to.
+#
+#     ./demo.sh switch 2 hungry_frenzy      ./demo.sh map surf surf_mesa
+#     ./demo.sh rcon arena status           ./demo.sh map 4 pg_lobby
 #
 # WHAT THIS IS FOR
 #
@@ -441,6 +456,20 @@ do_up() {
         ok "up to date"
     fi
 
+    # [b]The loader's base is re-stamped whether or not anything was rebuilt.[/b] The
+    # staleness test above compares the game against the WASM, and the base is not part
+    # of either — so an export somebody else built with a different base is "up to date"
+    # by that test and gets published with the wrong engine address baked into it.
+    #
+    # That is not hypothetical: `play.sh` exports with `http://127.0.0.1:8099/` so a
+    # developer can open it on the loopback, and publishing that here would hand every
+    # visitor a loader pointing at their own machine. `stamp-loader` rewrites
+    # `tmc-loader.js` and nothing else, which is what it is for — moving the engine to
+    # another domain is a deployment change rather than a rebuild — and it is idempotent,
+    # so doing it every run costs a file write.
+    ./server stamp-loader --base "$GAME_ORIGIN/game/" >/dev/null || exit 1
+    ok "loader stamped for $GAME_ORIGIN/game/"
+
     # Published where nginx can read it. /home is not traversable by www-data, which
     # is why this is a copy and not an alias into the checkout.
     if sudo -n true 2>/dev/null; then
@@ -529,8 +558,19 @@ $DIM    The certificate is self-signed, so a browser will warn once.$OFF
 
 $BLD  While somebody is playing:$OFF
 
-    ./demo.sh switch hungry_classic     they move to Hungry, still connected
+    ./demo.sh servers                   the five, by name and number
+    ./demo.sh switch hungry_classic     server 1 moves to Hungry, still connected
     ./demo.sh switch lobby              and back
+
+    ./demo.sh map surf surf_mesa        the timer changes map under them
+    ./demo.sh map 4                     what the sandbox has to change to
+    ./demo.sh switch 5 lobby            the deathmatch becomes a lobby
+
+$DIM    A GAME change swaps the module, the netcode and the client's scene and puts
+    everybody through signon. A MAP change swaps the world and nothing else. Every
+    one of these takes a server first: a number, or what it is running.$OFF
+
+    ./demo.sh rcon 3 status             and anything else, on any of them
 
 LINKS
 }
@@ -602,24 +642,242 @@ do_status() {
     fi
 }
 
-# --- switch ----------------------------------------------------------------
+# --- talking to one server -------------------------------------------------
+#
+# [b]Every command below took the first server and no other, and there are five.[/b]
+# `switch` hardcoded $GAME_PORT, so the only server in the demonstration an operator
+# could change was the lobby -- the surf timer, the sandbox and the deathmatch were
+# reachable by nothing but `node tools/rcon.mjs --port ...` typed by hand, which is
+# exactly the knowledge a script like this exists to hold. `rcon.mjs` has taken
+# `--port` since it was written; nothing here passed it.
+#
+# So: one resolver, and every command goes through it. A server is named by number
+# (1..5) or by what it is running, because nobody remembers that the sandbox is 4.
+
+# Number, alias, game port, public port, what it is.
+SERVERS=(
+    "1 lobby      $GAME_PORT  $PUBLIC_PORT        the lobby"
+    "2 hungry     $GAME2_PORT $GAME2_PUBLIC_PORT  Hungry"
+    "3 g2gfast    $GAME3_PORT $GAME3_PUBLIC_PORT  the bhop/surf timer"
+    "4 playground $GAME4_PORT $GAME4_PUBLIC_PORT  the sandbox"
+    "5 arena      $GAME5_PORT $GAME5_PUBLIC_PORT  the deathmatch"
+)
+
+## Accepted spellings that are not the alias itself. A person who types `surf` means
+## the timer server and a person who types `dm` means the deathmatch; refusing them to
+## be strict about a name only this file uses is a worse script.
+server_alias() {
+    case "$1" in
+        surf|bhop|timer) printf 'g2gfast' ;;
+        sandbox|props)   printf 'playground' ;;
+        dm|deathmatch)   printf 'arena' ;;
+        hungry_classic|hungry_frenzy) printf 'hungry' ;;
+        *) printf '%s' "$1" ;;
+    esac
+}
+
+## Resolve a server name to its game port, or fail with the list.
+##
+## Prints the port on stdout and nothing else, because callers capture it.
+server_port() {
+    local want; want="$(server_alias "$1")"
+    local row
+    for row in "${SERVERS[@]}"; do
+        set -- $row
+        if [ "$want" = "$1" ] || [ "$want" = "$2" ]; then printf '%s' "$3"; return 0; fi
+    done
+    return 1
+}
+
+## The canonical alias of whatever a person typed: `4`, `sandbox` and `playground` all
+## come back `playground`. Every lookup that needs to know WHICH GAME a server runs goes
+## through this rather than through the number, because the number means nothing to
+## anything but this table.
+server_key() {
+    local want; want="$(server_alias "$1")"
+    local row
+    for row in "${SERVERS[@]}"; do
+        set -- $row
+        if [ "$want" = "$1" ] || [ "$want" = "$2" ]; then printf '%s' "$2"; return 0; fi
+    done
+    return 1
+}
+
+server_label() {
+    local want; want="$(server_alias "$1")"
+    local row
+    for row in "${SERVERS[@]}"; do
+        set -- $row
+        if [ "$want" = "$1" ] || [ "$want" = "$2" ]; then shift 3; shift; printf '%s' "$*"; return 0; fi
+    done
+    printf '%s' "$want"
+}
+
+list_servers() {
+    local row
+    for row in "${SERVERS[@]}"; do
+        set -- $row
+        local num="$1" alias="$2" port="$3"; shift 4
+        local state="not running"
+        listening "$port" && state="port $port"
+        say "$(printf '  %s  %-11s %-12s %s' "$num" "$alias" "$state" "$*")"
+    done
+}
+
+## The first argument if it names a server, otherwise nothing -- so `switch lobby` and
+## `switch 3 g2gfast` are both unambiguous and neither needs a flag.
+##
+## [b]`lobby` is both a server name and a game id, and that is the one collision.[/b]
+## It resolves as a SERVER only when something follows it, which is what `switch lobby
+## g2gfast` means and is the reading that cannot be got any other way; `switch lobby`
+## alone keeps its old meaning of putting server 1 into the lobby game. The old spelling
+## of every command in this file therefore still does what it did.
+## Two arguments where the first names no server is a typo. Stop, rather than treat it
+## as "server 1" and quietly throw the second one away.
+reject_unknown_server() {
+    local what="$1"; shift
+    [ $# -ge 2 ] || return 0
+    server_port "$1" >/dev/null 2>&1 && return 0
+    bad "no such server: $1"
+    say ""
+    list_servers
+    say ""
+    say "  ./demo.sh $what <server> <name>   or leave the server out for server 1"
+    exit 2
+}
+
+## Sets $SERVER, and returns 0 when it consumed the first argument so the caller can
+## shift it off. A function cannot shift its caller's positional parameters, which is
+## why this is a return code and a global rather than something returned on stdout:
+## `take_server 1 lobby` has to be distinguishable from `take_server lobby`, and a
+## function that only prints "1" cannot say which of those it saw.
+##
+## [b]The whole rule, because the ambiguity is real and there is no clever way out of
+## it:[/b] four of the five server aliases are also game ids -- `lobby`, `g2gfast`,
+## `playground` and `arena` -- so a single word cannot say which of the two it is.
+##
+##   - two or more arguments: the first names a server, and must.
+##   - one argument that is a bare 1..5: a server, since no game or map is a number.
+##   - one argument otherwise: the game or the map, on server 1.
+##
+## Every reading that comes out wrong under that has an explicit two-argument form, and
+## the one-argument spellings all keep the meaning they had before servers 2 to 5 could
+## be named at all.
+take_server() {
+    SERVER=1
+    if [ $# -ge 2 ] && server_port "$1" >/dev/null 2>&1; then
+        SERVER="$1"
+        return 0
+    fi
+    if [ $# -eq 1 ] && [[ "$1" =~ ^[1-5]$ ]]; then
+        SERVER="$1"
+        return 0
+    fi
+    return 1
+}
+
+## Run a console command on one server and print what it said.
+rcon_on() {
+    local name="$1"; shift
+    local port; port="$(server_port "$name")" || {
+        bad "no such server: $name"; say ""; list_servers; exit 2
+    }
+
+    listening "$port" || { bad "$(server_label "$name") is not running (port $port)"; exit 1; }
+
+    # `--game-port`, not `--port`: RCON listens on the game port plus one, and that rule
+    # lives in rcon.mjs so this file and every other caller cannot each get it wrong
+    # separately. Off by that one, the connection lands on the NEXT server in this list,
+    # which succeeds often enough to be believed.
+    node tools/rcon.mjs --game-port "$port" "$@" 2>&1 | sed 's/^/  /'
+}
+
+# --- switch, map, rcon -----------------------------------------------------
 
 do_switch() {
+    # [b]Strict, and `rcon` below deliberately is not.[/b] `switch 9 lobby` used to set
+    # server 1's game to "9" and discard the rest, because nothing named a server and
+    # the fallback is server 1. A game change is the one command here that reaches
+    # everybody connected, so a spelling this file does not recognise stops rather than
+    # picks. `rcon` cannot be strict the same way -- `rcon changelevel lobby` is two
+    # words of a command and not a server followed by one.
+    reject_unknown_server "switch" "$@"
+    take_server "$@" && shift
+    local server="$SERVER"
     local game="${1:-}"
-    [ -n "$game" ] || { bad "which game? (lobby, hungry_classic, hungry_frenzy)"; exit 2; }
+    [ -n "$game" ] || {
+        bad "which game? try: ./demo.sh games ${server}"
+        say ""
+        say "  ./demo.sh switch <game>              server 1"
+        say "  ./demo.sh switch <server> <game>     any of them"
+        say ""
+        list_servers
+        exit 2
+    }
 
-    listening "$GAME_PORT" || { bad "the game server is not running"; exit 1; }
+    step "$(server_label "$server"): changing game to $game"
+    rcon_on "$server" "changelevel $game"
+}
 
-    step "changing to $game"
-    node tools/rcon.mjs "changelevel $game" 2>&1 | sed 's/^/  /'
+## A MAP is not a GAME, and this is the command that was missing entirely.
+##
+## Changing a game replaces the module, the netcode and the client's scene and puts
+## everybody through signon. Changing a map replaces the world and nothing else, and is
+## what an operator means nine times in ten -- `switch` could do the first and there was
+## no way at all to do the second.
+##
+## The command's NAME differs per game, which is why this is a table rather than a
+## single `map`: dot-server deliberately gave the plain name to dot-map, and each game
+## registers its own under its own prefix so two games' map changes cannot collide in
+## one console. An unknown game gets plain `map`, which is what an addon that installs
+## DotMapCommands with default names answers to.
+map_command_for() {
+    case "$1" in
+        g2gfast)    printf 'g2g_map' ;;
+        playground) printf 'pg_map' ;;
+        arena)      printf 'arena_map' ;;
+        *)          printf 'map' ;;
+    esac
+}
+
+do_map() {
+    reject_unknown_server "map" "$@"
+    take_server "$@" && shift
+    local server="$SERVER"
+    local map="${1:-}"
+    local cmd; cmd="$(map_command_for "$(server_key "$server")")"
+
+    if [ -z "$map" ]; then
+        step "$(server_label "$server"): the maps it has"
+        rcon_on "$server" "$cmd"
+        return
+    fi
+
+    step "$(server_label "$server"): changing map to $map"
+    rcon_on "$server" "$cmd $map"
+}
+
+## The escape hatch, and the reason the two above can stay this small: anything the
+## server's console takes, on any of the five. `./demo.sh rcon 3 status`.
+do_rcon() {
+    take_server "$@" && shift
+    local server="$SERVER"
+    [ $# -gt 0 ] || { bad "which command? ./demo.sh rcon [<server>] <command...>"; exit 2; }
+    rcon_on "$server" "$@"
 }
 
 case "${1:-up}" in
-    up)     do_up ;;
-    down)   do_down ;;
-    status) do_status ;;
-    switch) shift; do_switch "${1:-}" ;;
-    links)  do_links ;;
-    -h|--help|help) sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//' ;;
-    *) bad "unknown command: $1  (up | down | status | switch <game>)"; exit 2 ;;
+    up)      do_up ;;
+    down)    do_down ;;
+    status)  do_status ;;
+    servers) step "the five servers"; list_servers ;;
+    switch)  shift; do_switch "$@" ;;
+    map)     shift; do_map "$@" ;;
+    rcon)    shift; do_rcon "$@" ;;
+    games)   shift; do_rcon "${1:-1}" games ;;
+    links)   do_links ;;
+    -h|--help|help) sed -n '2,24p' "$0" | sed 's/^# \{0,1\}//' ;;
+    *) bad "unknown command: $1"
+       say "  up | down | status | servers | switch | map | rcon | games | links"
+       exit 2 ;;
 esac

@@ -11,6 +11,24 @@ This tool, along with every asset it is built on, was built initially with **Cla
 
 I intend on reviewing code, testing, and editing documentation regularly. If you're interested in helping out, please let me know!
 
+## Playing it locally, in one command
+
+```bash
+./play.sh                  # a server and the browser client, on the loopback
+./play.sh playground       # start on a particular game
+./play.sh games            # what else is in content/
+./play.sh status
+./play.sh down
+```
+
+It prints a link. Open it.
+
+**This is not `demo.sh`, and the difference is deployment.** `demo.sh` is five servers, nginx terminating TLS, a public host, a separate registrable domain for the game and a `sudo` step to install a listener — right for showing the platform to somebody and wrong for a developer who changed a line and wants to look at it. `play.sh` is the two commands the browser check has always needed, with the three things that are easy to get wrong done for you: it rebuilds the export when the game is newer, copies `embed.html` over Godot's generated `index.html` (the one that takes `?server=` from the query string), and **tells you when the vendored `game/` is older than the repositories it was copied from** — `setup.sh` copies that directory while the addons beside it stay symlinked, so it is the one part that goes stale, and a stale copy exports cleanly, runs, and is last week's game.
+
+**It has nothing to do with `dev.sh`.** That script is the website — website-city and friends on `:3002` — and starts no game at all. The two are independent and run side by side: `play.sh` serves the game from its own origin on `:8099`, and nothing about `embed.html?server=` involves the site. Framing a game *inside* the site is a different thing again and needs its own registrable domain; see `web/README.md`.
+
+**Loopback HTTP only.** An HTTPS page may not open a `ws://` socket, so this shape works here and nowhere else.
+
 ## A Server You Start With One Command
 TMC's server tool, as a thing you can run.
 
@@ -23,7 +41,7 @@ This repository is where the [dot-*](https://github.com/modcommunity) family com
 docker compose up -d    # or the same thing in a container
 ```
 
-Windows: `setup.bat` (a shim for `setup.ps1`), then `server.cmd`.
+Windows: `setup.bat` (a shim for `setup.ps1`), then `.\server.ps1`. It takes the same commands and the same options as `./server` — `--port`, `--bind`, `--name`, `--max-players`, `--game`, `--config`, `--content`, `--data`, `--godot`, `--verbose`, `--dry-run`, a `--` passthrough to the console — and accepts `-Port` as readily as `--port`, so a line copied out of this README works unchanged. `server.cmd` is still there and forwards to it.
 
 ## What it gives a server owner
 
@@ -156,10 +174,12 @@ The second one matters because a release tarball and the container have no sibli
 The browser target has its own check, because it is the one thing a headless Godot run cannot see: the WASM loading, the WebSocket handshake a browser performs, and whether anything is actually drawn:
 
 ```bash
-./server &
-(cd web/build && python3 -m http.server 8099) &
-node tools/browser_check.mjs 'http://127.0.0.1:8099/embed.html?server=ws://127.0.0.1:6064' shot.png
+./play.sh                  # the server and the client, both on the loopback
+node tools/browser_check.mjs \
+    'http://127.0.0.1:8099/embed.html?server=ws://127.0.0.1:6074' shot.png
 ```
+
+**`failures` and `otherSocketErrors` are different things and the check keeps them apart.** A server *browser* queries servers that may be down, and a refused query is the correct outcome of asking — game-playground seeds `127.0.0.1:27015` on a first run because that is where a launcher puts a server, and nothing is listening there on a developer's machine. Counting that as a failure made this check report one every time, and a check that always fails is a check whose failures stop being read. Only the socket the page was told to open can fail the run.
 
 ## Known limits
 

@@ -108,7 +108,7 @@ ADDONS=(dot_core dot_net dot_server dot_2d dot_ui dot_auth dot_cloud dot_user
         dot_props dot_vote dot_combat dot_chat dot_voice dot_moderation
         dot_browser dot_npc dot_npc_ai dot_npc_ai_director dot_vehicle
         dot_achievements dot_objective dot_effects dot_spectate dot_economy
-        dot_randomness dot_settings dot_console dot_audio dot_fx
+        dot_randomness dot_settings dot_console dot_audio dot_fx dot_lighting
         dot_procedural_generation dot_inventory dot_peer_to_peer dot_weapon
         dot_physics dot_spawn dot_team dot_player dot_player_class
         dot_player_char)

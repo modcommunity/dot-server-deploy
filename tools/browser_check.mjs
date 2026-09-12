@@ -42,9 +42,36 @@ const sockets = [];
 page.on('console', m => console_lines.push(`${m.type()}: ${m.text()}`));
 page.on('pageerror', e => failures.push(`pageerror: ${e.message}`));
 page.on('requestfailed', r => failures.push(`requestfailed: ${r.url()} ${r.failure()?.errorText}`));
+// The socket the page was TOLD to open, out of the query string. Anything else the
+// client opens on its own is reported separately below rather than as a failure.
+const wanted = (() => {
+  try { return new URL(url).searchParams.get('server') ?? ''; } catch { return ''; }
+})();
+
+const otherSockets = [];
+
 page.on('websocket', ws => {
   sockets.push(ws.url());
-  ws.on('socketerror', e => failures.push(`websocket error: ${e}`));
+
+  // A server BROWSER queries servers that may be down, and a refused query is the
+  // correct outcome of asking — game-playground seeds `127.0.0.1:27015` on a first run
+  // because that is where a launcher puts a server, and nothing is listening there on a
+  // developer's machine. Counting that as a failure made this check cry wolf, and a
+  // check that always reports one failure is a check whose failures stop being read.
+  //
+  // Matched on host and port rather than on the whole string: the browser normalises
+  // `ws://host:port` to `ws://host:port/`.
+  const same = wanted !== '' && (() => {
+    try {
+      const a = new URL(wanted), b = new URL(ws.url());
+      return a.host === b.host;
+    } catch { return false; }
+  })();
+
+  ws.on('socketerror', e => {
+    if (same || wanted === '') failures.push(`websocket error: ${ws.url()} ${e}`);
+    else otherSockets.push(`${ws.url()} ${e}`);
+  });
 });
 
 await page.goto(url, { waitUntil: 'load', timeout: 60000 });
@@ -93,7 +120,11 @@ if (switchTo) {
 }
 
 console.log(JSON.stringify({
+  connectedTo: wanted,
   websockets: sockets,
+  // Sockets the client opened on its own that failed — a server browser querying a
+  // server that is down belongs here, not in `failures`.
+  otherSocketErrors: otherSockets,
   switched,
   failures,
   console: console_lines,

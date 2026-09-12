@@ -154,6 +154,41 @@ abs() { case "$1" in /*) printf '%s' "$1" ;; *) printf '%s/%s' "$PROJECT" "$1" ;
 [ -d "$(abs "$CONTENT_DIR")" ] || die "no content directory at $(abs "$CONTENT_DIR")" 7
 mkdir -p "$(abs "$DATA_DIR")"  || die "could not create $(abs "$DATA_DIR")" 5
 
+# --- Is something already on the port? --------------------------------------
+#
+# [b]Exit code 6 has been documented at the top of this file since it was written and
+# was never once returned.[/b] A dot-server that cannot bind exits with Godot's own
+# code and a line in the middle of its boot log, so a supervisor reading these codes
+# restarts it forever against a port somebody else owns -- which is precisely the case
+# the code was invented to distinguish.
+#
+# A one-key read of the YAML, not a parser. tools/rcon.mjs makes the same choice for
+# the same reason: a second parser here would drift from the one the server uses.
+cfg_value() { sed -n "s/^[[:space:]]*$2[[:space:]]*:[[:space:]]*\"\?\([^\"#]*\)\"\?.*/\1/p" "$1" 2>/dev/null | head -1 | tr -d '[:space:]'; }
+
+port_busy() { ss -ltn 2>/dev/null | grep -qE "[:.]$1[[:space:]]"; }
+
+if [ "$COMMAND" = "run" ]; then
+    PORT=""
+    for ((n = 0; n < ${#OVERRIDES[@]} - 1; n++)); do
+        [ "${OVERRIDES[n]}" = "--port" ] && PORT="${OVERRIDES[n + 1]}"
+    done
+    [ -n "$PORT" ] || PORT="$(cfg_value "$(abs "$CONFIG_DIR")/net.yml" net_port)"
+
+    # Digits, and not merely non-empty: a `net_port` line somebody has commented out or
+    # written as `${PORT}` reaches here as text, and `$((PORT + 1))` on text is a shell
+    # error in the middle of a launcher rather than a server that starts.
+    case "$PORT" in ''|*[!0-9]*) PORT="" ;; esac
+
+    if [ -n "$PORT" ] && command -v ss >/dev/null 2>&1; then
+        port_busy "$PORT" && die "port $PORT is already in use. Stop what is on it, or ./server --port N" 6
+        # And the RCON listener, which is the game port plus one and is the half nobody
+        # thinks of: two servers a single port apart collide here and nowhere else, and
+        # the message the loser prints names a port that looks free.
+        port_busy "$((PORT + 1))" && die "port $((PORT + 1)) is in use, and that is where RCON listens (the game port plus one)" 6
+    fi
+fi
+
 # --- The command -----------------------------------------------------------
 
 # Write web/build/tmc-loader.js from the template with the engine's location baked
