@@ -74,23 +74,48 @@
     }
   }
 
-  function fail(message, detail) {
-    mount.innerHTML = '';
+  /*
+   * The panel every message a player sees is drawn in.
+   *
+   * It paints its own BACKGROUND, which is the difference between a message and a
+   * blank screen. The mount is whatever colour the site's page is, and the frame
+   * underneath may be showing something worse than nothing -- see the overlay below.
+   */
+  function panel(message, detail) {
     var box = document.createElement('div');
     box.style.cssText =
-      'display:flex;flex-direction:column;gap:8px;align-items:center;' +
-      'justify-content:center;height:100%;color:#e8eaee;text-align:center;' +
-      'font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;padding:24px';
+      'position:absolute;inset:0;display:flex;flex-direction:column;gap:8px;' +
+      'align-items:center;justify-content:center;color:#e8eaee;text-align:center;' +
+      'background:#0b0d10;font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;' +
+      'padding:24px;z-index:2';
     var head = document.createElement('div');
     head.textContent = message;
     box.appendChild(head);
     if (detail) {
       var small = document.createElement('div');
-      small.style.cssText = 'color:#8b919b;font-size:13px;max-width:44ch';
+      small.style.cssText = 'color:#8b919b;font-size:13px;max-width:52ch;word-break:break-word';
       small.textContent = detail;
       box.appendChild(small);
     }
-    mount.appendChild(box);
+    return box;
+  }
+
+  // An absolutely positioned child needs a positioned parent, and the mount belongs
+  // to the site. Only nudged when it is `static`, so a page that already positions it
+  // keeps whatever it chose.
+  function anchor() {
+    try {
+      if (window.getComputedStyle(mount).position === 'static')
+        mount.style.position = 'relative';
+    } catch (e) {
+      mount.style.position = 'relative';
+    }
+  }
+
+  function fail(message, detail) {
+    mount.innerHTML = '';
+    anchor();
+    mount.appendChild(panel(message, detail));
     console.error('[TMC] ' + message, detail || '');
   }
 
@@ -327,6 +352,8 @@
   frame.setAttribute('allowfullscreen', 'true');
 
   frame.onerror = function () {
+    // Rarely reached: a navigation that returns an error DOCUMENT fires load, not
+    // error. The liveness check below is what actually catches that.
     fail('The game could not be loaded.', src);
   };
 
@@ -375,13 +402,147 @@
   window.addEventListener('message', function (event) {
     if (event.origin !== baseOrigin) return;
     if (event.source !== frame.contentWindow) return;
+
+    // ANY message from the frame is proof the right document is in it -- checked
+    // before the type, so a future build that announces itself some other way is not
+    // reported as dead by a loader that only knew one word.
+    clearOverlay();
+
     if (!event.data || event.data.type !== 'tmc.auth.ready') return;
 
     sendAuth();
   });
 
   mount.innerHTML = '';
+  anchor();
   mount.appendChild(frame);
+
+  /*
+   * ---------------------------------------------------------- IS ANYTHING THERE?
+   *
+   * [b]An iframe pointed at a 403 fires `load`, not `error`.[/b] The browser did
+   * navigate; it just rendered whatever came back. So a build that is not published
+   * put the game origin's own error document on the page -- literally the words
+   * `AccessDeniedAccess Denied` in the top left corner of a white rectangle, with
+   * `frame.onerror` above never firing and nothing in the console. A player reported
+   * it as "it says access denied, is the server offline", which is the right question
+   * to ask about a screen that answers nothing.
+   *
+   * The signal that the RIGHT document is in the frame is `tmc.auth.ready`, which
+   * `embed.html` posts from a plain <script> as soon as it parses -- before the wasm,
+   * before the pck, before anything slow. So a few seconds of silence means the page
+   * in the frame is not ours, and NOT that the machine is on a slow connection. That
+   * ordering is the whole reason this can be a short timeout instead of a guess.
+   *
+   * The overlay is up from the first frame, which also covers the plain white gap
+   * every player used to look at while 70 MB of engine arrived.
+   */
+  var LIVENESS_MS = 10000;
+  var overlay = panel('Starting the game\u2026');
+  mount.appendChild(overlay);
+
+  var alive = false;
+  var liveness = null;
+
+  function clearOverlay() {
+    if (alive) return;
+    alive = true;
+    if (liveness) clearTimeout(liveness);
+    if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
+  }
+
+  function button(label, onclick) {
+    var el = document.createElement('button');
+    el.type = 'button';
+    el.textContent = label;
+    el.style.cssText =
+      'margin-top:8px;padding:7px 16px;border-radius:6px;border:1px solid #3a4150;' +
+      'background:#1b2029;color:#e8eaee;font:inherit;font-size:13px;cursor:pointer';
+    el.onclick = onclick;
+    return el;
+  }
+
+  function replaceOverlay(message, detail, dismissible) {
+    if (alive) return;
+    var next = panel(message, detail);
+    next.appendChild(
+      button('Try again', function () {
+        location.reload();
+      })
+    );
+    /*
+     * The escape hatch for the one case this can get wrong. A build whose
+     * `embed.html` predates the ready ping is a running game under a panel that says
+     * it did not start, and a player with no way past it is worse off than one
+     * looking at a white rectangle. Offered ONLY when the probe read the entry
+     * document and found it fine, which is the only branch where "it might actually
+     * be running" is a real possibility.
+     */
+    if (dismissible)
+      next.appendChild(
+        button('Show the game anyway', function () {
+          clearOverlay();
+        })
+      );
+    if (overlay && overlay.parentNode) overlay.parentNode.replaceChild(next, overlay);
+    overlay = next;
+  }
+
+  /*
+   * WHY THE PROBE ONLY RUNS ONCE THE PING IS ALREADY MISSING, and never gates the
+   * frame on its own.
+   *
+   * A cross-origin `fetch` can only read a status when the response carries CORS
+   * headers. The site's published builds do -- CloudFront answers a game with
+   * `access-control-allow-origin: <site>` -- and its 403 error document does not, so
+   * a broken build REJECTS rather than resolving with a status. That is not enough to
+   * act on by itself: the standalone deployment serves the engine from plain nginx
+   * with no CORS headers at all, so a perfectly good one rejects identically. Failing
+   * on a rejection would take down the deployment shape this file was written for.
+   *
+   * Which is why it is a second opinion and not a gate. By the time it is consulted
+   * the frame has already gone quiet for ten seconds, so the only question left is
+   * how confidently to word the message.
+   */
+  function diagnose() {
+    var url = entry.href;
+
+    function offer(detail, dismissible) {
+      replaceOverlay('The game did not start.', detail, dismissible);
+    }
+
+    if (typeof fetch !== 'function') {
+      offer(url);
+      return;
+    }
+
+    fetch(url, { method: 'GET', mode: 'cors', cache: 'no-store', credentials: 'omit' })
+      .then(function (res) {
+        if (res.ok) {
+          // Reachable, readable, and still silent: the document is there and did not
+          // announce itself. An engine build older than the ping does this, so the
+          // wording stops short of blaming anyone and the frame stays underneath.
+          offer('The game is taking longer than usual to respond. ' + url, true);
+          return;
+        }
+        offer(
+          publishedUrl
+            ? 'The published game build answered ' + res.status + '. It may not have finished publishing.'
+            : 'The engine at ' + url + ' answered ' + res.status + '.'
+        );
+      })
+      .catch(function () {
+        offer(
+          publishedUrl
+            ? 'The game build could not be loaded from ' + entry.origin + '.'
+            : 'No game build was found at ' + url +
+                '. This app has no published web build, so the loader fell back to the ' +
+                'address stamped into it -- and there is nothing at it.'
+        );
+      });
+  }
+
+  liveness = setTimeout(diagnose, LIVENESS_MS);
 
   /*
    * The hooks the player calls.
