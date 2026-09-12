@@ -35,23 +35,40 @@ TMC's server tool, as a thing you can run.
 This repository is where the [dot-*](https://github.com/modcommunity) family comes together into something a server owner starts with one command. It is a Godot project that boots a [dot-server](https://github.com/modcommunity/dot-server), reads its configuration from `cfg/*.yml`, loads games out of `content/`, and serves a browser client. It ships **no game of its own**. The games are copied in from their own repositories by `setup.sh`: [game-simple-lobby](https://github.com/modcommunity/game-simple-lobby), which is the lobby it serves by default, [game-hungario](https://github.com/modcommunity/game-hungario) and [game-g2gfast](https://github.com/modcommunity/game-g2gfast).
 
 ```bash
-./setup.sh              # find a runtime, wire the addons, write ./server
+./setup.sh              # get a runtime, wire the addons, write ./server
 ./server                # start it
 
 docker compose up -d    # or the same thing in a container
 ```
 
+**On a machine with no Godot on it, `./setup.sh` downloads one.** Pinned to a single version, verified against a sha512 that is checked into `tools/fetch-godot.sh` rather than fetched from beside the binary, cached in `~/.cache/tmc/godot/` so one download serves every checkout, and deleted on a mismatch. `--no-download` refuses to fetch and fails instead; `--godot PATH` uses yours and never downloads.
+
 Windows: `setup.bat` (a shim for `setup.ps1`), then `.\server.ps1`. It takes the same commands and the same options as `./server` — `--port`, `--bind`, `--name`, `--max-players`, `--game`, `--config`, `--content`, `--data`, `--godot`, `--verbose`, `--dry-run`, a `--` passthrough to the console — and accepts `-Port` as readily as `--port`, so a line copied out of this README works unchanged. `server.cmd` is still there and forwards to it.
 
 ## What it gives a server owner
 
-- **One command to start.** `./setup.sh` finds a Godot runtime, wires in the nineteen addons, writes a commented `cfg/`, and writes `./server`. It never overwrites a config file that already exists. RCON ships off; `cfg/rcon.yml` says how to turn it on.
+- **One command to start.** `./setup.sh` finds a Godot runtime — or downloads the pinned one, verified — wires in the addons, writes a commented `cfg/`, and writes `./server`. It never overwrites a config file that already exists. RCON ships off; `cfg/rcon.yml` says how to turn it on.
 - **Configuration in YAML**, in files split by subject: `server.yml`, `net.yml`, `rcon.yml`, `auth.yml`, `groups.yml` and `permissions.yml`. Anything dot-server exposes as a console variable can go in them under its own name.
 - **Roles, not flags.** dot-server's permission model is flags, deliberately; `groups.yml` is the translation, so an operator writes `admin: [kick, ban, mute]` and a player gets the flags.
 - **Moderation.** Bans, kicks, mutes, votes and an audit log, all dot-server's, all reachable from the console or over RCON.
 - **Games loaded at runtime.** A directory under `content/` with a `game.yml` in it is a game. `changelevel` switches between them with players still connected.
 - **The players choose the next game.** `!nominate`, `!rtv`, `!votefor`, `!timeleft` and `!nextmap`, which is the shape every server in this genre has had since 2005, over the games in `content/` rather than over maps. Each game gets its own time limit, in its own `game.yml`. All of it is `cfg/vote.yml`, and `enabled: false` turns it off.
 - **A browser client.** `./server export-web` builds it; one export serves every server, because the address comes from `?server=`.
+- **Content you publish yourself.** `./server pack <id>` turns any directory under `content/` into a signed dot-cloud pack in `dist/` — an avatar set, a prop pack, a texture set, a whole game. `content/<id>/pack.json` says what goes in it and where each file lands, so a pack is assembled from wherever the files actually live rather than from whatever happens to sit in one folder:
+
+```json
+{
+    "version": "1.0.0",
+    "name": "Stock avatars",
+    "include": [
+        "avatars/kenney",
+        { "from": "avatars/head_stock.tscn", "to": "heads/stock.tscn" }
+    ],
+    "exclude": ["*.import", "*.uid"]
+}
+```
+
+  `./server pack --all` does every one, `./server verify <id>` checks the signature. Packs are always signed: `client/content.json` ships `require_signed_manifests: true` because a pack can contain scripts, so an unsigned pack is one no client will mount — publishing without a key is refused rather than quietly producing something that works nowhere.
 
 ## The layout
 

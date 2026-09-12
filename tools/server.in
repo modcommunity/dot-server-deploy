@@ -67,7 +67,7 @@ OPT_NAME="${TMC_NAME:-}"
 OPT_MAX_PLAYERS="${TMC_MAX_PLAYERS:-}"
 OPT_GAME="${TMC_GAME:-}"
 
-RED=$'\033[31m'; YLW=$'\033[33m'; DIM=$'\033[2m'; OFF=$'\033[0m'
+RED=$'\033[31m'; YLW=$'\033[33m'; DIM=$'\033[2m'; BLD=$'\033[1m'; OFF=$'\033[0m'
 
 die() { printf '\n  %s%s%s\n\n' "$RED" "$1" "$OFF" >&2; exit "${2:-2}"; }
 note() { printf '  %s%s%s\n' "$DIM" "$1" "$OFF"; }
@@ -81,7 +81,11 @@ usage() {
     check               Boot, load the game, shut down. Exit 0 if it all worked.
     config              Print the resolved configuration and exit.
     games               List what is in the content directory and exit.
-    pack <id>           Publish content/<id> as a signed dot-cloud pack.
+    pack <id>           Publish content/<id> as a signed dot-cloud pack, into
+                        dist/<id>. Any content directory, not only a game:
+                        an avatar set, a prop pack or a texture set is
+                        published exactly the same way. --all does every one.
+    verify <id>         Check dist/<id>'s manifest against keys/content.pub.
     export-web          Build the browser client into web/build, plus the
                         loader website-city uploads. Takes --base and --zip.
     stamp-loader        Rewrite web/build/tmc-loader.js with a new --base and
@@ -172,7 +176,16 @@ USAGE
 
 case "${1:-}" in
     run|check|config|games|export-web|stamp-loader) COMMAND="$1"; shift ;;
-    pack) COMMAND="pack"; shift; PACK_ID="${1:-}"; [ -n "${PACK_ID:-}" ] || die "pack needs a game id: ./server pack lobby"; shift ;;
+    pack|publish)
+        COMMAND="pack"; shift
+        PACK_ID="${1:-}"
+        [ -n "${PACK_ID:-}" ] || die "pack needs a content id, or --all: ./server pack avatars" 2
+        shift ;;
+    verify)
+        COMMAND="verify"; shift
+        PACK_ID="${1:-}"
+        [ -n "${PACK_ID:-}" ] || die "verify needs a content id: ./server verify avatars" 2
+        shift ;;
 esac
 
 while [ $# -gt 0 ]; do
@@ -213,11 +226,17 @@ if [ ! -x "$GODOT" ]; then
     if command -v "$GODOT" >/dev/null 2>&1; then
         GODOT="$(command -v "$GODOT")"
     else
+        # The cache setup.sh downloads into is searched too, and before PATH. The
+        # baked path above is normally that same file; this is what makes ./server
+        # survive the cache moving, or being written on one box and run on another
+        # that ran setup.sh for itself.
+        CACHE_ROOT="${TMC_GODOT_CACHE:-${XDG_CACHE_HOME:-${HOME:-/nonexistent}/.cache}/tmc/godot}"
         FOUND=""
-        for candidate in godot godot4 Godot; do
+        for candidate in "$CACHE_ROOT"/*/godot "$PROJECT"/.godot-runtime/*/godot godot godot4 Godot; do
+            if [ -x "$candidate" ] && [ ! -d "$candidate" ]; then FOUND="$candidate"; break; fi
             if command -v "$candidate" >/dev/null 2>&1; then FOUND="$(command -v "$candidate")"; break; fi
         done
-        [ -n "$FOUND" ] || die "no Godot runtime found. Install one, or ./server --godot /path/to/godot" 3
+        [ -n "$FOUND" ] || die "no Godot runtime found. Run ./setup.sh, or ./server --godot /path/to/godot" 3
         GODOT="$FOUND"
     fi
 fi
@@ -316,6 +335,77 @@ stamp_loader() {
     printf '  tmc-loader.js  engine base: %s\n' "${ENGINE_BASE:-<unset>}"
 }
 
+# --- Publishing ------------------------------------------------------------
+#
+# [b]`./server pack` named a scene that was never written.[/b] It ran
+# `res://tools/publish.tscn`, Godot said "Cannot open file", and the launcher exited
+# **0** -- so every caller was told it had worked, including `export-web`, which refuses
+# to build when a map "is not in the build and is not published" and names this command
+# as the fix. The publisher itself was never missing: `DotCloudPublisher` and a complete
+# `dot_cloud_cli.gd` -- publish, keygen, verify, inspect -- have been in dot-cloud all
+# along. Only the wiring was absent, and it failed in the direction that reports success.
+#
+# [b]It publishes CONTENT, not games.[/b] The old signature took a game id and passed
+# `--game`, which meant the one route from a directory to a mountable pack ran through
+# the game index -- so an avatar set, a prop pack or a texture set had no way to be
+# published at all, however correctly it was authored. Anything under `content/` can be
+# published now, and a game is one case of it.
+
+CLOUD_CLI="res://addons/dot_cloud/publish/dot_cloud_cli.gd"
+PACK_TOOL="res://tools/pack.gd"
+
+# The signing key. `client/content.json` ships `require_signed_manifests: true`, so a
+# pack published without one mounts nowhere: dot-cloud refuses an unsigned manifest
+# because a pack can contain scripts. Publishing unsigned would therefore produce a
+# directory that looks finished, serves cleanly, and is silently unusable by every
+# client -- so this refuses instead, which is the whole lesson of the command it
+# replaces.
+SIGNING_KEY="${TMC_SIGNING_KEY:-$PROJECT/keys/content.key}"
+PUBLIC_KEY="${TMC_PUBLIC_KEY:-$PROJECT/keys/content.pub}"
+
+do_pack() {
+    [ -f "$SIGNING_KEY" ] || die "no signing key at $SIGNING_KEY
+
+  A pack has to be signed. cfg/content.json and client/content.json both ship
+  require_signed_manifests: true, because a pack can contain scripts -- so an
+  unsigned one is refused by every client and publishing it would produce a
+  directory that looks finished and mounts nowhere.
+
+  Make one once, keep the private half off the content host:
+      $GODOT --headless --path $PROJECT --script $CLOUD_CLI -- \
+          keygen --private keys/content.key --public keys/content.pub
+
+  Then put the PUBLIC half in client/content.json under trusted_keys." 5
+
+    local args=(--headless --path "$PROJECT" --script "$PACK_TOOL" --
+                --content "$(abs "$CONTENT_DIR")" --out "$PROJECT/dist" --key "$SIGNING_KEY")
+
+    if [ "$PACK_ID" = "--all" ] || [ "$PACK_ID" = "all" ]; then
+        args+=(--all)
+    else
+        args+=(--id "$PACK_ID")
+    fi
+
+    [ -n "${TMC_MIRROR:-}" ] && args+=(--mirror "$TMC_MIRROR")
+
+    "$GODOT" "${args[@]}" || exit 7
+
+    note "serve dist/ over HTTP, or leave it here -- a server searches dist/ before the network"
+    exit 0
+}
+
+do_verify() {
+    local manifest="$PROJECT/dist/$PACK_ID/manifest.json"
+
+    [ -f "$manifest" ] || die "nothing published at dist/$PACK_ID (./server pack $PACK_ID)" 7
+    [ -f "$PUBLIC_KEY" ] || die "no public key at $PUBLIC_KEY" 5
+
+    "$GODOT" --headless --path "$PROJECT" --script "$CLOUD_CLI" -- \
+        verify --manifest "$manifest" --public "$PUBLIC_KEY" || exit 7
+
+    exit 0
+}
+
 SCENE="res://host/host.tscn"
 ARGS=(--headless --path "$PROJECT" "$SCENE" --
       --config "$CONFIG_DIR" --content "$CONTENT_DIR" --data "$DATA_DIR")
@@ -324,9 +414,8 @@ case "$COMMAND" in
     check)      ARGS+=(--selftest) ;;
     config)     ARGS+=(--print-config) ;;
     games)      ARGS+=(--list-games) ;;
-    pack)       ARGS=(--headless --path "$PROJECT" "res://tools/publish.tscn" --
-                      --config "$CONFIG_DIR" --content "$CONTENT_DIR" --data "$DATA_DIR"
-                      --game "$PACK_ID") ;;
+    pack)       do_pack ;;
+    verify)     do_verify ;;
     export-web)
         mkdir -p "$PROJECT/web/build"
 
