@@ -79,6 +79,8 @@ SOURCE="${TMC_S3_SOURCE:-$ROOT/web/build}"
 # a box that pre-compresses does it on every publish or on none of them, never per run.
 # Publishing a dot-cloud content tree rather than a Godot web export. See the guard.
 CONTENT_MODE="${TMC_S3_CONTENT:+1}"
+# Publish a directory with no assumption about its shape. See the guard.
+RAW_MODE="${TMC_S3_RAW:+1}"
 GZIP="${TMC_S3_GZIP:+1}"
 USE_CLI="${TMC_S3_USE_CLI:+1}"
 # --dry-run is deliberately NOT an environment variable. It is the flag a person types to
@@ -98,6 +100,7 @@ while [ $# -gt 0 ]; do
         --gzip)        GZIP=1; shift ;;
         --use-cli)     USE_CLI=1; shift ;;
         --content)     CONTENT_MODE=1; shift ;;
+        --raw)         RAW_MODE=1; shift ;;
         --dry-run)     DRY_RUN=1; shift ;;
         -h|--help)     sed -n '2,52p' "$0"; exit 0 ;;
         *)             die "unknown argument: $1" 2 ;;
@@ -116,7 +119,18 @@ done
 # The guard is swapped rather than dropped. Its job is catching "you pointed me at the
 # wrong directory", and that job still exists for content: a tree with no manifest.json
 # anywhere under it is not one, however many files it has.
-if [ -n "$CONTENT_MODE" ]; then
+if [ -n "$RAW_MODE" ]; then
+    # [b]No shape check, and that is the whole meaning of the flag.[/b] The game origin
+    # serves a third kind of thing besides engine builds and content packs -- the site's
+    # own shared assets, `_site/avatar/<version>/…` being the one that exists today. They
+    # have no entry document and no manifest, so neither guard above says anything true
+    # about them, and a guard that cannot be true is worse than none: it teaches the next
+    # person to reach for whichever flag silences it.
+    #
+    # The caller asserts they know what the directory is. The file count printed below is
+    # the check that remains, and it is the one that catches a wrong path in practice.
+    :
+elif [ -n "$CONTENT_MODE" ]; then
     find "$SOURCE" -name manifest.json -print -quit 2>/dev/null | grep -q . \
         || die "$SOURCE has no manifest.json under it; is it a published content tree?"
 else
@@ -341,7 +355,7 @@ count=0
 # Process substitution rather than a pipe: a `while read` on the right of a `|` runs in a
 # subshell, so `count` and `failed` would be incremented in a copy and the summary would
 # report zero after a real upload.
-if [ -n "$CONTENT_MODE" ]; then
+if [ -n "$CONTENT_MODE" ] || [ -n "$RAW_MODE" ]; then
     exec 3< <(find "$SOURCE" -type f -print)
 else
     exec 3< <(for f in "$SOURCE"/*; do [ -f "$f" ] && printf '%s\n' "$f"; done)
