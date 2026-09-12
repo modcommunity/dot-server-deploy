@@ -62,6 +62,42 @@ RED=$'\033[31m'; DIM=$'\033[2m'; OFF=$'\033[0m'
 say()  { printf '    %s%s%s\n' "$DIM" "$1" "$OFF" >&2; }
 die()  { printf '\n    %s%s%s\n\n' "$RED" "$1" "$OFF" >&2; exit "${2:-1}"; }
 
+## Install a system package, if this machine lets us without asking a human.
+##
+## Returns non-zero and says nothing when it cannot, so the caller falls through to
+## printing the command for a person to run.
+install_package() {
+    local deb="$1" rpm="$2" arch="$3" sudo_cmd=""
+
+    if [ "$(id -u)" = "0" ]; then
+        sudo_cmd=""
+    elif command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
+        sudo_cmd="sudo"
+    else
+        return 1
+    fi
+
+    if command -v apt-get >/dev/null 2>&1 && [ -n "$deb" ]; then
+        say "installing $deb"
+        $sudo_cmd apt-get update -qq >/dev/null 2>&1
+        # shellcheck disable=SC2086
+        $sudo_cmd apt-get install -y -qq --no-install-recommends $deb >/dev/null 2>&1 || return 1
+    elif command -v dnf >/dev/null 2>&1 && [ -n "$rpm" ]; then
+        say "installing $rpm"
+        # shellcheck disable=SC2086
+        $sudo_cmd dnf install -y -q $rpm >/dev/null 2>&1 || return 1
+    elif command -v pacman >/dev/null 2>&1 && [ -n "$arch" ]; then
+        say "installing $arch"
+        # shellcheck disable=SC2086
+        $sudo_cmd pacman -S --needed --noconfirm $arch >/dev/null 2>&1 || return 1
+    else
+        return 1
+    fi
+
+    return 0
+}
+
+
 # --- Which build ------------------------------------------------------------
 
 OS="$(uname -s)"
@@ -224,6 +260,24 @@ if ! VERSION="$("$TARGET" --version 2>"$TMP/run.err" | head -1)" || [ -z "$VERSI
             libpulse*)      PKG_DEB="libpulse0";       PKG_RPM="pulseaudio-libs"; PKG_ARCH="libpulse" ;;
             *)              PKG_DEB=""; PKG_RPM=""; PKG_ARCH="" ;;
         esac
+
+        # [b]Install it, when this machine can do that without asking anybody.[/b] The
+        # point of this script is that one command gets you a working runtime, and
+        # "now go and run one more command as root" is the same dead end the download
+        # used to be.
+        #
+        # Root, or passwordless sudo, and nothing else. `sudo` WITHOUT `-n` would sit
+        # there waiting for a password in the middle of a setup script -- on a box with
+        # no terminal attached that is a hang, not a prompt.
+        if [ -n "$PKG_DEB" ] && install_package "$PKG_DEB" "$PKG_RPM" "$PKG_ARCH"; then
+            if "$TARGET" --version >/dev/null 2>&1; then
+                VERSION="$("$TARGET" --version 2>/dev/null | head -1)"
+                say "installed the missing $MISSING"
+                say "installed $VERSION at $TARGET"
+                printf '%s\n' "$TARGET"
+                exit 0
+            fi
+        fi
 
         HINT="    Install the library it is missing."
         [ -n "$PKG_DEB" ] && HINT="    Debian/Ubuntu:  sudo apt-get install -y $PKG_DEB

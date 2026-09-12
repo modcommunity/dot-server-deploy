@@ -7,6 +7,7 @@
 #   ./setup.sh --no-import      skip the Godot import pass (fast, for a re-run)
 #   ./setup.sh --godot PATH     use a specific runtime
 #   ./setup.sh --no-download    never fetch a runtime; fail if there is none
+#   ./setup.sh --no-clone       never git clone a sibling; fail if one is missing
 #   ./setup.sh --vendor         COPY the addons instead of linking them
 #
 # WHAT IT DOES, AND WHY EACH STEP IS HERE
@@ -45,6 +46,17 @@ DO_IMPORT=1
 # cannot add an argument to a line somebody else wrote.
 DO_DOWNLOAD=1
 [ -n "${TMC_NO_DOWNLOAD:-}" ] && DO_DOWNLOAD=0
+
+# Clone the siblings this project needs.
+#
+# [b]On by default, and it only ever runs when the alternative is failing.[/b] Nothing is
+# cloned for a repository that is already beside this one, and nothing is cloned for an
+# addon already vendored into ./addons/ -- which is what a release tarball is, and it
+# must keep working with no network at all. So the only run that writes anything into
+# the parent directory is the run that would otherwise have stopped and printed fifty
+# names at somebody.
+DO_CLONE=1
+[ -n "${TMC_NO_CLONE:-}" ] && DO_CLONE=0
 DO_CHECK=0
 VENDOR=0
 
@@ -53,9 +65,10 @@ while [ $# -gt 0 ]; do
         --godot)     GODOT_ARG="${2:-}"; shift 2 ;;
         --no-import) DO_IMPORT=0; shift ;;
         --no-download) DO_DOWNLOAD=0; shift ;;
+        --no-clone)    DO_CLONE=0; shift ;;
         --check)     DO_CHECK=1; shift ;;
         --vendor)    VENDOR=1; shift ;;
-        -h|--help)   sed -n '2,34p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        -h|--help)   sed -n '2,35p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
         *) printf 'unknown option: %s\n' "$1" >&2; exit 2 ;;
     esac
 done
@@ -145,6 +158,68 @@ else
     fi
 fi
 
+# --- Cloning the siblings --------------------------------------------------
+#
+# [b]Every dot-* project is its own repository and there is no way to clone the tree at
+# once.[/b] That is a deliberate shape -- an addon is installable on its own -- and it
+# means a fresh machine that has cloned only THIS repository is fifty clones away from a
+# build. The message that used to end the run listed all fifty names and offered no way
+# to act on it.
+#
+# [b]This invents no list.[/b] The repository name is the addon name with underscores
+# turned into hyphens, which this script already relies on to find them, and the games
+# are already named by repository. A second list is this tree's most repeated bug; there
+# is not one here.
+#
+# HTTPS, not SSH. `dot-bootstrap` defaults to `git@github.com:` because it runs on a
+# developer's machine with a key loaded; the machine this flag is for is a fresh server
+# where that is the one thing not configured. These repositories are public, so HTTPS
+# needs no credential at all.
+GIT_BASE="${TMC_GIT_BASE:-https://github.com/modcommunity}"
+
+## Clone every named repository that is not already beside this one.
+##
+## Never touches a checkout that exists -- not even to pull. A setup script that
+## silently updated somebody's working tree would be a setup script that can lose work.
+clone_repos() {
+    command -v git >/dev/null 2>&1 || die "--clone needs git, and this machine has none." 4
+
+    local wanted=("$@") missing=() repo failed=()
+
+    for repo in "${wanted[@]}"; do
+        [ -d "$ROOT/../$repo" ] || missing+=("$repo")
+    done
+
+    [ ${#missing[@]} -gt 0 ] || return 0
+
+    printf '    %scloning %d repositories into %s%s\n' \
+        "$DIM" "${#missing[@]}" "$(cd "$ROOT/.." && pwd)" "$OFF"
+
+    # [b]Shallow by default.[/b] This path exists to stand a SERVER up: fifty repositories
+    # of history is bandwidth and disk nobody on that box will ever read, and it is most
+    # of what the clone costs. `dot-bootstrap` is the developer tool and clones in full.
+    # TMC_GIT_DEPTH=0 turns this off; `git fetch --unshallow` fixes one after the fact.
+    local depth=()
+    [ "${TMC_GIT_DEPTH:-1}" = "0" ] || depth=(--depth "${TMC_GIT_DEPTH:-1}")
+
+    for repo in "${missing[@]}"; do
+        if git clone --quiet "${depth[@]}" "$GIT_BASE/$repo.git" "$ROOT/../$repo" 2>/dev/null; then
+            printf '    %s+%s    %s\n' "$GRN" "$OFF" "$repo"
+        else
+            # Collected rather than fatal. One repository that is not published yet --
+            # which happens, because this list is edited when an addon is written and
+            # pushed some time after -- should not stop the other forty-nine.
+            failed+=("$repo")
+            printf '    %s!!%s   %s\n' "$YLW" "$OFF" "$repo"
+        fi
+    done
+
+    if [ ${#failed[@]} -gt 0 ]; then
+        warn "could not clone: ${failed[*]}"
+        warn "check the names, or that they are published, then re-run"
+    fi
+}
+
 # --- 2. The addons ---------------------------------------------------------
 #
 # name:repository. The repository is the name with underscores turned into hyphens,
@@ -177,30 +252,45 @@ ADDONS=(dot_core dot_net dot_server dot_server_query dot_server_security dot_2d 
 step "dot-* addons"
 mkdir -p addons
 
-MISSING=()
-for name in "${ADDONS[@]}"; do
-    repo="${name//_/-}"
-    source_dir="$ROOT/../$repo/addons/$name"
+## Link, copy or record-as-missing every addon. Run twice: once to find out what is
+## absent, and once more after cloning it, so the clone is driven by what is ACTUALLY
+## needed rather than by the list in the abstract.
+##
+## A vendored addon is not missing and is never cloned -- that is the release tarball,
+## which has no siblings, no network and nothing wrong with it.
+resolve_addons() {
+    MISSING=()
+    for name in "${ADDONS[@]}"; do
+        repo="${name//_/-}"
+        source_dir="$ROOT/../$repo/addons/$name"
 
-    if [ -d "$source_dir" ]; then
-        if [ "$VENDOR" -eq 1 ]; then
-            # Copied, not linked. A symlink out of this directory is fine on a
-            # developer's machine and breaks the moment the directory is moved
-            # somewhere the siblings are not -- a release tarball, or a container
-            # image whose final stage copies only this project. The symptom is
-            # every dot-* class_name unresolved at once, which reads as a broken
-            # project rather than as a dangling link.
-            rm -rf "addons/$name"
-            cp -rL "$source_dir" "addons/$name"
-        elif [ -L "addons/$name" ] || [ ! -e "addons/$name" ]; then
-            ln -sfn "../../$repo/addons/$name" "addons/$name"
+        if [ -d "$source_dir" ]; then
+            if [ "$VENDOR" -eq 1 ]; then
+                # Copied, not linked. A symlink out of this directory is fine on a
+                # developer's machine and breaks the moment the directory is moved
+                # somewhere the siblings are not -- a release tarball, or a container
+                # image whose final stage copies only this project. The symptom is
+                # every dot-* class_name unresolved at once, which reads as a broken
+                # project rather than as a dangling link.
+                rm -rf "addons/$name"
+                cp -rL "$source_dir" "addons/$name"
+            elif [ -L "addons/$name" ] || [ ! -e "addons/$name" ]; then
+                ln -sfn "../../$repo/addons/$name" "addons/$name"
+            fi
+        elif [ -d "addons/$name" ]; then
+            : # already vendored, which is what a release tarball looks like
+        else
+            MISSING+=("$repo")
         fi
-    elif [ -d "addons/$name" ]; then
-        : # already vendored, which is what a release tarball looks like
-    else
-        MISSING+=("$repo")
-    fi
-done
+    done
+}
+
+resolve_addons
+
+if [ ${#MISSING[@]} -gt 0 ] && [ "$DO_CLONE" -eq 1 ]; then
+    clone_repos "${MISSING[@]}"
+    resolve_addons
+fi
 
 if [ ${#MISSING[@]} -gt 0 ]; then
     die "These addon repositories are not beside this one:
@@ -208,8 +298,14 @@ if [ ${#MISSING[@]} -gt 0 ]; then
         ${MISSING[*]}
 
     Each dot-* project is a separate repository and there is no way to clone the
-    tree at once. Clone them as siblings of this directory, or vendor their
-    addons/<name> folders into ./addons/." 4
+    tree at once.
+
+    They are normally cloned for you from $GIT_BASE over HTTPS; this run could not,
+    or --no-clone was given.
+
+    Or vendor their addons/<name> folders into ./addons/, which is what a release
+    tarball looks like; or use dot-bootstrap, which clones the whole family and is
+    the right tool on a development machine." 4
 fi
 ok "${#ADDONS[@]} addons $([ "$VENDOR" -eq 1 ] && echo copied || echo linked)"
 
@@ -287,20 +383,33 @@ GAMES=(
 # So: find every source first, refuse the whole run if one is missing, and only then
 # remove anything.
 
-GAME_DIRS=()
-MISSING_GAMES=()
-for entry in "${GAMES[@]}"; do
-    repo="${entry%%:*}"
-    rest="${entry#*:}"
-    extra=""
-    [ "$rest" != "${rest%%:*}" ] && extra="${rest#*:}"
+resolve_games() {
+    GAME_DIRS=()
+    MISSING_GAMES=()
+    for entry in "${GAMES[@]}"; do
+        repo="${entry%%:*}"
+        rest="${entry#*:}"
+        extra=""
+        [ "$rest" != "${rest%%:*}" ] && extra="${rest#*:}"
 
-    if [ -d "$ROOT/../$repo/game" ]; then
-        GAME_DIRS+=("$extra")
-    else
-        MISSING_GAMES+=("$repo")
-    fi
-done
+        if [ -d "$ROOT/../$repo/game" ]; then
+            GAME_DIRS+=("$extra")
+        else
+            MISSING_GAMES+=("$repo")
+        fi
+    done
+}
+
+resolve_games
+
+# [b]Only when SOME are missing.[/b] All of them missing with a vendored game/ already
+# here is the release tarball, and the branch below keeps what it has -- cloning five
+# game repositories onto a box that already has the games would be pure download.
+if [ ${#MISSING_GAMES[@]} -gt 0 ] && [ "$DO_CLONE" -eq 1 ] \
+        && ! { [ ${#MISSING_GAMES[@]} -eq ${#GAMES[@]} ] && [ -n "$(ls -A "$ROOT/game" 2>/dev/null)" ]; }; then
+    clone_repos "${MISSING_GAMES[@]}"
+    resolve_games
+fi
 
 # Three cases, and only three. Every game beside this one is a developer's machine
 # and the copy runs; none of them beside it, with a game/ already here, is a release
@@ -324,7 +433,8 @@ else
         ${MISSING_GAMES[*]}
 
     Each game is a separate repository and there is no way to clone the tree at
-    once. Clone them as siblings of this directory, or vendor their game/ folders.
+    once. They are normally cloned for you; this run could not, or --no-clone was
+    given. Or vendor their game/ folders.
 
     If one was RENAMED, fix the GAMES list in this script. A name here that no
     longer exists is how this step silently stopped copying a game -- and it used
