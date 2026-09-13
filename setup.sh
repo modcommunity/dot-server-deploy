@@ -968,7 +968,15 @@ fi
 # any platform -- so a pack published from a project that has never been imported ships
 # the bytes of an asset that no load() can open, and reports nothing, because the file
 # is right there.
-if [ "${PUBLISHED_GAMES:-0}" -ne 1 ] && [ "$DO_IMPORT" -eq 1 ]; then
+#
+# [b]NOT gated on --no-import, and that is not an oversight.[/b] `--no-import` is the
+# documented upgrade command -- `git pull && ./setup.sh --no-import` -- and it exists to
+# skip re-importing THIS project, which is slow and unchanged on a pull. A game
+# repository that gained an asset since the last run is a different question: skipping it
+# publishes a pack carrying bytes no load() can open, silently, on the one command an
+# operator runs most. The import is what makes the pack it is about to build correct, so
+# it belongs to the publish rather than to the import flag.
+if [ "${PUBLISHED_GAMES:-0}" -ne 1 ]; then
     for entry in "${GAMES[@]}"; do
         src="$ROOT/../${entry%%:*}"
         [ -d "$src/game" ] || continue

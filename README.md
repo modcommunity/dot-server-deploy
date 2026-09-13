@@ -403,6 +403,10 @@ for d in ../dot-*; do git -C "$d" pull --ff-only; done && ./setup.sh --no-import
 
 `./setup.sh --vendor` copies the addons into this checkout instead of linking them, if one server has to be pinned while the others move.
 
+**Every game is republished by that run, and a pull that changed one is not live until it is.** The games are packs: `setup.sh` imports each game repository and publishes it into `dist/`, so the upgrade command above is also the command that rebuilds the content this server serves. `--no-import` does not skip it — that flag is about re-importing *this* project, and a game repository that gained an asset since the last run has to be imported or its pack ships bytes nothing can open. `tools/check.sh` fails when a pack is older than its source, which is the backstop.
+
+**The content a BROWSER client downloads is published separately, and from one place.** A server prefers `dist/` on its own box over the network, so a box publishing its own packs and a content origin publishing different ones is a server and its players running different builds of the same version — silently, since the version string is the same. Publish both from the same commit.
+
 **The browser client is not upgraded by any of this.** `./server export-web` has to be re-run and the result *published*, and how it is published depends on the deployment shape — a site-published build is `--zip` and an upload every time. [web/README.md](web/README.md#shipping-a-client-change-which-shape-you-are-on-and-what-it-costs) has the table and the ten-second check for which shape you are on. A client change that was exported but not published looks precisely like a change that did not work: the browser runs the previous build and prints the previous errors.
 
 **Once, on a box that ran an older `setup.sh`**, the pull stops on a uid instead:
