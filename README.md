@@ -221,6 +221,10 @@ A game can be **in the build** or **delivered**. Built in is the default and is 
 
    Excluding `addons/` is not optional. Without it the pack carries a second copy of every dot-\* addon the host build already has — measured at 768 files and 11.2 MiB for arena, against 140 files and 3.1 MiB with them dropped. It is also what keeps the rewrite honest: the publisher moves a `res://` reference onto the mount **only when the file it names is in the pack**, so with `addons/` out, `res://addons/dot_core/…` still means the host's copy and `res://game/arena_client.gd` becomes `res://dot_cloud/arena/0.1.0/game/arena_client.gd`.
 
+   The pack lands in **`dist/<content id>/`**, which is not always `dist/<directory>`: hungario is three game ids over one `content_id: hungry`, because its modes are three presets of one world. Everything that looks a pack up builds `{base}/{content id}/manifest.json`, and `dist/` is one of those bases, so `dist/hungry_classic/` would be a pack nothing — not even the server that wrote it — could find. `./server verify` takes the content id for the same reason.
+
+   Each of those three directories needs its own `pack.json`, identical: `--all` walks directories, so whichever ran without one would republish the pack without its excludes.
+
 2. **Point `content/<id>/game.yml` at it.** Every path becomes relative — they are resolved against the mount prefix, which is not knowable when the file is written:
 
    ```yaml
@@ -246,6 +250,20 @@ A game can be **in the build** or **delivered**. Built in is the default and is 
    ```
 
 5. **Take it out of the build**, once it is delivered: drop its entry from `BUILTIN_CLIENTS` in `client/shell.gd` and its row from `GAMES` in `setup.sh`.
+
+### The five, as published
+
+Every one of these was published and booted as a pack — mounted, module loaded from the mount, scene loaded from the mount, `./server check` exit 0 — with warnings identical to the same game booted from the build.
+
+| game.yml | `--source` | pack | `scene:` | `client_scene:` | `module:` |
+| --- | --- | --- | --- | --- | --- |
+| `arena` | `../game-arena` | `dist/arena` — 140 files, 3.1 MiB | `scenes/arena_server.tscn` | `game/arena.tscn` | `game/arena_module.gd` |
+| `g2gfast` | `../game-g2gfast` | `dist/g2gfast` — 171 files, 3.1 MiB | `scenes/g2g_server.tscn` | `game/g2g.tscn` | `game/g2g_module.gd` |
+| `playground` | `../game-playground` | `dist/playground` — 76 files, 755 KiB | `scenes/pg_server.tscn` | `game/playground.tscn` | `game/playground_module.gd` |
+| `hungry_classic` `hungry_frenzy` `hungry_gauntlet` | `../game-hungario` | `dist/hungry` — 65 files, 644 KiB | `game/modes/<mode>.tscn` | `game/client/hungry_client.tscn` | `game/hungry_module.gd` |
+| `lobby` | `../game-simple-lobby` | `dist/a_room` — 36 files, 399 KiB | `scenes/room_server.tscn` | `scenes/room_client.tscn` | `game/room_module.gd` |
+
+`exclude_dirs` is `addons`, `examples`, `tools`, `screenshots` everywhere, plus `imported` for g2gfast — `maps/imported/` is 66 MB of converted geometry that is published as its own packs, and a game pack carrying it would deliver every map to every player on connect — and `web` for hungario, which has a browser build of its own in the repository.
 
 ### Signing
 

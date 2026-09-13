@@ -271,14 +271,23 @@ func _publish_one(
 	pub.signing_key_pem = FileAccess.get_file_as_string(key_path)
 	pub.signing_key_id = str(opts.get("key-id", "default"))
 
+	# [b]Named for the CONTENT id, not for the directory.[/b] Those are the same thing
+	# almost everywhere -- a directory with no `game.yml` takes its own name -- and where
+	# they differ it is load-bearing: hungario is three game ids over one `content_id:
+	# hungry`, because its modes are three presets of one world. The manifest URL every
+	# consumer builds is `{base}/{content id}/manifest.json`, and `dist/` is one of those
+	# bases, so publishing into `dist/hungry_classic/` writes a pack that nothing -- not
+	# the server that produced it -- can find.
+	var out_name := str(meta["id"])
+
 	print("")
 	print("  %s  %s -> %s" % [
 		meta["id"],
 		"assembled from pack.json" if not (meta["include"] as Array).is_empty() else source,
-		out_dir.path_join(id),
+		out_dir.path_join(out_name),
 	])
 
-	return pub.publish(source, out_dir.path_join(id))
+	return pub.publish(source, out_dir.path_join(out_name))
 
 
 # --- The descriptor ---------------------------------------------------------
