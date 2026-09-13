@@ -298,6 +298,14 @@ func _apply_settings(file: String, tree: Dictionary) -> DotResult:
 				var one := String(value).strip_edges()
 				if one != "":
 					content_urls.append(one)
+
+			# [b]The same list to the clients, from the same line of YAML.[/b] The
+			# server downloads its maps from these and the client has to download the
+			# same maps from somewhere; left to itself the only address a shipped build
+			# can guess is the origin its page came from, which is right for a
+			# self-hosted deployment and wrong for every CDN. Two settings for one fact
+			# is this tree's most repeated bug, so there is one setting.
+			server.content_base_urls = content_urls
 			continue
 
 		if name == "sv_query_app":

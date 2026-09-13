@@ -28,6 +28,10 @@ warn(){ printf '  %s!!%s   %s\n' "$YLW" "$OFF" "$1" >&2; }
 DOMAIN="${TMC_GAME_DOMAIN:-games.example.net}"
 SITE_ORIGINS="${TMC_SITE_ORIGINS:-https://example.com https://www.example.com}"
 WEB_ROOT="${TMC_GAME_WEB_ROOT:-/srv/tmc-game}"
+# Where the packs a game downloads while it plays are served from. Beside the player
+# rather than inside it: `./server export-web` rewrites the web root on every export,
+# and content that lived under it would be deleted by a rebuild of the client.
+CONTENT_ROOT="${TMC_GAME_CONTENT_ROOT:-/srv/tmc-content}"
 SSL_CERT="${TMC_GAME_SSL_CERT:-}"
 SSL_KEY="${TMC_GAME_SSL_KEY:-}"
 CACHE_CONTROL="${TMC_GAME_CACHE_CONTROL:-no-store}"
@@ -44,6 +48,7 @@ while [ $# -gt 0 ]; do
         --domain)       DOMAIN="${2:?--domain needs a value}"; shift 2 ;;
         --site-origins) SITE_ORIGINS="${2:?--site-origins needs a value}"; shift 2 ;;
         --root)         WEB_ROOT="${2:?--root needs a value}"; shift 2 ;;
+        --content-root) CONTENT_ROOT="${2:?--content-root needs a value}"; shift 2 ;;
         --cert)         SSL_CERT="${2:?--cert needs a value}"; shift 2 ;;
         --key)          SSL_KEY="${2:?--key needs a value}"; shift 2 ;;
         --cache)        CACHE_CONTROL="${2:?--cache needs a value}"; shift 2 ;;
@@ -167,6 +172,7 @@ trap 'rm -f "$rendered"' EXIT
 sed -e "s|@GAME_DOMAIN@|$DOMAIN|g" \
     -e "s|@SITE_ORIGINS@|$SITE_ORIGINS|g" \
     -e "s|@WEB_ROOT@|$WEB_ROOT|g" \
+    -e "s|@CONTENT_ROOT@|$CONTENT_ROOT|g" \
     -e "s|@SSL_CERT@|$SSL_CERT|g" \
     -e "s|@SSL_KEY@|$SSL_KEY|g" \
     -e "s|@CACHE_CONTROL@|$CACHE_CONTROL|g" \

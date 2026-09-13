@@ -86,6 +86,54 @@ server {
         add_header Cache-Control "@CACHE_CONTROL@" always;
     }
 
+    # [b]The packs the game downloads while it plays: maps, and games delivered as
+    # content rather than built in.[/b]
+    #
+    # Same origin as the player, deliberately and not incidentally. A browser build
+    # fetches these with [HTTPRequest], which is subject to CORS like any other
+    # fetch -- and `fetch()` refuses to say WHY it failed, so a missing
+    # `Access-Control-Allow-Origin` on a content host is an hour of looking at the
+    # wrong thing. Served from the origin the page came from, there is no
+    # cross-origin request to allow and nothing to get right.
+    #
+    # This is the other half of the client's default content base. Without this
+    # block that default is a 404 from `location /` below, and the player sits in an
+    # empty world with the console reporting a manifest it could not fetch.
+    location /content/ {
+        alias @CONTENT_ROOT@/;
+
+        default_type application/octet-stream;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Cross-Origin-Resource-Policy "cross-origin" always;
+
+        # CONTENT-ADDRESSED, so immutable is the truth rather than an optimism: a
+        # pack is namespaced by id and version and dot-cloud stores objects under
+        # their own hash, so a URL that changes content is a URL that changed name.
+        # The manifest is the one document that is re-read to discover a new version,
+        # and it is small.
+        add_header Cache-Control "public, max-age=31536000, immutable" always;
+
+        # NO `add_header Accept-Ranges` HERE. Resuming a half-downloaded pack needs
+        # that header and nginx already sends it for every static file it serves --
+        # adding one puts it on the response TWICE, which is what the first version
+        # of this block did.
+        # [b]Every header repeated, because nginx does not inherit them here.[/b]
+        # `add_header` in a nested location REPLACES the whole inherited set rather
+        # than adding to it -- the same trap as the `types` block above, one
+        # directive along -- so a manifest served from this block with only
+        # Cache-Control on it would arrive with no nosniff and no CORP, which is the
+        # one document in a pack whose content type a browser is about to trust.
+        location ~ /manifest\.json$ {
+            default_type application/json;
+
+            # The one mutable document: it is how a new version is discovered, so it
+            # must not be cached for a year like the objects it names.
+            add_header Cache-Control "no-cache" always;
+            add_header X-Content-Type-Options "nosniff" always;
+            add_header Cross-Origin-Resource-Policy "cross-origin" always;
+        }
+    }
+
     location = / {
         default_type text/plain;
         return 200 "@GAME_DOMAIN@ serves game content only.\n";

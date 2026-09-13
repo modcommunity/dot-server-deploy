@@ -459,11 +459,27 @@ func _ensure_cloud() -> void:
 		)
 		_cloud.config_file = ""
 
-	# Same origin as the page, so there is no CORS to configure. A root-relative URL is
-	# resolved against the page by the browser and is the one content layout that works
-	# with no headers at all — which is why `DotCloudClient` treats a scheme-less string
-	# as a URL unless the file is genuinely on disk.
-	_cloud.http_base_urls = PackedStringArray(["/content"])
+	# [b]Where this build downloads maps from, and it is an operator's decision.[/b]
+	#
+	# The default is `/content`: the page's own origin, which is the one content layout
+	# with no CORS headers to get right. `DotCloudClient` puts the page origin on the
+	# front of it at request time — it has to, because [HTTPRequest] parses the URL
+	# itself, in C++, before any of the browser sees it, and a root-relative string is
+	# not a URL. That resolution was ASSUMED here for months and did not exist: the
+	# console said `Error parsing URL: '/content/surf_mesa/manifest.json'`, an engine
+	# message naming nothing anybody had configured, and no map ever downloaded.
+	#
+	# A deployment whose content is somewhere else says so in `content.json`, beside the
+	# key it already keeps there:
+	#
+	#     "content_urls": ["https://games.example.net/content"]
+	#
+	# That host then needs `Access-Control-Allow-Origin` for the page, which is the cost
+	# of not being same-origin and the reason the default is what it is.
+	var configured := _configured_content_urls()
+	_cloud.http_base_urls = (
+		configured if not configured.is_empty() else PackedStringArray(["/content"])
+	)
 
 	# [b]No version segment, because the published layout has none.[/b] The default
 	# template is `{base}/{id}/{version}/manifest.json`, and `DotCloudPublisher` writes
@@ -478,6 +494,45 @@ func _ensure_cloud() -> void:
 	_cloud.manifest_url_template = "{base}/{id}/manifest.json"
 
 	add_child(_cloud)
+
+
+## `content_urls` out of `client/content.json`, or empty.
+##
+## Read here rather than through [DotCloudConfig], which has no field for it: the base
+## URLs live on the client and the config file is the only thing in an export an
+## operator can edit without rebuilding. Parsed defensively -- a file that is present
+## but malformed must not stop a build that can still play the games it already has.
+func _configured_content_urls() -> PackedStringArray:
+	var out := PackedStringArray()
+
+	if not FileAccess.file_exists(CONTENT_CONFIG):
+		return out
+
+	var text := FileAccess.get_file_as_string(CONTENT_CONFIG)
+	if text == "":
+		return out
+
+	var parsed: Variant = JSON.parse_string(text)
+	if not (parsed is Dictionary):
+		return out
+
+	var urls: Variant = (parsed as Dictionary).get("content_urls", null)
+	if not (urls is Array):
+		return out
+
+	for u in (urls as Array):
+		var one := str(u).strip_edges()
+		if one != "":
+			out.append(one)
+
+	if not out.is_empty():
+		DotLog.info(
+			CHANNEL,
+			"content will be fetched from the URLs in content.json",
+			{"urls": ", ".join(out)}
+		)
+
+	return out
 
 
 func _connect_to(address: String) -> void:
