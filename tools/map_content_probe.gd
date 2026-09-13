@@ -1,5 +1,16 @@
 extends SceneTree
 
+# [b]By path, because these classes no longer have global names.[/b] game-g2gfast
+# dropped every `class_name` so it can be DELIVERED as a dot-cloud pack -- a mounted
+# pack's globals are not registered in the host, so a delivered game may not use
+# them. setup.sh vendors that game into this project, so the next setup run replaces
+# the copy this probe was written against and `G2GGame` stops existing. It is a
+# res:// path rather than a relative one because this file is the HOST's, not the
+# game's: it stays where it is while the game it reaches into may be vendored here
+# or mounted from a pack.
+const G2GGame := preload("res://game/g2g_game.gd")
+const G2GConfig := preload("res://game/g2g_config.gd")
+
 ## Does a client with NO maps get one from the content origin?
 ##
 ## `cloud_fetch_probe.gd` proved fetch-verify-mount for a pack. This proves the half that
