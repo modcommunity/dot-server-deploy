@@ -49,6 +49,7 @@ var _name: LineEdit = null
 var _identity: Label = null
 var _join: Button = null
 var _progress: ProgressBar = null
+var _detail: Label = null
 
 
 func _ready() -> void:
@@ -324,6 +325,19 @@ func _build_menu() -> void:
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(_status)
 
+	# [b]The second line, and it is the one somebody waiting actually reads.[/b] A bar
+	# and a percentage answer "how much"; they do not answer "how much longer" or "of
+	# what", and a player watching a 200 MB map arrive has exactly those two questions.
+	# So: the file being fetched, the bytes, the rate and the estimate -- and an empty
+	# line rather than a stale one when there is nothing to say.
+	_detail = Label.new()
+	_detail.theme_type_variation = &"DotDim"
+	_detail.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_detail.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_detail.modulate = Color(1.0, 1.0, 1.0, 0.62)
+	_detail.visible = false
+	box.add_child(_detail)
+
 	# No Host button: a browser tab cannot listen, and offering a control that fails on
 	# the platform this shell exists for is worse than not offering it.
 	if DotPlatform.is_web():
@@ -493,7 +507,139 @@ func _ensure_cloud() -> void:
 	# hands the client a manifest URL an operator wrote in `game.yml`.
 	_cloud.manifest_url_template = "{base}/{id}/manifest.json"
 
+	# [b]Straight off the content client, not through the link.[/b] DotClientLink
+	# forwards a fraction and a sentence, which is all a join needs -- but the payload
+	# dot-cloud emits carries the file, the rate and the estimate, and that is the
+	# difference between a bar that moves and a wait somebody can sit through. The
+	# shell owns this node, so it can read the richer signal without widening anything
+	# in the addon.
+	_cloud.phase_changed.connect(_on_cloud_phase)
+	_cloud.progress_changed.connect(_on_cloud_progress_detail)
+
 	add_child(_cloud)
+
+
+## The headline: what dot-cloud is doing at all.
+##
+## Every phase is worth saying out loud. Mounting a 200 MB pack is not instant and
+## looks identical to a hang, and "Verifying" is the phase that takes the longest with
+## nothing moving on the network -- a bar that sits at 100% through it is how a
+## finished download reads as a freeze.
+func _on_cloud_phase(phase: int, text: String) -> void:
+	if _status != null and text != "":
+		_status.text = text
+
+	# The detail line belongs to the download. Anything else and it is stale.
+	if _detail != null and phase != DotCloudClient.Phase.DOWNLOADING:
+		_detail.visible = false
+
+	if _progress == null:
+		return
+
+	match phase:
+		DotCloudClient.Phase.IDLE, DotCloudClient.Phase.READY, DotCloudClient.Phase.FAILED:
+			_progress.visible = false
+		DotCloudClient.Phase.DOWNLOADING:
+			_progress.visible = true
+			_indeterminate(false)
+		_:
+			# Fetching a manifest, verifying a signature, planning, verifying files,
+			# mounting: real work with no fraction to report, which is what an
+			# indeterminate bar is for.
+			_progress.visible = true
+			_indeterminate(true)
+
+
+## The second line: which file, how fast, how much longer.
+func _on_cloud_progress_detail(p: Dictionary) -> void:
+	if _progress != null:
+		_indeterminate(false)
+		_progress.visible = true
+		_progress.value = clampf(float(p.get("fraction", 0.0)), 0.0, 1.0) * 100.0
+
+	if _detail == null:
+		return
+
+	# [b]Two lines, in the order somebody actually asks the questions.[/b] First "how
+	# much longer", then "of what" -- and they are separate lines because one joined
+	# string wrapped three times in a 275 px panel and left the word "left" alone on a
+	# row of its own. That is invisible to every assertion about the text and obvious
+	# in a rendered frame, which is why there is a screenshot of it.
+	var numbers := PackedStringArray()
+
+	var total := int(p.get("total_bytes", 0))
+	if total > 0:
+		numbers.append(_bytes_pair(int(p.get("done_bytes", 0)), total))
+
+	var rate := float(p.get("bytes_per_sec", 0.0))
+	if rate > 1.0:
+		numbers.append("%s/s" % DotPaths.format_bytes(int(rate)))
+
+	# [b]Only once it means something.[/b] An estimate computed from the first two
+	# hundred milliseconds of a transfer says four hours, and a player reads that
+	# before it settles and closes the tab.
+	var eta := float(p.get("eta_sec", 0.0))
+	if eta > 0.0 and rate > 1.0 and float(p.get("fraction", 0.0)) > 0.02:
+		numbers.append(_eta_text(eta))
+
+	var what := PackedStringArray()
+
+	var file := str(p.get("current_file", ""))
+	if file != "":
+		what.append(_elide(file, 30))
+
+	var files_total := int(p.get("total_files", 0))
+	if files_total > 1:
+		what.append("%d of %d" % [mini(int(p.get("done_files", 0)) + 1, files_total), files_total])
+
+	var lines := PackedStringArray()
+	if not numbers.is_empty():
+		lines.append(" · ".join(numbers))
+	if not what.is_empty():
+		lines.append(" · ".join(what))
+
+	_detail.text = "\n".join(lines)
+	_detail.visible = _detail.text != ""
+
+
+## `23.5 / 63.0 MiB` rather than `23.5 MiB / 63.0 MiB`.
+##
+## The unit twice is nine characters that say nothing, and this panel is 215 px wide --
+## the first version of this line wrapped and left the word "left" alone on a row.
+## Dropped only when both sides land in the same unit, which is most of a download and
+## never the interesting end of one.
+static func _bytes_pair(done: int, total: int) -> String:
+	var a := DotPaths.format_bytes(done)
+	var b := DotPaths.format_bytes(total)
+	var unit := b.get_slice(" ", 1) if b.contains(" ") else ""
+
+	if unit != "" and a.ends_with(" " + unit):
+		return "%s / %s" % [a.trim_suffix(" " + unit), b]
+
+	return "%s / %s" % [a, b]
+
+
+## A middle-elided name, because the end of a filename is the part that identifies it.
+##
+## `surf_mesa_geometry_lod0.bin` truncated from the right is `surf_mesa_geometr…`, which
+## is every file in that map.
+static func _elide(text: String, limit: int) -> String:
+	if text.length() <= limit:
+		return text
+	var keep := (limit - 1) / 2
+	return text.substr(0, keep) + "…" + text.substr(text.length() - keep)
+
+
+## An estimate in the units a person would use for it.
+static func _eta_text(seconds: float) -> String:
+	# Short, because it shares a line with the bytes and the rate. "about 15s left" and
+	# "15s left" carry the same information and one of them fits.
+	if seconds < 10.0:
+		return "a few seconds"
+	if seconds < 90.0:
+		return "%ds left" % int(round(seconds / 5.0) * 5)
+	var minutes := int(round(seconds / 60.0))
+	return "%d min left" % minutes
 
 
 ## `content_urls` out of `client/content.json`, or empty.

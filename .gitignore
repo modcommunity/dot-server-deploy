@@ -86,3 +86,6 @@ node_modules/
 # `dot_cloud_cli publish`. Build output of a build: megabytes per map, regenerable
 # from maps/ and the signing key, and belonging on a CDN rather than in history.
 /dist/
+
+# Rendered by tools/progress_shot.gd. Regenerable, and a picture is not a source.
+/screenshots/
