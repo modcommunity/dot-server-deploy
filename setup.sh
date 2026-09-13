@@ -832,7 +832,26 @@ if [ ${#MISSING[@]} -gt 0 ]; then
 fi
 ok "${#ADDONS[@]} addons $([ "$VENDOR" -eq 1 ] && echo copied || echo linked)"
 
-# --- 3. The games -----------------------------------------------------------
+# --- 3. Import -------------------------------------------------------------
+#
+# [b]Before the games, and that ordering is now load-bearing.[/b] It used to run after
+# them, which was right while the games were COPIED in: the copy added scripts and the
+# import registered their class_name globals. Nothing is copied now, and the games step
+# runs Godot scripts of its own -- the keygen and the publisher -- against a project whose
+# addons have just been dropped in and never imported. Every one of them failed to
+# compile, and the whole install died on "could not generate a content signing key",
+# naming the last thing it tried rather than the reason.
+
+if [ "$DO_IMPORT" -eq 1 ]; then
+    step "importing"
+    # Re-run after ANY script with a new class_name is added. Without it the
+    # identifier does not resolve, the scene fails to load, and the process HANGS
+    # rather than exiting, because nothing ever reaches get_tree().quit().
+    "$GODOT" --headless --path "$ROOT" --import >/dev/null 2>&1
+    ok "class_name globals registered"
+fi
+
+# --- 4. The games -----------------------------------------------------------
 #
 # Every game is PUBLISHED here, not copied in. This build ships no game at all.
 #
@@ -972,7 +991,8 @@ for entry in "${GAMES[@]}"; do
     # the runtime before the step that finds the runtime.
     pack_args=(--headless --path "$ROOT" --script res://tools/pack.gd --
                --content "$ROOT/content" --out "$ROOT/dist"
-               --key "$ROOT/keys/content.key" --id "$id" --source "$ROOT/../$repo")
+               --key "$ROOT/keys/content.key" --key-id local
+               --id "$id" --source "$ROOT/../$repo")
 
     if "$GODOT" "${pack_args[@]}" >/dev/null 2>&1; then
         ok "$id"
@@ -988,17 +1008,6 @@ done
 
 if [ "$published_any" -eq 0 ]; then
     die "No games were published and none are in dist/." 4
-fi
-
-# --- 4. Import -------------------------------------------------------------
-
-if [ "$DO_IMPORT" -eq 1 ]; then
-    step "importing"
-    # Re-run after ANY script with a new class_name is added. Without it the
-    # identifier does not resolve, the scene fails to load, and the process HANGS
-    # rather than exiting, because nothing ever reaches get_tree().quit().
-    "$GODOT" --headless --path "$ROOT" --import >/dev/null 2>&1
-    ok "class_name globals registered"
 fi
 
 # --- 5. Configuration ------------------------------------------------------
@@ -1075,6 +1084,41 @@ io.open("cfg/content.json", "w", encoding="utf-8").write(json.dumps({
     "require_signed_manifests": src.get("require_signed_manifests", True),
     "trusted_keys": src.get("trusted_keys", {}),
 }, indent=4) + "\n")' && printf '    %s+%s    %s\n' "$GRN" "$OFF" "cfg/content.json"
+fi
+
+# [b]And the key THIS box publishes with, or it cannot read what it just wrote.[/b]
+#
+# The step above copies the trust that ships with this repository -- our public key --
+# and the games step generates a signing key of its own on a box that has none, then
+# publishes every pack with it. Those are two different keys, so a fresh install found
+# its own manifest on disk, failed the signature, fell through to the network, and died
+# on
+#
+#     [forbidden] Could not get lobby's content. … <Code>AccessDenied</Code>
+#
+# an S3 error, on a server that had every byte it needed in dist/. Nothing about that
+# message points at the key, and the packs verify perfectly against the key that made
+# them.
+#
+# Merged rather than written, and run on every setup rather than only the first: an
+# upgrade keeps the cfg/content.json it has, and a key added only on a first run would
+# be missing from every box that already existed. Under its own id, beside ours, so the
+# two coexist and neither replaces the other.
+if [ -f keys/content.pub ] && [ -f cfg/content.json ] \
+        && command -v python3 >/dev/null 2>&1; then
+    if python3 -c 'import json,io,sys
+pub = io.open("keys/content.pub", encoding="utf-8").read().strip()
+doc = json.load(io.open("cfg/content.json", encoding="utf-8"))
+keys = doc.setdefault("trusted_keys", {})
+if keys.get("local") == pub:
+    sys.exit(1)
+keys["local"] = pub
+io.open("cfg/content.json", "w", encoding="utf-8").write(json.dumps(doc, indent=4) + "\n")'
+    then
+        ok "the signing key on this box is trusted by its server (cfg/content.json)"
+        note "a BROWSER client needs it too: add keys/content.pub to client/content.json
+    under trusted_keys before ./server export-web, or players get our packs only"
+    fi
 fi
 
 umask "$umask_old"

@@ -334,6 +334,22 @@ A bare PEM still means every id, because that is what every config written befor
 
 `DotCloudConfig.validate()` warns about the one arrangement that is actually a hole — several keys with at least one of them unscoped — and says nothing about a single unscoped key, which is every deployment today. It warns rather than refuses: a client that will not start is worse than one that says so, and the content still has to be signed by a key in the set either way.
 
+### The key your own box publishes with
+
+`setup.sh` generates one on a machine that has none, because `./server pack` refuses to publish unsigned and that refusal would otherwise stop an install on a step nobody was told about. It then adds the **public** half to `cfg/content.json` under the id `local`, beside the one this repository ships — and it does that on every run, not only the first, because an upgrade keeps the `cfg/content.json` it already has.
+
+**Without that merge a fresh install can verify nothing it just published.** The packs are signed by the new key; the trusted set holds only ours. The server finds its own manifest on disk, fails the signature, falls through to the network, and dies on
+
+```
+[forbidden] Could not get lobby's content. … <Code>AccessDenied</Code>
+```
+
+an S3 error, on a box holding every byte it needs in `dist/`. Nothing in that message points at a key, and the packs verify perfectly against the key that made them.
+
+**A browser client needs it too, and setup cannot do that half for you.** `client/content.json` is tracked and is baked into the export, so an operator publishing their own content adds `keys/content.pub` to it under `trusted_keys` before `./server export-web`. Until they do, their players can mount our packs and not theirs. `setup.sh` says so when it generates a key.
+
+Two unscoped keys — ours and yours — is a coherent configuration and is what a self-hosted server looks like: every publisher in the set is trusted for everything, which is what you mean by adding your own key beside ours on your own box. `DotCloudConfig` says so once at info. It *warns* only about the inconsistent set — some entries scoped and some not — where somebody restricted a publisher and left another key that can still sign the ids they just restricted.
+
 ### How to add a publisher
 
 1. They generate a key pair and keep the private half: `godot --headless --path . --script addons/dot_cloud/publish/dot_cloud_cli.gd -- keygen --private theirs.key --public theirs.pub`.

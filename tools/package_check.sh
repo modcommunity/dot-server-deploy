@@ -200,7 +200,7 @@ else
 fi
 
 if printf '%s' "$parse_out" | grep -q 'staleness not checked'; then
-    pass "and says the lobby could not be compared, rather than passing silently"
+    pass "and says the packs could not be compared, rather than passing silently"
 else
     fail "the missing-sibling notice is gone from check.sh"
 fi

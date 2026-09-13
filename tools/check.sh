@@ -142,7 +142,11 @@ for entry in "${GAME_ENTRIES[@]}"; do
 done
 
 if [ "$checked_any" -eq 0 ]; then
-    printf '  %sok%s   no game repositories beside this one; nothing to compare\n' \
+    # [b]The wording is asserted by tools/package_check.sh.[/b] That check exists because
+    # this branch is the one a developer checkout can never reach, and a notice that
+    # quietly stops being printed is indistinguishable from a check that quietly stops
+    # running -- which is exactly how the old copy-staleness guard went stale.
+    printf '  %sok%s   no game repositories beside this one; staleness not checked\n' \
         "$GRN" "$OFF"
 elif [ "$drift" -eq 0 ]; then
     printf '  %sok%s   every game is published and its pack is newer than its source\n' \
