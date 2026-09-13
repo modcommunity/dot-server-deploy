@@ -800,12 +800,24 @@ func _on_spawned() -> void:
 		return
 
 	if not BUILTIN_CLIENTS.has(content_id):
-		# The server named a game whose content it did not deliver. With an empty
-		# BUILTIN_CLIENTS this is the only way to get here, and it is a server-side
-		# mistake every time: a `kind: builtin` game on a server whose client is this
-		# shell, or a pack that failed to mount without failing loudly.
+		# [b]Say which side is behind, because the symptom points at neither.[/b] With an
+		# empty BUILTIN_CLIENTS this is the only way to get here, and by far the most
+		# likely cause is a server older than this client: a server that delivers its
+		# games ALWAYS sends content, so "named a game and sent nothing" is what a
+		# `kind: builtin` descriptor looks like from here -- or a deployment whose
+		# dot-server addon was not pulled alongside its host, which is the same thing one
+		# repository further down. The first version of this message said only that no
+		# content arrived, which is true, unactionable, and reads as a broken client.
+		DotLog.error(CHANNEL, "the server sent no content for the game it named", {
+			"content_id": content_id,
+			"builtin_clients": BUILTIN_CLIENTS.size(),
+			"hint": "this build ships no game; the server needs updating "
+				+ "(git pull in the deploy repo AND in ../dot-*, then restart)",
+		})
 		_fail(
-			"This server is running '%s' but did not send its content." % content_id
+			"'%s' could not be loaded: this server sent no content to download.\n"
+			% content_id
+			+ "It is probably running an older build than this client."
 		)
 		return
 
