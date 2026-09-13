@@ -842,11 +842,53 @@ ok "${#ADDONS[@]} addons $([ "$VENDOR" -eq 1 ] && echo copied || echo linked)"
 # compile, and the whole install died on "could not generate a content signing key",
 # naming the last thing it tried rather than the reason.
 
+# [b]`--no-import` may not skip this when the cache is STALE, and that is not a
+# convenience.[/b] `.godot/global_script_class_cache.cfg` is what registers every
+# `class_name` in the project, and a DELIVERED game's scripts are parsed against it at
+# runtime -- so an addon linked or updated after the cache was last built is a class the
+# pack cannot see. The host's own scripts are already cached, so the server boots, loads
+# the game, and looks healthy; what fails is the pack:
+#
+#     SCRIPT ERROR: Parse Error: Could not find type "DotTimerRun" in the current scope.
+#     ERROR: Failed to load script "res://dot_cloud/g2gfast/0.1.0/game/g2g_game.gd"
+#            with error "Parse error".
+#
+# and three layers up that surfaces as "No G2GGame is registered", a game with no map
+# command, and a grey screen. Reproduced exactly by removing one addon's entries from
+# the cache.
+#
+# `--no-import` exists so an upgrade does not pay for a full reimport it does not need,
+# and that was right while every game was compiled in: nothing was parsed from a mount,
+# so a stale cache could only affect scripts that were already cached. The flip to packs
+# changed what the import is FOR.
+#
+# The test is the cache against the newest file under addons/ -- one `find`, and it is
+# exactly the question "was anything linked or pulled since this was built".
+import_is_stale() {
+    local cache="$ROOT/.godot/global_script_class_cache.cfg"
+
+    [ -f "$cache" ] || return 0
+    [ -d "$ROOT/addons" ] || return 1
+
+    # -L: addons/ is symlinks on a developer machine, and the mtime that matters is the
+    # file in the sibling repository rather than the link.
+    [ -n "$(find -L "$ROOT/addons" -newer "$cache" -name '*.gd' -print -quit 2>/dev/null)" ]
+}
+
 if [ "$DO_IMPORT" -eq 1 ]; then
     step "importing"
     # Re-run after ANY script with a new class_name is added. Without it the
     # identifier does not resolve, the scene fails to load, and the process HANGS
     # rather than exiting, because nothing ever reaches get_tree().quit().
+    "$GODOT" --headless --path "$ROOT" --import >/dev/null 2>&1
+    ok "class_name globals registered"
+elif import_is_stale; then
+    step "importing"
+    warn "an addon is newer than the class cache, so --no-import is being overridden"
+    printf '       a delivered game parses against that cache; leaving it stale breaks
+'
+    printf '       the pack and nothing else, which reads as a broken game.
+'
     "$GODOT" --headless --path "$ROOT" --import >/dev/null 2>&1
     ok "class_name globals registered"
 fi

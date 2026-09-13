@@ -680,7 +680,7 @@ func _apply_initial_map() -> void:
 	# saying why it must come first; this path does not go through it, so it needed its
 	# own. A game that fetches its own content sees a mount that is already there and
 	# does nothing twice.
-	await _ensure_map_content(StringName(config.initial_map))
+	await _ensure_map_content(StringName(config.initial_map), server.games)
 
 	var changed: Variant = await session.call("change_to", StringName(config.initial_map))
 
@@ -706,8 +706,40 @@ func _apply_initial_map() -> void:
 ## already mounted, a map that ships in the build: all of them mean "carry on", and the
 ## refusal that follows from `change_to` is the better message anyway because it names
 ## the map.
-func _ensure_map_content(id: StringName) -> void:
+func _ensure_map_content(id: StringName, root: Node = null) -> void:
 	if id == &"":
+		return
+
+	# [b]Through the game's own fetch when it has one, because mounting is only half.[/b]
+	# A delivered map has to be ADDED to the catalogue as well: a catalogue holds what was
+	# on disk when the game booted, and a pack mounted a moment ago is not in it. This
+	# host did the mount and not the registration, so every delivered map named by `+map`
+	# was downloaded, verified, mounted -- and then refused by `change_to` with "No such
+	# map in the catalogue", after which the server booted on the game's own default.
+	# It read as an operator's typo about a map that was sitting in the cache.
+	#
+	# It looked like it worked because g2gfast's own `initial_map` default IS `surf_mesa`,
+	# so the map the operator asked for was already the one the game was loading; asking
+	# for any other map is what showed it.
+	#
+	# Duck-typed on the method rather than the type, for the reason `_find_map_session`
+	# gives: this host names no game's class. A game that fetches and registers its own
+	# map content answers `ensure_map_content`; one that does not falls through to the
+	# mount below, which is still right for a game whose catalogue is already complete.
+	var fetcher := _find_map_fetcher(root)
+
+	if fetcher != null:
+		var registered: Variant = await fetcher.call("ensure_map_content", id)
+
+		if registered is DotResult and not (registered as DotResult).ok:
+			# Info for the same reason the cloud path below is: `change_to` is about to
+			# refuse the id with a message that names the map, and that is the better
+			# line to read.
+			DotLog.info(CHANNEL, "the game could not fetch this map; using what is here", {
+				"map": String(id),
+				"why": (registered as DotResult).error.message,
+			})
+
 		return
 
 	var cloud := DotRegistry.get_service(&"dot_cloud_client")
@@ -724,6 +756,28 @@ func _ensure_map_content(id: StringName) -> void:
 			"map": String(id),
 			"why": (got as DotResult).error.message,
 		})
+
+
+## The running game, if it fetches and registers its own map content.
+##
+## Duck-typed and walked the same way as [method _find_map_session], and for the same
+## reason: the game is a scene this host loaded from a pack, not a type it may name.
+## `ensure_map_content` is the half `change_to` cannot do for itself -- see
+## [method _ensure_map_content].
+static func _find_map_fetcher(root: Node) -> Object:
+	if root == null:
+		return null
+
+	for child in root.get_children():
+		if child.has_method("ensure_map_content"):
+			return child
+
+		var found := _find_map_fetcher(child)
+
+		if found != null:
+			return found
+
+	return null
 
 
 ## The loaded game's map session, or null.
