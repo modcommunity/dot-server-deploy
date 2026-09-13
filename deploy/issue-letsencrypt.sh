@@ -39,17 +39,25 @@
 #
 #   1. It probes the challenge path BEFORE asking Let's Encrypt to, so a webroot
 #      that is not the one nginx serves costs a curl instead of a rate limit.
-#   2. It writes a DEPLOY HOOK. A packaged certbot renews on a timer and reloads
+#   2. It PUTS A LISTENER ON :80 when the probe finds nothing answering there. An
+#      HTTP-01 challenge is answered over plain HTTP, and plenty of boxes have
+#      nothing on that port: nginx freshly installed with its stock site removed,
+#      a host that serves only TLS, a vhost that answers every name but this one.
+#      It writes a server block for the challenge path, tests the configuration
+#      before reloading, takes it straight back out if nginx refuses it, and then
+#      LEAVES IT THERE -- the renewal in sixty days needs the same port.
+#      --no-nginx-vhost to never touch nginx.
+#   3. It writes a DEPLOY HOOK. A packaged certbot renews on a timer and reloads
 #      NOTHING: the files under /etc/letsencrypt change, nginx goes on serving the
 #      certificate it opened at startup, and sixty days later a browser that has
 #      never been told anything reports an expired certificate on a box where
 #      `certbot renew` has been succeeding all along. This is the single most
 #      common way TLS breaks here.
-#   3. It can COPY the pair somewhere a non-root process can read. Everything under
+#   4. It can COPY the pair somewhere a non-root process can read. Everything under
 #      /etc/letsencrypt/archive is 0700 root, so a dot-server that terminates TLS
 #      itself, or one in a container with its own mounts, cannot read privkey.pem
 #      no matter what the config says. --install-to.
-#   4. It hands you the next command -- install-server-tls.sh with these paths
+#   5. It hands you the next command -- install-server-tls.sh with these paths
 #      already in it.
 #
 # Every argument has an environment variable behind it (TMC_LE_*), because a unit
@@ -87,6 +95,7 @@ DRY_RUN=""
 CERTBOT_DRY_RUN=""
 NO_PROBE="${TMC_LE_NO_PROBE:-}"
 NO_HOOK=""
+NO_VHOST="${TMC_LE_NO_NGINX_VHOST:-}"
 INSTALL_CERTBOT=""
 # For a caller whose next step is not a guess -- setup.sh --full installs the vhost
 # itself, with the ports it was given, and two suggestions where one of them has
@@ -117,9 +126,10 @@ while [ $# -gt 0 ]; do
         --certbot-dry-run) CERTBOT_DRY_RUN=1; shift ;;
         --no-probe)        NO_PROBE=1; shift ;;
         --no-hook)         NO_HOOK=1; shift ;;
+        --no-nginx-vhost)  NO_VHOST=1; shift ;;
         --install-certbot) INSTALL_CERTBOT=1; shift ;;
         --no-next-steps)   NO_NEXT=1; shift ;;
-        -h|--help)         sed -n '2,57p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        -h|--help)         sed -n '2,65p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
         -*)                die "unknown argument: $1" 2 ;;
         *)                 domains+=("$1"); shift ;;
     esac
@@ -230,14 +240,168 @@ find_nginx() {
 }
 NGINX="$(find_nginx || true)"
 
+# The same names install-server-tls.sh uses, so one box is described once. Debian
+# and Ubuntu have sites-available/sites-enabled; most RPM distributions have only
+# conf.d, and nginx.conf includes it from inside the http context on both.
+SITES_DIR="${TMC_NGINX_SITES_DIR:-/etc/nginx/sites-available}"
+ENABLED_DIR="${TMC_NGINX_ENABLED_DIR:-/etc/nginx/sites-enabled}"
+CONF_DIR="${TMC_NGINX_CONF_DIR:-/etc/nginx/conf.d}"
+
+# Is anything listening on :80, and what? Two questions rather than one, because
+# `ss` prints the process column only to root: an unprivileged run that greps for a
+# name finds nothing on a port nginx is very much holding, and reporting that as
+# "free" is worse than not asking.
+PORT80_LISTENING=""
+PORT80_HOLDER=""
+port80_look() {
+    PORT80_LISTENING=""
+    PORT80_HOLDER=""
+    if command -v ss >/dev/null 2>&1; then
+        ss -ltnH 2>/dev/null | awk '$4 ~ /:80$/ {found=1} END {exit !found}' && PORT80_LISTENING=1
+        PORT80_HOLDER="$($SUDO ss -ltnpH 2>/dev/null \
+            | awk '$4 ~ /:80$/ && match($0, /users:\(\("[^"]+"/) {
+                       print substr($0, RSTART + 9, RLENGTH - 10); exit }')"
+    elif command -v lsof >/dev/null 2>&1; then
+        PORT80_HOLDER="$($SUDO lsof -nP -iTCP:80 -sTCP:LISTEN -Fc 2>/dev/null | sed -n 's/^c//p' | head -1)"
+        [ -n "$PORT80_HOLDER" ] && PORT80_LISTENING=1
+    fi
+}
+
+# A server block whose whole job is to answer the challenge.
+#
+# Written only when the probe has already proved that nothing else answers it, so
+# this never competes with a site that works. It is not removed afterwards: the
+# renewal in sixty days is the same challenge over the same port, and an installer
+# that tidies away the thing that made renewal possible has built a certificate
+# that expires quietly.
+#
+# `nginx -t` BEFORE the reload, and the file removed again if it fails. A script
+# that leaves a box with a configuration nginx will not load has not failed to add
+# a certificate -- it has taken down whatever was already being served.
+install_acme_vhost() {
+    local conf name tmp names="" d
+
+    [ -n "$NGINX" ] || return 1
+
+    for d in "${domains[@]}"; do
+        case "$d" in \*.*) continue ;; esac
+        names="${names:+$names }$d"
+    done
+    [ -n "$names" ] || return 1
+
+    name="tmc-acme-$CERT_NAME"
+    if [ -d "$SITES_DIR" ] && [ -d "$ENABLED_DIR" ]; then
+        conf="$SITES_DIR/$name.conf"
+    elif [ -d "$CONF_DIR" ]; then
+        conf="$CONF_DIR/$name.conf"
+    else
+        warn "nginx is here but neither $ENABLED_DIR nor $CONF_DIR is; not adding a block"
+        return 1
+    fi
+
+    tmp="$(mktemp)" || return 1
+    {
+        printf '# Written by dot-server-deploy/deploy/issue-letsencrypt.sh.\n#\n'
+        printf '# Answers the HTTP-01 challenge for %s. KEEP IT: the renewal\n' "$names"
+        printf '# in sixty days is the same challenge over the same port.\n\n'
+        printf 'server {\n'
+        printf '    listen 80;\n'
+        # Only when this kernel has IPv6. `listen [::]:80` on a box without it is
+        # "Address family not supported by protocol", and nginx then refuses to
+        # start at all -- which is a worse outcome than no certificate.
+        [ -f /proc/net/if_inet6 ] && printf '    listen [::]:80;\n'
+        printf '    server_name %s;\n\n' "$names"
+        printf '    location ^~ /.well-known/acme-challenge/ {\n'
+        printf '        root %s;\n' "$WEBROOT"
+        printf '        default_type "text/plain";\n'
+        printf '        allow all;\n'
+        printf '    }\n\n'
+        # 404 rather than a redirect to https. A redirect would be a guess about a
+        # TLS listener that may be on another port entirely -- install-server-tls.sh
+        # puts one on 6065 as readily as on 443 -- and a redirect to a port nothing
+        # listens on is a worse answer than an honest 404.
+        printf '    location / {\n        return 404;\n    }\n'
+        printf '}\n'
+    } > "$tmp"
+
+    $SUDO install -m 644 "$tmp" "$conf" || { rm -f "$tmp"; return 1; }
+    rm -f "$tmp"
+    [ -d "$ENABLED_DIR" ] && [ "${conf#$SITES_DIR}" != "$conf" ] \
+        && $SUDO ln -sf "$conf" "$ENABLED_DIR/$name.conf"
+
+    if ! $SUDO "$NGINX" -t >/dev/null 2>&1; then
+        $SUDO rm -f "$conf" "$ENABLED_DIR/$name.conf"
+        warn "nginx rejected the challenge block, so it was removed again:"
+        $SUDO "$NGINX" -t 2>&1 | sed 's/^/       /' >&2
+        return 1
+    fi
+
+    if command -v systemctl >/dev/null 2>&1; then
+        if $SUDO systemctl is-active --quiet nginx; then
+            $SUDO systemctl reload nginx || return 1
+        else
+            $SUDO systemctl start nginx || return 1
+        fi
+    else
+        $SUDO "$NGINX" -s reload 2>/dev/null || $SUDO "$NGINX" || return 1
+    fi
+
+    ok "added $conf and reloaded nginx"
+    return 0
+}
+
+# --- Do we already have one? ------------------------------------------------
+#
+# A second run of an installer on a configured box must not be a second
+# certificate request. certbot itself would answer "not yet due for renewal" and
+# exit 0, but only AFTER the preflight here has insisted on a webroot, a listener
+# on :80 and a DNS name that resolves -- none of which a box that already has a
+# valid certificate needs to prove again. So ask first, and skip the lot.
+#
+# Three questions, and all three have to say yes: is there a certificate, does it
+# cover every name asked for, and does it have more than thirty days left.
+# Thirty because that is the window certbot renews in anyway, so anything inside it
+# is a renewal that is due rather than a re-run that is redundant.
+
+SKIP_ISSUE=""
+if [ -z "$FORCE" ] && [ -z "$DRY_RUN" ] && [ -z "$CERTBOT_DRY_RUN" ] \
+        && $SUDO test -f "/etc/letsencrypt/live/$CERT_NAME/fullchain.pem"; then
+    existing_pem="/etc/letsencrypt/live/$CERT_NAME/fullchain.pem"
+    existing_names="$($SUDO openssl x509 -in "$existing_pem" -noout -ext subjectAltName 2>/dev/null \
+        | tr ',' '\n' | sed -n 's/.*DNS:\([^ ,]*\).*/\1/p')"
+
+    covers_all=1
+    for d in "${domains[@]}"; do
+        printf '%s\n' "$existing_names" | grep -qxF "$d" || covers_all=""
+    done
+
+    if [ -z "$existing_names" ]; then
+        warn "there is a certificate at $existing_pem but its names could not be read"
+    elif [ -z "$covers_all" ]; then
+        ok "the certificate at $CERT_NAME does not cover every name asked for; reissuing"
+    elif ! $SUDO openssl x509 -in "$existing_pem" -noout -checkend 2592000 >/dev/null 2>&1; then
+        ok "the certificate at $CERT_NAME expires within thirty days; renewing"
+    else
+        SKIP_ISSUE=1
+        ok "a certificate for ${domains[*]} is already here and is not due"
+        say "$($SUDO openssl x509 -in "$existing_pem" -noout -enddate | sed 's/^notAfter=/expires /')"
+        say "--force-renewal replaces it anyway"
+    fi
+fi
+
 # --- certbot ----------------------------------------------------------------
 
-step "certbot"
+[ -n "$SKIP_ISSUE" ] || step "certbot"
 
 HAVE_CERTBOT=1
 if ! command -v certbot >/dev/null 2>&1; then
     HAVE_CERTBOT=""
-    if [ -n "$DRY_RUN" ]; then
+    if [ -n "$SKIP_ISSUE" ]; then
+        # Nothing is going to be requested, so the tool that would request it is not
+        # a requirement. A box whose certificate is already in place and in date can
+        # be told so without installing anything.
+        :
+    elif [ -n "$DRY_RUN" ]; then
         warn "certbot is not installed; printing the command anyway (--dry-run)"
     elif [ -n "$INSTALL_CERTBOT" ] && command -v apt-get >/dev/null 2>&1; then
         $SUDO apt-get update -qq \
@@ -273,6 +437,10 @@ fi
 # Let's Encrypt that the webroot is wrong is an hour, and the cost of finding out
 # here is one curl.
 
+# Skipped wholesale when the certificate is already here and not due: a box that
+# has one does not have to prove its webroot, its :80 and its DNS all over again
+# to be told nothing needs doing.
+if [ -z "$SKIP_ISSUE" ]; then
 case "$METHOD" in
 webroot)
     step "the challenge path"
@@ -296,29 +464,74 @@ webroot)
         probe_dir="$WEBROOT/.well-known/acme-challenge"
         $SUDO mkdir -p "$probe_dir" || die "could not create $probe_dir"
 
-        for d in "${domains[@]}"; do
-            token="tmc-probe-$$-$RANDOM"
-            printf '%s' "$token" | $SUDO tee "$probe_dir/$token" >/dev/null
+        # One name, one token, fetched back through whatever is actually serving
+        # :80. Sets PROBE_FAILED to the name that did not answer.
+        PROBE_FAILED=""
+        probe_domains() {
+            local d token got
+            for d in "${domains[@]}"; do
+                token="tmc-probe-$$-$RANDOM"
+                printf '%s' "$token" | $SUDO tee "$probe_dir/$token" >/dev/null
 
-            # -L because a vhost that redirects http to https is normal and
-            # Let's Encrypt follows the redirect too; -k because the certificate
-            # at the other end of that redirect is the thing we are here to fix.
-            # The token is random and compared exactly, so neither weakens the test.
-            got="$(curl -fsSL -k --max-time 10 \
-                "http://$d/.well-known/acme-challenge/$token" 2>/dev/null)"
-            $SUDO rm -f "$probe_dir/$token"
+                # -L because a vhost that redirects http to https is normal and
+                # Let's Encrypt follows the redirect too; -k because the certificate
+                # at the other end of that redirect is the thing we are here to fix.
+                # The token is random and compared exactly, so neither weakens it.
+                got="$(curl -fsSL -k --max-time 10 \
+                    "http://$d/.well-known/acme-challenge/$token" 2>/dev/null)"
+                $SUDO rm -f "$probe_dir/$token"
 
-            if [ "$got" = "$token" ]; then
-                ok "http://$d/.well-known/acme-challenge/ is served from $WEBROOT"
-            else
-                die "http://$d/.well-known/acme-challenge/ did not return what was put in
-  $WEBROOT. Either the vhost for $d serves a different root, or :80 is not
-  reachable, or DNS for $d does not point here.
+                if [ "$got" = "$token" ]; then
+                    ok "http://$d/.well-known/acme-challenge/ is served from $WEBROOT"
+                else
+                    PROBE_FAILED="$d"
+                    return 1
+                fi
+            done
+            return 0
+        }
+
+        if ! probe_domains; then
+            # Nothing answered. Before giving up on it, find out WHETHER ANYTHING IS
+            # ON :80 AT ALL -- because if the answer is no, this is not a
+            # misconfiguration to report, it is a listener to add. A box with nginx
+            # installed and its stock site removed, or one serving only TLS, has
+            # everything needed to pass this challenge except the block that says so.
+            port80_look
+
+            if [ -n "$NO_VHOST" ]; then
+                :
+            elif [ -z "$PORT80_LISTENING" ] && [ -n "$NGINX" ]; then
+                warn "nothing is listening on :80, so the challenge cannot be answered"
+                install_acme_vhost && probe_domains
+            elif [ -n "$PORT80_LISTENING" ] && [ "${PORT80_HOLDER:-nginx}" = "nginx" ] && [ -n "$NGINX" ]; then
+                # nginx IS on :80 and still did not serve it: the vhost that answered
+                # is one that does not know this name, or does not share this webroot.
+                # A block of our own for exactly these names settles both.
+                warn "nginx answers on :80 but not for $PROBE_FAILED out of $WEBROOT"
+                install_acme_vhost && probe_domains
+            fi
+        fi
+
+        if [ -n "$PROBE_FAILED" ]; then
+            extra=""
+            [ -n "$PORT80_LISTENING" ] && [ -n "${PORT80_HOLDER:-}" ] && [ "$PORT80_HOLDER" != "nginx" ] \
+                && extra="
+  :80 is held by $PORT80_HOLDER, which is not nginx, so nothing here can add a
+  block to it. Point --webroot at whatever $PORT80_HOLDER serves, or use
+  --method standalone, or --method dns."
+            [ -z "$NGINX" ] && [ -z "$PORT80_LISTENING" ] \
+                && extra="
+  There is no nginx on this box either, so there was nothing to add a listener to.
+  Install one, or use --method standalone, which brings its own."
+
+            die "http://$PROBE_FAILED/.well-known/acme-challenge/ did not return what was
+  put in $WEBROOT. Either the vhost for $PROBE_FAILED serves a different root, or
+  :80 is not reachable from here, or DNS for $PROBE_FAILED does not point here.$extra
 
   If this box cannot reach its own public address -- hairpin NAT does this, and
   Let's Encrypt would still succeed from outside -- re-run with --no-probe." 1
-            fi
-        done
+        fi
     fi
     ;;
 
@@ -329,24 +542,12 @@ standalone)
     # has to go on every RENEWAL too, not only today. That is what the hooks are:
     # without them the renewal in sixty days fails with "address already in use"
     # on a box where the first run worked perfectly.
-    # TWO questions, not one, and conflating them is how this reports a busy port as
-    # free: `ss` prints the process column ONLY to root, so an unprivileged run that
-    # greps for a name finds nothing on a port nginx is very much holding. So ask
-    # first whether anything is listening -- which any user can see -- and only then
-    # try to name it.
-    listening=""
-    holder=""
-    if command -v ss >/dev/null 2>&1; then
-        ss -ltnH 2>/dev/null | awk '$4 ~ /:80$/ {found=1} END {exit !found}' && listening=1
-        holder="$($SUDO ss -ltnpH 2>/dev/null \
-            | awk '$4 ~ /:80$/ && match($0, /users:\(\("[^"]+"/) {
-                       print substr($0, RSTART + 9, RLENGTH - 10); exit }')"
-    elif command -v lsof >/dev/null 2>&1; then
-        holder="$($SUDO lsof -nP -iTCP:80 -sTCP:LISTEN -Fc 2>/dev/null | sed -n 's/^c//p' | head -1)"
-        [ -n "$holder" ] && listening=1
-    else
+    if ! command -v ss >/dev/null 2>&1 && ! command -v lsof >/dev/null 2>&1; then
         warn "neither ss nor lsof is here, so :80 cannot be checked; certbot will find out"
     fi
+    port80_look
+    listening="$PORT80_LISTENING"
+    holder="$PORT80_HOLDER"
 
     if [ -z "$listening" ]; then
         ok ":80 is free"
@@ -372,8 +573,25 @@ standalone)
 nginx)
     [ -n "$NGINX" ] || die "--method nginx needs nginx installed" 1
     ok "$("$NGINX" -v 2>&1)"
+
+    # certbot's nginx plugin edits a server block that already matches the name it is
+    # asked for. With none it stops at "unable to find a virtual host listening on
+    # port 80 which matches the requested domain", which is a true statement about a
+    # file nobody has written yet rather than about anything being wrong.
+    if [ -z "$DRY_RUN" ] && [ -z "$NO_VHOST" ]; then
+        port80_look
+        if [ -z "$PORT80_LISTENING" ]; then
+            warn "nothing is listening on :80, which is where this method works"
+            install_acme_vhost || warn "could not add one; certbot will say what it finds"
+        elif ! $SUDO "$NGINX" -T 2>/dev/null \
+                | grep -qE "server_name[^;]*[[:space:]]${domains[0]}([[:space:];]|$)"; then
+            warn "no server block names ${domains[0]}"
+            install_acme_vhost || warn "could not add one; certbot will say what it finds"
+        fi
+    fi
     ;;
 esac
+fi
 
 # --- The invocation ---------------------------------------------------------
 
@@ -421,16 +639,18 @@ if [ -n "$DRY_RUN" ]; then
     exit 0
 fi
 
-step "requesting a certificate"
-[ -n "$STAGING" ] && warn "--staging: this certificate is signed by the STAGING CA and no browser trusts it"
+if [ -z "$SKIP_ISSUE" ]; then
+    step "requesting a certificate"
+    [ -n "$STAGING" ] && warn "--staging: this certificate is signed by the STAGING CA and no browser trusts it"
 
-$SUDO certbot "${args[@]}" || die "certbot did not issue a certificate.
+    $SUDO certbot "${args[@]}" || die "certbot did not issue a certificate.
   Its own log says why: /var/log/letsencrypt/letsencrypt.log
   A first run on a new name is cheaper with --staging." 1
 
-if [ -n "$CERTBOT_DRY_RUN" ]; then
-    ok "validation succeeded and nothing was kept (--certbot-dry-run)"
-    exit 0
+    if [ -n "$CERTBOT_DRY_RUN" ]; then
+        ok "validation succeeded and nothing was kept (--certbot-dry-run)"
+        exit 0
+    fi
 fi
 
 LIVE="/etc/letsencrypt/live/$CERT_NAME"
@@ -438,8 +658,14 @@ FULLCHAIN="$LIVE/fullchain.pem"
 PRIVKEY="$LIVE/privkey.pem"
 
 $SUDO test -f "$FULLCHAIN" || die "certbot reported success but there is no $FULLCHAIN" 1
-ok "issued $FULLCHAIN"
-say "$($SUDO openssl x509 -in "$FULLCHAIN" -noout -enddate | sed 's/^notAfter=/expires /')"
+if [ -n "$SKIP_ISSUE" ]; then
+    # "issued" would be a lie about a file that was already here, and the expiry has
+    # been printed once already.
+    ok "using $FULLCHAIN"
+else
+    ok "issued $FULLCHAIN"
+    say "$($SUDO openssl x509 -in "$FULLCHAIN" -noout -enddate | sed 's/^notAfter=/expires /')"
+fi
 
 # --- Where the server can read it -------------------------------------------
 

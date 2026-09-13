@@ -256,6 +256,38 @@ cfg_set() {
     rm -f "$tmp"
 }
 
+# Who is listening on a port, if anybody. Two questions rather than one: `ss` prints
+# the process column only to root, so an unprivileged look finds nothing on a port
+# that is very much taken -- and answering "free" there is how an installer writes a
+# vhost that stops nginx from starting.
+#
+# Prints the holder's name, or nothing. Returns 0 when something is listening even if
+# it could not be named, so a caller can tell "free" from "busy, unknown".
+port_holder() {
+    local port="$1" listening="" holder=""
+    if command -v ss >/dev/null 2>&1; then
+        ss -ltnH 2>/dev/null | awk -v p=":$port\$" '$4 ~ p {found=1} END {exit !found}' && listening=1
+        holder="$($SUDO ss -ltnpH 2>/dev/null \
+            | awk -v p=":$port\$" '$4 ~ p && match($0, /users:\(\("[^"]+"/) {
+                       print substr($0, RSTART + 9, RLENGTH - 10); exit }')"
+    elif command -v lsof >/dev/null 2>&1; then
+        holder="$($SUDO lsof -nP -iTCP:"$port" -sTCP:LISTEN -Fc 2>/dev/null | sed -n 's/^c//p' | head -1)"
+        [ -n "$holder" ] && listening=1
+    fi
+    [ -n "$holder" ] && printf '%s' "$holder"
+    [ -n "$listening" ]
+}
+
+# /usr/sbin is not on a normal user's PATH, so `command -v nginx` answers "not
+# installed" for the very user who is about to install a second copy of it.
+find_nginx() {
+    local c
+    for c in nginx /usr/sbin/nginx /sbin/nginx /usr/local/sbin/nginx; do
+        command -v "$c" >/dev/null 2>&1 && { command -v "$c"; return 0; }
+    done
+    return 1
+}
+
 # Root, and how much of it this box will give us. Everything the guided install does
 # outside this directory -- packages, nginx, a certificate, a unit file, a firewall
 # rule -- needs it, and finding that out at the end is finding it out too late.
@@ -374,18 +406,63 @@ if [ "$DO_FULL" -eq 1 ]; then
             [ -n "$LE_EMAIL" ] || LE_EMAIL="$(ask "Email for the certificate (expiry warnings)" "")"
             [ -n "$LE_METHOD" ] || LE_METHOD="$(ask "Certificate method (webroot, nginx, standalone, dns, manual)" webroot)"
 
-            # 443 unless something already has it. It is the port that survives a
-            # corporate firewall, and a game on a high port is the one thing a
-            # player on an office network cannot reach -- but taking it from a
-            # website that is already serving on it is worse.
+            # 443 unless something that is not nginx already has it. It is the port
+            # that survives a corporate firewall, and a game on a high port is the one
+            # thing a player on an office network cannot reach.
+            #
+            # nginx ALREADY being on 443 is not a reason to avoid it: a second server
+            # block on the same port with a different name is exactly what SNI is
+            # for, and a box that already serves a website over HTTPS is the common
+            # case rather than the awkward one. Anything else holding it is a
+            # different matter, because nginx cannot have it at all.
+            # The three cases have to be the same three the check below uses. An
+            # earlier version asked only whether a NAME came back, so a port that was
+            # busy but unnameable -- which is every port when this run cannot see the
+            # process column -- looked free, 443 was offered as the default, and the
+            # check two lines down then refused the answer the script had just
+            # suggested. A default that its own validator rejects is worse than no
+            # default at all.
             pp_default=6065
-            if ! ss -ltnH 2>/dev/null | awk '$4 ~ /:443$/ {found=1} END {exit !found}'; then
+            pp_holder="$(port_holder 443)"
+            if [ $? -ne 0 ] || [ "$pp_holder" = "nginx" ]; then
                 pp_default=443
             fi
             FULL_PUBLIC_PORT="$(ask "Public TLS port" "$pp_default")"
             case "$FULL_PUBLIC_PORT" in ''|*[!0-9]*) die "public port must be a number: $FULL_PUBLIC_PORT" 2 ;; esac
             [ "$FULL_PUBLIC_PORT" = "$FULL_PORT" ] && die "the public TLS port and the server's own port cannot both be $FULL_PORT.
     nginx listens on the first and forwards to the second." 2
+
+            # [b]This box may already be doing something, and this is where that stops
+            # being a surprise.[/b] A vhost written for a port another PROCESS holds
+            # does not fail when it is written -- it fails the next time nginx is
+            # restarted, which can be weeks later and by somebody else entirely. nginx
+            # holding it is fine and normal: a second server block on the same port
+            # with a different name is what SNI is for.
+            # And the one way sharing a port goes wrong: the same NAME twice. Two
+            # server blocks with one server_name on one port is a "conflicting server
+            # name" warning from nginx, after which the first one wins and the new one
+            # is silently never used -- a vhost that was installed, tested, reloaded
+            # and does nothing.
+            if nginx_bin="$(find_nginx)" \
+                    && $SUDO "$nginx_bin" -T 2>/dev/null \
+                       | grep -qE "^[[:space:]]*server_name[^;]*[[:space:]]${LE_DOMAINS[0]}([[:space:];]|$)"; then
+                warn "nginx already has a server block naming ${LE_DOMAINS[0]}.
+       If it is on the same port, nginx keeps the first and ignores the new one.
+       A name of its own for the game -- play.yourdomain, say -- avoids the whole
+       question."
+            fi
+
+            FULL_PORT_SHARED=""
+            if holder="$(port_holder "$FULL_PUBLIC_PORT")"; then
+                case "${holder:-unknown}" in
+                    nginx) FULL_PORT_SHARED=1 ;;
+                    unknown) die "something is already listening on $FULL_PUBLIC_PORT and this run
+    cannot see what. Re-run with sudo, or pick another port." 1 ;;
+                    *) die "$holder is already listening on $FULL_PUBLIC_PORT.
+    nginx cannot have that port as well, and a vhost written for it would break the
+    next nginx restart rather than this run. Pick another public port." 1 ;;
+                esac
+            fi
         fi
 
         # --- the service ---
@@ -426,7 +503,12 @@ if [ "$DO_FULL" -eq 1 ]; then
     plan "cfg/server.yml: $FULL_NAME, game $FULL_GAME, $FULL_MAXPLAYERS slots, $FULL_TICKRATE tick"
     if [ "$FULL_NGINX" -eq 1 ]; then
         plan "cfg/net.yml: port $FULL_PORT, bound to 127.0.0.1 (nginx is the way in)"
-        plan "install nginx and certbot if they are missing"
+        if find_nginx >/dev/null 2>&1; then
+            plan "use the nginx that is already on this box, adding one server block to it"
+        else
+            plan "install nginx"
+        fi
+        command -v certbot >/dev/null 2>&1 || plan "install certbot"
         [ -n "$FULL_FIREWALL" ] && plan "open 80 and $FULL_PUBLIC_PORT in $FULL_FIREWALL"
         # `${LE_STAGING:+...}` is wrong here and read right for a whole test run:
         # LE_STAGING is 0 or 1, and :+ fires on a value being SET rather than being
@@ -435,7 +517,11 @@ if [ "$DO_FULL" -eq 1 ]; then
         staging_note=""
         [ "$LE_STAGING" -eq 1 ] && staging_note=" (staging)"
         plan "get a certificate for ${LE_DOMAINS[*]} over ${LE_METHOD:-webroot}$staging_note"
-        plan "nginx: wss://${LE_DOMAINS[0]}:$FULL_PUBLIC_PORT -> 127.0.0.1:$FULL_PORT"
+        if [ -n "$FULL_PORT_SHARED" ]; then
+            plan "nginx: wss://${LE_DOMAINS[0]}:$FULL_PUBLIC_PORT -> 127.0.0.1:$FULL_PORT (nginx is already on that port; this adds a name to it)"
+        else
+            plan "nginx: wss://${LE_DOMAINS[0]}:$FULL_PUBLIC_PORT -> 127.0.0.1:$FULL_PORT"
+        fi
     else
         plan "cfg/net.yml: port $FULL_PORT, bound to 0.0.0.0"
         [ -n "$FULL_FIREWALL" ] && plan "open $FULL_PORT in $FULL_FIREWALL"
@@ -1204,18 +1290,22 @@ if [ "${FULL_NGINX:-0}" -eq 1 ]; then
         fi
     }
 
-    # /usr/sbin is not on a normal user's PATH, so `command -v nginx` answers "not
-    # installed" for the user who is about to install it a second time.
-    find_nginx() {
-        local c
-        for c in nginx /usr/sbin/nginx /sbin/nginx /usr/local/sbin/nginx; do
-            command -v "$c" >/dev/null 2>&1 && { command -v "$c"; return 0; }
-        done
-        return 1
-    }
-
+    # [b]An nginx that is already here is somebody else's nginx.[/b] It may be serving a
+    # website, it is certainly serving something if it is running, and the difference
+    # between installing one and joining one decides what this step may do: a fresh
+    # install can be started and enabled freely, and a running one must be left
+    # working. So find out which this is, and say so -- an operator who is told
+    # "installed nginx" about a box that was already serving their site has been told
+    # something false about the thing they are most worried about.
+    NGINX_PREEXISTING=""
     if NGINX_BIN="$(find_nginx)"; then
-        ok "nginx is installed"
+        NGINX_PREEXISTING=1
+        vhosts="$($SUDO "$NGINX_BIN" -T 2>/dev/null | grep -cE '^[[:space:]]*server_name[[:space:]]' || true)"
+        if [ "${vhosts:-0}" -gt 0 ]; then
+            ok "nginx was already here, serving ${vhosts} server block(s); this adds one"
+        else
+            ok "nginx was already here"
+        fi
     elif pkg_install nginx nginx nginx && NGINX_BIN="$(find_nginx)"; then
         ok "installed nginx"
     else
@@ -1226,12 +1316,37 @@ if [ "${FULL_NGINX:-0}" -eq 1 ]; then
     fi
 
     if command -v systemctl >/dev/null 2>&1; then
-        $SUDO systemctl enable --now nginx >/dev/null 2>&1
+        # Started and enabled are two different things and a box can be either without
+        # the other. Reporting them apart is the difference between "I started your
+        # web server" and "it was already running", which is the sentence an operator
+        # reads to find out whether this run touched their site.
         if $SUDO systemctl is-active --quiet nginx; then
-            ok "nginx is running and enabled at boot"
+            ok "nginx is already running; not restarting it"
         else
-            die "nginx is installed but will not start: sudo systemctl status nginx" 1
+            $SUDO systemctl start nginx >/dev/null 2>&1
+            if $SUDO systemctl is-active --quiet nginx; then
+                ok "started nginx"
+            else
+                die "nginx is installed but will not start. Its own configuration is the
+    first place to look, and this run has not written any of it yet:
+        sudo nginx -t
+        sudo systemctl status nginx" 1
+            fi
         fi
+
+        if $SUDO systemctl is-enabled --quiet nginx 2>/dev/null; then
+            ok "nginx starts at boot"
+        else
+            $SUDO systemctl enable nginx >/dev/null 2>&1 && ok "enabled nginx at boot"
+        fi
+    fi
+
+    # A vhost this installer wrote before. install-server-tls.sh overwrites its own
+    # file and tests the configuration before reloading, so a re-run is safe -- but
+    # somebody watching should be told it is a replacement rather than an addition.
+    if [ -n "$NGINX_PREEXISTING" ] \
+            && $SUDO "$NGINX_BIN" -T 2>/dev/null | grep -q "server-tls-${LE_DOMAINS[0]}-"; then
+        ok "a TLS vhost for ${LE_DOMAINS[0]} is already installed; it will be rewritten"
     fi
 
     # The webroot the stock vhost actually serves, which is not the same directory on
@@ -1314,9 +1429,13 @@ if [ "$DO_LETSENCRYPT" -eq 1 ]; then
         # send somebody back to re-run a setup that has nothing left to do. The exit
         # code is still non-zero, because a run that was asked for a certificate and
         # has none did not do what it was told.
+        # The suggestion is for a person to paste, so the flag this script passes for
+        # its own convenience has no business in it.
+        shown_args=()
+        for a in "${le_args[@]}"; do [ "$a" = "--no-next-steps" ] || shown_args+=("$a"); done
         warn "no certificate was issued. The project is set up and ./server works;
        re-run just the certificate with:
-           sudo ./deploy/issue-letsencrypt.sh ${le_args[*]}"
+           sudo ./deploy/issue-letsencrypt.sh ${shown_args[*]}"
         LE_OK=0
     fi
 fi
