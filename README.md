@@ -242,6 +242,21 @@ for d in ../dot-*; do git -C "$d" pull --ff-only; done && ./setup.sh --no-import
 
 **The browser client is not upgraded by any of this.** `./server export-web` has to be re-run and the result *published*, and how it is published depends on the deployment shape — a site-published build is `--zip` and an upload every time. [web/README.md](web/README.md#shipping-a-client-change-which-shape-you-are-on-and-what-it-costs) has the table and the ten-second check for which shape you are on. A client change that was exported but not published looks precisely like a change that did not work: the browser runs the previous build and prints the previous errors.
 
+**Once, on a box that ran an older `setup.sh`**, the pull stops on a uid instead:
+
+```
+error: Your local changes to the following files would be overwritten by merge:
+        content/avatars/part.gd.uid
+```
+
+Discard it and pull. `setup.sh` used to delete every `.uid` under the directories it vendors into — right for a file copied from a sibling, whose uid belongs to that project, and wrong for `content/avatars/part.gd`, which is this repository's own tracked file sitting in a directory that also receives vendored content. So `--import` minted a fresh random one and left a tracked file modified after a command whose whole job is to be safe to re-run.
+
+```bash
+git checkout -- content/avatars/part.gd.uid && git pull
+```
+
+Nothing is lost: every scene that uses that script references it **by path**, so the uid is not named anywhere. The fix is in the commit you are pulling — `setup.sh` asks git which files are its own now and leaves those alone — so this is needed once per box and never again.
+
 **Once, on a box checked out before this changed**, the pull stops on the configuration it is about to stop tracking:
 
 ```
