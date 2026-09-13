@@ -39,6 +39,29 @@ style. `content/lobby/game.yml` says so where somebody will read it.
 It is the same shape as the constraint dot-cloud already documents for avatar packs — "the
 pack is data, the code ships in the build" — reached from further along.
 
+### The constraint has three forms, and two of them are closed
+
+One root cause — a delivered pack mounts at `res://dot_cloud/<id>/<version>/` and not at
+the path its content was authored at — reaching the code by three separate routes. Each
+one was found by running something rather than by reading, and each is invisible until a
+game is actually delivered.
+
+| Route | Symptom | State |
+| --- | --- | --- |
+| script → script by `class_name` | every cross-file type reference fails to compile; the pack mounts and its scripts are dead | **closed** — every game references its own files by relative `preload`, and `tools/check.sh` refuses a new `class_name` |
+| scene → script by `ext_resource` | the scene loads with its script silently missing: `Attempt to open script 'res://…' … 'File not found'` | **closed** — `DotCloudPublisher` rewrites text resources to the mount prefix at publish time |
+| script → anything by `"res://…"` | resolves against the HOST project root: another game's file, or nothing | **open** |
+
+The third is measured rather than estimated: **62 file references** across the five games,
+which can become relative `preload`s the same way the first form did, and **36
+directory-or-format references** — `"res://audio"`, `"res://maps/imported/%s/%s.bin"` —
+which cannot, because there is nothing to preload. Those need a game to resolve its own
+content root at runtime, which a script can do from its own `resource_path`.
+
+`tools/check.sh` counts them and says so without failing: they are harmless while every
+game is `kind: builtin`, and a check that fails on work nobody has scheduled is a check
+people learn to skip. The number is there to shrink on purpose.
+
 ## `cfg/` is written by setup, and `cfg.example/` is what is tracked
 
 **A configuration file an operator edits in place cannot also be a file git is tracking.** The seven `cfg/*.yml` were committed, and setup.sh carried a second copy of each one in a heredoc for a tarball with no checkout, and setup.ps1 carried a third for Windows. Three consequences, all of them found on a live box rather than reasoned about:

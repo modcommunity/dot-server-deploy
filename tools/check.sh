@@ -14,7 +14,7 @@ set -uo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 GODOT="${GODOT:-godot}"
-RED=$'\033[31m'; GRN=$'\033[32m'; OFF=$'\033[0m'
+RED=$'\033[31m'; GRN=$'\033[32m'; YLW=$'\033[33m'; OFF=$'\033[0m'
 fails=0
 
 echo "importing"
@@ -170,6 +170,53 @@ if [ "$checked_any" -eq 1 ]; then
         printf '       CLAUDE.md, "the one constraint that decides what a delivered game may look like"
 '
         fails=$((fails + globals))
+    fi
+fi
+
+# --- Absolute res:// references into a game's own files --------------------
+#
+# [b]The third form of the same bug, and the one still open.[/b] A delivered game
+# mounts at `res://dot_cloud/<id>/<version>/`, so any reference it makes to its own
+# content by an ABSOLUTE path resolves against the host project root instead -- which
+# holds either somebody else's file or nothing at all.
+#
+#   script -> script by class_name    fixed: relative preloads
+#   scene  -> script by ext_resource  fixed: DotCloudPublisher rewrites on publish
+#   script -> anything by "res://…"   THIS. Not fixed.
+#
+# Reported rather than failed, because these are harmless while every game is
+# builtin, and because a hard failure on work that has not been scheduled is a check
+# people learn to skip. It is here so the number is visible and shrinks on purpose.
+#
+# `screenshots` is a tool's output directory and never shipped; `dot_cloud` is the
+# mount prefix itself, which is a delivered game reading delivered content correctly.
+if [ "$checked_any" -eq 1 ]; then
+    absolute=0
+    for repo in "${GAME_REPOS[@]}"; do
+        [ -d "../$repo" ] || continue
+        n=$(grep -rhoE '"res://[^"]+"' "../$repo" --include='*.gd' 2>/dev/null \
+            | grep -v 'res://addons/' \
+            | grep -v 'res://screenshots' \
+            | grep -v 'res://dot_cloud' \
+            | sort -u | wc -l)
+        absolute=$((absolute + n))
+        [ "$n" -gt 0 ] && printf '       %-20s %3d
+' "$repo" "$n"
+    done
+
+    if [ "$absolute" -eq 0 ]; then
+        printf '  %sok%s   no game names its own files by absolute path
+' "$GRN" "$OFF"
+    else
+        printf '  %s~~%s   %d absolute res:// reference(s) into games own files
+' \
+            "$YLW" "$OFF" "$absolute"
+        printf '       A DELIVERED game resolves these against the host project root, not
+'
+        printf '       its mount. Harmless while every game is kind: builtin. See CLAUDE.md,
+'
+        printf '       "the one constraint that decides what a delivered game may look like".
+'
     fi
 fi
 
