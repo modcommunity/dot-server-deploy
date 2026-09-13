@@ -218,6 +218,37 @@ func _publish_one(
 	else:
 		source = dir
 
+	# [b]A pack whose scripts declare `class_name` is dead before it is written.[/b] A
+	# mounted pack's globals are not registered in the host, so every cross-file type
+	# reference in it fails to compile -- and NOTHING says so at any point a person is
+	# looking: the pack publishes, uploads, downloads, verifies its signature and mounts,
+	# the scene loads, and the script silently does not attach. What reaches an operator
+	# is a game that came up with no behaviour at all:
+	#
+	#     ERR tmc.host the game's module would not load error="[state] No G2GGame is
+	#     registered." module=res://dot_cloud/g2gfast/0.1.0/game/g2g_module.gd
+	#
+	# which names the module, and the module is fine.
+	#
+	# Found in production. `tools/check.sh` has refused a new `class_name` in a game
+	# repository since the conversion, and it did not help: the box that published this
+	# had a STALE game checkout -- the upgrade command pulled the host and the addons and
+	# never the games -- so the guard was passing on a developer machine against sources
+	# the server was not using. A guard that runs where the author is does not protect the
+	# machine that publishes. This one runs at the moment the bytes are chosen.
+	var globals := _class_names_in(source)
+
+	if not globals.is_empty():
+		return DotResult.fail(
+			DotError.CODE_INVALID,
+			"%s declares class_name and cannot be delivered: %s" % [
+				id, ", ".join(globals)
+			],
+			"a mounted pack's globals are not registered in the host, so every script "
+			+ "in it would fail to compile. This is usually a STALE checkout of the "
+			+ "game -- pull ../game-* and publish again"
+		)
+
 	# An empty pack publishes a manifest that mounts and contains nothing, which is
 	# indistinguishable from one whose files failed to upload.
 	if _count_files(source) == 0:
@@ -502,6 +533,37 @@ func _drop_matching(root: String, pattern: String) -> void:
 
 
 # --- Odds and ends ----------------------------------------------------------
+
+## Every `class_name` declared under [param root], up to a handful worth naming.
+##
+## Text search rather than a parse: this runs over a tree that is about to be published
+## and the question is only whether the declaration is there. A `class_name` inside a
+## string or a comment would be a false positive, and in five games there has never been
+## one -- and refusing a pack that would not have worked anyway costs nothing.
+func _class_names_in(root: String) -> PackedStringArray:
+	var out := PackedStringArray()
+
+	for rel in DotPaths.list_files_recursive(root):
+		if not rel.ends_with(".gd"):
+			continue
+		# The host's own addons legitimately declare globals; they are not in the pack.
+		if rel.begins_with("addons/") or rel.contains("/addons/"):
+			continue
+
+		for line in FileAccess.get_file_as_string(root.path_join(rel)).split("\n"):
+			if not line.begins_with("class_name "):
+				continue
+
+			var name := line.substr(11).strip_edges().split(" ")[0]
+
+			if name != "" and not out.has(name):
+				out.append("%s (%s)" % [name, rel])
+
+			if out.size() >= 6:
+				return out
+
+	return out
+
 
 func _count_files(root: String) -> int:
 	var abs_root := ProjectSettings.globalize_path(root)

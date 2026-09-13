@@ -395,10 +395,12 @@ The pull cannot touch `cfg/`, because `cfg/` is not tracked; the setup run adds 
 
 **That pulls this repository and nothing else, and two things live outside it.**
 
+**The games are separate clones too, and the loop above says `../game-*` for that reason.** It said `../dot-*` when the games were compiled in, and that was right then: the deploy repo's own pull brought the code. It is not right now. `setup.sh` republishes every pack on an upgrade, from those clones, and `--update` is off by default — so a loop that skips them publishes **stale sources**, silently, on the command an operator runs most. A stale game still declares `class_name`, and a pack whose scripts do that mounts and is dead: the scene loads, the script does not attach, and what surfaces is `No G2GGame is registered` against a module that is fine. `./server pack` refuses such a source now, which is the backstop; pulling them is the fix.
+
 **The addons are separate clones, one directory up.** `git pull` here updates the host and the launcher; it does not touch `../dot-server`, `../dot-cloud` or the other fifty, and a host newer than the addon it configures is a real failure mode — a setting this file reads and hands to a `DotServerConfig` that has no property for it. That is reported rather than fatal (`UNKNOWN : server.yml: … this dot-server has no …`), but it means the setting does nothing. Several servers on one box **share** those clones, so one pull fixes all of them — and changes all of them:
 
 ```bash
-for d in ../dot-*; do git -C "$d" pull --ff-only; done && ./setup.sh --no-import
+for d in ../dot-* ../game-*; do git -C "$d" pull --ff-only; done && ./setup.sh --no-import
 ```
 
 `./setup.sh --vendor` copies the addons into this checkout instead of linking them, if one server has to be pinned while the others move.
