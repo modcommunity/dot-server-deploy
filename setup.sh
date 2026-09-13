@@ -14,6 +14,11 @@
 #   ./setup.sh --letsencrypt --domain demo.example.com --email ops@example.com
 #                               ...and then get a real certificate for it
 #
+#   ./setup.sh --full           THE GUIDED INSTALL. A vanilla Linux box to a server
+#                               somebody can connect to, asking one question at a
+#                               time with an answer already in the brackets
+#   ./setup.sh --full --yes     the same install, every default taken, nobody typing
+#
 # WHAT IT DOES, AND WHY EACH STEP IS HERE
 #
 #   1. Finds a Godot 4.7+ runtime, and DOWNLOADS the pinned one when the machine has
@@ -83,6 +88,11 @@ DO_UPDATE=0
 DO_CHECK=0
 VENDOR=0
 
+# The guided install. Everything it decides is asked for, and everything it asks has
+# a default, so --full --yes is the same install with nobody typing.
+DO_FULL=0
+ASSUME_YES=0
+
 # TLS. Nothing here happens without --letsencrypt; the rest only says what.
 DO_LETSENCRYPT=0
 LE_DOMAINS=()
@@ -105,12 +115,14 @@ while [ $# -gt 0 ]; do
         --email)     LE_EMAIL="${2:?--email needs a value}"; shift 2 ;;
         --tls-method) LE_METHOD="${2:?--tls-method needs a value}"; shift 2 ;;
         --staging)   LE_STAGING=1; shift ;;
+        --full)      DO_FULL=1; shift ;;
+        --yes|-y)    ASSUME_YES=1; shift ;;
         # Everything after a bare `--` belongs to issue-letsencrypt.sh. That script
         # has twenty options and this one is not going to grow a copy of each: a
         # wrapper that re-declares the arguments it forwards is a second list to keep
         # in step, and the half that drifts is always the one nobody uses often.
         --)          shift; LE_EXTRA=("$@"); break ;;
-        -h|--help)   sed -n '2,45p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        -h|--help)   sed -n '2,50p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
         *) printf 'unknown option: %s\n' "$1" >&2; exit 2 ;;
     esac
 done
@@ -122,6 +134,146 @@ ok()   { printf '    %sok%s   %s\n' "$GRN" "$OFF" "$1"; }
 warn() { printf '    %s!!%s   %s\n' "$YLW" "$OFF" "$1"; }
 die()  { printf '\n    %s%s%s\n\n' "$RED" "$1" "$OFF" >&2; exit "${2:-1}"; }
 
+# --- Asking, and the rules it follows --------------------------------------
+#
+# Three of them, and they are what separates an installer from a script that runs
+# commands at you:
+#
+#   Every question has a DEFAULT, and the default is what is already true -- the
+#   value in cfg/ if this box has one, the hostname if it has one of those. Pressing
+#   return through the whole thing is a supported way to install this.
+#
+#   NOTHING IS DONE UNTIL EVERY QUESTION IS ANSWERED. The answers are collected, the
+#   plan is printed, and one confirmation covers the lot. An installer that acts on
+#   answer three while asking answer four cannot be stopped at answer five, and half
+#   an install is worse than none.
+#
+#   --yes takes every default and asks nothing, so the same install runs from a
+#   provisioning script. A prompt read with no terminal attached is a hang, not a
+#   question, which is why this is a flag and not a guess about stdin.
+
+# The prompt goes to STDERR because the answer comes back through a command
+# substitution, and a prompt printed on stdout would be captured as part of it.
+ask() {
+    local q="$1" d="$2" a=""
+    if [ "$ASSUME_YES" -eq 1 ]; then printf '%s' "$d"; return 0; fi
+    printf '    %s%s%s %s[%s]%s ' "$BLD" "$q" "$OFF" "$DIM" "$d" "$OFF" >&2
+    IFS= read -r a || a=""
+    printf '%s' "${a:-$d}"
+}
+
+# ask_yn "Question" y   ->  0 for yes, 1 for no. The capital in the brackets is the
+# default, the way every package manager has shown it for twenty years.
+ask_yn() {
+    local q="$1" d="$2" a="" hint
+    case "$d" in [Yy]*) hint="Y/n" ;; *) hint="y/N" ;; esac
+    if [ "$ASSUME_YES" -eq 1 ]; then
+        case "$d" in [Yy]*) return 0 ;; *) return 1 ;; esac
+    fi
+    while :; do
+        printf '    %s%s%s %s[%s]%s ' "$BLD" "$q" "$OFF" "$DIM" "$hint" "$OFF" >&2
+        IFS= read -r a || a=""
+        [ -z "$a" ] && a="$d"
+        case "$a" in
+            [Yy]|[Yy][Ee][Ss]) return 0 ;;
+            [Nn]|[Nn][Oo])     return 1 ;;
+            *) printf '    %sanswer y or n%s\n' "$YLW" "$OFF" >&2 ;;
+        esac
+    done
+}
+
+PLAN=()
+plan() { PLAN+=("$1"); }
+
+# Read a value out of a YAML file so a question can offer what is already there.
+# The comment is stripped AFTER the quoted value rather than at the first `#`,
+# because `sv_name: "Server #1"` is a legal name and the naive version renames it.
+cfg_get() {
+    local file="$1" key="$2" line v
+    [ -f "$file" ] || return 1
+    line="$(grep -m1 -E "^${key}:" "$file" 2>/dev/null)" || return 1
+    v="${line#*:}"
+    v="${v#"${v%%[![:space:]]*}"}"
+    case "$v" in
+        '"'*) v="${v#\"}"; v="${v%%\"*}" ;;
+        *)    v="${v%%#*}"; v="${v%"${v##*[![:space:]]}"}" ;;
+    esac
+    printf '%s' "$v"
+}
+
+# What cfg/ already says, or a default when it says nothing. Every question in the
+# guided install is built on this: the answer in the brackets is the answer that is
+# already true, so a re-run changes nothing unless somebody types something.
+cfg_or() {
+    local v
+    v="$(cfg_get "$1" "$2" 2>/dev/null)"
+    [ -n "$v" ] && printf '%s' "$v" || printf '%s' "$3"
+}
+
+# Write one key back, keeping the line's comment and the file's mode. `cat >` rather
+# than `mv`, because cfg/rcon.yml is 0600 and mv would give it the temporary file's
+# permissions -- which is how a password becomes world-readable.
+cfg_set() {
+    local file="$1" key="$2" value="$3" tmp
+    [ -f "$file" ] || return 1
+
+    # A key the file has never heard of is APPENDED, not refused. cfg/ is written
+    # once and then belongs to the operator, so a server set up a year ago has the
+    # keys of a year ago -- and this box's cfg/server.yml really is missing
+    # sv_tickrate, which step 5 reports and nobody has acted on. Refusing there
+    # means the installer asked a question, was answered, and then quietly did
+    # nothing with it, which is worse than either doing it or not asking.
+    if ! grep -qE "^${key}:" "$file"; then
+        # A file whose last line has no newline -- cfg.example/net.yml ends in a bare
+        # "# Performance" comment and this is not hypothetical -- would otherwise get
+        # the new key glued onto the end of that line, where it is a comment and does
+        # nothing. In command substitution a trailing newline is stripped, so this
+        # test is empty exactly when the last byte IS one.
+        [ -n "$(tail -c 1 "$file")" ] && printf '\n' >> "$file"
+        printf '%s: %s\n' "$key" "$value" >> "$file" || return 1
+        return 0
+    fi
+
+    tmp="$(mktemp)" || return 1
+    awk -v k="$key" -v v="$value" '
+        !done && index($0, k ":") == 1 {
+            rest = substr($0, length(k) + 2)
+            c = ""
+            if (rest ~ /^[[:space:]]*"/) {
+                q = index(substr(rest, index(rest, "\"") + 1), "\"")
+                tail = substr(rest, index(rest, "\"") + q + 1)
+                if (index(tail, "#") > 0) c = "  " substr(tail, index(tail, "#"))
+            } else if (index(rest, "#") > 0) {
+                c = "  " substr(rest, index(rest, "#"))
+            }
+            print k ": " v c
+            done = 1
+            next
+        }
+        { print }
+    ' "$file" > "$tmp" || { rm -f "$tmp"; return 1; }
+    cat "$tmp" > "$file"
+    rm -f "$tmp"
+}
+
+# Root, and how much of it this box will give us. Everything the guided install does
+# outside this directory -- packages, nginx, a certificate, a unit file, a firewall
+# rule -- needs it, and finding that out at the end is finding it out too late.
+SUDO=""
+CAN_ROOT=1
+if [ "$(id -u)" -eq 0 ]; then
+    SUDO=""
+elif command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
+    SUDO="sudo"
+elif command -v sudo >/dev/null 2>&1 && [ "$ASSUME_YES" -eq 0 ] && [ -t 0 ]; then
+    # sudo WITHOUT -n sits waiting for a password. That is a prompt when somebody is
+    # here to answer it and a hang when nobody is, so it is allowed only in the first
+    # case -- which is the one --full is for.
+    SUDO="sudo"
+else
+    CAN_ROOT=0
+fi
+
 # --- 0. The TLS arguments, checked here and used at the end ----------------
 #
 # Checked BEFORE the first step rather than beside the step that uses them, because
@@ -132,16 +284,171 @@ die()  { printf '\n    %s%s%s\n\n' "$RED" "$1" "$OFF" >&2; exit "${2:-1}"; }
 
 LE_SCRIPT="$ROOT/deploy/issue-letsencrypt.sh"
 
-if [ "$DO_LETSENCRYPT" -eq 0 ]; then
+# --full answers these itself, and anything given on the command line becomes the
+# default it offers rather than a contradiction.
+if [ "$DO_LETSENCRYPT" -eq 0 ] && [ "$DO_FULL" -eq 0 ]; then
     if [ "${#LE_DOMAINS[@]}" -gt 0 ] || [ -n "$LE_METHOD" ] || [ "$LE_STAGING" -eq 1 ] \
             || [ "${#LE_EXTRA[@]}" -gt 0 ]; then
         die "--domain, --email, --tls-method, --staging and -- are for --letsencrypt,
-    and it was not given. Add --letsencrypt, or drop them." 2
+    and it was not given. Add --letsencrypt (or --full), or drop them." 2
     fi
-else
+elif [ "$DO_LETSENCRYPT" -eq 1 ]; then
     [ -x "$LE_SCRIPT" ] || die "--letsencrypt needs deploy/issue-letsencrypt.sh, and it is
     not here (or not executable). This is not a complete checkout." 1
     [ "${#LE_DOMAINS[@]}" -gt 0 ] || die "--letsencrypt needs at least one --domain" 2
+fi
+
+if [ "$DO_FULL" -eq 1 ]; then
+    for f in deploy/issue-letsencrypt.sh deploy/install-server-tls.sh deploy/install-systemd.sh; do
+        [ -x "$ROOT/$f" ] || die "--full needs $f, and it is not here (or not executable).
+    This is not a complete checkout." 1
+    done
+fi
+
+# --- 0b. The guided install, which is all questions and no actions ---------
+
+if [ "$DO_FULL" -eq 1 ]; then
+    if [ ! -t 0 ] && [ "$ASSUME_YES" -eq 0 ]; then
+        die "--full asks questions and stdin is not a terminal.
+    Run it from a terminal, or add --yes to take every default." 2
+    fi
+
+    printf '\n%s  A server on this machine, in about ten questions.%s\n' "$BLD" "$OFF"
+    printf '  %sReturn takes the answer in the brackets. Nothing happens until the end.%s\n\n' "$DIM" "$OFF"
+
+    # --- what the server is ---
+    FULL_NAME="$(ask       "Server name" "$(cfg_or cfg/server.yml sv_name 'TMC Test Server')")"
+
+    # The games are copied out of the sibling repositories in step 3, so on a first
+    # run this directory holds the lobby and nothing else. Offering what is here is
+    # therefore a hint rather than the list -- and the answer is checked again after
+    # the copy, where the real list exists.
+    installed_games=""
+    for gy in content/*/game.yml; do
+        [ -f "$gy" ] || continue
+        gid="${gy#content/}"; gid="${gid%/game.yml}"
+        installed_games="$installed_games $gid"
+    done
+    [ -n "$installed_games" ] && printf '    %sgames here now:%s%s\n' "$DIM" "$OFF" "$installed_games" >&2
+
+    FULL_GAME="$(ask       "Game to boot" "$(cfg_or cfg/server.yml sv_game lobby)")"
+    FULL_MAXPLAYERS="$(ask "Player slots" "$(cfg_or cfg/server.yml sv_maxplayers 64)")"
+    FULL_TICKRATE="$(ask   "Tickrate" "$(cfg_or cfg/server.yml sv_tickrate 60)")"
+    FULL_PORT="$(ask       "Port the server listens on" "$(cfg_or cfg/net.yml net_port 6064)")"
+
+    case "$FULL_MAXPLAYERS" in ''|*[!0-9]*) die "player slots must be a number: $FULL_MAXPLAYERS" 2 ;; esac
+    case "$FULL_TICKRATE"   in ''|*[!0-9]*) die "tickrate must be a number: $FULL_TICKRATE" 2 ;; esac
+    case "$FULL_PORT"       in ''|*[!0-9]*) die "port must be a number: $FULL_PORT" 2 ;; esac
+
+    # --- nginx, TLS, and why they are one question ---
+    #
+    # A browser on an HTTPS page may not open a plain ws:// socket, so a web client
+    # needs wss://, which needs a certificate, which needs something in front of the
+    # server to terminate it. That is one decision, not three, and asking it as three
+    # is how somebody ends up with a certificate and nothing using it.
+    FULL_NGINX=0
+    FULL_PUBLIC_PORT=""
+    if [ "$CAN_ROOT" -eq 0 ]; then
+        warn "no root on this box, so nginx, a certificate, a service and the firewall
+       are all out of reach. Setting the project up only."
+    else
+        printf '\n'
+        if ask_yn "Put nginx in front of it, so browsers can connect over wss://?" y; then
+            FULL_NGINX=1
+            DO_LETSENCRYPT=1
+
+            guess=""
+            if command -v hostname >/dev/null 2>&1; then
+                guess="$(hostname -f 2>/dev/null || hostname 2>/dev/null)"
+            fi
+            case "$guess" in
+                ''|localhost|*.local|*.localdomain|*[!a-zA-Z0-9.-]*) guess="" ;;
+                *.*) ;;
+                *) guess="" ;;
+            esac
+
+            if [ "${#LE_DOMAINS[@]}" -eq 0 ]; then
+                d="$(ask "Public hostname clients will connect to" "${guess:-demo.example.com}")"
+                LE_DOMAINS=("$d")
+            fi
+            [ -n "$LE_EMAIL" ] || LE_EMAIL="$(ask "Email for the certificate (expiry warnings)" "")"
+            [ -n "$LE_METHOD" ] || LE_METHOD="$(ask "Certificate method (webroot, nginx, standalone, dns, manual)" webroot)"
+
+            # 443 unless something already has it. It is the port that survives a
+            # corporate firewall, and a game on a high port is the one thing a
+            # player on an office network cannot reach -- but taking it from a
+            # website that is already serving on it is worse.
+            pp_default=6065
+            if ! ss -ltnH 2>/dev/null | awk '$4 ~ /:443$/ {found=1} END {exit !found}'; then
+                pp_default=443
+            fi
+            FULL_PUBLIC_PORT="$(ask "Public TLS port" "$pp_default")"
+            case "$FULL_PUBLIC_PORT" in ''|*[!0-9]*) die "public port must be a number: $FULL_PUBLIC_PORT" 2 ;; esac
+            [ "$FULL_PUBLIC_PORT" = "$FULL_PORT" ] && die "the public TLS port and the server's own port cannot both be $FULL_PORT.
+    nginx listens on the first and forwards to the second." 2
+        fi
+
+        # --- the service ---
+        printf '\n'
+        FULL_SYSTEMD=0
+        if command -v systemctl >/dev/null 2>&1; then
+            if ask_yn "Install a systemd service, so it starts on boot?" y; then
+                FULL_SYSTEMD=1
+                FULL_UNIT="$(ask "Unit name" "dot-server")"
+                FULL_RUN_USER="$(ask "Run the server as" "$(stat -c '%U' "$ROOT" 2>/dev/null || echo root)")"
+                id "$FULL_RUN_USER" >/dev/null 2>&1 || die "no such user: $FULL_RUN_USER" 2
+            fi
+        fi
+
+        # --- the firewall ---
+        #
+        # Only offered when this box HAS one that is switched on. Asking about ufw on
+        # a machine with no ufw is a question whose every answer is wrong, and
+        # opening ports in a firewall nobody enabled is a change with no effect that
+        # still shows up in somebody's audit.
+        FULL_FIREWALL=""
+        if command -v ufw >/dev/null 2>&1 && $SUDO ufw status 2>/dev/null | grep -qi '^Status: active'; then
+            FULL_FIREWALL=ufw
+        elif command -v firewall-cmd >/dev/null 2>&1 && $SUDO firewall-cmd --state 2>/dev/null | grep -q running; then
+            FULL_FIREWALL=firewalld
+        fi
+        if [ -n "$FULL_FIREWALL" ]; then
+            printf '\n'
+            ask_yn "Open the ports in $FULL_FIREWALL?" y || FULL_FIREWALL=""
+        fi
+    fi
+
+    # --- the plan ---
+    #
+    # Printed in full and confirmed once. This is the last moment at which nothing
+    # has happened, and it is the only screen in the install that matters.
+    plan "set up the project: runtime, addons, games, cfg/, ./server"
+    plan "cfg/server.yml: $FULL_NAME, game $FULL_GAME, $FULL_MAXPLAYERS slots, $FULL_TICKRATE tick"
+    if [ "$FULL_NGINX" -eq 1 ]; then
+        plan "cfg/net.yml: port $FULL_PORT, bound to 127.0.0.1 (nginx is the way in)"
+        plan "install nginx and certbot if they are missing"
+        [ -n "$FULL_FIREWALL" ] && plan "open 80 and $FULL_PUBLIC_PORT in $FULL_FIREWALL"
+        # `${LE_STAGING:+...}` is wrong here and read right for a whole test run:
+        # LE_STAGING is 0 or 1, and :+ fires on a value being SET rather than being
+        # true -- so "0" took the branch and the plan promised a staging certificate
+        # for every install.
+        staging_note=""
+        [ "$LE_STAGING" -eq 1 ] && staging_note=" (staging)"
+        plan "get a certificate for ${LE_DOMAINS[*]} over ${LE_METHOD:-webroot}$staging_note"
+        plan "nginx: wss://${LE_DOMAINS[0]}:$FULL_PUBLIC_PORT -> 127.0.0.1:$FULL_PORT"
+    else
+        plan "cfg/net.yml: port $FULL_PORT, bound to 0.0.0.0"
+        [ -n "$FULL_FIREWALL" ] && plan "open $FULL_PORT in $FULL_FIREWALL"
+    fi
+    [ "${FULL_SYSTEMD:-0}" -eq 1 ] && plan "install and start the ${FULL_UNIT}.service unit, running as $FULL_RUN_USER"
+
+    printf '\n%s  This is the whole of it:%s\n\n' "$BLD" "$OFF"
+    for line in "${PLAN[@]}"; do printf '    %s-%s %s\n' "$GRN" "$OFF" "$line"; done
+    printf '\n'
+    if ! ask_yn "Go ahead?" y; then
+        printf '\n  nothing was done.\n\n'
+        exit 0
+    fi
 fi
 
 # --- 1. The runtime --------------------------------------------------------
@@ -811,7 +1118,175 @@ sed "s|@GODOT@|$GODOT|g" tools/server.in > server
 chmod +x server
 ok "written, using $GODOT"
 
-# --- 8. A certificate ------------------------------------------------------
+# --- 8. What the answers said -----------------------------------------------
+#
+# Applied here rather than in step 5, and the difference matters: step 5 writes
+# cfg/ from cfg.example/ ONLY for files that do not exist, because a config file is
+# what one deployment decided and regenerating it on upgrade throws that away. So
+# this runs after it, sets the handful of keys somebody was asked about, and leaves
+# every other line -- including the comments, which are half of what those files are
+# for -- exactly where it found it.
+
+if [ "$DO_FULL" -eq 1 ]; then
+    step "what you answered"
+
+    cfg_changed=0
+    set_and_say() {
+        local file="$1" key="$2" value="$3" shown="$4" current
+        current="$(cfg_get "$file" "$key" 2>/dev/null)"
+        [ "$current" = "$shown" ] && return 0
+        if cfg_set "$file" "$key" "$value"; then
+            printf '    %s~%s    %s %s -> %s\n' "$GRN" "$OFF" "$key" "${current:-unset}" "$shown"
+            cfg_changed=1
+        else
+            warn "could not set $key in $file"
+        fi
+    }
+
+    set_and_say cfg/server.yml sv_name       "\"$FULL_NAME\""    "$FULL_NAME"
+    set_and_say cfg/server.yml sv_game       "\"$FULL_GAME\""    "$FULL_GAME"
+    set_and_say cfg/server.yml sv_maxplayers "$FULL_MAXPLAYERS"  "$FULL_MAXPLAYERS"
+    set_and_say cfg/server.yml sv_tickrate   "$FULL_TICKRATE"    "$FULL_TICKRATE"
+    set_and_say cfg/net.yml    net_port      "$FULL_PORT"        "$FULL_PORT"
+
+    # Loopback when nginx is in front, and this is the line that makes the proxy a
+    # boundary instead of a decoration. Left on 0.0.0.0, the game port stays open to
+    # the internet beside the TLS one, and every client that finds it connects in
+    # plaintext past everything nginx is there to do.
+    if [ "$FULL_NGINX" -eq 1 ]; then
+        set_and_say cfg/net.yml net_bind_ip "\"127.0.0.1\"" "127.0.0.1"
+        set_and_say cfg/net.yml net_public_ip "\"${LE_DOMAINS[0]}\"" "${LE_DOMAINS[0]}"
+    fi
+
+    [ "$cfg_changed" -eq 0 ] && ok "cfg/ already said all of that"
+
+    # The game list is real now -- step 3 copied them -- so the answer given before
+    # any of that existed can finally be checked. A server whose sv_game names
+    # nothing boots into the lobby and says so in one line of a log nobody has opened
+    # yet, which looks like the setting being ignored.
+    if [ -n "$FULL_GAME" ] && [ ! -f "content/$FULL_GAME/game.yml" ]; then
+        have=""
+        for gy in content/*/game.yml; do
+            [ -f "$gy" ] || continue
+            gid="${gy#content/}"; have="$have ${gid%/game.yml}"
+        done
+        warn "no content/$FULL_GAME/game.yml, so the server will fall back to the lobby.
+       This build has:$have
+       Fix it with: sed -i 's/^sv_game:.*/sv_game: \"<one of those>\"/' cfg/server.yml"
+    fi
+fi
+
+# --- 9. nginx, and the packages it needs ------------------------------------
+#
+# The proxy is what makes a browser client possible at all: a page served over
+# HTTPS may not open a plain ws:// socket, and the engine's web export therefore
+# needs wss:// -- which is nginx terminating TLS on a public port and forwarding to
+# the game on the loopback. deploy/install-server-tls.sh writes that vhost and is
+# not duplicated here; this step is only about the things that have to exist first.
+
+if [ "${FULL_NGINX:-0}" -eq 1 ]; then
+    step "nginx"
+
+    # One helper, three package managers, and the same shape fetch-godot.sh uses for
+    # the library the runtime needs. Nothing here builds a distro list beyond the
+    # three names a package has.
+    pkg_install() {
+        local deb="$1" rpm="$2" arch="$3"
+        if command -v apt-get >/dev/null 2>&1 && [ -n "$deb" ]; then
+            $SUDO apt-get update -qq >/dev/null 2>&1
+            $SUDO apt-get install -y -qq --no-install-recommends $deb >/dev/null 2>&1
+        elif command -v dnf >/dev/null 2>&1 && [ -n "$rpm" ]; then
+            $SUDO dnf install -y -q $rpm >/dev/null 2>&1
+        elif command -v pacman >/dev/null 2>&1 && [ -n "$arch" ]; then
+            $SUDO pacman -S --needed --noconfirm $arch >/dev/null 2>&1
+        else
+            return 1
+        fi
+    }
+
+    # /usr/sbin is not on a normal user's PATH, so `command -v nginx` answers "not
+    # installed" for the user who is about to install it a second time.
+    find_nginx() {
+        local c
+        for c in nginx /usr/sbin/nginx /sbin/nginx /usr/local/sbin/nginx; do
+            command -v "$c" >/dev/null 2>&1 && { command -v "$c"; return 0; }
+        done
+        return 1
+    }
+
+    if NGINX_BIN="$(find_nginx)"; then
+        ok "nginx is installed"
+    elif pkg_install nginx nginx nginx && NGINX_BIN="$(find_nginx)"; then
+        ok "installed nginx"
+    else
+        die "could not install nginx. Install it and re-run:
+    Debian/Ubuntu:  sudo apt-get install -y nginx
+    Fedora/RHEL:    sudo dnf install -y nginx
+    Arch:           sudo pacman -S nginx" 1
+    fi
+
+    if command -v systemctl >/dev/null 2>&1; then
+        $SUDO systemctl enable --now nginx >/dev/null 2>&1
+        if $SUDO systemctl is-active --quiet nginx; then
+            ok "nginx is running and enabled at boot"
+        else
+            die "nginx is installed but will not start: sudo systemctl status nginx" 1
+        fi
+    fi
+
+    # The webroot the stock vhost actually serves, which is not the same directory on
+    # every distribution -- and a certificate request against the wrong one is a
+    # FAILED validation, which is what the rate limit counts.
+    case " ${LE_EXTRA[*]} " in
+        *' --webroot '*|*' -w '*) ;;
+        *)
+            if [ -d /var/www/html ]; then
+                LE_EXTRA+=(--webroot /var/www/html)
+            elif [ -d /usr/share/nginx/html ]; then
+                LE_EXTRA+=(--webroot /usr/share/nginx/html)
+            fi
+            ;;
+    esac
+
+    if ! command -v certbot >/dev/null 2>&1; then
+        if pkg_install certbot certbot certbot; then
+            ok "installed certbot"
+        else
+            warn "could not install certbot; the certificate step will say so"
+        fi
+    fi
+    [ "${LE_METHOD:-}" = "dns" ] && [ -n "${TMC_LE_DNS_PLUGIN:-}" ] \
+        && pkg_install "python3-certbot-dns-${TMC_LE_DNS_PLUGIN}" "" "" \
+        && ok "installed the dns-${TMC_LE_DNS_PLUGIN} plugin"
+fi
+
+# --- 10. The firewall --------------------------------------------------------
+#
+# Before the certificate rather than after it. HTTP-01 is Let's Encrypt reaching
+# this box on :80, so a closed firewall is a failed validation -- and five of those
+# on one hostname is an hour's lockout.
+
+if [ -n "${FULL_FIREWALL:-}" ]; then
+    step "firewall"
+
+    fw_allow() {
+        case "$FULL_FIREWALL" in
+            ufw)       $SUDO ufw allow "$1/tcp" >/dev/null 2>&1 ;;
+            firewalld) $SUDO firewall-cmd --permanent --add-port="$1/tcp" >/dev/null 2>&1 ;;
+        esac
+    }
+
+    if [ "${FULL_NGINX:-0}" -eq 1 ]; then
+        fw_allow 80 && ok "80/tcp open (the certificate is issued through it)"
+        fw_allow "$FULL_PUBLIC_PORT" && ok "$FULL_PUBLIC_PORT/tcp open (wss)"
+    else
+        fw_allow "$FULL_PORT" && ok "$FULL_PORT/tcp open"
+    fi
+
+    [ "$FULL_FIREWALL" = "firewalld" ] && $SUDO firewall-cmd --reload >/dev/null 2>&1
+fi
+
+# --- 11. A certificate ------------------------------------------------------
 #
 # Last, and after ./server exists, so that a failure here leaves a project that is
 # set up and a server that starts. TLS is what a browser client needs in FRONT of
@@ -827,6 +1302,11 @@ if [ "$DO_LETSENCRYPT" -eq 1 ]; then
     [ "$LE_STAGING" -eq 1 ] && le_args+=(--staging)
     [ "${#LE_EXTRA[@]}" -gt 0 ] && le_args+=("${LE_EXTRA[@]}")
 
+    # In the guided install the next step is the very next thing this script does,
+    # with the ports somebody actually gave -- so the certificate script's own
+    # suggestion is not just noise, it names a backend port it had to invent.
+    [ "$DO_FULL" -eq 1 ] && le_args+=(--no-next-steps)
+
     if "$LE_SCRIPT" "${le_args[@]}"; then
         LE_OK=1
     else
@@ -838,6 +1318,65 @@ if [ "$DO_LETSENCRYPT" -eq 1 ]; then
        re-run just the certificate with:
            sudo ./deploy/issue-letsencrypt.sh ${le_args[*]}"
         LE_OK=0
+    fi
+fi
+
+# --- 12. The proxy -----------------------------------------------------------
+#
+# deploy/install-server-tls.sh writes the vhost: a TLS listener on the public port
+# that forwards to the game on the loopback, and the `$http_upgrade` map a WebSocket
+# handshake needs. It is called rather than copied -- that script already knows
+# which nginx directories this distribution uses and which map may only appear once
+# in a configuration, and a second copy of that knowledge here is a second copy to
+# get wrong.
+
+if [ "${FULL_NGINX:-0}" -eq 1 ]; then
+    step "nginx -> the server"
+
+    if [ "${LE_OK:-0}" -ne 1 ]; then
+        warn "no certificate, so the TLS vhost was not installed -- nginx would refuse
+       to start with an ssl_certificate that is not there. Fix the certificate and
+       then run:
+           sudo ./deploy/install-server-tls.sh --domain ${LE_DOMAINS[0]} \\
+                --port $FULL_PUBLIC_PORT --backend 127.0.0.1:$FULL_PORT"
+    else
+        TLS_NAME="${LE_DOMAINS[0]}"
+        [ "$LE_STAGING" -eq 1 ] && TLS_NAME="$TLS_NAME-staging"
+        TLS_CERT="/etc/letsencrypt/live/$TLS_NAME/fullchain.pem"
+        TLS_KEY="/etc/letsencrypt/live/$TLS_NAME/privkey.pem"
+
+        if $SUDO test -f "$TLS_CERT"; then
+            if $SUDO "$ROOT/deploy/install-server-tls.sh" \
+                    --domain "${LE_DOMAINS[0]}" \
+                    --port "$FULL_PUBLIC_PORT" \
+                    --backend "127.0.0.1:$FULL_PORT" \
+                    --cert "$TLS_CERT" --key "$TLS_KEY"; then
+                FULL_PROXY_OK=1
+            else
+                warn "the TLS vhost was not installed. The certificate is fine; re-run:
+           sudo ./deploy/install-server-tls.sh --domain ${LE_DOMAINS[0]} \\
+                --port $FULL_PUBLIC_PORT --backend 127.0.0.1:$FULL_PORT \\
+                --cert $TLS_CERT --key $TLS_KEY"
+            fi
+        else
+            warn "expected the certificate at $TLS_CERT and it is not there"
+        fi
+    fi
+fi
+
+# --- 13. The service ---------------------------------------------------------
+#
+# Last, because a unit that starts the server should start a server that is
+# configured: the game, the port, the bind address and the certificate are all
+# already what the answers said by the time this runs.
+
+if [ "${FULL_SYSTEMD:-0}" -eq 1 ]; then
+    step "systemd"
+
+    if $SUDO "$ROOT/deploy/install-systemd.sh" --name "$FULL_UNIT" --user "$FULL_RUN_USER"; then
+        FULL_SERVICE_OK=1
+    else
+        warn "the service did not come up. ./server still starts it by hand."
     fi
 fi
 
@@ -857,6 +1396,29 @@ if [ "$DO_CHECK" -eq 1 ]; then
     fi
 fi
 
+if [ "$DO_FULL" -eq 1 ]; then
+    printf '\n%s  Ready.%s  %s\n\n' "$BLD" "$OFF" "$FULL_NAME"
+
+    if [ "${FULL_SERVICE_OK:-0}" -eq 1 ]; then
+        printf '    %srunning as %s.service%s\n' "$GRN" "$FULL_UNIT" "$OFF"
+        printf '      sudo systemctl status %s\n' "$FULL_UNIT"
+        printf '      sudo journalctl -u %s -f\n\n' "$FULL_UNIT"
+    else
+        printf '    ./server                 start it\n'
+        printf '    ./server check           boot once and exit, for CI\n\n'
+    fi
+
+    if [ "${FULL_PROXY_OK:-0}" -eq 1 ]; then
+        printf '    %sa client connects to%s\n' "$BLD" "$OFF"
+        printf '      wss://%s:%s\n\n' "${LE_DOMAINS[0]}" "$FULL_PUBLIC_PORT"
+        printf '    %sthe game port itself is on 127.0.0.1:%s and is not reachable from\n' "$DIM" "$FULL_PORT"
+        printf '    outside this machine, which is the point of the proxy.%s\n\n' "$OFF"
+    fi
+
+    printf '    ./server config          what your YAML became\n'
+    printf '    ./server --help          every option\n\n'
+else
+
 cat <<DONE
 
 $BLD  Ready.$OFF
@@ -870,15 +1432,23 @@ $BLD  Ready.$OFF
 
 DONE
 
-if [ "$DO_LETSENCRYPT" -eq 0 ]; then
+fi
+
+if [ "$DO_FULL" -eq 1 ]; then
+    :
+elif [ "$DO_LETSENCRYPT" -eq 0 ]; then
     cat <<TLS
     A browser client needs TLS in front of this, because a page on HTTPS may not
     open a plain ws:// socket:
 
-    ./setup.sh --letsencrypt --domain <host> --email <you>
-    ./deploy/issue-letsencrypt.sh --help     every method
+    ./setup.sh --full                        the guided install: nginx, TLS, a service
+    ./deploy/issue-letsencrypt.sh --help     every certificate method
 
 TLS
-elif [ "${LE_OK:-0}" -eq 0 ]; then
+fi
+
+# A run that was asked for a certificate and has none did not do what it was told,
+# whatever else went right.
+if [ "$DO_LETSENCRYPT" -eq 1 ] && [ "${LE_OK:-0}" -eq 0 ]; then
     exit 1
 fi

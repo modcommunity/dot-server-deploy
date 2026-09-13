@@ -88,6 +88,10 @@ CERTBOT_DRY_RUN=""
 NO_PROBE="${TMC_LE_NO_PROBE:-}"
 NO_HOOK=""
 INSTALL_CERTBOT=""
+# For a caller whose next step is not a guess -- setup.sh --full installs the vhost
+# itself, with the ports it was given, and two suggestions where one of them has
+# invented a port number is worse than none.
+NO_NEXT=""
 
 domains=()
 while [ $# -gt 0 ]; do
@@ -114,6 +118,7 @@ while [ $# -gt 0 ]; do
         --no-probe)        NO_PROBE=1; shift ;;
         --no-hook)         NO_HOOK=1; shift ;;
         --install-certbot) INSTALL_CERTBOT=1; shift ;;
+        --no-next-steps)   NO_NEXT=1; shift ;;
         -h|--help)         sed -n '2,57p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
         -*)                die "unknown argument: $1" 2 ;;
         *)                 domains+=("$1"); shift ;;
@@ -503,6 +508,8 @@ if [ -z "$NO_HOOK" ]; then
 fi
 
 # --- What to do with it -----------------------------------------------------
+
+[ -n "$NO_NEXT" ] && exit 0
 
 cat <<NEXT
 

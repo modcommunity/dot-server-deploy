@@ -38,12 +38,61 @@ This repository is where the [dot-*](https://github.com/modcommunity) family com
 ./setup.sh              # get a runtime, wire the addons, write ./server
 ./server                # start it
 
+./setup.sh --full       # or: the guided install, from a vanilla box to a public server
+
 docker compose up -d    # or the same thing in a container
 ```
 
 **On a machine with no Godot on it, `./setup.sh` downloads one.** Pinned to a single version, verified against a sha512 that is checked into `tools/fetch-godot.sh` rather than fetched from beside the binary, cached in `~/.cache/tmc/godot/` so one download serves every checkout, and deleted on a mismatch. `--no-download` refuses to fetch and fails instead; `--godot PATH` uses yours and never downloads.
 
 Windows: `setup.bat` (a shim for `setup.ps1`), then `.\server.ps1`. It takes the same commands and the same options as `./server` — `--port`, `--bind`, `--name`, `--max-players`, `--game`, `--map`, `--config`, `--content`, `--data`, `--godot`, `--verbose`, `--dry-run`, a `--` passthrough to the console — and accepts `-Port` as readily as `--port`, so a line copied out of this README works unchanged. `server.cmd` is still there and forwards to it.
+
+## The guided install
+
+`./setup.sh --full` is the whole of a deployment as about ten questions, each with the answer already in the brackets. It is meant for the case it names: a vanilla Linux box, a `git clone`, and one command.
+
+```
+  A server on this machine, in about ten questions.
+  Return takes the answer in the brackets. Nothing happens until the end.
+
+    Server name [TMC Test Server]
+    games here now: arena g2gfast hungry_classic lobby playground
+    Game to boot [lobby]
+    Player slots [64]
+    Tickrate [60]
+    Port the server listens on [6064]
+
+    Put nginx in front of it, so browsers can connect over wss://? [Y/n]
+    Public hostname clients will connect to [demo.example.com]
+    Email for the certificate (expiry warnings) []
+    Certificate method (webroot, nginx, standalone, dns, manual) [webroot]
+    Public TLS port [443]
+
+    Install a systemd service, so it starts on boot? [Y/n]
+
+  This is the whole of it:
+
+    - set up the project: runtime, addons, games, cfg/, ./server
+    - cfg/server.yml: TMC Test Server, game lobby, 64 slots, 60 tick
+    - cfg/net.yml: port 6064, bound to 127.0.0.1 (nginx is the way in)
+    - install nginx and certbot if they are missing
+    - open 80 and 443 in ufw
+    - get a certificate for demo.example.com over webroot
+    - nginx: wss://demo.example.com:443 -> 127.0.0.1:6064
+    - install and start the dot-server.service unit, running as games
+
+  Go ahead? [Y/n]
+```
+
+**Nothing is done until every question is answered.** The answers are collected, the plan is printed, and one confirmation covers the lot — an installer that acts on answer three while asking answer four cannot be stopped at answer five, and half an install is worse than none. `--yes` takes every default and asks nothing, so the same install runs from a provisioning script; without it, `--full` refuses to start when stdin is not a terminal, because a prompt with nobody attached is a hang rather than a question.
+
+**Every default is what is already true.** The server name, game, slots, tickrate and port come from `cfg/` when this box has one, so pressing return through the whole thing is a supported way to re-run it, and the second run reports *cfg/ already said all of that*. A key the templates have gained since your `cfg/` was written is appended rather than refused — the installer asking a question and then silently doing nothing with the answer is worse than either doing it or not asking.
+
+**nginx is the optional half, and it is one question because it is one decision.** A page served over HTTPS may not open a plain `ws://` socket, so a browser client needs `wss://`, which needs a certificate, which needs something in front of the server to terminate it. Answer yes and it installs nginx and certbot if they are missing, opens the ports in `ufw` or `firewalld` when one is running, gets a real certificate with [`deploy/issue-letsencrypt.sh`](deploy/issue-letsencrypt.sh), installs the reverse proxy with [`deploy/install-server-tls.sh`](deploy/install-server-tls.sh), and **binds the game to `127.0.0.1`** — left on `0.0.0.0` the game port stays open beside the TLS one and every client that finds it connects in plaintext past everything nginx is there to do. Answer no and none of that happens.
+
+**The service is the other optional half.** [`deploy/install-systemd.sh`](deploy/install-systemd.sh) writes the unit, enables it, starts it, waits, and then checks it is *still* running — `systemctl enable --now` exits 0 for a service that died a second later, and an installer that reports success there has told you the opposite of what happened. It defaults to running as the user that owns the project directory rather than the one typing, because under `sudo` those are not the same and one of them is root.
+
+Anything it does can be done on its own afterwards: the three scripts above take the same arguments the installer passes them, and `./setup.sh --letsencrypt --domain <host> --email <you>` is the certificate step without the questions.
 
 ## What it gives a server owner
 
@@ -99,6 +148,7 @@ deploy/              the root-owned half: TLS certificates, nginx in front, the 
   issue-letsencrypt.sh   a real certificate, by whichever method the box allows
   install-server-tls.sh  wss:// on a public port -> the server on the loopback
   install-game-origin.sh the game's own origin, which is a security boundary
+  install-systemd.sh     the unit file, and the check that it is still running
   issue-local-cert.sh    a development certificate from a local CA
 
 host/                the boot: YAML -> DotServer

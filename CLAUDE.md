@@ -436,12 +436,20 @@ is what stopped the previous two.
 - **A downloadable game.** The pack path is understood and the constraint that shapes it is
   measured, but every game here still ships in the build, so `changelevel` has never sent a
   client to fetch one.
+- **A package.** There is no .deb, no .rpm and no install prefix; `./setup.sh --full`
+  is the installer, and what it produces is this directory plus a unit file pointing
+  at it. That is deliberate while the engine version is pinned per checkout -- a
+  package would have to own /usr, and two servers on one box would then be two
+  packages rather than two clones.
 - **TLS.** A page on HTTPS cannot open `ws://`. Certificates and a reverse proxy are
   deployment, and they live in `deploy/`: `issue-letsencrypt.sh` gets a real certificate
   by whichever method the box allows -- HTTP-01 out of a webroot, out of nginx, or
   standalone; DNS-01 through a certbot plugin, which is the only one that issues a
-  wildcard -- and `install-server-tls.sh` puts it in front of a server. Nothing in the
-  host or the client knows any of it happened.
+  wildcard -- and `install-server-tls.sh` puts it in front of a server. `setup.sh
+  --full` asks whether to do both, and binds the game to 127.0.0.1 when the answer is
+  yes: left on 0.0.0.0 the game port stays open beside the TLS one, and a client that
+  finds it connects in plaintext past everything the proxy is there to do. Nothing in
+  the host or the client knows any of it happened.
 - **A server browser.** dot-server-query answers both query protocols and `TmcHost`
   attaches one; nothing here asks. `sv_query_app` in `cfg/server.yml` sets the app
   slug a listing shows — display only, and the backbone is what a launch actually
