@@ -39,7 +39,7 @@ style. `content/lobby/game.yml` says so where somebody will read it.
 It is the same shape as the constraint dot-cloud already documents for avatar packs — "the
 pack is data, the code ships in the build" — reached from further along.
 
-### The constraint has three forms, and two of them are closed
+### The constraint has four forms, and all of them are closed
 
 One root cause — a delivered pack mounts at `res://dot_cloud/<id>/<version>/` and not at
 the path its content was authored at — reaching the code by three separate routes. Each
@@ -50,17 +50,34 @@ game is actually delivered.
 | --- | --- | --- |
 | script → script by `class_name` | every cross-file type reference fails to compile; the pack mounts and its scripts are dead | **closed** — every game references its own files by relative `preload`, and `tools/check.sh` refuses a new `class_name` |
 | scene → script by `ext_resource` | the scene loads with its script silently missing: `Attempt to open script 'res://…' … 'File not found'` | **closed** — `DotCloudPublisher` rewrites text resources to the mount prefix at publish time |
-| script → anything by `"res://…"` | resolves against the HOST project root: another game's file, or nothing | **open** |
+| script → anything by `"res://…"` | resolves against the HOST project root: another game's file, or nothing | **closed** — `<Game>Paths.rebase()` resolves the game's root from its own script's `resource_path` |
+| script → superclass by `extends "res://…"` | the same, for the class a script inherits from | **closed** — made relative; a relative superclass path travels with the script |
 
-The third is measured rather than estimated: **62 file references** across the five games,
-which can become relative `preload`s the same way the first form did, and **36
-directory-or-format references** — `"res://audio"`, `"res://maps/imported/%s/%s.bin"` —
-which cannot, because there is nothing to preload. Those need a game to resolve its own
-content root at runtime, which a script can do from its own `resource_path`.
+The fourth was found by accident: a const collision made somebody open
+`npc_chaser.gd`, whose own comment said it extended a path rather than a class *"because
+it is the shape an entity delivered in a dot-cloud pack must have"* — and the path it
+extended was absolute. The intent was right and the form was not, in eleven files.
 
-`tools/check.sh` counts them and says so without failing: they are harmless while every
-game is `kind: builtin`, and a check that fails on work nobody has scheduled is a check
-people learn to skip. The number is there to shrink on purpose.
+`<Game>Paths.rebase()` closes the third. It resolves the game's root from its own
+script's `resource_path`, which is `res://` when the game is built into the shell and the
+mount prefix when it is delivered — so one form is correct in both, and built in it
+returns exactly what it was given. Format specifiers survive, because only the prefix
+moves. A `const` cannot hold a function call, so paths that were constants are
+`static var` now.
+
+**Only a first segment the game actually ships is moved.** `res://audio` in a game with no
+`audio/` names the HOST's directory, and rebasing it would point into a pack where nothing
+exists. Five such references remain across the five games and every one is correct as it
+stands.
+
+`tools/check.sh` counts what would genuinely break — shipped code, outside comments, not
+already wrapped in `rebase()`, first segment owned by the game. **The first version of that
+counter got it wrong in three ways at once** and read 92 before the fix and 102 after, which
+is a completed piece of work reported as a 10% regression: it counted the literal inside a
+`rebase()` call, which is the fixed form; it counted doc comments, which are prose; and it
+counted `examples/` and `tools/`, which never travel in a pack. A number that moves the
+wrong way when the work lands is worse than no number, because it teaches people to stop
+reading it.
 
 ## `cfg/` is written by setup, and `cfg.example/` is what is tracked
 

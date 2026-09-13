@@ -194,29 +194,50 @@ if [ "$checked_any" -eq 1 ]; then
     absolute=0
     for repo in "${GAME_REPOS[@]}"; do
         [ -d "../$repo" ] || continue
-        n=$(grep -rhoE '"res://[^"]+"' "../$repo" --include='*.gd' 2>/dev/null \
-            | grep -v 'res://addons/' \
-            | grep -v 'res://screenshots' \
-            | grep -v 'res://dot_cloud' \
-            | sort -u | wc -l)
+
+        # The directories this game actually SHIPS. A path whose first segment is not
+        # one of them -- `res://audio` in a game with no audio/ -- names the HOST's
+        # file and is correct as it stands: rebasing it would point into a pack where
+        # nothing exists. Only what would really break is counted.
+        owned=" $(cd "../$repo" && find . -maxdepth 1 -type d \
+            ! -name '.' ! -name '.git' ! -name '.godot' ! -name 'addons' \
+            ! -name 'examples' ! -name 'tools' ! -name 'screenshots' \
+            | sed 's|^\./||' | tr '\n' ' ')"
+
+        n=0
+        while IFS= read -r hit; do
+            first="${hit#\"res://}"
+            first="${first%%/*}"
+            first="${first%\"}"
+            case "$owned" in *" $first "*) n=$((n + 1)) ;; esac
+        done < <(
+            # Shipped code only: examples/ and tools/ are harnesses and never travel
+            # in a pack. Comments are prose. A reference already wrapped in
+            # `XPaths.rebase(...)` is the FIXED form and must not be counted -- doing
+            # so made this number rise from 92 to 102 when the fix landed, which reads
+            # as a regression and is the exact opposite. A measure that moves the wrong
+            # way is worse than no measure.
+            find "../$repo" -name '*.gd' -not -path '*/addons/*' -not -path '*/.godot/*' \
+                -not -path '*/examples/*' -not -path '*/tools/*' -print0 2>/dev/null \
+            | xargs -0 -r sed -E 's/[A-Za-z0-9_]*Paths\.rebase\("res:\/\/[^"]*"\)//g' \
+            | grep -vE '^[[:space:]]*#' \
+            | grep -oE '"res://[^"]+"' \
+            | sort -u
+        )
+
         absolute=$((absolute + n))
-        [ "$n" -gt 0 ] && printf '       %-20s %3d
-' "$repo" "$n"
+        [ "$n" -gt 0 ] && printf '       %-20s %3d\n' "$repo" "$n"
     done
 
     if [ "$absolute" -eq 0 ]; then
-        printf '  %sok%s   no game names its own files by absolute path
-' "$GRN" "$OFF"
+        printf '  %sok%s   every game resolves its own files relative to its mount\n' \
+            "$GRN" "$OFF"
     else
-        printf '  %s~~%s   %d absolute res:// reference(s) into games own files
-' \
+        printf '  %s~~%s   %d reference(s) a delivered game would resolve wrongly\n' \
             "$YLW" "$OFF" "$absolute"
-        printf '       A DELIVERED game resolves these against the host project root, not
-'
-        printf '       its mount. Harmless while every game is kind: builtin. See CLAUDE.md,
-'
-        printf '       "the one constraint that decides what a delivered game may look like".
-'
+        printf '       Wrap them in <Game>Paths.rebase(), or make an `extends` relative.\n'
+        printf '       See CLAUDE.md, "the one constraint that decides what a delivered\n'
+        printf '       game may look like".\n'
     fi
 fi
 
