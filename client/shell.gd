@@ -503,8 +503,12 @@ func _ensure_cloud() -> void:
 	# from a CDN that is serving the map perfectly well one path segment up, and reports
 	# "could not get surf_mesa's manifest" — which reads as missing content.
 	#
-	# This is the path maps take. A game delivered as a pack does not use it: dot-server
-	# hands the client a manifest URL an operator wrote in `game.yml`.
+	# [b]This is the path EVERYTHING takes now, not just maps.[/b] It used to say a
+	# delivered game did not use it, because dot-server handed the client a manifest URL
+	# an operator had written in `game.yml`. `manifest_url` is optional since packs became
+	# findable by content id, and the tracked descriptors carry none -- so a game pack is
+	# resolved through this template against the bases below, exactly as a map is. Getting
+	# the template wrong would now break every game rather than only the maps.
 	_cloud.manifest_url_template = "{base}/{id}/manifest.json"
 
 	# [b]Straight off the content client, not through the link.[/b] DotClientLink
