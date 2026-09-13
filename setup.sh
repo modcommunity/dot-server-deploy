@@ -1046,7 +1046,24 @@ UID_DIRS=(game scenes content/avatars)
 for extra in "${GAME_DIRS[@]}"; do
     for dir in $extra; do UID_DIRS+=("$dir"); done
 done
-find "${UID_DIRS[@]}" -name '*.uid' -delete 2>/dev/null
+# [b]Except the ones this repository owns.[/b] The rule above is about files COPIED
+# from a sibling: their uid belongs to that project and must be reminted here. But
+# `content/avatars/part.gd` is ours, tracked in git, and sitting in a directory that
+# also receives vendored content -- so deleting its uid meant `--import` generated a
+# new random one and rewrote a tracked file on EVERY setup run. A dirty working tree
+# after a command whose whole job is to be re-runnable, and a uid that changes under
+# any scene referencing it by uid rather than by path.
+#
+# Ask git which files are its own. Without git -- a release tarball, the container's
+# final stage -- there are no tracked files to protect and the old behaviour is right.
+if git -C "$ROOT" rev-parse --git-dir >/dev/null 2>&1; then
+    while IFS= read -r uid; do
+        git -C "$ROOT" ls-files --error-unmatch "$uid" >/dev/null 2>&1 && continue
+        rm -f "$uid"
+    done < <(find "${UID_DIRS[@]}" -name '*.uid' 2>/dev/null)
+else
+    find "${UID_DIRS[@]}" -name '*.uid' -delete 2>/dev/null
+fi
 
 if [ "$copied_any" -eq 0 ]; then
     die "No games were found beside this repository, and none are vendored." 4
