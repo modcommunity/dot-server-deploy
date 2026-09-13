@@ -6,16 +6,14 @@
 #
 #     changelevel playground
 #
-# kind: builtin -- the code is compiled into this build, for the reason
-# content/lobby/game.yml sets out at length: a mounted dot-cloud pack's `class_name`
-# globals are not registered in the host, so every cross-file type reference inside a
-# pack fails to compile. game-playground is written in the family's ordinary style and
-# would be dead in a pack.
+# kind: pack -- delivered, for the reason content/lobby/game.yml sets out at length.
+# Published with `./server pack playground --source ../game-playground`.
 #
-# NOTE that its PROPS are a different question and are already answered the other way:
-# every entity and every weapon in the catalogue is named by PATH
-# (`meta.script: res://game/entities/npc_wanderer.gd`), which is exactly the shape a
-# delivered pack can use. The game shell is builtin; the things you spawn need not be.
+# ITS PROPS WERE ALREADY WRITTEN THIS WAY, which is why this game was the easiest to
+# move: every entity and every weapon in the catalogue is named by PATH
+# (`meta.script: res://game/entities/npc_wanderer.gd`) rather than by class, so the
+# catalogue needed nothing doing to it. A second pack could add to it without touching
+# this one.
 #
 # THE SCENE IS ALMOST EMPTY, ON PURPOSE. res://scenes/pg_server.tscn is a Playground
 # under a plain Node, and Playground registers itself under `playground` in _ready() --
@@ -31,11 +29,12 @@
 name: Playground
 content_id: playground
 version: 0.1.0
-kind: builtin
+kind: pack
 max_players: 32
 
-scene: res://scenes/pg_server.tscn
-module: res://game/playground_module.gd
+scene: scenes/pg_server.tscn
+client_scene: game/playground.tscn
+module: game/playground_module.gd
 
 # Set when this game is loaded, and only while it is loaded.
 #

@@ -1,11 +1,8 @@
 extends Node
-# [b]By path, because the games no longer have global names.[/b] Every game here
-# dropped its `class_name` declarations so it can be DELIVERED as a dot-cloud pack:
-# a mounted pack's globals are not registered in the host, so a delivered game may
-# not use them. These are the HOST's references into a vendored game, so they are
-# res:// -- this file stays put while the game it reaches into may be vendored here
-# or mounted from a pack.
-const RoomModule := preload("res://game/room_module.gd")
+# [b]Nothing preloaded out of a game, because no game is in this build.[/b] The lobby is
+# a delivered pack: its files are at `res://dot_cloud/a_room/<version>/…` and this file
+# cannot name that path, because the version is the game's. The module is reached through
+# the host's own module table instead, which is where a host is supposed to reach it.
 
 ## Changing the game with a REAL client attached, over a real socket.
 ##
@@ -307,7 +304,7 @@ func _test_still_serving() -> void:
 			]
 	)
 
-	var module := _server().modules.get_module("room") as RoomModule
+	var module: DotModule = _server().modules.get_module("room")
 	_check(
 		module != null and module.net != null and module.net.is_running(),
 		"and the current game's netcode is running"

@@ -52,34 +52,24 @@ for f in setup.sh tools/server.in docker-entrypoint.sh docker-healthcheck.sh too
 done
 
 echo
-echo "the copied games"
-# setup.sh COPIES each built-in game's game/ and scenes/ out of its sibling repository
-# rather than linking them -- they are compiled into this build, and
-# content/lobby/game.yml says why. Both directories are gitignored here, so the only
-# record of what they should contain is the siblings.
+echo "the published games"
+# Every game is PUBLISHED now, not copied: setup.sh turns each sibling repository into a
+# signed pack in dist/ and this build contains none of them. The staleness that allows is
+# the same shape as the one the copy allowed, one layer up -- a game is fixed in its own
+# repository, setup.sh is not re-run, and this server keeps serving the old pack. Nothing
+# notices, because the game's own suite tests the fix and this one tests the pack, and
+# they are different code and both are green.
 #
-# The failure that allows is a stale copy: a game is fixed in its own repository,
-# setup.sh is not re-run, and this project boots the old one. Nothing notices, because
-# each repository's suite tests the copy it has -- the game's passes on the fix and this
-# one passes on the code an operator actually deploys. They are different code and both
-# are green.
+# [b]The list is setup.sh's, and it is READ from setup.sh rather than repeated.[/b] The
+# line here used to say "it has to stay setup.sh's" and the two had already drifted: this
+# one still named `dot-a-room` and `dot-2d-hungry` long after they were renamed, so
+# nothing was checked at all and the line printed looked like the release-tarball case
+# working correctly. Two copies of one list is the bug the list was guarding against, one
+# level up.
 #
-# This is NOT the family's deliberate duplication. That rule is about a small check two
-# addons both need being written twice so neither has to depend on the other. This is one
-# game in two places that must be the same game, and the copy is generated.
-#
-# [b]The list is setup.sh's, and it is now READ from setup.sh rather than repeated.[/b]
-# The line above said "it has to stay setup.sh's" and the two had already drifted: this
-# one still named `dot-a-room` and `dot-2d-hungry` long after they were renamed to
-# `game-simple-lobby` and `game-hungario`, so `checked_any` was 0, the staleness check
-# reported "no game repositories beside this one" on a machine where all of them were,
-# and every copied file went unchecked while the line printed looked like the
-# release-tarball case working correctly. Two copies of one list is the bug the list was
-# guarding against, one level up.
-#
-# Entries are `repo:label[:extra directories]`; the extra directories are top-level ones
-# a game owns beyond game/ and scenes/ -- g2gfast's maps/ and avatars/ -- and they are
-# copied by setup.sh, so they go stale exactly the same way.
+# Entries are `repo:content directory`. The content directory is not always the pack's
+# name -- hungario is three game ids over one `content_id: hungry` -- so the pack name is
+# read from the descriptor, which is the same file the publisher reads it from.
 mapfile -t GAME_ENTRIES < <(
     sed -n '/^GAMES=(/,/^)/p' setup.sh | grep -oE '"[^"]+"' | tr -d '"'
 )
@@ -90,48 +80,98 @@ if [ ${#GAME_ENTRIES[@]} -eq 0 ]; then
 fi
 
 GAME_REPOS=()
-ALL_DIRS=(game scenes)
-for entry in "${GAME_ENTRIES[@]}"; do
-    GAME_REPOS+=("${entry%%:*}")
-    rest="${entry#*:}"
-    if [ "$rest" != "${rest%%:*}" ]; then
-        for d in ${rest#*:}; do
-            case " ${ALL_DIRS[*]} " in *" $d "*) ;; *) ALL_DIRS+=("$d") ;; esac
-        done
-    fi
-done
+for entry in "${GAME_ENTRIES[@]}"; do GAME_REPOS+=("${entry%%:*}"); done
 
 drift=0
-copied=0
 checked_any=0
 
-# Every file the siblings say should be here, and identical.
-for repo in "${GAME_REPOS[@]}"; do
+for entry in "${GAME_ENTRIES[@]}"; do
+    repo="${entry%%:*}"
+    dir="${entry#*:}"
     src="../$repo"
+
     [ -d "$src/game" ] || continue
     checked_any=1
 
-    for dir in "${ALL_DIRS[@]}"; do
-        [ -d "$src/$dir" ] || continue
+    yml="content/$dir/game.yml"
+    if [ ! -f "$yml" ]; then
+        printf '  %sFAIL%s setup.sh publishes %s but there is no %s\n' \
+            "$RED" "$OFF" "$dir" "$yml"
+        drift=$((drift + 1))
+        continue
+    fi
 
-        # .uid files are deleted by setup.sh and regenerated per project, so they are
-        # expected to differ and are not compared.
-        while read -r rel; do
-            copied=$((copied + 1))
-            if [ ! -f "$dir/$rel" ]; then
-                printf '  %sFAIL%s %s/%s is in %s and not here\n' \
-                    "$RED" "$OFF" "$dir" "$rel" "$repo"
-                drift=$((drift + 1))
-            elif ! cmp -s "$src/$dir/$rel" "$dir/$rel"; then
-                printf '  %sFAIL%s %s/%s is stale; re-run ./setup.sh\n' \
-                    "$RED" "$OFF" "$dir" "$rel"
-                drift=$((drift + 1))
-            fi
-        done < <(cd "$src/$dir" && find . \( -name '*.gd' -o -name '*.tscn' \) \
-            | sed 's|^\./||' | sort)
-    done
+    # Delivered, or the pack is beside the point.
+    if ! grep -qE '^kind: pack$' "$yml"; then
+        printf '  %sFAIL%s %s is not kind: pack, but setup.sh publishes it\n' \
+            "$RED" "$OFF" "$yml"
+        drift=$((drift + 1))
+        continue
+    fi
+
+    # The pack's name, from the descriptor rather than from the directory.
+    cid="$(grep -E '^content_id:' "$yml" | head -1 | sed -E 's/^content_id:[[:space:]]*//' \
+        | sed -E 's/[[:space:]]*#.*$//' | tr -d '"')"
+    [ -n "$cid" ] || cid="$dir"
+
+    manifest="dist/$cid/manifest.json"
+    if [ ! -f "$manifest" ]; then
+        printf '  %sFAIL%s %s is not published (no %s); re-run ./setup.sh\n' \
+            "$RED" "$OFF" "$dir" "$manifest"
+        drift=$((drift + 1))
+        continue
+    fi
+
+    # [b]Newer source than pack is the whole check.[/b] Comparing CONTENTS would not
+    # work: the publisher rewrites every res:// reference in a .tscn onto the mount
+    # prefix, so a correctly published file is deliberately not byte-identical to its
+    # source. A timestamp says the same thing about staleness and says it about every
+    # file type, including the imported ones a byte comparison could not reach either.
+    newer="$(find "$src" \
+        \( -name .git -o -name .godot -o -name addons -o -name examples \
+           -o -name tools -o -name screenshots -o -name imported \) -prune -o \
+        -type f \( -name '*.gd' -o -name '*.tscn' -o -name '*.tres' \) \
+        -newer "$manifest" -print 2>/dev/null | head -3)"
+
+    if [ -n "$newer" ]; then
+        printf '  %sFAIL%s %s is stale; re-run ./setup.sh or ./server pack %s --source %s\n' \
+            "$RED" "$OFF" "$manifest" "$dir" "$src"
+        printf '%s\n' "$newer" | sed 's|^|         newer: |'
+        drift=$((drift + 1))
+    fi
 done
 
+if [ "$checked_any" -eq 0 ]; then
+    printf '  %sok%s   no game repositories beside this one; nothing to compare\n' \
+        "$GRN" "$OFF"
+elif [ "$drift" -eq 0 ]; then
+    printf '  %sok%s   every game is published and its pack is newer than its source\n' \
+        "$GRN" "$OFF"
+else
+    fails=$((fails + drift))
+fi
+
+# --- Nothing may be vendored into this build any more ----------------------
+#
+# The five games used to be copied into one game/ and one scenes/ here. They are not,
+# and a directory left behind from a checkout that predates the change is a build that
+# still contains a game -- which for `client/shell.gd` means a stale copy could win over
+# the delivered one for anybody on this build and not for anybody else.
+stray=0
+for d in game scenes maps avatars npcs props textures; do
+    [ -d "$d" ] || continue
+    printf '  %sFAIL%s %s/ is left over from when games were vendored; remove it\n' \
+        "$RED" "$OFF" "$d"
+    stray=$((stray + 1))
+done
+
+if [ "$stray" -eq 0 ]; then
+    printf '  %sok%s   no game is vendored into this build\n' "$GRN" "$OFF"
+else
+    fails=$((fails + stray))
+fi
+
+echo
 # --- No game may declare a class_name -------------------------------------
 #
 # [b]A mounted dot-cloud pack's globals are NOT registered in the host.[/b] So a game
@@ -241,39 +281,12 @@ if [ "$checked_any" -eq 1 ]; then
     fi
 fi
 
-# And nothing here that no sibling claims. A file left behind by a game that was removed
-# from the list still compiles, still exports, and is still loadable by id -- so the
-# server would happily serve a game this project no longer believes it has.
-if [ "$checked_any" -eq 1 ]; then
-    for dir in "${ALL_DIRS[@]}"; do
-        [ -d "$dir" ] || continue
-
-        while read -r rel; do
-            found=0
-            for repo in "${GAME_REPOS[@]}"; do
-                [ -f "../$repo/$dir/$rel" ] && { found=1; break; }
-            done
-            if [ "$found" -eq 0 ]; then
-                printf '  %sFAIL%s %s/%s is here and no game claims it\n' \
-                    "$RED" "$OFF" "$dir" "$rel"
-                drift=$((drift + 1))
-            fi
-        done < <(cd "$dir" && find . \( -name '*.gd' -o -name '*.tscn' \) \
-            | sed 's|^\./||' | sort)
-    done
-
-    if [ "$drift" -eq 0 ]; then
-        printf '  %sok%s   %d files match their game repositories\n' \
-            "$GRN" "$OFF" "$copied"
-    else
-        fails=$((fails + drift))
-    fi
-else
-    # A release tarball or the container's final stage has no siblings, and the copy it
-    # was built with is the only one there will ever be. Nothing to compare against.
-    printf '  %s--%s   no game repositories beside this one; staleness not checked\n' \
-        "$RED" "$OFF"
-fi
+# [b]The "is here and no game claims it" check went with the vendoring.[/b] It walked
+# game/ and scenes/ looking for a file no sibling owned -- a game removed from the list
+# whose files stayed behind, still compiling, still exporting, still loadable by id. Those
+# directories do not exist now, and the check that replaced it is stricter: any of them
+# existing AT ALL is a failure, reported above, because a vendored copy could win over the
+# delivered one for players on this build and for nobody else.
 
 if [ "${1:-}" = "--parse" ]; then
     exit $((fails > 0))

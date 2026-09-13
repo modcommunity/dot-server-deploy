@@ -4,20 +4,24 @@
 # Every dot-* addon is a separate repository. setup.sh links or copies them in.
 /addons/
 
-# The games, copied in by setup.sh from the five game repositories beside this one.
-# They are compiled into this build on purpose; content/lobby/game.yml says why.
+# The games were VENDORED here once — copied into one game/ and one scenes/ at this
+# project's root, because a .tscn names its scripts by absolute res:// path. They are
+# published as signed packs now and this build ships none of them, so none of these
+# directories is created any more. The entries stay so that a checkout that predates the
+# change, or a developer who copies a game in to debug it, does not offer a build's
+# generated output as a change.
 #
-# Everything below game/ and scenes/ is a top-level directory some game owns, and it is
-# top-level for the reason setup.sh gives: a .tscn names its scripts by absolute res://
-# path and there is no relative form, so a game's maps/ has to become THIS project's
-# maps/. The list here has to match setup.sh's GAMES entries — a directory vendored and
-# not ignored is a build's generated output committed as source.
+# textures/ was tracked rather than ignored, which made it the odd one out: it is
+# g2gfast's prototype texture set, byte-identical to the copy in that repository, and
+# `G2GTextures` reads it through the game's own rebase helper — so the pack carries it
+# and a second copy here is a copy that can drift.
 /game/
 /scenes/
 /maps/
 /avatars/
 /npcs/
 /props/
+/textures/
 
 # Written per deployment by demo.sh before the export, naming the backbone the web
 # player signs in against. Not tracked, because it is a deployment's answer and not

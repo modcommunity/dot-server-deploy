@@ -4,11 +4,12 @@
 #
 #     changelevel g2gfast
 #
-# kind: builtin -- the code is compiled into this build, for the reason
-# content/lobby/game.yml sets out at length: a mounted dot-cloud pack's `class_name`
-# globals are not registered in the host, so every cross-file type reference inside
-# a pack fails to compile. game-g2gfast is written in the family's ordinary style
-# and would be dead in a pack.
+# kind: pack -- delivered, for the reason content/lobby/game.yml sets out at length.
+# Published with `./server pack g2gfast --source ../game-g2gfast`.
+#
+# ITS IMPORTED MAPS ARE NOT IN THIS PACK, and that is deliberate: `maps/imported/` is 66 MB
+# of converted geometry published as one pack per map, so a player downloads the map the
+# server is on rather than every map it could be on. `pack.json` excludes the directory.
 #
 # THE SCENE IS ALMOST EMPTY, ON PURPOSE. res://scenes/g2g_server.tscn is a G2GGame
 # under a plain Node, and G2GGame registers itself under `g2g_game` in _ready() --
@@ -25,11 +26,12 @@
 name: g2gfast
 content_id: g2gfast
 version: 0.1.0
-kind: builtin
+kind: pack
 max_players: 32
 
-scene: res://scenes/g2g_server.tscn
-module: res://game/g2g_module.gd
+scene: scenes/g2g_server.tscn
+client_scene: game/g2g.tscn
+module: game/g2g_module.gd
 
 # Set when this game is loaded, and only while it is loaded. These are the module's
 # own cvars in the genre's units, which is the whole point of them: an operator who

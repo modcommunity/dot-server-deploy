@@ -176,16 +176,34 @@ func _build(name: String, tree: Dictionary) -> DotResult:
 					+ "so the client would refuse it and be timed out in LOADING"
 				)
 		"pack":
+			# [b]Optional, and it used to be required.[/b] A pack is found by its content
+			# id: `content/` and `dist/` on this box are searched first, then every
+			# `content_urls` entry in order. Requiring an address here meant writing a
+			# per-DEPLOYMENT fact into a per-GAME file -- a server that published its own
+			# packs had to spell out a path that was true on one box, and every version
+			# bump meant editing it again in a file that is otherwise pure description.
+			#
+			# Set it when the content lives somewhere this server has no base for. Leave
+			# it out and `./server pack <id>` is the whole of the setup.
 			descriptor.manifest_url = String(TmcYaml.at(tree, "manifest_url", ""))
 			descriptor.scene = scene
 			descriptor.client_scene = client_scene
 
-			if descriptor.manifest_url == "":
+			if scene == "" and client_scene == "":
 				return DotResult.fail(
 					DotError.CODE_INVALID,
-					"A pack game needs a manifest_url.",
-					"set it to where the published manifest will be served from, or run "
-					+ "./server publish to have one written and served in-band"
+					"A pack game names no scene.",
+					"set scene: to the server scene inside the pack, relative to its root"
+				)
+
+			if scene.contains("://") and descriptor.manifest_url == "":
+				# An absolute scene in a pack game is the builtin spelling in the wrong
+				# file: nothing would ever be fetched, and the game would silently run
+				# out of the build while claiming to be delivered.
+				return DotResult.fail(
+					DotError.CODE_INVALID,
+					"A pack game's scene must be relative to the pack root.",
+					"got '%s' -- drop the res:// prefix, or use kind: builtin" % scene
 				)
 		_:
 			return DotResult.fail(

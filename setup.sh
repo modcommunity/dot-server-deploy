@@ -832,94 +832,55 @@ if [ ${#MISSING[@]} -gt 0 ]; then
 fi
 ok "${#ADDONS[@]} addons $([ "$VENDOR" -eq 1 ] && echo copied || echo linked)"
 
-# --- 3. The games ----------------------------------------------------------
+# --- 3. The games -----------------------------------------------------------
 #
-# Every game that ships INSIDE this build is copied in here, and they all land in
-# one game/ directory on purpose.
+# Every game is PUBLISHED here, not copied in. This build ships no game at all.
 #
-# A game's scenes name their scripts by absolute res:// path -- that is how a .tscn
-# stores a script reference and there is no relative form -- so game-simple-lobby's
-# res://game/room_world.gd and game-hungario's res://game/modes/hungry_mode.gd only
-# resolve if each project's game/ becomes THIS project's game/. Moving either into a
-# subdirectory of its own would mean re-authoring every scene it owns.
+# It used to copy all five into one `game/` and one `scenes/` at this project's root,
+# because a .tscn stores its script reference as an absolute res:// path and there is
+# no relative form -- so a game's own `maps/` had to become THIS project's `maps/`.
+# That worked, and it meant a new game was a new build of the engine: an export, an
+# upload, and every player on the old build unable to join.
 #
-# That works because no two of them share a filename: every file is prefixed with
-# its own game's name, which is the family's class_name rule paying off somewhere it
-# was not aimed at. The check below asserts it rather than trusting it, because the
-# failure -- one game silently overwriting a file of another's -- is invisible until
-# something loads.
+# The games reference their own files relatively now and rebase their own res://
+# strings, so each one is correct wherever it is mounted. `./server pack <id>
+# --source <repo>` turns a game repository into a signed pack in `dist/`, the server
+# finds it there without any URL, and a client downloads it on connect. Adding a game
+# to a server is publishing a pack and writing a `game.yml`.
 #
-# WHY BUILT IN AND NOT DELIVERED: a mounted dot-cloud pack's class_name globals are
-# not registered in the host, so every cross-file type reference inside a pack fails
-# to compile -- the pack mounts, its scenes load, and every script in it is dead.
-# See content/lobby/game.yml.
+# THE SIGNING KEY IS WHAT MAKES THIS SAFE AND IT IS ALSO WHAT MAKES IT WORK. A pack
+# contains scripts, so every client refuses an unsigned manifest -- which means a box
+# with no key publishes nothing at all rather than publishing something that mounts
+# nowhere. One is generated below if there is not one already.
 
 step "games"
 
-# repository:label[:extra directories]
+# repository:content id
 #
-# The repository name is the DIRECTORY beside this one, and it is not the game's
-# name: `dot-a-room` and `dot-2d-hungry` were renamed to `game-simple-lobby` and
-# `game-hungario` and this list was not, so every run skipped both games -- after
-# the `rm -rf` below had already deleted the vendored copies. See the ordering note
-# there. A stale name here is now a hard failure rather than a warning, for the same
-# reason: "skipping the lobby" scrolls past and a build with no games does not.
+# The repository name is the DIRECTORY beside this one and it is not the game's name:
+# `dot-a-room` and `dot-2d-hungry` were renamed to `game-simple-lobby` and
+# `game-hungario` and this list was not, so every run skipped both games. A stale name
+# here is a hard failure rather than a warning: "skipping the lobby" scrolls past and a
+# server with no games does not.
 #
-# The extra field is the top-level directories a game owns beyond game/ and scenes/.
-# Same reason those two are flattened into this project: a .tscn stores its script
-# reference as an absolute res:// path and there is no relative form, so
-# game-g2gfast's res://maps/surf_g2g_intro.gd only resolves if its maps/ becomes
-# THIS project's maps/.
-#
-# [b]A game that grows a top-level directory has to be added here, and nothing
-# reports it if it is not.[/b] game-arena and game-g2gfast both gained npcs/ and
-# props/ when the NPC and prop layers landed; a build vendored without them mounts,
-# loads every scene, and refuses every spawn with "that NPC's content is not loaded on
-# this server" -- which is dot-npc answering correctly a question nobody meant to ask.
-# The refusal is a legitimate answer, so nothing errors.
-#
-# Filenames are prefixed per game (`arena_grunt.tscn`, `g2g_stalker.tscn`) so the two
-# can share one flattened directory, which is the collision check below.
-#
-# g2gfast's `textures/` is the newest of these and is the same shape of omission:
-# `G2GTextures` looks its prototype set up at the fixed path `res://textures/prototype`
-# and falls back to a generated grid when it is not there, so a build without it draws
-# every map -- imported ones included, which is most of what that server runs -- in a
-# different texture set from the one the developer looked at, and reports nothing.
+# The second field is the CONTENT directory whose `game.yml` and `pack.json` describe
+# the pack -- which is not always the pack's name, and deliberately: hungario is three
+# game ids over one `content_id: hungry`, so any one of its three directories publishes
+# the one pack. What each pack excludes is in its `pack.json`, beside the game.yml,
+# because that is a property of the game rather than of this script.
 GAMES=(
-    "game-simple-lobby:the lobby"
-    "game-hungario:hungry"
-    "game-g2gfast:g2gfast:maps avatars npcs props textures"
-    "game-playground:playground:maps"
-    "game-arena:arena:maps avatars npcs props"
+    "game-simple-lobby:lobby"
+    "game-hungario:hungry_classic"
+    "game-g2gfast:g2gfast"
+    "game-playground:playground"
+    "game-arena:arena"
 )
 
-# --- Resolve before destroying ---------------------------------------------
-#
-# [b]The wipe below used to come first, and that made a stale repository name
-# destructive.[/b] Both entries had been renamed, so setup.sh deleted game/ and
-# scenes/, warned twice, and died with "No games were found beside this repository,
-# and none are vendored" -- having just made that true. A vendored tarball, which is
-# exactly the case the message is about, lost its games to the run that reported
-# them missing.
-#
-# So: find every source first, refuse the whole run if one is missing, and only then
-# remove anything.
-
 resolve_games() {
-    GAME_DIRS=()
     MISSING_GAMES=()
     for entry in "${GAMES[@]}"; do
         repo="${entry%%:*}"
-        rest="${entry#*:}"
-        extra=""
-        [ "$rest" != "${rest%%:*}" ] && extra="${rest#*:}"
-
-        if [ -d "$ROOT/../$repo/game" ]; then
-            GAME_DIRS+=("$extra")
-        else
-            MISSING_GAMES+=("$repo")
-        fi
+        [ -d "$ROOT/../$repo/game" ] || MISSING_GAMES+=("$repo")
     done
 }
 
@@ -931,142 +892,102 @@ fi
 
 resolve_games
 
-# [b]Only when SOME are missing.[/b] All of them missing with a vendored game/ already
-# here is the release tarball, and the branch below keeps what it has -- cloning five
-# game repositories onto a box that already has the games would be pure download.
-if [ ${#MISSING_GAMES[@]} -gt 0 ] && [ "$DO_CLONE" -eq 1 ] \
-        && ! { [ ${#MISSING_GAMES[@]} -eq ${#GAMES[@]} ] && [ -n "$(ls -A "$ROOT/game" 2>/dev/null)" ]; }; then
+if [ ${#MISSING_GAMES[@]} -gt 0 ] && [ "$DO_CLONE" -eq 1 ]; then
     clone_repos "${MISSING_GAMES[@]}"
     resolve_games
 fi
 
-# Three cases, and only three. Every game beside this one is a developer's machine
-# and the copy runs; none of them beside it, with a game/ already here, is a release
-# tarball and the copy is skipped whole. Anything in between -- which is what a
-# rename produces -- is refused, because copying the games that are still there over
-# a vendored set of the ones that are not gives one build made of two vintages.
-if [ ${#MISSING_GAMES[@]} -eq 0 ]; then
-    # Only the directories this list declares, so a typo cannot remove anything the
-    # script did not put there.
-    rm -rf game scenes
-    for extra in "${GAME_DIRS[@]}"; do
-        for dir in $extra; do rm -rf "${ROOT:?}/$dir"; done
-    done
-    mkdir -p game scenes
-elif [ ${#MISSING_GAMES[@]} -eq ${#GAMES[@]} ] && [ -n "$(ls -A "$ROOT/game" 2>/dev/null)" ]; then
-    ok "no game repositories beside this one; keeping the vendored games"
-    VENDORED_GAMES=1
-else
-    die "These game repositories are not beside this one:
+# [b]Packs already in dist/ are the release-tarball case and are kept.[/b] A box with
+# no game repositories beside it and a published dist/ is a deployment, not a broken
+# developer machine -- and re-publishing would need the signing key, which a
+# deployment should not have. Only when there is nothing to run does this refuse.
+if [ ${#MISSING_GAMES[@]} -gt 0 ]; then
+    if [ -n "$(ls -A "$ROOT/dist" 2>/dev/null)" ]; then
+        ok "no game repositories beside this one; keeping the packs in dist/"
+        PUBLISHED_GAMES=1
+    else
+        die "These game repositories are not beside this one:
 
         ${MISSING_GAMES[*]}
 
     Each game is a separate repository and there is no way to clone the tree at
     once. They are normally cloned for you; this run could not, or --no-clone was
-    given. Or vendor their game/ folders.
+    given. A deployment that only serves published packs needs dist/ instead.
 
-    If one was RENAMED, fix the GAMES list in this script. A name here that no
-    longer exists is how this step silently stopped copying a game -- and it used
-    to delete game/ before finding out, so the run that reported the games missing
-    was the run that made them missing." 4
+    If one was RENAMED, fix the GAMES list in this script." 4
+    fi
 fi
 
-copied_any=0
-[ "${VENDORED_GAMES:-0}" -eq 1 ] && copied_any=1
+# The signing key. Generated rather than demanded, because a first run on a fresh box
+# has no reason to have one -- and without it `./server pack` correctly refuses, which
+# would make the whole install fail on a step the operator was never told about.
+#
+# [b]The private half never leaves this machine and is gitignored before it exists.[/b]
+# Anyone holding it can publish content that every client trusting this key will mount
+# and RUN. The public half goes in client/content.json, which is shipped on purpose.
+if [ "${PUBLISHED_GAMES:-0}" -ne 1 ] && [ ! -f "$ROOT/keys/content.key" ]; then
+    mkdir -p "$ROOT/keys"
+    "$GODOT" --headless --path "$ROOT" \
+        --script res://addons/dot_cloud/publish/dot_cloud_cli.gd -- \
+        keygen --private keys/content.key --public keys/content.pub >/dev/null 2>&1 \
+        || die "could not generate a content signing key" 4
+    chmod 600 "$ROOT/keys/content.key"
+    ok "content signing key generated (keys/content.key -- keep it)"
+fi
+
+# content/avatars/ is NOT copied from a game any more, and the difference is worth
+# naming. HungryContentSource reads it through the game's own rebase helper, so for a
+# delivered game it resolves inside the mount and the pack carries it. What is left
+# here is this server's own publishable avatar set -- `./server pack avatars` -- which
+# is the pack that OVERRIDES the built-in one. Copying a game's copy on top of it made
+# the two the same file by construction, which is the one arrangement in which an
+# override cannot be tested.
+
+# [b]Imported BEFORE publishing, and that ordering is the whole of it.[/b] A .glb or a
+# .png is not a loadable resource: the editor imports it into .godot/imported/ and the
+# .import marker beside it redirects every load there. Nothing imports at runtime, on
+# any platform -- so a pack published from a project that has never been imported ships
+# the bytes of an asset that no load() can open, and reports nothing, because the file
+# is right there.
+if [ "${PUBLISHED_GAMES:-0}" -ne 1 ] && [ "$DO_IMPORT" -eq 1 ]; then
+    for entry in "${GAMES[@]}"; do
+        src="$ROOT/../${entry%%:*}"
+        [ -d "$src/game" ] || continue
+        "$GODOT" --headless --path "$src" --import >/dev/null 2>&1 || true
+    done
+    ok "game assets imported"
+fi
+
+published_any=0
+[ "${PUBLISHED_GAMES:-0}" -eq 1 ] && published_any=1
+
 for entry in "${GAMES[@]}"; do
-    [ "${VENDORED_GAMES:-0}" -eq 1 ] && break
+    [ "${PUBLISHED_GAMES:-0}" -eq 1 ] && break
 
     repo="${entry%%:*}"
-    rest="${entry#*:}"
-    label="${rest%%:*}"
-    extra=""
-    [ "$rest" != "$label" ] && extra="${rest#*:}"
-    src="$ROOT/../$repo"
+    id="${entry#*:}"
 
-    # Refuse a collision rather than let cp resolve it. Two games contributing the
-    # same filename means one of them silently loses a script, and the symptom is a
-    # parse error in a file nobody edited.
-    for sub in game $extra; do
-        [ -d "$src/$sub" ] || continue
-        while read -r f; do
-            rel="${f#"$src"/}"
-            if [ -e "$ROOT/$rel" ]; then
-                # Byte-identical is not a collision. Two games legitimately ship the
-                # same third-party asset -- both arena and g2gfast use Kenney's
-                # character GLBs, copied from one source -- and vendoring them into
-                # the shared tree would otherwise be refused, or force a per-game copy
-                # of every byte. The rule this guards is "one of them silently loses a
-                # script", and a file that is the same file loses nothing.
-                if cmp -s "$f" "$ROOT/$rel"; then
-                    continue
-                fi
-                # Godot regenerates these for THIS project on the --import below, and
-                # mints a fresh uid per project while doing it -- so two games' copies
-                # of the same asset always differ here and never mean anything. The
-                # asset itself is compared above; this is its bookkeeping.
-                case "$rel" in
-                    *.import|*.uid) continue ;;
-                esac
-                die "$repo and an earlier game both provide $rel, with different contents.
+    # tools/pack.gd directly rather than through `./server`: the launcher is generated
+    # in step 7, after this one, and moving that step earlier would put a script naming
+    # the runtime before the step that finds the runtime.
+    pack_args=(--headless --path "$ROOT" --script res://tools/pack.gd --
+               --content "$ROOT/content" --out "$ROOT/dist"
+               --key "$ROOT/keys/content.key" --id "$id" --source "$ROOT/../$repo")
 
-    Every built-in game shares one game/ directory, because a .tscn names its
-    scripts by absolute res:// path. Rename one of them." 4
-            fi
-        done < <(find "$src/$sub" -type f)
-    done
-
-    # -a preserves timestamps. Without it every setup.sh gives identical files a fresh
-    # mtime, so anything that asks "is the build older than the source" -- demo.sh does,
-    # to catch a stale web export -- rebuilds on every run for no reason.
-    cp -a "$src/game/." game/
-    [ -d "$src/scenes" ] && cp -a "$src"/scenes/*.tscn scenes/ 2>/dev/null
-
-    for dir in $extra; do
-        [ -d "$src/$dir" ] || continue
-        mkdir -p "$ROOT/$dir"
-        cp -a "$src/$dir/." "$ROOT/$dir/"
-    done
-
-    # Cosmetic parts a game looks for in its own build. HungryContentSource reads
-    # res://content/avatars/, and content/ here is the operator's game directory --
-    # so this lands beside the games and TmcContent knows it is not one.
-    if [ -d "$src/content/avatars" ]; then
-        mkdir -p content/avatars
-        cp -a "$src/content/avatars/." content/avatars/
+    if "$GODOT" "${pack_args[@]}" >/dev/null 2>&1; then
+        ok "$id"
+        published_any=1
+    else
+        # Shown rather than swallowed: the run above is quiet so the install reads as
+        # a list of steps, and a failure with no output is the one thing worse than
+        # noise.
+        "$GODOT" "${pack_args[@]}" || true
+        die "could not publish $id from $repo" 4
     fi
-
-    ok "$label"
-    copied_any=1
 done
 
-# The .uid files are Godot's own and are regenerated by --import. Copying one from a
-# source project pins this build's script to that project's uid, and two games whose
-# uids were generated separately can then collide.
-UID_DIRS=(game scenes content/avatars)
-for extra in "${GAME_DIRS[@]}"; do
-    for dir in $extra; do UID_DIRS+=("$dir"); done
-done
-# [b]Except the ones this repository owns.[/b] The rule above is about files COPIED
-# from a sibling: their uid belongs to that project and must be reminted here. But
-# `content/avatars/part.gd` is ours, tracked in git, and sitting in a directory that
-# also receives vendored content -- so deleting its uid meant `--import` generated a
-# new random one and rewrote a tracked file on EVERY setup run. A dirty working tree
-# after a command whose whole job is to be re-runnable, and a uid that changes under
-# any scene referencing it by uid rather than by path.
-#
-# Ask git which files are its own. Without git -- a release tarball, the container's
-# final stage -- there are no tracked files to protect and the old behaviour is right.
-if git -C "$ROOT" rev-parse --git-dir >/dev/null 2>&1; then
-    while IFS= read -r uid; do
-        git -C "$ROOT" ls-files --error-unmatch "$uid" >/dev/null 2>&1 && continue
-        rm -f "$uid"
-    done < <(find "${UID_DIRS[@]}" -name '*.uid' 2>/dev/null)
-else
-    find "${UID_DIRS[@]}" -name '*.uid' -delete 2>/dev/null
-fi
-
-if [ "$copied_any" -eq 0 ]; then
-    die "No games were found beside this repository, and none are vendored." 4
+if [ "$published_any" -eq 0 ]; then
+    die "No games were published and none are in dist/." 4
 fi
 
 # --- 4. Import -------------------------------------------------------------

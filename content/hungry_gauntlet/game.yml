@@ -19,8 +19,9 @@
 name: "Hungario: Gauntlet"
 content_id: hungry       # shared with hungry_classic: one client, three modes
 version: 0.1.0
-kind: builtin
+kind: pack
 max_players: 32
 
-scene: res://game/modes/gauntlet.tscn
-module: res://game/hungry_module.gd
+scene: game/modes/gauntlet.tscn
+client_scene: game/client/hungry_client.tscn
+module: game/hungry_module.gd

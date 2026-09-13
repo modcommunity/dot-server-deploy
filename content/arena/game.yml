@@ -17,10 +17,10 @@
 #     is what reconciliation reads as "what the client is showing". The measured
 #     correction becomes the whole replay distance.
 #
-# kind: builtin -- the code is compiled into this build, for the reason
-# content/lobby/game.yml sets out at length: a mounted dot-cloud pack's `class_name`
-# globals are not registered in the host, so every cross-file type reference inside a
-# pack fails to compile, and game-arena is written in the family's ordinary style.
+# kind: pack -- delivered, for the reason content/lobby/game.yml sets out at length.
+# game-arena references its own files by relative path and rebases its own res:// strings,
+# which is what makes it correct both in a build and at res://dot_cloud/arena/<version>/.
+# Published with `./server pack arena --source ../game-arena`.
 #
 # ONE MAP, AND THAT IS THE GAME. `dm_box` is an ArenaMap -- a list of AABBs that becomes
 # meshes, static bodies and analytic trace geometry from ONE description, so the server's
@@ -31,11 +31,12 @@
 name: Arena
 content_id: arena
 version: 0.1.0
-kind: builtin
+kind: pack
 max_players: 16
 
-scene: res://scenes/arena_server.tscn
-module: res://game/arena_module.gd
+scene: scenes/arena_server.tscn
+client_scene: game/arena.tscn
+module: game/arena_module.gd
 
 # Set when this game is loaded, and only while it is loaded.
 #

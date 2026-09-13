@@ -102,7 +102,7 @@ Anything it does can be done on its own afterwards: the three scripts above take
 - **Configuration in YAML**, in files split by subject: `server.yml`, `net.yml`, `rcon.yml`, `auth.yml`, `groups.yml` and `permissions.yml`. Anything dot-server exposes as a console variable can go in them under its own name.
 - **Roles, not flags.** dot-server's permission model is flags, deliberately; `groups.yml` is the translation, so an operator writes `admin: [kick, ban, mute]` and a player gets the flags.
 - **Moderation.** Bans, kicks, mutes, votes and an audit log, all dot-server's, all reachable from the console or over RCON.
-- **Games loaded at runtime.** A directory under `content/` with a `game.yml` in it is a game. `changelevel` switches between them with players still connected.
+- **Games loaded at runtime, and delivered at runtime.** A directory under `content/` with a `game.yml` in it is a game; `changelevel` switches between them with players still connected. **This build ships no game code at all** — every one of them is a signed dot-cloud pack that the server and each client download and mount, so adding a game to your server is publishing a pack and writing a YAML file. No new client build, no upload, nothing in an admin panel, and every player already connected to something else gets it on the way in.
 - **The game, and the map it starts on.** `sv_game` and `sv_map` in `cfg/server.yml`, `--game` and `--map` on the command line, `TMC_GAME` and `TMC_MAP` in a unit file, and `-- +map <id>` for the fingers of anybody who has run a dedicated server before. A game decides whether it has maps at all, so a game with none, and an id its catalogue has never heard of, are both a line in the log rather than a refusal to boot.
 - **The players choose the next game.** `!game_nominate`, `!game_rtv`, `!game_vote`, `!game_timeleft` and `!game_next`, which is the shape every server in this genre has had since 2005, over the games in `content/` rather than over maps. They are prefixed because a game may run a vote of its own over its own maps, and those own the bare `!rtv` and `!nominate` that players' fingers already know. Each game gets its own time limit, in its own `game.yml`. All of it is `cfg/vote.yml`, and `enabled: false` turns it off.
 - **A browser client.** `./server export-web` builds it; one export serves every server, because the address comes from `?server=`. **It publishes nothing** — `web/build/` is the output, and what makes a browser see it depends on which of the three deployment shapes you are on. A site-published build is `--zip` plus an upload, every time. [web/README.md](web/README.md#shipping-a-client-change-which-shape-you-are-on-and-what-it-costs) says how to tell which you are on in ten seconds, and why a stale build looks exactly like a change that did not work. It fetches Godot's export templates first if the machine has none — pinned to the engine's version, sha512 checked against a digest in git, and never as part of `./setup.sh`, because the archive is about a gigabyte and a server that only ever runs games should not pay for one. `tools/fetch-export-templates.sh` on its own does the same thing; `TMC_NO_DOWNLOAD` refuses both it and the runtime. It fetches Godot's export templates first if the machine has none — pinned to the engine's version, sha512 checked against a digest in git, and never as part of `./setup.sh`, because the archive is about a gigabyte and a server that only ever runs games should not pay for one. `tools/fetch-export-templates.sh` on its own does the same thing; `TMC_NO_DOWNLOAD` refuses both it and the runtime.
@@ -121,7 +121,9 @@ Anything it does can be done on its own afterwards: the three scripts above take
 }
 ```
 
-  `./server pack --all` does every one, `./server verify <id>` checks the signature. Packs are always signed: `client/content.json` ships `require_signed_manifests: true` because a pack can contain scripts, so an unsigned pack is one no client will mount — publishing without a key is refused rather than quietly producing something that works nowhere.
+  `pack.json` also carries `exclude_dirs`, which is what a whole GAME needs: `addons`, `examples`, `tools` and the like are a tree rather than a name pattern, and shipping a second copy of every addon the client already has took arena's pack from 140 files to 768. `--source <dir>` publishes a tree that is not under `content/` — which for a game is every time, since a game lives in its own repository.
+
+  `./server pack --all` does every one, `./server verify <id>` checks the signature. Packs are always signed: `client/content.json` ships `require_signed_manifests: true` because a pack can contain scripts, so an unsigned pack is one no client will mount — publishing without a key is refused rather than quietly producing something that works nowhere. `setup.sh` generates a key on a fresh box so that refusal never becomes the thing that stops an install.
 
 ## The layout
 
@@ -140,7 +142,14 @@ cfg/                 what an operator edits. Written on first run, and not in th
 
 content/             what the server serves
   global/              loaded by every game
-  lobby/game.yml       the lobby. The default
+  avatars/             cosmetic parts, published as a pack of their own
+  lobby/               the lobby. The default
+    game.yml             what it is, where its scene is inside the pack
+    pack.json            what its pack leaves out
+
+dist/                the published packs. Written by `./server pack`, not tracked.
+  arena/manifest.json    signed; the objects it names are beside it
+  arena/objects/
 
 data/                what the server writes
   from_yaml.cfg        what your YAML became. Read this when a setting seems ignored
@@ -230,14 +239,15 @@ A game can be **in the build** or **delivered**. Built in is the default and is 
    ```yaml
    kind: pack
    version: 0.1.0
-   manifest_url: /srv/tmc/dist/arena/manifest.json   # or https://…/content/arena/manifest.json
 
    scene: scenes/arena_server.tscn
    client_scene: game/arena.tscn
    module: game/arena_module.gd
    ```
 
-   `client_scene` is what a built-in game must **not** have and a delivered game must: `DotClientLink._resolve_scene` refuses every absolute path outside the mount, so it is the only way a client can be told what to show.
+   **No address**, and that is deliberate: a pack is found by its content id, against `content/` and `dist/` on this box first and then every `content_urls` entry in order. `manifest_url:` is still accepted and overrides all of that, for content that lives somewhere this server has no base for — but writing one by default put a per-deployment fact into a per-game file, and made every version bump an edit in two places.
+
+   `client_scene` is what a built-in game must **not** have and a delivered game must: `DotClientLink._resolve_scene` refuses every absolute path outside the mount, so it is the only way a client can be told what to show. `module:` is resolved against the mount too, so it is relative for the same reason.
 
 3. **Serve `dist/`, or do not.** `content/` and `dist/` on this box are searched before the network, so a server that published a pack already has it — a LAN deployment needs no web server at all. Clients are told where to fetch from by `content_urls` in `cfg/server.yml`, which the server passes down the connection.
 
@@ -287,7 +297,7 @@ So the worst a trusted-but-hostile publisher can do is **be the game you joined*
 
 ### The rule today
 
-One key. `cfg/content.json` and `client/content.json` each carry a single `trusted_keys` entry, the public half of `keys/content.key`, and the private half lives on the publishing machine and is gitignored *before* it is generated so it cannot arrive in a commit by being written first. **A pack signed by anything else mounts nowhere**, which means a server owner can point `manifest_url` anywhere they like and still cannot deliver code nobody vouched for. That is the right default and it should stay the default.
+One key. `cfg/content.json` and `client/content.json` each carry a single `trusted_keys` entry, the public half of `keys/content.key`, and the private half lives on the publishing machine and is gitignored *before* it is generated so it cannot arrive in a commit by being written first — `setup.sh` generates one on a fresh box, `chmod 600`, because a server with no key publishes nothing at all rather than publishing something that mounts nowhere. **A pack signed by anything else mounts nowhere**, which means a server owner can point a server at any content they like and still cannot deliver code nobody vouched for. That is the right default and it should stay the default.
 
 The cost is equally plain: a server owner who writes their *own* game cannot deliver it to the stock client. They have three ways round it, in increasing order of how much they are taking on —
 
@@ -295,11 +305,42 @@ The cost is equally plain: a server owner who writes their *own* game cannot del
 2. **Run their own client build.** `client/content.json` is baked into the export, so adding a key there and running `./server export-web` produces a client that trusts them. Their players use their page; nobody else is affected.
 3. **`require_signed_manifests: false`.** LAN and development only. It logs a warning every time, and it should: it turns a content system into a remote-code-execution system with extra steps.
 
-### The gap to close before opening this up
+### A key says what it is trusted FOR
 
-**A trusted key is trusted for every content id.** `DotCloudSignature.verify_any` tries each configured key, returns the id of whichever matched, and the caller throws it away — nothing anywhere checks that *this* publisher is entitled to *this* id. With one key that is a distinction without a difference. The moment there are two it is not: the second publisher can sign a manifest claiming `content_id: arena`, and a client that has not already mounted `arena@0.1.0` takes it.
+**A trusted key used to be trusted for every content id there is.** `verify_any` tried each configured key, returned whichever matched, and the caller threw the id away — nothing checked that *this* publisher was entitled to *this* content. With one key that is a distinction without a difference; with two it is the hole that lets the second publisher sign a manifest claiming `content_id: arena` and have any client that has not already mounted it take the pack.
 
-Closing it is small and should happen **before** a second key is ever added, not after: scope each `trusted_keys` entry to the content ids it may sign — a publisher gets a prefix, `first-party` gets everything — and have `verify_manifest` check the id it just accepted against the entry that accepted it. Until then, adding a second key is adding a second party who can be any game.
+An entry can now name its namespace:
+
+```json
+"trusted_keys": {
+    "first-party": "-----BEGIN PUBLIC KEY-----\n…",
+    "community-alice": {
+        "key": "-----BEGIN PUBLIC KEY-----\n…",
+        "content_ids": ["alice_*"]
+    }
+}
+```
+
+A bare PEM still means every id, because that is what every config written before this said and silently narrowing them would break deployments that are correct. The patterns are globs, because a publisher's namespace is a prefix in every deployment that has ever had one.
+
+`verify_for` does both halves and the failure says which: a bad signature is `The manifest is not signed by any trusted key`; a good signature from the wrong key is
+
+```
+'community-alice' is not trusted to publish 'arena'.
+  the signature is valid; the key is scoped to alice_*
+```
+
+**Verification first, entitlement second**, and that order is not cosmetic: a scope check on an unverified manifest is a check on a claim the attacker wrote.
+
+`DotCloudConfig.validate()` warns about the one arrangement that is actually a hole — several keys with at least one of them unscoped — and says nothing about a single unscoped key, which is every deployment today. It warns rather than refuses: a client that will not start is worse than one that says so, and the content still has to be signed by a key in the set either way.
+
+### How to add a publisher
+
+1. They generate a key pair and keep the private half: `godot --headless --path . --script addons/dot_cloud/publish/dot_cloud_cli.gd -- keygen --private theirs.key --public theirs.pub`.
+2. Agree a namespace — a prefix on their content ids, `alice_` — and have them publish under it.
+3. Add the public half to `client/content.json` **with `content_ids`**, and re-export the client. Add the same entry to `cfg/content.json` on any server that will serve their packs.
+
+Step 3 is the one that cannot be skipped or widened. An entry without `content_ids` is a publisher who can be any game on the platform.
 
 ## The website chat box, and running a command from it
 

@@ -19,17 +19,18 @@
 # failure the Dockerfile's `--vendor` comment records having been found by running the
 # container. Nothing re-checked it afterwards from this side.
 #
-# It also exercises the one branch check.sh deliberately does NOT fail on: with no
-# ../game-simple-lobby to compare against, the lobby staleness check reports `--` and passes,
-# because the copy it was built with is the only record. That branch has to keep
-# working, and here is where it is reached on purpose rather than by accident.
+# It also exercises the one branch check.sh deliberately does NOT fail on: with no sibling
+# repositories to compare against, the pack staleness check says so and passes, because
+# the packs the tree was built with are the only record there is -- and a deployment has
+# no signing key to republish with anyway. That branch has to keep working, and here is
+# where it is reached on purpose rather than by accident.
 #
 # HOW IT WORKS
 #
 #   1. Exports the TRACKED files only, into a staging directory beside symlinks to the
-#      sibling repositories. Tracked-only on purpose: addons/, game/ and scenes/ are
-#      gitignored here, so anything left in a working tree would hide the case where
-#      setup.sh fails to produce them.
+#      sibling repositories. Tracked-only on purpose: addons/ and dist/ are gitignored
+#      here, so anything left in a working tree would hide the case where setup.sh fails
+#      to produce them.
 #   2. Runs ./setup.sh --vendor there -- the developer-builds-a-tarball position.
 #   3. MOVES the result somewhere the siblings do not exist, which is the shape an
 #      operator unpacks, and checks nothing points back out of it.
@@ -156,12 +157,28 @@ else
     printf '       %s\n' $linked
 fi
 
-# The lobby is copied out of ../game-simple-lobby, which is now gone. It has to have come
-# with the tree.
-if [ -f "$TREE/scenes/room_server.tscn" ] && [ -d "$TREE/game" ]; then
-    pass "the lobby travelled with it ($(find "$TREE/game" "$TREE/scenes" -name '*.gd' -o -name '*.tscn' | wc -l) files)"
+# The games are PUBLISHED, not copied: what has to have travelled is dist/, which holds a
+# signed pack per game and is the only record of them once the siblings are gone. A tree
+# that arrived without it boots into a server that can serve nothing, and the failure --
+# every game refusing to mount -- points at the content host rather than at the tarball.
+packs="$(find "$TREE/dist" -mindepth 2 -maxdepth 2 -name manifest.json 2>/dev/null | wc -l)"
+if [ "$packs" -gt 0 ]; then
+    pass "$packs published pack(s) travelled with it"
 else
-    fail "game/ or scenes/ did not survive the move"
+    fail "dist/ did not survive the move; this tree can serve no game"
+fi
+
+# And nothing vendored came with it. A game/ or scenes/ in a packaged tree is a build
+# that contains a game, which is the arrangement the packs replaced -- and a stale copy
+# there would win over the delivered one for whoever unpacked this and for nobody else.
+stray="$(for d in game scenes maps avatars npcs props textures; do
+    [ -d "$TREE/$d" ] && echo "$d"
+done)"
+if [ -z "$stray" ]; then
+    pass "and no game is vendored into it"
+else
+    fail "vendored game directories travelled with it:"
+    printf '       %s\n' $stray
 fi
 
 # --- 4. It runs -----------------------------------------------------------
@@ -169,9 +186,9 @@ fi
 echo
 echo "the staleness branch"
 
-# check.sh --parse with no sibling to compare against: the lobby check reports `--`
-# and must NOT fail, because in this shape the copy is the only record there is. It is
-# the one branch of check.sh a developer checkout can never reach.
+# check.sh --parse with no sibling to compare against: the pack staleness check says so
+# and must NOT fail, because in this shape the published packs are the only record there
+# is. It is the one branch of check.sh a developer checkout can never reach.
 parse_out="$( (cd "$TREE" && GODOT="$GODOT" tools/check.sh --parse) 2>&1 )"
 parse_rc=$?
 

@@ -1,14 +1,18 @@
 extends Node
-# [b]By path, because the games no longer have global names.[/b] Every game here
-# dropped its `class_name` declarations so it can be DELIVERED as a dot-cloud pack:
-# a mounted pack's globals are not registered in the host, so a delivered game may
-# not use them. These are the HOST's references into a vendored game, so they are
-# res:// -- this file stays put while the game it reaches into may be vendored here
-# or mounted from a pack.
-const HungryModule := preload("res://game/hungry_module.gd")
-const HungryWorld := preload("res://game/hungry_world.gd")
-const RoomModule := preload("res://game/room_module.gd")
-const RoomWorld := preload("res://game/room_world.gd")
+# [b]Not preloaded, and there is nothing left to preload.[/b] Every game here is
+# DELIVERED now: its files exist at `res://dot_cloud/<id>/<version>/…`, a path no constant
+# in this file can name, because the version belongs to the game and this file belongs to
+# the host. A `preload("res://game/hungry_module.gd")` used to work because the game was
+# copied into this project; there is no `game/` any more.
+#
+# What is left is what the host and the game actually agree on: the REGISTRY NAME each
+# world publishes itself under, and the module name. Those are the contract -- a host
+# finds a game's world by asking DotRegistry for a name, exactly as a module finds it --
+# so a literal here is not a shortcut past a type, it IS the interface. If a game renames
+# one, the check below reports "a hungry world is registered: false", which is the right
+# failure and names the right thing.
+const HUNGRY_WORLD := &"hungry_world"
+const ROOM_WORLD := &"room_world"
 
 ## Changing the game under a running server, which is what a multi-game server is for.
 ##
@@ -284,7 +288,7 @@ func _test_switch_to_hungry() -> void:
 	# netcode, and the world that is about to be freed is holding nothing. A real
 	# `changelevel` happens under players, and that is a different code path: it took a
 	# browser sitting in the lobby to reach it, and it segfaulted the server.
-	var lobby := _server().modules.get_module("room") as RoomModule
+	var lobby: DotModule = _server().modules.get_module("room")
 
 	# [b]Somebody came and went before the one who is still here.[/b] That is what a real
 	# server looks like by the time anybody types `changelevel`, and it is the difference
@@ -294,7 +298,7 @@ func _test_switch_to_hungry() -> void:
 	lobby.bridge.add_occupant(2, 4242, "Left already")
 	lobby.bridge.remove_peer(2)
 
-	var seated := lobby.bridge.add_occupant(3, 4243, "Occupant")
+	var seated: DotResult = lobby.bridge.add_occupant(3, 4243, "Occupant")
 	_check(seated.ok, "somebody is in the lobby first", str(seated.error))
 	_check(
 		lobby.world.occupant_count() == 1,
@@ -322,14 +326,14 @@ func _test_switch_to_hungry() -> void:
 		"two modules each holding a DotNetManager would both tick the same world"
 	)
 
-	var world := DotRegistry.get_node_service(HungryWorld.SERVICE)
-	_check(world != null, "a HungryWorld is registered")
+	var world := DotRegistry.get_node_service(HUNGRY_WORLD)
+	_check(world != null, "a hungry world is registered")
 	_check(
-		DotRegistry.get_node_service(RoomWorld.SERVICE) == null,
+		DotRegistry.get_node_service(ROOM_WORLD) == null,
 		"and the room's world is not"
 	)
 
-	var module := _server().modules.get_module("hungry") as HungryModule
+	var module: DotModule = _server().modules.get_module("hungry")
 	_check(
 		module != null and module.world == world,
 		"the module is bound to the world the scene created"
@@ -339,16 +343,18 @@ func _test_switch_to_hungry() -> void:
 		"and its netcode is running"
 	)
 
-	# The only thing that tells a multi-game client which of its built-in scenes to show.
+	# What a joining client is told, which for a delivered game is the whole of what it
+	# needs: a game id it can show a name for, and a scene path RELATIVE to the mount.
 	var info := _server().games.load_info()
 	_check(
 		String(info.get("game_id", "")) == "hungry_classic",
 		"and what a joining client is told names the game (%s)" % info.get("game_id", "")
 	)
 	_check(
-		String(info.get("scene", "")) == "",
-		"while naming no scene, because it ships inside the client's own build",
-		"DotClientLink refuses every absolute res:// path outside dot-cloud's mount"
+		String(info.get("scene", "")) == "game/client/hungry_client.tscn",
+		"and names its client scene RELATIVELY (%s)" % info.get("scene", ""),
+		"DotClientLink refuses every absolute res:// path outside dot-cloud's mount, so "
+		+ "a relative one is the only spelling a client will resolve"
 	)
 	_done()
 
@@ -357,7 +363,7 @@ func _test_switch_between_modes() -> void:
 	_section("hungry classic -> frenzy")
 
 	var before := _server().modules.get_module("hungry")
-	var world_before := DotRegistry.get_node_service(HungryWorld.SERVICE)
+	var world_before := DotRegistry.get_node_service(HUNGRY_WORLD)
 
 	var result := _console("changelevel hungry_frenzy")
 	_check(result.ok, "the second mode can be reached", str(result.error))
@@ -380,15 +386,15 @@ func _test_switch_between_modes() -> void:
 		"reloading it would rebuild the DotNetManager and disconnect everybody"
 	)
 
-	var world_after := DotRegistry.get_node_service(HungryWorld.SERVICE)
+	var world_after := DotRegistry.get_node_service(HUNGRY_WORLD)
 	_check(world_after != world_before, "the world is a new one")
 	_check(
-		after != null and (after as HungryModule).world == world_after,
+		after != null and after.world == world_after,
 		"and the module rebound onto it"
 	)
 	_check(
-		after != null and (after as HungryModule).net != null
-			and (after as HungryModule).net.is_running(),
+		after != null and after.net != null
+			and after.net.is_running(),
 		"with the same netcode still running"
 	)
 	_done()
@@ -409,11 +415,11 @@ func _test_switch_back() -> void:
 	_check(_server().modules.has_module("room"), "the lobby's module is back")
 	_check(not _server().modules.has_module("hungry"), "and hungry's is gone")
 	_check(
-		DotRegistry.get_node_service(RoomWorld.SERVICE) != null,
-		"a RoomWorld is registered again"
+		DotRegistry.get_node_service(ROOM_WORLD) != null,
+		"a room world is registered again"
 	)
 	_check(
-		DotRegistry.get_node_service(HungryWorld.SERVICE) == null,
+		DotRegistry.get_node_service(HUNGRY_WORLD) == null,
 		"and hungry's world is not",
 		"a world left registered would be found by the next module to look for one"
 	)

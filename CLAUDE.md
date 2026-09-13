@@ -32,14 +32,22 @@ The pack mounts, its scenes load, and every script in it is dead — with no err
 something tries to run one. So a game meant to be **delivered** references its own files
 by path; a game compiled into the shell has no such restriction.
 
-That is why the lobby is `kind: builtin`. It is the shell's home screen, it is what a
-player sees before anything is downloaded, and it is written in the family's ordinary
-style. `content/lobby/game.yml` says so where somebody will read it.
+That constraint has not gone away — it is a property of the engine. What changed is the
+games: every one of them references its own files by relative path and rebases its own
+`res://` strings, so each is correct in a build and at a mount prefix alike. **All seven
+game ids are `kind: pack` and this build ships no game at all.** The five fourth-form
+routes below are what had to be closed first, and `tools/check.sh` keeps them closed.
+
+The lobby was the last holdout and the argument for it was real: it is the shell's home
+screen and what a player sees before anything is downloaded. It lost anyway, because a
+built-in lobby is a lobby that has to be re-exported to change — and a client that
+contains one game contains the machinery for all of them, which is the thing this was
+trying to stop. `content/lobby/game.yml` sets out the whole of it.
 
 It is the same shape as the constraint dot-cloud already documents for avatar packs — "the
 pack is data, the code ships in the build" — reached from further along.
 
-### The constraint has four forms, and all of them are closed
+### The constraint has five forms, and all of them are closed
 
 One root cause — a delivered pack mounts at `res://dot_cloud/<id>/<version>/` and not at
 the path its content was authored at — reaching the code by three separate routes. Each
@@ -52,6 +60,7 @@ game is actually delivered.
 | scene → script by `ext_resource` | the scene loads with its script silently missing: `Attempt to open script 'res://…' … 'File not found'` | **closed** — `DotCloudPublisher` rewrites text resources to the mount prefix at publish time |
 | script → anything by `"res://…"` | resolves against the HOST project root: another game's file, or nothing | **closed** — `<Game>Paths.rebase()` resolves the game's root from its own script's `resource_path` |
 | script → superclass by `extends "res://…"` | the same, for the class a script inherits from | **closed** — made relative; a relative superclass path travels with the script |
+| an asset the engine has to IMPORT | a `.glb` or `.png` in the pack is bytes nothing can open: `exists=false file=true load=null`, and no error anywhere because the file is right there | **closed** — the publisher ships `.godot/imported/` and the `.import` markers, and rewrites the three absolute paths inside each marker onto the mount |
 
 The fourth was found by accident: a const collision made somebody open
 `npc_chaser.gd`, whose own comment said it extended a path rather than a class *"because
@@ -286,39 +295,68 @@ calls `try_web_handoff()`, which is the only sign-in this shell was ever meant t
 
 Those two failing requests were also what made the wrong domain visible at all.
 
-## The games are copied, and the copies are checked
+## The games are published, and the packs are checked
 
-`game/`, `scenes/`, `maps/` and `avatars/` are not in this repository. `setup.sh`
-copies them out of `../game-simple-lobby`, `../game-hungario`, `../game-g2gfast`,
-`../game-playground` and `../game-arena` — the list is `setup.sh`'s `GAMES` and this
-sentence is prose about it, not a second copy; `tools/check.sh` and
-`tools/package_check.sh` both READ that list rather than repeating it, which is the fix
-for the time all three had gone stale together —
-copied rather than linked because they are compiled into this build, and gitignored
-because the siblings are the record of what they should contain.
+**This build contains no game.** `setup.sh` turns each sibling repository into a signed
+dot-cloud pack in `dist/` — `./server pack <id> --source ../<repo>` — and the server finds
+it there by content id, with no URL anywhere. A client downloads it on connect. The list
+is `setup.sh`'s `GAMES` and this sentence is prose about it, not a second copy;
+`tools/check.sh` and `tools/package_check.sh` both READ that list rather than repeating
+it, which is the fix for the time all three had gone stale together.
 
-**Only `scenes/*.tscn` is copied, not the scripts beside them.** A game's server-scene
-script therefore has to live in its `game/` directory; one under `scenes/` never reaches
-this build, and the failure is three steps removed from the cause — the scene fails to
-load with "referenced non-existent resource", the module refuses to load because no game
-registered itself, and the server reports "the game loaded but its module did not".
-game-arena's `arena_server.gd` was in `scenes/` for exactly one run.
+It was not always so. For most of this project's life the five games were **copied** into
+one `game/` and one `scenes/` at the project root, because a `.tscn` stores its script
+reference as an absolute `res://` path and there is no relative form — so a game's own
+`maps/` had to become *this* project's `maps/`. That worked, and it meant a new game was a
+new build of the engine: an export, an upload, and every player on the old build unable to
+join. Closing the five forms of the mount constraint above is what made the other
+arrangement possible, and `pack.json` beside each `game.yml` is where a game says what not
+to ship.
 
-The failure that arrangement allows is a **stale copy**, and it is invisible from either
-side: a game is fixed in its own repository, `setup.sh` is not re-run, and this project boots
-the old one. Both suites pass, because each tests the copy it has — the game's on the
-fix, this one on the code an operator actually deploys. They are different code and both
-are green. It is the same shape as every other bug in this family that hid behind a suite
-that was genuinely passing.
+**What the source of a pack is, and why it is the repository.** Not a directory here: the
+old arrangement merged all five games into one `game/`, so no directory in this project
+*is* any single game — the files are separable only by their name prefix, and an `include`
+list copies directories and files, not globs. `--source` names the repository and
+`game.yml` still supplies the id, the version and the entry scene, so nothing is said
+twice.
 
-`tools/check.sh` compares the two file by file and fails on any difference in either
-direction. Where there is no sibling to compare against — a release tarball, the
-container's final stage — it says so and does not fail, because the copy it was built
-with is the only one there will ever be.
+**A pack is named for its CONTENT id, not its directory.** Those are the same almost
+everywhere and where they differ it is load-bearing: hungario is three game ids over one
+`content_id: hungry`, and the lobby is `a_room`. Everything that looks a pack up builds
+`{base}/{content id}/manifest.json` and `dist/` is one of those bases, so `dist/lobby/`
+would have been a pack nothing — not the server that wrote it — could find.
 
-This is **not** the family's deliberate duplication. That rule is about a check two addons
-both need being written twice so neither has to depend on the other (`DotAvatarKey`,
-`DotLoadoutKey`). This is one game in two places that must be the same game.
+**Imports happen before publishing, and that ordering is the whole of it.** A `.glb` or a
+`.png` is not a loadable resource: the editor imports it into `.godot/imported/` and the
+`.import` marker beside it redirects every load there. Nothing imports at runtime, on any
+platform. So `setup.sh` runs `--import` in each game repository before packing it, and the
+publisher ships the imported form and the markers — with the three absolute paths inside
+each marker rewritten onto the mount. Without that a pack carries the bytes of an asset
+nothing can open and reports nothing, because the file is right there:
+
+```
+character-a.glb    exists=false  file=true   load=null
+arena.tscn         exists=true   file=true   load=PackedScene
+```
+
+The failure this still allows is a **stale pack**, and it is invisible from either side: a
+game is fixed in its own repository, `setup.sh` is not re-run, and this server keeps
+serving the old pack. Both suites pass, because each tests the code it has — the game's on
+the fix, this one on what an operator actually deploys. It is the same shape as every
+other bug in this family that hid behind a suite that was genuinely passing.
+
+`tools/check.sh` compares the manifest's timestamp against every source file in the
+sibling and fails on anything newer. **Timestamps rather than contents**, because the
+publisher rewrites every `res://` reference in a `.tscn` onto the mount prefix — a
+correctly published file is deliberately *not* byte-identical to its source, so the
+comparison the old copy-checker did cannot be made here. It also fails if `game/`,
+`scenes/`, `maps/`, `avatars/`, `npcs/`, `props/` or `textures/` exists at all: a vendored
+copy left over from an older checkout would win over the delivered one for players on this
+build and for nobody else.
+
+Where there is no sibling to compare against — a release tarball, the container's final
+stage — it says so and does not fail, and `setup.sh` keeps whatever is in `dist/` rather
+than trying to republish, because a deployment should not be holding the signing key.
 
 ### It went stale, and so did the guard
 

@@ -559,9 +559,11 @@ do_verify() {
 # nothing. `--args "--,--connect,{host}:{port}"` is the spelling that works, and the
 # app's own argument builder drops the pair cleanly when no server was chosen.
 
-# [b]An imported map must NOT be in the build, and MUST be on the CDN.[/b] Shared by
-# both export commands, because both presets exclude `maps/imported/*` and both builds
-# reach a player who then has to fetch those maps from the content origin.
+# [b]An imported map must NOT be in a pack, and MUST be on the CDN.[/b] Shared by both
+# export commands, because either build reaches a player who then has to fetch those maps
+# from the content origin -- 66 MB of converted geometry that is published one pack per
+# map, so a player downloads the map the server is on rather than every map it could be
+# on. The game's own `pack.json` excludes the directory; this checks the other half.
 #
 # The second half is the one worth having. A map excluded from the build and never
 # published is a map nobody can reach, and the symptom -- G2GBspMap reads the manifest
@@ -621,27 +623,27 @@ check_excluded_maps() {
                 "$RED" "$id" "$OFF" >&2
             unpublished=$((unpublished + 1))
         fi
-    done < <(find "$PROJECT/maps/imported" -name '*.bin' 2>/dev/null)
+    done < <(find "$PROJECT"/../game-*/maps/imported -name '*.bin' 2>/dev/null)
 
-    [ "$carried" -eq 0 ] || warn "$carried map(s) are in the pack as well as on the CDN -- exclude_filter should hold maps/imported/*"
+    [ "$carried" -eq 0 ] || warn "$carried map(s) are in the build as well as on the CDN -- the game's pack.json should exclude \"imported\""
     # NAMING THE DIRECTORY IS THE POINT. This said `./server pack <id>` and nothing
     # else, and that command publishes `content/<id>` -- where no imported map has ever
     # lived. Every one of them is under `maps/imported/`, so the remedy as written fails
     # with "no content at content/surf_mesa" and reads like the map is the problem.
     [ "$unpublished" -eq 0 ] || die "$unpublished map(s) reach nobody: not in the build, not in dist/.
 
-  Publish them -- the map id is the content id, and the directory is not content/:
+  Publish them -- the map id is the content id, and the maps are in the GAME's
+  repository rather than under content/ here:
 
-      ./server pack --all --content maps/imported
+      ./server pack --all --content ../game-g2gfast/maps/imported
 
-  Or put them back in the export by dropping maps/imported/* from exclude_filter." 3
+  Or put them back in the game's pack by dropping \"imported\" from its pack.json." 3
 
-    # Top-level maps/*.bin -- a map that is part of the build rather than content --
-    # would still need carrying, and `all_resources` still will not carry it. There are
-    # none today; this says so rather than leaving the next person to find out.
-    if find "$PROJECT/maps" -maxdepth 2 -name '*.bin' 2>/dev/null | grep -q .; then
-        warn "maps/*.bin outside maps/imported/ exists and needs include_filter to reach the pack"
-    fi
+    # [b]There is no maps/ in this project any more.[/b] The games are published as packs
+    # and each one carries its own maps/, so an imported map is now excluded by its
+    # GAME's pack.json rather than by this project's exclude_filter -- and the loop above
+    # reads the sibling repositories for that reason. What has not changed is the half
+    # worth having: a map excluded from a pack and never published reaches nobody.
 }
 
 # Zip a directory from INSIDE it, so entries are `tmc.x86_64` rather than

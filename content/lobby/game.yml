@@ -1,28 +1,36 @@
 # The lobby. What a player lands in, and what the server runs when it is not
 # running anything else.
 #
-# kind: builtin  -- the code is compiled into this build.
+# kind: pack -- the code is DELIVERED, and the build contains none of it.
 #
-# It is builtin rather than a pack on purpose, and the reason is measured rather
-# than assumed: a mounted dot-cloud pack's `class_name` globals are NOT registered
-# in the host, so every cross-file type reference inside a pack fails to compile.
-# The pack mounts, its scenes load, and every script in it is dead. A game meant to
-# be delivered has to reference its own files by path -- preload("res://x.gd") and
-# extends "res://x.gd" both work -- and the lobby is written in the family's
-# ordinary style because it is the one game that is always here.
+# This was builtin for most of this project's life, and the reason was measured rather
+# than assumed: a mounted dot-cloud pack's `class_name` globals are NOT registered in the
+# host, so every cross-file type reference inside a pack fails to compile. The pack
+# mounts, its scenes load, and every script in it is dead. That constraint has not gone
+# away -- it is a property of the engine. What changed is the games: all five now
+# reference their own files by relative path and rebase their own `res://` strings, so
+# they are correct in both places, and `tools/check.sh` refuses a new `class_name` so
+# they stay that way.
 #
-# Note that `client_scene` is deliberately absent. DotClientLink refuses every
-# absolute res:// path outside dot-cloud's mount, so naming one here would have
-# every client refuse it, never report loaded, and be timed out in LOADING with no
-# other symptom.
+# WHAT THAT BUYS, and it is the whole point of the exercise: this build ships no game.
+# A server owner adds one by publishing a pack and writing a `game.yml`, and every
+# player's client downloads it on connect -- no new client build, no upload, nothing in
+# an admin panel. The client here is a shell that knows how to join a server and mount
+# what it is told to.
+#
+# `client_scene` is relative and MUST be. DotClientLink refuses every absolute res://
+# path outside dot-cloud's mount -- a server that could name one could ask every client
+# to load any scene in its build -- so a relative path is not a convenience here, it is
+# the only spelling that resolves.
 
 name: The Room
 content_id: a_room       # which built-in client shows this; see client/shell.gd
 version: 0.1.0
-kind: builtin
+kind: pack
 default: true
 
-scene: res://scenes/room_server.tscn
-module: res://game/room_module.gd
+scene: scenes/room_server.tscn
+client_scene: scenes/room_client.tscn
+module: game/room_module.gd
 
 max_players: 64

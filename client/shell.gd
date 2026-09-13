@@ -748,13 +748,19 @@ func _connect_to(address: String) -> void:
 ## would leave every client unable to find the scene for a game it still has. `content_id`
 ## is the game's own identity, and it is also how two game ids share one client — hungry's
 ## classic and frenzy are one `hungry`.
-const BUILTIN_CLIENTS := {
-	"a_room": "res://scenes/room_client.tscn",
-	"hungry": "res://game/client/hungry_client.tscn",
-	"g2gfast": "res://game/g2g.tscn",
-	"playground": "res://game/playground.tscn",
-	"arena": "res://game/arena.tscn",
-}
+##
+## [b]EMPTY, and that is the whole point of this build.[/b] It held five entries and five
+## games were compiled in beside them, so playing a game meant shipping a client that
+## already knew about it: a new game was a new export, an upload, and every player on the
+## old build unable to join. Every one of the five is a pack now, and this shell downloads
+## and mounts whatever the server it joined is running.
+##
+## The table is kept rather than deleted because the mechanism is still right for anybody
+## building a client with a game inside it — a single-game product, a demo, an offline
+## build. Add an entry and that content id stops needing a download. What must NOT go back
+## is an entry for a game that is also published: the built-in copy would win for players
+## on this build and the delivered one for everybody else, and the two would drift.
+const BUILTIN_CLIENTS := {}
 
 
 ## The server told us which game it is running. Fires on the first load and on every
@@ -782,13 +788,21 @@ func _on_spawned() -> void:
 	var content_id := link.server_content_id
 
 	if content_id == "":
-		# A server running nothing at all. Legitimate — dot-server supports it — and the
-		# only case where falling back to the lobby is right rather than a guess, because
-		# there is no game to be wrong about.
-		content_id = "a_room"
+		# A server running nothing at all. Legitimate — dot-server supports it — and said
+		# out loud, because an empty screen is indistinguishable from a broken client.
+		# There is no lobby to fall back to any more: the lobby is delivered like every
+		# other game, so a server that is running none has nothing for this client to show.
+		_fail("This server is not running a game yet.")
+		return
 
 	if not BUILTIN_CLIENTS.has(content_id):
-		_fail("This build has no client for '%s'." % content_id)
+		# The server named a game whose content it did not deliver. With an empty
+		# BUILTIN_CLIENTS this is the only way to get here, and it is a server-side
+		# mistake every time: a `kind: builtin` game on a server whose client is this
+		# shell, or a pack that failed to mount without failing loudly.
+		_fail(
+			"This server is running '%s' but did not send its content." % content_id
+		)
 		return
 
 	var path := String(BUILTIN_CLIENTS[content_id])

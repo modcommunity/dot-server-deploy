@@ -1,15 +1,11 @@
 extends SceneTree
 
-# [b]By path, because these classes no longer have global names.[/b] game-g2gfast
-# dropped every `class_name` so it can be DELIVERED as a dot-cloud pack -- a mounted
-# pack's globals are not registered in the host, so a delivered game may not use
-# them. setup.sh vendors that game into this project, so the next setup run replaces
-# the copy this probe was written against and `G2GGame` stops existing. It is a
-# res:// path rather than a relative one because this file is the HOST's, not the
-# game's: it stays where it is while the game it reaches into may be vendored here
-# or mounted from a pack.
-const G2GGame := preload("res://game/g2g_game.gd")
-const G2GConfig := preload("res://game/g2g_config.gd")
+# [b]Loaded out of the MOUNT, not preloaded, because the game is not in this build.[/b]
+# game-g2gfast is a delivered pack: its scripts exist at
+# `res://dot_cloud/g2gfast/<version>/game/…`, a path no constant here can name, because
+# the version belongs to the game and this file belongs to the host. So the probe mounts
+# the pack first -- which it was going to do anyway, since mounting is half of what it
+# proves -- and loads them from where they landed.
 
 ## Does a client with NO maps get one from the content origin?
 ##
@@ -66,9 +62,42 @@ func _init() -> void:
 	# that changes the registered name.
 	root.add_child(cloud)
 
+	print("-- mounting g2gfast")
+
+	# The version is read from the descriptor rather than written here: a probe carrying
+	# its own copy of a version number is a probe that keeps passing against last week's
+	# pack after somebody bumps it.
+	var descriptor := TmcYaml.parse_file("res://content/g2gfast/game.yml")
+	if not descriptor.ok:
+		print("  [FAIL] could not read content/g2gfast/game.yml: ", str(descriptor.error))
+		quit(1)
+		return
+
+	var version := String(TmcYaml.at(descriptor.value as Dictionary, "version", ""))
+
+	var mounted: Variant = await cloud.ensure(&"g2gfast", version)
+	if not (mounted is DotResult) or not (mounted as DotResult).ok:
+		print("  [FAIL] could not mount g2gfast: ", str((mounted as DotResult).error))
+		quit(1)
+		return
+
+	var prefix := DotCloudClient.mount_prefix_for(&"g2gfast", version)
+	print("mounted at %s" % prefix)
+
+	var G2GGame: GDScript = load(prefix.path_join("game/g2g_game.gd"))
+	var G2GConfig: GDScript = load(prefix.path_join("game/g2g_config.gd"))
+
+	if G2GGame == null or G2GConfig == null:
+		print("  [FAIL] the pack mounted but its scripts did not load")
+		quit(1)
+		return
+
 	print("-- building the game")
 
-	var game := G2GGame.new()
+	# Typed Node rather than inferred: `G2GGame` is a GDScript loaded at runtime, so
+	# `new()` is a Variant and inference on one is an error under this project's warning
+	# settings. A G2GGame IS a Node, which is all this probe touches it as.
+	var game: Node = G2GGame.new()
 	game.name = "Game"
 	game.config = G2GConfig.new()
 	game.config.authoritative = false
@@ -85,7 +114,7 @@ func _init() -> void:
 		quit(1)
 		return
 
-	var before := game.maps.catalogue.has(id)
+	var before: bool = game.maps.catalogue.has(id)
 	print("catalogue has %s before: %s" % [id, before])
 
 	if before:
