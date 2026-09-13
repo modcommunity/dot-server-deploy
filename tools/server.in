@@ -102,7 +102,8 @@ usage() {
     check               Boot, load the game, shut down. Exit 0 if it all worked.
     config              Print the resolved configuration and exit.
     games               List what is in the content directory and exit.
-    pack <id>           Publish content/<id> as a signed dot-cloud pack, into
+    pack <id> [--source DIR]
+                        Publish content/<id> as a signed dot-cloud pack, into
                         dist/<id>. Any content directory, not only a game:
                         an avatar set, a prop pack or a texture set is
                         published exactly the same way. --all does every one.
@@ -253,6 +254,10 @@ while [ $# -gt 0 ]; do
         --build-version) [ $# -ge 2 ] || die "$1 needs a value"; BUILD_VERSION="$2"; shift 2 ;;
         --config)  CONFIG_DIR="${2:-}";  shift 2 ;;
         --content) CONTENT_DIR="${2:-}"; shift 2 ;;
+        # pack only. The tree to publish AS this pack, when it is not the content
+        # directory -- which for a game is every time: setup.sh vendors all five into one
+        # game/ and one scenes/, so no directory here is any single game.
+        --source)  PACK_SOURCE="${2:-}"; shift 2 ;;
         --data)    DATA_DIR="${2:-}";    shift 2 ;;
         --godot)   GODOT="${2:-}";       shift 2 ;;
         --verbose) VERBOSE="--verbose";  shift ;;
@@ -507,6 +512,7 @@ do_pack() {
         args+=(--id "$PACK_ID")
     fi
 
+    [ -n "${PACK_SOURCE:-}" ] && args+=(--source "$(abs "$PACK_SOURCE")")
     [ -n "${TMC_MIRROR:-}" ] && args+=(--mirror "$TMC_MIRROR")
 
     "$GODOT" "${args[@]}" || exit 7

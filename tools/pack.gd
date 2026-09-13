@@ -29,9 +29,17 @@ extends SceneTree
 ##         "avatars/kenney",
 ##         { "from": "avatars/head_stock.tscn", "to": "heads/stock.tscn" }
 ##     ],
-##     "exclude": ["*.import", "*.uid"]
+##     "exclude": ["*.import", "*.uid"],
+##     "exclude_dirs": ["addons", "examples", "tools"]
 ## }
 ## [/codeblock]
+##
+## [b]`exclude` matches file NAMES; `exclude_dirs` matches directory names, at any
+## depth.[/b] Two keys rather than one pattern language because the thing a game pack
+## always has to drop is a whole tree -- `addons/` above all, which is every dot-* addon
+## the host build already has -- and a name glob cannot express "and everything under it".
+## Packing a game repository without it produced an 11.2 MiB pack of which the game was a
+## fraction: 768 files, most of them a second copy of addons the client had already.
 ##
 ## [b]JSON, and not another YAML file.[/b] `game.yml` is YAML because an operator edits it
 ## on a live server; this is a build instruction a developer writes once, and JSON needs
@@ -159,7 +167,11 @@ func _publish_one(
 	#
 	# `pack/` or a `pack.json` overrides this: a game that is builtin here and also
 	# delivers content has said so explicitly.
+	# `--source` overrides all of this: naming a tree to publish IS the explicit statement
+	# the refusal below asks for, and it is how a game repository beside this one is packed
+	# without first being copied into `content/`.
 	if str(meta["kind"]) == "builtin" \
+			and not opts.has("source") \
 			and (meta["include"] as Array).is_empty() \
 			and not DirAccess.dir_exists_absolute(dir.path_join("pack")):
 		if not strict:
@@ -176,8 +188,24 @@ func _publish_one(
 	# before the directory itself because that is the layout a game with `kind: pack`
 	# uses and `tmc_content.gd` documents.
 	var source := ""
+	var given := str(opts.get("source", ""))
 
-	if not (meta["include"] as Array).is_empty():
+	if given != "":
+		# [b]A game's pack source is its own repository, not this project's tree.[/b]
+		# setup.sh vendors all five games into ONE `game/` and one `scenes/`, so there is
+		# no directory here that is any single game -- the files are separable only by
+		# their name prefix, and `include` copies directories and files, not globs. Naming
+		# the repository sidesteps the merge entirely, and `game.yml` still supplies the
+		# id, the version and the entry scene, so nothing is said twice.
+		if not DirAccess.dir_exists_absolute(given):
+			return DotResult.fail(
+				DotError.CODE_STATE,
+				"no directory at %s" % given,
+				"--source names the tree to publish as this pack"
+			)
+
+		source = given
+	elif not (meta["include"] as Array).is_empty():
 		var staged := STAGING.path_join(id)
 		var built := _assemble(meta, staged)
 
@@ -207,6 +235,13 @@ func _publish_one(
 
 	if str(meta["mount_root"]) != "":
 		pub.mount_root = str(meta["mount_root"])
+
+	# [b]On the publisher rather than on the staged tree.[/b] `exclude` is applied during
+	# assembly and so reaches only packs built from an `include` list -- a pack published
+	# from `pack/` or from `--source` never sees it. Directory excludes are the ones a game
+	# cannot do without, so they are applied where every route passes: `_collect`.
+	for name in (meta["exclude_dirs"] as Array):
+		pub.exclude_dirs.append(str(name))
 
 	for m in (meta["mirrors"] as Array):
 		pub.mirrors.append(str(m))
@@ -258,6 +293,7 @@ func _read_spec(dir: String, id: String) -> DotResult:
 		"mount_root": "",
 		"include": [],
 		"exclude": [],
+		"exclude_dirs": [],
 		"optional": [],
 		"groups": {},
 		"mirrors": [],
@@ -324,7 +360,7 @@ func _read_spec(dir: String, id: String) -> DotResult:
 	for key in doc:
 		meta[key] = doc[key]
 
-	for key in ["include", "exclude", "optional", "mirrors"]:
+	for key in ["include", "exclude", "exclude_dirs", "optional", "mirrors"]:
 		if not (meta[key] is Array):
 			return DotResult.fail(
 				DotError.CODE_INVALID, "%s: '%s' must be a list" % [pack_json, key]

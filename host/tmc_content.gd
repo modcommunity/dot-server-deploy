@@ -201,9 +201,30 @@ func _build(name: String, tree: Dictionary) -> DotResult:
 	# The module is named rather than derived from the id. A module is a script path and a
 	# guessed one produces a load failure that reads as a missing game — and a game with no
 	# server-side behaviour at all is legitimate, so "absent" has to be expressible.
+	# [b]A pack game's module is inside the mount, and nothing was resolving it.[/b]
+	# `TmcHost._on_game_loaded` hands this string straight to `load_module`, so a relative
+	# path -- the only kind a pack can honestly write, because the version segment of the
+	# mount prefix is not knowable when the file is authored -- was loaded as a path
+	# relative to the project root and found nothing. The alternative an operator would
+	# have reached for is worse: an absolute `res://dot_cloud/<id>/<version>/…` spelled out
+	# in `game.yml` is a path that has to be edited by hand on every version bump, and a
+	# stale one loads the PREVIOUS version's module against the new version's scene.
+	#
+	# Resolved the same way [method DotGameDescriptor._resolve] resolves the scene, and
+	# against the same id and version, so the module and the scene cannot disagree about
+	# which mount they are in.
+	var module := String(TmcYaml.at(tree, "module", ""))
+
+	if kind == "pack" and module != "" and not module.contains("://"):
+		module = "res://dot_cloud/%s/%s/%s" % [
+			descriptor.effective_content_id(),
+			descriptor.version if descriptor.version != "" else "0.0.0",
+			module,
+		]
+
 	descriptor.metadata = {
 		"kind": kind,
-		"module": String(TmcYaml.at(tree, "module", "")),
+		"module": module,
 		"directory": "%s/%s" % [root, name],
 	}
 

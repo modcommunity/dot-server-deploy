@@ -195,6 +195,94 @@ Exit codes are meaningful, so a supervisor can tell a misconfiguration from a cr
 
 **Secrets are not options.** `--rcon-password` is refused outright: argv is readable by every other process on the machine and ends up in pasted bug reports, which is why `DotConfig` refuses secrets from argv and the environment too.
 
+## Delivering a game as a pack
+
+A game can be **in the build** or **delivered**. Built in is the default and is what every game in `content/` is today: the code is compiled into this project, the server names an absolute `res://` scene, and the client shell has a matching entry in `BUILTIN_CLIENTS`. Delivered means the game is a signed dot-cloud pack that the server and every client download and mount at `res://dot_cloud/<id>/<version>/` — so a server owner adds a game by editing one YAML file, and a player who has never heard of it gets it on connect.
+
+**One pack per game, and the pack is the game's own repository.** Not a directory of this project: `setup.sh` vendors all five games into one `game/` and one `scenes/`, so no directory here *is* any single game — the files are separable only by their name prefix.
+
+**A pack's scripts may not use `class_name`.** A mounted pack's globals are not registered in the host, so every cross-file type reference inside it fails to compile: the pack mounts, the scene loads, and every script in it is dead. `preload("relative/path.gd")` and `extends "relative/path.gd"` both work, and `<Game>Paths.rebase("res://…")` moves a path string onto wherever the game landed. All five games are already written this way; `tools/check.sh` refuses a new `class_name` so they stay that way.
+
+### The steps
+
+1. **Publish it.** `--source` names the tree; `game.yml` still supplies the id, the version and the entry scene, so nothing is said twice.
+
+   ```bash
+   ./server pack arena --source ../game-arena
+   ```
+
+   `content/<id>/pack.json` says what not to ship:
+
+   ```json
+   {
+       "exclude_dirs": ["addons", "examples", "tools", "screenshots"]
+   }
+   ```
+
+   Excluding `addons/` is not optional. Without it the pack carries a second copy of every dot-\* addon the host build already has — measured at 768 files and 11.2 MiB for arena, against 140 files and 3.1 MiB with them dropped. It is also what keeps the rewrite honest: the publisher moves a `res://` reference onto the mount **only when the file it names is in the pack**, so with `addons/` out, `res://addons/dot_core/…` still means the host's copy and `res://game/arena_client.gd` becomes `res://dot_cloud/arena/0.1.0/game/arena_client.gd`.
+
+2. **Point `content/<id>/game.yml` at it.** Every path becomes relative — they are resolved against the mount prefix, which is not knowable when the file is written:
+
+   ```yaml
+   kind: pack
+   version: 0.1.0
+   manifest_url: /srv/tmc/dist/arena/manifest.json   # or https://…/content/arena/manifest.json
+
+   scene: scenes/arena_server.tscn
+   client_scene: game/arena.tscn
+   module: game/arena_module.gd
+   ```
+
+   `client_scene` is what a built-in game must **not** have and a delivered game must: `DotClientLink._resolve_scene` refuses every absolute path outside the mount, so it is the only way a client can be told what to show.
+
+3. **Serve `dist/`, or do not.** `content/` and `dist/` on this box are searched before the network, so a server that published a pack already has it — a LAN deployment needs no web server at all. Clients are told where to fetch from by `content_urls` in `cfg/server.yml`, which the server passes down the connection.
+
+4. **Check it.** `./server check` boots, mounts and loads:
+
+   ```
+   cloud.mount  mounted content=arena@0.1.0 files=140 prefix=res://dot_cloud/arena/0.1.0
+   tmc.host     content ready at=res://dot_cloud/arena/0.1.0
+   games        game loaded scene=res://dot_cloud/arena/0.1.0/scenes/arena_server.tscn
+   ```
+
+5. **Take it out of the build**, once it is delivered: drop its entry from `BUILTIN_CLIENTS` in `client/shell.gd` and its row from `GAMES` in `setup.sh`.
+
+### Signing
+
+`cfg/content.json` and `client/content.json` both ship `require_signed_manifests: true`, and `./server pack` refuses to publish without a key rather than producing a directory that looks finished and mounts nowhere. **A pack contains scripts, so signing it is the whole security boundary** — see "Who may sign a pack" below.
+
+## Who may sign a pack
+
+**A pack contains scripts, and mounting one runs them.** That is the whole reason signing exists here, and it is why `require_signed_manifests` defaults to on and `./server pack` refuses to publish without a key rather than writing a directory that looks finished and mounts nowhere.
+
+### What signing does and does not bound
+
+Signing answers exactly one question — *did the party holding this private key produce these bytes* — and the rest is bounded by the mount, not by the signature:
+
+- The signature is checked over the manifest **as received**, never a re-serialisation, so a manifest cannot be reformatted into something that verifies and means something else.
+- Every path in a manifest goes through `DotPaths.safe_relative` before it is used, so no entry can escape the mount prefix.
+- The `.pck` is assembled **by the client**, from content-addressed objects it hashed itself. A publisher never hands over a pack file.
+- `allow_replace_files` is off, so a pack cannot shadow a file the build already has. A pack runs inside `res://dot_cloud/<id>/<version>/` and nowhere else.
+- `trusted_keys` is in `DotCloudConfig.sensitive_keys`, so it is refused from the environment and from argv. Anything that could set a variable in the game's process would otherwise become a publisher.
+
+So the worst a trusted-but-hostile publisher can do is **be the game you joined**. That is already bad — it is code in the player's process — but it is not the host build, and it is not the player's machine outside the sandbox the engine gives it.
+
+### The rule today
+
+One key. `cfg/content.json` and `client/content.json` each carry a single `trusted_keys` entry, the public half of `keys/content.key`, and the private half lives on the publishing machine and is gitignored *before* it is generated so it cannot arrive in a commit by being written first. **A pack signed by anything else mounts nowhere**, which means a server owner can point `manifest_url` anywhere they like and still cannot deliver code nobody vouched for. That is the right default and it should stay the default.
+
+The cost is equally plain: a server owner who writes their *own* game cannot deliver it to the stock client. They have three ways round it, in increasing order of how much they are taking on —
+
+1. **Have it signed**, and it works in every client everywhere.
+2. **Run their own client build.** `client/content.json` is baked into the export, so adding a key there and running `./server export-web` produces a client that trusts them. Their players use their page; nobody else is affected.
+3. **`require_signed_manifests: false`.** LAN and development only. It logs a warning every time, and it should: it turns a content system into a remote-code-execution system with extra steps.
+
+### The gap to close before opening this up
+
+**A trusted key is trusted for every content id.** `DotCloudSignature.verify_any` tries each configured key, returns the id of whichever matched, and the caller throws it away — nothing anywhere checks that *this* publisher is entitled to *this* id. With one key that is a distinction without a difference. The moment there are two it is not: the second publisher can sign a manifest claiming `content_id: arena`, and a client that has not already mounted `arena@0.1.0` takes it.
+
+Closing it is small and should happen **before** a second key is ever added, not after: scope each `trusted_keys` entry to the content ids it may sign — a publisher gets a prefix, `first-party` gets everything — and have `verify_manifest` check the id it just accepted against the entry that accepted it. Until then, adding a second key is adding a second party who can be any game.
+
 ## The website chat box, and running a command from it
 
 `DotChatRelay` joins this server's chat to its room on the website: what players type reaches the page, what members type reaches the game, and a line beginning with `/` or `!` can run as a console command. It needs three things, in this order, and the third one is the only one that is fiddly.
