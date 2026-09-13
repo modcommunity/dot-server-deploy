@@ -436,6 +436,17 @@ is what stopped the previous two.
 - **A downloadable game.** The pack path is understood and the constraint that shapes it is
   measured, but every game here still ships in the build, so `changelevel` has never sent a
   client to fetch one.
+- **A publish step for the browser client.** `./server export-web` writes `web/build/`
+  and stops there, and that is the single most expensive gap in this repository to
+  rediscover: an export that was never published is indistinguishable from a fix that
+  did not work, because the browser runs the previous build and prints the previous
+  errors, byte for byte. There are three deployment shapes and they publish
+  differently -- the site-published one takes `--zip` and an upload PER BUILD, because
+  every build gets its own immutable prefix and there is no directory to write into.
+  web/README.md opens with the table and a ten-second check for which shape a
+  deployment is on; `curl -sI <origin>/game/index.pck | grep last-modified` answers it
+  from a shell. Check the deployed bytes before believing any conclusion about client
+  behaviour.
 - **A package.** There is no .deb, no .rpm and no install prefix; `./setup.sh --full`
   is the installer, and what it produces is this directory plus a unit file pointing
   at it. That is deliberate while the engine version is pinned per checkout -- a

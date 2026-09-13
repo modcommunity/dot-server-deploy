@@ -15,6 +15,30 @@ index.html?server=ws://your-host:6064
 
 `embed.html` replaces Godot's generated `index.html`: it is smaller, it handles the device-pixel-ratio and touch-action problems, and it takes the server from the query string so **one export serves every server**.
 
+## Shipping a client change: which shape you are on, and what it costs
+
+**Read this before exporting anything.** `./server export-web` writes `web/build/` and publishes nothing. Which of the three shapes below you are on decides what happens next, and getting it wrong looks exactly like the change not working: the browser keeps running the previous build and every console message stays byte-for-byte identical, because it *is* the previous build.
+
+**Ten seconds to find out which one you are on.** In DevTools → Network, find `index.pck` and read its Request URL:
+
+| Request URL | Shape | Deploying a change |
+| --- | --- | --- |
+| `<game origin>/game/<app>/<build id>/…` | **site-published** | `./server export-web --zip`, then upload `web/build.zip` on **App → Party → Web game build**. Every time. |
+| `<game origin>/game/…` | **self-hosted** | `./server export-web --base <game origin>/game/`, then copy `web/build/` to the web root. |
+| a bucket URL | **bucket** | `./server export-web --base <public base>`, then `./deploy/publish-web-s3.sh` |
+
+Or from a shell, which needs nobody's browser:
+
+```bash
+curl -sI https://<game origin>/game/index.pck | grep -i last-modified
+```
+
+If that timestamp is older than your export, the build you are testing is not the build you made — whatever the export printed.
+
+**Yes, a site-published build is one upload per change, and that is the deal it makes.** The site writes every build to its own immutable prefix `game/<app>/<build id>/` and hands the loader a `boot.game` naming it. Nothing is ever overwritten, so a CDN caches it forever, a deploy swaps atomically, and a rollback is a build id — but there is no directory to `rsync` into, and the engine cannot change without a new build id. That is what an immutable prefix *is*. If you would rather deploy by copying a directory, use the self-hosted shape; you trade the atomic swap and the long cache for an `rsync`.
+
+**The one thing that is the same in all three:** `web/build` is the output, never the deployment. Nothing that writes into it makes a browser see it.
+
 ## What the browser costs you
 
 Every one of these is encoded somewhere in dot-core already; they are collected here because they are what a deployment has to answer for.
