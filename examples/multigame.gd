@@ -1,4 +1,14 @@
 extends Node
+# [b]By path, because the games no longer have global names.[/b] Every game here
+# dropped its `class_name` declarations so it can be DELIVERED as a dot-cloud pack:
+# a mounted pack's globals are not registered in the host, so a delivered game may
+# not use them. These are the HOST's references into a vendored game, so they are
+# res:// -- this file stays put while the game it reaches into may be vendored here
+# or mounted from a pack.
+const HungryModule := preload("res://game/hungry_module.gd")
+const HungryWorld := preload("res://game/hungry_world.gd")
+const RoomModule := preload("res://game/room_module.gd")
+const RoomWorld := preload("res://game/room_world.gd")
 
 ## Changing the game under a running server, which is what a multi-game server is for.
 ##

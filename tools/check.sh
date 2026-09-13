@@ -132,6 +132,47 @@ for repo in "${GAME_REPOS[@]}"; do
     done
 done
 
+# --- No game may declare a class_name -------------------------------------
+#
+# [b]A mounted dot-cloud pack's globals are NOT registered in the host.[/b] So a game
+# that is delivered rather than compiled in has every cross-file type reference fail --
+# and fail the way that costs the most to find: the pack mounts, its scenes load, and
+# nothing says a word until something tries to run one of its scripts.
+#
+# Every game here was converted to `const X := preload("relative/path.gd")` for exactly
+# that reason. Nothing stops the next file from declaring a global again: it would
+# compile, pass every suite, export, run, and break only once that game is delivered --
+# which is a different deployment shape from the one anybody tests in, and this tree's
+# most repeated bug.
+#
+# Checked against the SIBLING repositories rather than the vendored copies, so a game
+# is told off in the repository where the line was written.
+if [ "$checked_any" -eq 1 ]; then
+    globals=0
+    for repo in "${GAME_REPOS[@]}"; do
+        [ -d "../$repo" ] || continue
+        while read -r hit; do
+            printf '  %sFAIL%s %s declares a class_name: %s
+' \
+                "$RED" "$OFF" "$repo" "$hit"
+            globals=$((globals + 1))
+        done < <(grep -rn '^class_name ' "../$repo" --include='*.gd' 2>/dev/null \
+            | grep -v '/addons/' | sed "s|^../$repo/||")
+    done
+
+    if [ "$globals" -eq 0 ]; then
+        printf '  %sok%s   no game declares a class_name, so all of them can be delivered
+' \
+            "$GRN" "$OFF"
+    else
+        printf '       a delivered game must reference its own files by path; see
+'
+        printf '       CLAUDE.md, "the one constraint that decides what a delivered game may look like"
+'
+        fails=$((fails + globals))
+    fi
+fi
+
 # And nothing here that no sibling claims. A file left behind by a game that was removed
 # from the list still compiles, still exports, and is still loadable by id -- so the
 # server would happily serve a game this project no longer believes it has.
