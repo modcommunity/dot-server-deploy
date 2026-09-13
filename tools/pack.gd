@@ -218,6 +218,32 @@ func _publish_one(
 	else:
 		source = dir
 
+	# [b]A `kind: pack` game's source is its own repository, and `--all` has no way to
+	# know that.[/b] Without an `include` list, a `pack/` directory or an explicit
+	# `--source`, the fallback below is the DESCRIPTOR directory -- which for a delivered
+	# game holds `game.yml` and `pack.json` and nothing else. So `./server pack --all`
+	# republished every game as a signed, verifiable, two-file pack, overwriting the real
+	# one in `dist/` with a manifest that mounts and contains no game.
+	#
+	# Found in production, on a box already chasing a different fault: the operator ran
+	# the sweep, it reported "9 published, 0 failed", and the packs were destroyed. The
+	# builtin case has been refused since the beginning for the same reason; this is that
+	# refusal for the kind that replaced it.
+	if str(meta["kind"]) == "pack" and not opts.has("source") \
+			and (meta["include"] as Array).is_empty() \
+			and not DirAccess.dir_exists_absolute(dir.path_join("pack")):
+		var why := DotResult.fail(
+			DotError.CODE_INVALID,
+			"%s is delivered and its source is not in %s" % [id, content_dir],
+			"publish it from the game's own repository: "
+				+ "./server pack %s --source ../<repo>" % id
+		)
+
+		# Named and skipped when sweeping, refused when asked for by name -- the same
+		# split the builtin guard makes, and for the same reason: "the set you asked for
+		# contains some that cannot" is a skip, "you asked for this one" is an error.
+		return why if strict else DotResult.success(false)
+
 	# [b]A pack whose scripts declare `class_name` is dead before it is written.[/b] A
 	# mounted pack's globals are not registered in the host, so every cross-file type
 	# reference in it fails to compile -- and NOTHING says so at any point a person is
