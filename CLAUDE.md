@@ -437,7 +437,11 @@ is what stopped the previous two.
   measured, but every game here still ships in the build, so `changelevel` has never sent a
   client to fetch one.
 - **TLS.** A page on HTTPS cannot open `ws://`. Certificates and a reverse proxy are
-  deployment.
+  deployment, and they live in `deploy/`: `issue-letsencrypt.sh` gets a real certificate
+  by whichever method the box allows -- HTTP-01 out of a webroot, out of nginx, or
+  standalone; DNS-01 through a certbot plugin, which is the only one that issues a
+  wildcard -- and `install-server-tls.sh` puts it in front of a server. Nothing in the
+  host or the client knows any of it happened.
 - **A server browser.** dot-server-query answers both query protocols and `TmcHost`
   attaches one; nothing here asks. `sv_query_app` in `cfg/server.yml` sets the app
   slug a listing shows — display only, and the backbone is what a launch actually

@@ -95,6 +95,12 @@ data/                what the server writes
   from_yaml.cfg        what your YAML became. Read this when a setting seems ignored
   admins.json  bans.json  audit.jsonl
 
+deploy/              the root-owned half: TLS certificates, nginx in front, the S3 publish
+  issue-letsencrypt.sh   a real certificate, by whichever method the box allows
+  install-server-tls.sh  wss:// on a public port -> the server on the loopback
+  install-game-origin.sh the game's own origin, which is a security boundary
+  issue-local-cert.sh    a development certificate from a local CA
+
 host/                the boot: YAML -> DotServer
 client/              the client shell. Knows nothing about any game
 web/                 the browser build, and the page that takes ?server= from the URL
@@ -204,6 +210,35 @@ The build context is the **parent** directory: every dot-* addon is its own repo
 
 RCON is published on **loopback only**. It is a remote console and the password is the only thing between it and whoever finds the port; reach it through an SSH tunnel, or put an address allow-list in `cfg/rcon.yml` and widen the mapping deliberately.
 
+## TLS, and the one question that picks the method
+
+A page served over HTTPS may not open a plain `ws://` socket, so a browser client needs a certificate in front of this server — and the method that gets you one is decided by a single question: what can reach this box, and on which port?
+
+```bash
+# :80 is reachable and nginx already serves something there
+sudo ./deploy/issue-letsencrypt.sh --domain demo.example.com --email ops@example.com
+
+# :80 is closed, or you want *.example.com — DNS-01 is the only method that does either
+sudo ./deploy/issue-letsencrypt.sh --method dns --dns-plugin cloudflare      --dns-credentials /root/.secrets/cloudflare.ini      --domain example.com --wildcard --email ops@example.com
+
+# or as the last step of setting the project up
+./setup.sh --letsencrypt --domain demo.example.com --email ops@example.com
+```
+
+`--method` is `webroot` (the default: HTTP-01 out of a directory nginx already serves, nothing restarts), `nginx` (certbot drives nginx for the length of the challenge and puts it back), `standalone` (certbot binds :80 itself, and the stop/start hooks are installed so **renewals** work too), `dns` (DNS-01 through a certbot plugin — the only method that issues a wildcard) or `manual` (it prints a TXT record and waits; fine once, and it cannot renew unattended).
+
+**Use `--staging` on a name nobody has proved out yet.** The rate limits count *failed* validations — five per hostname per hour — so a webroot that is not the one nginx serves locks the name out for an hour. That is also why this script probes the challenge path with a token and a `curl` before Let's Encrypt is asked to: a wrong `--webroot` costs a second here instead of an hour there.
+
+**The renewal hook is the part that is otherwise always missing.** A packaged certbot renews on a timer and reloads nothing: the files under `/etc/letsencrypt` change, nginx goes on serving the certificate it opened at startup, and sixty days later a browser reports an expired certificate on a box where `certbot renew` has been succeeding all along. This writes `/etc/letsencrypt/renewal-hooks/deploy/tmc-<name>.sh`, which reloads nginx and — with `--install-to` — re-copies the pair somewhere a non-root process can read, because everything under `/etc/letsencrypt/archive` is `0700 root` and a server reading `privkey.pem` straight out of it gets a permission error no config change fixes.
+
+Then put it in front of a server:
+
+```bash
+sudo ./deploy/install-server-tls.sh --domain demo.example.com --port 6065      --backend 127.0.0.1:6071      --cert /etc/letsencrypt/live/demo.example.com/fullchain.pem      --key  /etc/letsencrypt/live/demo.example.com/privkey.pem
+```
+
+`./deploy/issue-letsencrypt.sh --help` lists every method and every option, and `--dry-run` prints the `certbot` invocation it would run and changes nothing — no probe file, no hook, no account.
+
 ## Validating
 
 ```bash
@@ -237,4 +272,4 @@ node tools/browser_check.mjs \
 - **One transport at a time.** A server listens on WebSocket *or* ENet, so a desktop client on UDP and a browser client on TCP cannot share a match yet. See [PLATFORM.md](../../PLATFORM.md).
 - **`cfg/permissions.yml` does nothing without authentication.** `DotAdminManager` refuses permissions to any unauthenticated session, because a guest uid is a random per-device string, so granting anything to one grants it to anyone. Correct, and it looks exactly like the file being ignored.
 - **No game has been delivered as a pack yet.** The lobby ships inside the build. See CLAUDE.md for the constraint that decides what a delivered game may look like.
-- **No TLS.** A page on HTTPS cannot open `ws://`. Certificates and a reverse proxy are deployment, not code.
+- **No TLS in the server itself.** A page on HTTPS cannot open `ws://`, and the certificate and the reverse proxy in front of it are deployment rather than code — `deploy/issue-letsencrypt.sh` and `deploy/install-server-tls.sh` are how you get both.

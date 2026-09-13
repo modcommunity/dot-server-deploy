@@ -11,6 +11,9 @@
 #   ./setup.sh --update         git pull every sibling repository first
 #   ./setup.sh --vendor         COPY the addons instead of linking them
 #
+#   ./setup.sh --letsencrypt --domain demo.example.com --email ops@example.com
+#                               ...and then get a real certificate for it
+#
 # WHAT IT DOES, AND WHY EACH STEP IS HERE
 #
 #   1. Finds a Godot 4.7+ runtime, and DOWNLOADS the pinned one when the machine has
@@ -41,6 +44,12 @@
 #      `./server export-web` fail on a fresh machine for a preset that existed only
 #      where somebody had made one by hand.
 #   7. Writes ./server.
+#   8. ONLY WITH --letsencrypt: runs deploy/issue-letsencrypt.sh for a real
+#      certificate. Opt-in and never implied, because it is the one step here that
+#      needs root, needs the internet, and can be RATE LIMITED -- five failed
+#      validations on one hostname locks that name out for an hour, so a setup that
+#      tried it on every run would punish the re-run that is otherwise free. Every
+#      argument after `--` goes to that script untouched.
 
 set -uo pipefail
 
@@ -74,6 +83,14 @@ DO_UPDATE=0
 DO_CHECK=0
 VENDOR=0
 
+# TLS. Nothing here happens without --letsencrypt; the rest only says what.
+DO_LETSENCRYPT=0
+LE_DOMAINS=()
+LE_EMAIL="${TMC_LE_EMAIL:-}"
+LE_METHOD="${TMC_LE_METHOD:-}"
+LE_STAGING=0
+LE_EXTRA=()
+
 while [ $# -gt 0 ]; do
     case "$1" in
         --godot)     GODOT_ARG="${2:-}"; shift 2 ;;
@@ -83,7 +100,17 @@ while [ $# -gt 0 ]; do
         --update)      DO_UPDATE=1; shift ;;
         --check)     DO_CHECK=1; shift ;;
         --vendor)    VENDOR=1; shift ;;
-        -h|--help)   sed -n '2,35p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        --letsencrypt) DO_LETSENCRYPT=1; shift ;;
+        --domain)    LE_DOMAINS+=("${2:?--domain needs a value}"); shift 2 ;;
+        --email)     LE_EMAIL="${2:?--email needs a value}"; shift 2 ;;
+        --tls-method) LE_METHOD="${2:?--tls-method needs a value}"; shift 2 ;;
+        --staging)   LE_STAGING=1; shift ;;
+        # Everything after a bare `--` belongs to issue-letsencrypt.sh. That script
+        # has twenty options and this one is not going to grow a copy of each: a
+        # wrapper that re-declares the arguments it forwards is a second list to keep
+        # in step, and the half that drifts is always the one nobody uses often.
+        --)          shift; LE_EXTRA=("$@"); break ;;
+        -h|--help)   sed -n '2,45p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
         *) printf 'unknown option: %s\n' "$1" >&2; exit 2 ;;
     esac
 done
@@ -94,6 +121,28 @@ step() { printf '\n%s==>%s %s\n' "$BLD" "$OFF" "$1"; }
 ok()   { printf '    %sok%s   %s\n' "$GRN" "$OFF" "$1"; }
 warn() { printf '    %s!!%s   %s\n' "$YLW" "$OFF" "$1"; }
 die()  { printf '\n    %s%s%s\n\n' "$RED" "$1" "$OFF" >&2; exit "${2:-1}"; }
+
+# --- 0. The TLS arguments, checked here and used at the end ----------------
+#
+# Checked BEFORE the first step rather than beside the step that uses them, because
+# the certificate is the LAST thing this script does and everything before it takes
+# minutes: a download, fifty repositories, an import pass. `--letsencrypt` with a
+# misspelled flag and no --domain should cost a second, not a coffee, and the
+# version of this that validated in place told people so four minutes in.
+
+LE_SCRIPT="$ROOT/deploy/issue-letsencrypt.sh"
+
+if [ "$DO_LETSENCRYPT" -eq 0 ]; then
+    if [ "${#LE_DOMAINS[@]}" -gt 0 ] || [ -n "$LE_METHOD" ] || [ "$LE_STAGING" -eq 1 ] \
+            || [ "${#LE_EXTRA[@]}" -gt 0 ]; then
+        die "--domain, --email, --tls-method, --staging and -- are for --letsencrypt,
+    and it was not given. Add --letsencrypt, or drop them." 2
+    fi
+else
+    [ -x "$LE_SCRIPT" ] || die "--letsencrypt needs deploy/issue-letsencrypt.sh, and it is
+    not here (or not executable). This is not a complete checkout." 1
+    [ "${#LE_DOMAINS[@]}" -gt 0 ] || die "--letsencrypt needs at least one --domain" 2
+fi
 
 # --- 1. The runtime --------------------------------------------------------
 
@@ -762,6 +811,36 @@ sed "s|@GODOT@|$GODOT|g" tools/server.in > server
 chmod +x server
 ok "written, using $GODOT"
 
+# --- 8. A certificate ------------------------------------------------------
+#
+# Last, and after ./server exists, so that a failure here leaves a project that is
+# set up and a server that starts. TLS is what a browser client needs in FRONT of
+# this server, not something the server itself cannot boot without.
+
+if [ "$DO_LETSENCRYPT" -eq 1 ]; then
+    step "TLS certificate"
+
+    le_args=()
+    for d in "${LE_DOMAINS[@]}"; do le_args+=(--domain "$d"); done
+    [ -n "$LE_EMAIL" ]  && le_args+=(--email "$LE_EMAIL")
+    [ -n "$LE_METHOD" ] && le_args+=(--method "$LE_METHOD")
+    [ "$LE_STAGING" -eq 1 ] && le_args+=(--staging)
+    [ "${#LE_EXTRA[@]}" -gt 0 ] && le_args+=("${LE_EXTRA[@]}")
+
+    if "$LE_SCRIPT" "${le_args[@]}"; then
+        LE_OK=1
+    else
+        # Not `die`: everything above this line worked, and saying otherwise would
+        # send somebody back to re-run a setup that has nothing left to do. The exit
+        # code is still non-zero, because a run that was asked for a certificate and
+        # has none did not do what it was told.
+        warn "no certificate was issued. The project is set up and ./server works;
+       re-run just the certificate with:
+           sudo ./deploy/issue-letsencrypt.sh ${le_args[*]}"
+        LE_OK=0
+    fi
+fi
+
 # --- Done ------------------------------------------------------------------
 
 if [ "${NEW_RCON:-0}" -eq 1 ]; then
@@ -790,3 +869,16 @@ $BLD  Ready.$OFF
     docker compose up -d     the same thing in a container
 
 DONE
+
+if [ "$DO_LETSENCRYPT" -eq 0 ]; then
+    cat <<TLS
+    A browser client needs TLS in front of this, because a page on HTTPS may not
+    open a plain ws:// socket:
+
+    ./setup.sh --letsencrypt --domain <host> --email <you>
+    ./deploy/issue-letsencrypt.sh --help     every method
+
+TLS
+elif [ "${LE_OK:-0}" -eq 0 ]; then
+    exit 1
+fi
