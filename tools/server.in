@@ -563,6 +563,41 @@ do_verify() {
 # geometry at all -- is a player who connects, signs on, spawns, and sees sky in every
 # direction. Reported on a server, a day later, by somebody who thought the map was
 # broken.
+## The export templates, fetched at the moment they are first needed.
+##
+## [b]Not part of setting the project up, and not left to the operator either.[/b] The
+## archive is about a gigabyte, so a server that will only ever run games should not
+## pay for it -- but a box that has never exported anything fails like this:
+##
+##     ERROR: Cannot export project with preset "Web" due to configuration errors:
+##     No export template found at the expected path:
+##     ~/.local/share/godot/export_templates/4.7.2.stable/web_nothreads_debug.zip
+##
+## which names a path nobody configured, for a file nothing here ever downloaded. The
+## runtime had exactly this hole and fetch-godot.sh closed it. This is the same answer
+## for the other half, at the only moment it is certainly wanted: somebody has just
+## asked for an export.
+##
+## TMC_NO_DOWNLOAD opts out, the same switch that stops the runtime being fetched --
+## a policy that says binaries arrive another way means all of them, not some.
+ensure_export_templates() {
+    local fetch="$PROJECT/tools/fetch-export-templates.sh"
+
+    [ -x "$fetch" ] || return 0
+    "$fetch" --check >/dev/null 2>&1 && return 0
+
+    if [ -n "${TMC_NO_DOWNLOAD:-}" ]; then
+        die "no export templates for this engine, and TMC_NO_DOWNLOAD is set.
+
+    Install them yourself, or unset it and let this fetch them:
+        tools/fetch-export-templates.sh" 3
+    fi
+
+    printf '\n  %sexport templates%s\n' "$BLD" "$OFF"
+    "$fetch" >/dev/null || die "could not install the export templates" 3
+}
+
+
 check_excluded_maps() {
     local pack="$1" carried=0 unpublished=0 bin rel id
 
@@ -701,6 +736,8 @@ do_export_native() {
 
         mkdir -p "$PROJECT/$outdir" || die "could not create $PROJECT/$outdir" 5
 
+        ensure_export_templates
+
         printf '\n  %sexporting %s%s\n' "$BLD" "$preset" "$OFF"
 
         rm -f "$PROJECT/$outdir/$binary"
@@ -713,7 +750,11 @@ do_export_native() {
         # leave the exit code alone, which makes the artifact existing the only
         # evidence worth acting on.
         [ -s "$PROJECT/$outdir/$binary" ] \
-            || die "the $preset export produced no $outdir/$binary -- export templates for $VERSION missing? ./setup.sh installs them" 3
+            || die "the $preset export produced no $outdir/$binary.
+
+    Export templates for $VERSION are the usual cause, and
+    tools/fetch-export-templates.sh installs them -- this command calls it, so if
+    that is what happened it already said so above." 3
 
         check_excluded_maps "$PROJECT/$outdir/$binary"
 
@@ -768,6 +809,7 @@ case "$COMMAND" in
     verify)     do_verify ;;
     export-native) do_export_native ;;
     export-web)
+        ensure_export_templates
         mkdir -p "$PROJECT/web/build"
 
         # Godot caches its text->binary scene conversions in .godot/exported/, and
