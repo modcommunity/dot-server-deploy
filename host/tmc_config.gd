@@ -305,7 +305,33 @@ func _apply_settings(file: String, tree: Dictionary) -> DotResult:
 			# can guess is the origin its page came from, which is right for a
 			# self-hosted deployment and wrong for every CDN. Two settings for one fact
 			# is this tree's most repeated bug, so there is one setting.
-			server.content_base_urls = content_urls
+			#
+			# [b]Assigned only if this dot-server has the property, and the check is
+			# not paranoia.[/b] Every addon here is a separately cloned repository, so
+			# an operator who pulls this one and not that one is the ordinary case --
+			# and a plain assignment to a property a resource does not have is a FATAL
+			# script error naming a type rather than a version:
+			#
+			#   Invalid assignment of property or key 'content_base_urls' with value
+			#   of type 'PackedStringArray' on a base object of type
+			#   'Resource (DotServerConfig)'
+			#
+			# which aborts `_apply_settings` mid-way, returns null into a caller that
+			# reads `.ok` off it, and buries the cause under two more errors about Nil.
+			# A server that booted yesterday then does not boot today and says nothing
+			# an operator can act on.
+			#
+			# This file's rule for the opposite skew -- a key from a NEWER config file
+			# than the code -- is fifty lines up: never fatal, report it and carry on.
+			# Same rule, other direction.
+			if "content_base_urls" in server:
+				server.content_base_urls = content_urls
+			else:
+				unknown.append(
+					"%s: content_urls was read, but this dot-server has no " % file
+					+ "content_base_urls to put it in -- clients will not be told "
+					+ "where the content is. Update the dot-server addon."
+				)
 			continue
 
 		if name == "sv_query_app":
