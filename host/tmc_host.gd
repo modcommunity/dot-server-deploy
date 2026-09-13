@@ -512,7 +512,61 @@ func _build_cloud() -> void:
 	# Same reasoning as `client/shell.gd`: the published layout carries no version
 	# segment, and the default template asks for one.
 	cloud.manifest_url_template = "{base}/{id}/manifest.json"
+
+	# [b]Say what a download is doing, on the console an operator is watching.[/b] A
+	# server fetching a 15 MB map printed one line when it started and nothing again
+	# until it finished or failed -- which on a slow link is indistinguishable from a
+	# hang, and the operator's only recourse is to kill a transfer that was working.
+	#
+	# Throttled to a line a second rather than forwarded raw: `progress_changed` fires
+	# per chunk, and a server log is read afterwards as often as it is watched live. A
+	# spinner is for a loading screen; this is for a file somebody greps.
+	cloud.progress_changed.connect(_on_content_progress)
+	cloud.content_ready.connect(_on_content_ready)
+
 	server.add_child(cloud)
+
+
+## Last time a content-progress line was printed, in milliseconds.
+var _progress_said_ms: int = 0
+
+## How often progress is printed while content downloads.
+const PROGRESS_EVERY_MS := 1000
+
+
+func _on_content_progress(progress: Dictionary) -> void:
+	var now := Time.get_ticks_msec()
+
+	# The last line always lands, whatever the throttle says: "94%" as the final word
+	# on a finished download reads as a download that stopped.
+	var fraction := float(progress.get("fraction", 0.0))
+	var finishing := fraction >= 1.0
+
+	if not finishing and now - _progress_said_ms < PROGRESS_EVERY_MS:
+		return
+
+	_progress_said_ms = now
+
+	DotLog.info(CHANNEL, "downloading content", {
+		"percent": "%d%%" % int(round(fraction * 100.0)),
+		"files": "%d/%d" % [
+			int(progress.get("done_files", 0)), int(progress.get("total_files", 0))
+		],
+		"bytes": "%s / %s" % [
+			DotPaths.format_bytes(int(progress.get("done_bytes", 0))),
+			DotPaths.format_bytes(int(progress.get("total_bytes", 0))),
+		],
+	})
+
+
+func _on_content_ready(manifest: DotCloudManifest, mount_prefix: String) -> void:
+	if manifest == null:
+		return
+
+	DotLog.info(CHANNEL, "content ready", {
+		"content": manifest.key(),
+		"at": mount_prefix,
+	})
 
 
 func _on_game_loaded(_content_key: String) -> void:
