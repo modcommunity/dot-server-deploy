@@ -695,6 +695,12 @@ func _connect_to(address: String) -> void:
 	_status.text = "Connecting to %s…" % target
 	_set_busy(true)
 
+	# Before a new one is built, never after: see [method _drop_link]. Every path that
+	# ends a connection drops it too, so this is belt and braces -- except for the one
+	# path that does not, which is a signon that failed after the socket came up
+	# ([method _fail]), where the menu comes back with the link still connected.
+	_drop_link()
+
 	# [b]Without this a browser client cannot download anything, ever.[/b]
 	# `DotClientLink._begin_content_sync` resolves `dot_cloud_client` from [DotRegistry]
 	# and fails the join outright when it is null — "This server needs downloadable
@@ -731,8 +737,7 @@ func _connect_to(address: String) -> void:
 	if not connecting.ok:
 		_status.text = "Could not connect: %s" % str(connecting.error)
 		_set_busy(false)
-		link.queue_free()
-		link = null
+		_drop_link()
 
 
 ## The client scene for every game that ships inside this build.
@@ -850,6 +855,43 @@ func _clear_game() -> void:
 		child.free()
 
 
+## Takes the current link out of the tree, closing whatever it still has open.
+##
+## [b]Reconnecting without this signs on, downloads nothing, and renders an empty world.[/b]
+## The link is named "Server" and that name is the routing: Godot addresses an RPC by the
+## receiver's node path relative to the [MultiplayerAPI] root, so everything the server
+## sends arrives addressed to "Server" and is delivered to whichever child of this shell
+## has that name. A shell that left the dropped link in the tree -- which is what both
+## ways out of a live connection used to do -- gets "Server2" for the replacement, because
+## Godot renames a colliding sibling rather than refusing the add.
+##
+## Nothing then errors. The *old* node answers the handshake, because it is the one the
+## server's calls resolve to, and its signals are still wired to this shell from the first
+## connection, so the menu hides and the game loads. The *new* node is what
+## [DotRegistry] hands out, and a delivered game asks the registry for its link and
+## parents its own RPC node underneath it -- under "Server2", where a snapshot addressed
+## to "Server/<game>" can never land. Signon completes, the pack is already mounted from
+## the first connection so there is visibly no download, the scene instantiates, and the
+## world stays empty. A page refresh "fixes" it because it is the second link, not the
+## connection, that is broken.
+##
+## `remove_child` before `queue_free`, because a name is released when the node leaves the
+## tree and `queue_free` defers that to the end of the frame -- long enough for a
+## reconnect in the same frame to collide with a node that is already on its way out.
+func _drop_link() -> void:
+	if link == null or not is_instance_valid(link):
+		link = null
+		return
+
+	# Closes the socket and clears the peer. A link freed while still connected leaves the
+	# server holding a session it can only reap on timeout, and leaves this end believing
+	# it is still on a network.
+	link.disconnect_from_server()
+	remove_child(link)
+	link.queue_free()
+	link = null
+
+
 ## Says something, whether or not the menu is on screen.
 ##
 ## [b]The status label lives inside the menu, and the menu is hidden while a game is
@@ -875,6 +917,7 @@ func _fail(text: String) -> void:
 
 func _on_disconnected(reason: String) -> void:
 	_clear_game()
+	_drop_link()
 	_set_busy(false)
 	_menu.visible = true
 	_say("Disconnected: %s" % (reason if reason != "" else "no reason given"))
