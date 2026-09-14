@@ -47,7 +47,7 @@ trying to stop. `content/lobby/game.yml` sets out the whole of it.
 It is the same shape as the constraint dot-cloud already documents for avatar packs — "the
 pack is data, the code ships in the build" — reached from further along.
 
-### The constraint has five forms, and all of them are closed
+### The constraint has six forms, and all of them are closed
 
 One root cause — a delivered pack mounts at `res://dot_cloud/<id>/<version>/` and not at
 the path its content was authored at — reaching the code by three separate routes. Each
@@ -61,6 +61,9 @@ game is actually delivered.
 | script → anything by `"res://…"` | resolves against the HOST project root: another game's file, or nothing | **closed** — `<Game>Paths.rebase()` resolves the game's root from its own script's `resource_path` |
 | script → superclass by `extends "res://…"` | the same, for the class a script inherits from | **closed** — made relative; a relative superclass path travels with the script |
 | an asset the engine has to IMPORT | a `.glb` or `.png` in the pack is bytes nothing can open: `exists=false file=true load=null`, and no error anywhere because the file is right there | **closed** — the publisher ships `.godot/imported/` and the `.import` markers, and rewrites the three absolute paths inside each marker onto the mount |
+| an imported asset's own reference to its SIBLING | the mesh loads and its texture does not: the imported form is a binary `.scn` whose dependency is a UID plus the authored absolute path, and the pack can rewrite neither. Two warnings, no error, and a game that appears to have shipped without art | **closed** — `DotCloudMounter` registers the pack's own UIDs against the mounted files after mounting, so the binary form's reference resolves with nothing rewritten |
+
+The sixth was found by **publishing the first game in this family that vendors art** and looking at a screenshot of a real client: game-buses-from-hell's crates arrived as white boxes with the node their model was instanced under reported as having "vanished". It is the same root cause reaching the code by a route nothing here could rewrite — see dot-cloud's own notes.
 
 The fourth was found by accident: a const collision made somebody open
 `npc_chaser.gd`, whose own comment said it extended a path rather than a class *"because
@@ -296,6 +299,8 @@ calls `try_web_handoff()`, which is the only sign-in this shell was ever meant t
 Those two failing requests were also what made the wrong domain visible at all.
 
 ## The games are published, and the packs are checked
+
+**There are six games now.** `game-buses-from-hell` was added on 2026-09-14 — the first asymmetric one, and the first that vendors art, which is how the sixth form of the mount constraint above was found. It is also the first game in the family whose module subclasses `DotGameModule` and whose services layer subclasses `DotGameServices`, so `addons/dot_game` is in the addon list: a delivered module `extends DotGameModule`, and a base class the host build does not carry is a module that cannot parse. The symptom is *"Could not find base class"* once, at load, followed by a server that admits players into a game with no netcode in it.
 
 **This build contains no game.** `setup.sh` turns each sibling repository into a signed
 dot-cloud pack in `dist/` — `./server pack <id> --source ../<repo>` — and the server finds

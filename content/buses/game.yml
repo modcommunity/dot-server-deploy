@@ -1,0 +1,51 @@
+# buses. Two people drive buses at everybody else, and the runners' only weapon cannot
+# hurt them.
+#
+#     changegame buses
+#
+# THE FIRST ASYMMETRIC GAME IN THE SET, and everything unusual about this descriptor
+# comes from that. The other five degrade gracefully when they are empty: a deathmatch
+# with one person in it is a person walking around a map, a sandbox with one person in it
+# is the whole sandbox. This one is a bowl with nothing in it to run away from — so
+# `bfh_bots` is on and the server keeps its driving seats filled, which is what makes the
+# first visitor to an empty server find a game rather than a clock that never moves.
+#
+# kind: pack -- delivered, like every other game here. game-buses-from-hell references its
+# own files by relative path and rebases its own `res://` strings (`BfhPaths`), which is
+# what makes it correct both in a build and at res://dot_cloud/buses/<version>/. It was
+# written with `class_name` on seven of its scripts and converted when it was added here;
+# `tools/check.sh` is what stops that coming back.
+#
+# Published with `./server pack buses --source games/game-buses-from-hell`.
+#
+# NO MAPS, AND THAT IS THE GAME. The bowl is `BfhArena.build(radius)` run on both ends —
+# a disc, a ring of wall, a ledge and eight pillars, from one number — so the map travels
+# in the HELLO as a radius rather than as a file, and a client that joined a server
+# running a smaller bowl rebuilds its own to match. There is no dot-map rotation for the
+# same reason game-arena has none: this game's geometry IS its gameplay.
+
+name: Buses From Hell
+content_id: buses
+version: 0.1.0
+kind: pack
+max_players: 24
+
+scene: scenes/bfh_server.tscn
+client_scene: game/bfh.tscn
+module: game/bfh_module.gd
+
+# Set when this game is loaded, and only while it is loaded.
+cvars:
+  # TWO SEATS, which is the design and not a limit to raise on a busy server. The whole
+  # tension is two drivers against everybody else; a fourth bus turns the bowl into a
+  # place with nowhere to be, and the round stops being about where a bus has committed
+  # to and starts being about which one gets there first.
+  bfh_drivers: "2"
+
+  # On, and this game needs it more than any other here. See the note at the top.
+  bfh_bots: "1"
+
+  # Three minutes. Long enough that the last thirty seconds — when the crates are gone
+  # and the concrete blocks are all that is left — actually arrive, short enough that
+  # somebody who is out waits for a round rather than for a match.
+  bfh_round_seconds: "180"
