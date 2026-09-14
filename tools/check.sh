@@ -316,6 +316,14 @@ echo
 echo "changing games under a live client"
 "$GODOT" --headless --path . res://examples/live_switch.tscn || fails=$((fails + 1))
 
+# And the REAL shell, connected twice. Everything above connects at most once, and a
+# second connection in one session put the game on screen with an empty world -- the
+# dropped link was still in the tree, so the replacement was renamed and every RPC the
+# server sent resolved to the dead one. Nothing errored anywhere.
+echo
+echo "reconnecting after the server restarts"
+"$GODOT" --headless --path . res://examples/reconnect.tscn || fails=$((fails + 1))
+
 # The other half: a real DotServer, a real listener, the lobby loaded and a module in
 # it. Everything the selftest cannot reach without starting one.
 if [ -x ./server ]; then

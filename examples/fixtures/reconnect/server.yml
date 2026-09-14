@@ -1,0 +1,12 @@
+# A fixture for examples/reconnect.tscn. Its own port, because this suite binds the same
+# address twice and must not race a `multigame` or `live_switch` run on 27101.
+sv_name: "Reconnect Fixture"
+sv_maxplayers: 8
+sv_game: "lobby"
+
+# Off, and the suite does not work without it. Two servers are started in one process
+# here -- that is what a restart is -- and each one starts a thread blocked in a read of
+# this terminal's stdin that the engine offers no way to cancel. The checks all pass and
+# the process then never exits, which reads as a hung suite rather than as a console
+# nobody asked for.
+sv_stdin_console: false

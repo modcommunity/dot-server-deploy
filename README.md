@@ -511,9 +511,12 @@ tools/package_check.sh  # vendor the addons, move the tree away from its sibling
 | `examples/selftest.tscn` | the YAML reader, the config translation, the permission translation, the content index |
 | `examples/multigame.tscn` | changing games on a running server, and the module swap that goes with it |
 | `examples/live_switch.tscn` | **the same, with a real client on a real socket** |
+| `examples/reconnect.tscn` | **the real shell, connected twice**, across a server that went down and came back |
 | `./server check` | a real `DotServer` booting, loading the lobby, and shutting down |
 
 The third one earns its place. Switching games under a live client segfaulted the server, twice over, once going in and once coming out, and `multigame` passes the same switch with an occupant seated in the world. An occupant is not a socket.
+
+The fourth earns its place for the same reason one layer along: every other suite connects at most once. A shell that reconnected added a second link beside the dropped one, Godot renamed it, and the server's RPCs went on resolving to the dead node while the delivered game was handed the live one — so signon completed, the pack was already mounted and nothing downloaded, the scene instantiated, and the world was empty. No error, on either end. A refresh cleared it, which is what made it look like a browser problem.
 
 The second one matters because a release tarball and the container have no sibling repositories to link to, and a symlink out of `addons/` dangles the moment the directory moves, leaving every `dot-*` class unresolved at once, which reads as a broken project rather than a broken link.
 

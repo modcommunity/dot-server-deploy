@@ -27,7 +27,7 @@ extends Node
 ## is the only suite that connects the shell twice — `live_switch` connects a bare link
 ## once and `multigame` connects nothing — which is why nothing caught it.
 
-const CONFIG := "res://examples/fixtures/multigame"
+const CONFIG := "res://examples/fixtures/reconnect"
 const CONTENT := "res://content"
 const DATA := "user://tmc_reconnect"
 const SHELL := "res://client/shell.tscn"
@@ -61,7 +61,10 @@ func _run() -> void:
 			if await _test_server_goes_down():
 				await _test_reconnect()
 
-	_teardown()
+	# Awaited. `_teardown` shuts a server down and waits for the socket to go with it, and
+	# a `_run` that walked straight past it printed its totals while the game scene was
+	# still being freed underneath — which is a suite that reports a pass and then hangs.
+	await _teardown()
 	DotPaths.remove_tree(DATA)
 
 	print("")
@@ -238,11 +241,17 @@ func _boot() -> bool:
 	return true
 
 
+## The client first, then the server. A server shut down under a live client makes the
+## client tear a game scene down on the same frame it is being freed on.
 func _teardown() -> void:
 	if _shell != null and is_instance_valid(_shell):
+		if _shell.link != null and is_instance_valid(_shell.link):
+			_shell.link.disconnect_from_server()
+
 		remove_child(_shell)
-		_shell.free()
+		_shell.queue_free()
 		_shell = null
+		await get_tree().process_frame
 
 	await _stop_host()
 
@@ -282,14 +291,16 @@ func _test_server_goes_down() -> bool:
 		func() -> bool: return _shell.link == null, 10.0
 	)
 
-	if not _check(
+	# Checked, and then carried on with regardless. A shell still holding the dropped link
+	# is the CAUSE; the reconnect below is the symptom the player reported, and a suite
+	# that stopped here would pass a half-fix that dropped the link on disconnect and not
+	# before the next dial.
+	_check(
 		dropped,
 		"the shell lets go of the dropped link",
 		"it is still holding %s; the next connect is added beside it and renamed"
 			% _link_names()
-	):
-		_done()
-		return false
+	)
 
 	_check(
 		_links().is_empty(),
@@ -300,7 +311,7 @@ func _test_server_goes_down() -> bool:
 		"and nothing left in the registry for a game to find"
 	)
 	_done()
-	return true
+	return _shell != null and is_instance_valid(_shell)
 
 
 ## The whole bug: pressing Connect after the server comes back.

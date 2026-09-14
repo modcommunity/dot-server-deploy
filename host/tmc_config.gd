@@ -64,6 +64,13 @@ const BOOT_KEYS := {
 	"a2s_enabled": "a2s_enabled",
 	"a2s_port": "a2s_port",
 	"content_manifest_url": "content_manifest_url",
+	# dot-server documents this as the one stdin decision that is a real decision rather
+	# than an environment -- and it was unreachable, because YAML is the only surface this
+	# deployment has and the key was not on it. A server whose stdin carries something
+	# other than commands needs it, and so does anything running two servers in one
+	# process: [DotStdinConsole] is a thread blocked in a read the engine cannot cancel,
+	# so the second one keeps the process alive after everything else has stopped.
+	"sv_stdin_console": "stdin_console_enabled",
 }
 
 ## Operator-facing name -> netcode config property.

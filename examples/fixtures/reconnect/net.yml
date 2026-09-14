@@ -1,0 +1,2 @@
+net_bind_ip: "127.0.0.1"
+net_port: 27102
