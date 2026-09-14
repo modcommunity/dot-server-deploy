@@ -60,6 +60,12 @@ WORKDIR /src/dot-server-deploy
 # this project -- so a symlink out of it dangles, every dot-* class_name is unresolved
 # at once, and the server dies at startup with what reads as a broken project rather
 # than a dangling link. Found by running the container.
+#
+# No --games-dir, and that is deliberate: the game repositories are in the context too
+# and the parent directory is already the last place setup.sh looks for one, so they are
+# found before anything is cloned. What --vendor decides for them is that games/ gets no
+# link into a sibling this image's final stage will not have, and is deleted if a clone
+# put anything there -- what travels is dist/, the signed pack of each game.
 RUN ./setup.sh --godot /usr/local/bin/godot --vendor --addons-dir ..
 
 # The configuration generated during the build is thrown away. cfg/ is a volume at

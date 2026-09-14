@@ -408,10 +408,96 @@
     // reported as dead by a loader that only knew one word.
     clearOverlay();
 
-    if (!event.data || event.data.type !== 'tmc.auth.ready') return;
+    if (!event.data) return;
+
+    /*
+     * ------------------------------------------------- THE SERVER WANTS ANOTHER BUILD
+     *
+     * [b]The one failure a player can act on, and the only one the GAME can detect but
+     * cannot fix.[/b] Godot refuses an RPC when the two ends declare different `@rpc`
+     * methods, so a client build that predates a change to dot-server's handshake can
+     * never join a server that has it -- the socket opens, the join stalls, and every
+     * retry stalls the same way. The shell recognises it (`DotSignon`) and posts this,
+     * because a build cannot become a different build and the page can load one.
+     *
+     * Every build the site has ever published is still at its own immutable prefix, so
+     * the fix is a URL away. What this file does NOT do is guess which: it offers what
+     * `boot.builds` lists, and says what is wanted when the site has sent no list. A
+     * loader inventing a build id would be a loader sending players to 403s.
+     */
+    if (event.data.type === 'tmc.build.mismatch') {
+      buildMismatch(event.data);
+      return;
+    }
+
+    if (event.data.type !== 'tmc.auth.ready') return;
 
     sendAuth();
   });
+
+  /*
+   * Shown OVER a frame that is alive, which is why it does not go through
+   * `replaceOverlay`: that one is the "nothing ever arrived" path and refuses to draw
+   * once the frame has spoken. This is the opposite case -- the game loaded, ran, and
+   * told us it cannot join.
+   */
+  function buildMismatch(data) {
+    var wanted = String(data.server_signon || '');
+    var have = String(data.client_signon || '');
+
+    var box = panel(
+      'This server needs a different version of the game.',
+      wanted && have
+        ? 'It was built for ' + wanted + ' and this is ' + have + '.'
+        : 'This build and that server were made at different times.'
+    );
+
+    /*
+     * `boot.builds` is the site's list of what it has published, newest first, each
+     * `{ url, signon, label }`. It is optional and is usually absent: a deployment that
+     * publishes one build has nothing to choose between, and the standalone stamp knows
+     * of no others at all. When it is there, the entry whose `signon` matches what the
+     * server asked for is the ANSWER rather than an option, so it is offered first and
+     * by name.
+     */
+    var builds = boot && Array.isArray(boot.builds) ? boot.builds : [];
+    var match = null;
+    var i;
+
+    for (i = 0; i < builds.length; i++) {
+      if (builds[i] && String(builds[i].signon || '') === wanted && wanted) {
+        match = builds[i];
+        break;
+      }
+    }
+
+    if (match && match.url) {
+      box.appendChild(
+        button('Open the version this server needs', function () {
+          location.href = match.url;
+        })
+      );
+    } else {
+      for (i = 0; i < builds.length && i < 10; i++) {
+        (function (b) {
+          if (!b || !b.url) return;
+          box.appendChild(
+            button(b.label || b.signon || b.url, function () {
+              location.href = b.url;
+            })
+          );
+        })(builds[i]);
+      }
+    }
+
+    box.appendChild(
+      button('Try again', function () {
+        location.reload();
+      })
+    );
+
+    mount.appendChild(box);
+  }
 
   mount.innerHTML = '';
   anchor();

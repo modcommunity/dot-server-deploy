@@ -1,0 +1,13 @@
+# The guard, as an operator would write it: counting for real, still not acting.
+sec_enabled: true
+sec_dryrun: true
+sec_caps_ratio: 0.8
+sec_duplicate_depth: 7
+sec_churn_window_sec: 45.0
+sec_ledger_size: 128
+sec_link_allow: ["example.test"]
+
+ac_enabled: true
+ac_dryrun: false
+ac_max_speed: 420.0
+ac_max_time_ratio: 1.02

@@ -70,9 +70,10 @@ echo "the published games"
 # Entries are `repo:content directory`. The content directory is not always the pack's
 # name -- hungario is three game ids over one `content_id: hungry` -- so the pack name is
 # read from the descriptor, which is the same file the publisher reads it from.
-mapfile -t GAME_ENTRIES < <(
-    sed -n '/^GAMES=(/,/^)/p' setup.sh | grep -oE '"[^"]+"' | tr -d '"'
-)
+# The read itself is in tools/game_source.sh now, beside the search order that answers
+# the other half of the question -- where each of those repositories actually is.
+. tools/game_source.sh
+mapfile -t GAME_ENTRIES < <(game_entries)
 
 if [ ${#GAME_ENTRIES[@]} -eq 0 ]; then
     printf '  %sFAIL%s could not read the GAMES list out of setup.sh\n' "$RED" "$OFF"
@@ -88,9 +89,13 @@ checked_any=0
 for entry in "${GAME_ENTRIES[@]}"; do
     repo="${entry%%:*}"
     dir="${entry#*:}"
-    src="../$repo"
 
-    [ -d "$src/game" ] || continue
+    # games/, a --games-dir, or beside this project -- whichever this machine has. It
+    # was `../$repo` and nothing else, so the moment setup.sh started cloning into
+    # games/ this check would have gone quiet on a real deployment and said so in the
+    # words a release tarball uses, which is the branch nobody looks twice at.
+    game_source "$repo" || continue
+    src="$GAME_SRC"
     checked_any=1
 
     yml="content/$dir/game.yml"
@@ -146,7 +151,7 @@ if [ "$checked_any" -eq 0 ]; then
     # this branch is the one a developer checkout can never reach, and a notice that
     # quietly stops being printed is indistinguishable from a check that quietly stops
     # running -- which is exactly how the old copy-staleness guard went stale.
-    printf '  %sok%s   no game repositories beside this one; staleness not checked\n' \
+    printf '  %sok%s   no game repositories on this machine; staleness not checked\n' \
         "$GRN" "$OFF"
 elif [ "$drift" -eq 0 ]; then
     printf '  %sok%s   every game is published and its pack is newer than its source\n' \
@@ -194,14 +199,14 @@ echo
 if [ "$checked_any" -eq 1 ]; then
     globals=0
     for repo in "${GAME_REPOS[@]}"; do
-        [ -d "../$repo" ] || continue
+        game_source "$repo" || continue
         while read -r hit; do
             printf '  %sFAIL%s %s declares a class_name: %s
 ' \
                 "$RED" "$OFF" "$repo" "$hit"
             globals=$((globals + 1))
-        done < <(grep -rn '^class_name ' "../$repo" --include='*.gd' 2>/dev/null \
-            | grep -v '/addons/' | sed "s|^../$repo/||")
+        done < <(grep -rn '^class_name ' "$GAME_SRC" --include='*.gd' 2>/dev/null \
+            | grep -v '/addons/' | sed "s|^$GAME_SRC/||")
     done
 
     if [ "$globals" -eq 0 ]; then
@@ -237,13 +242,13 @@ fi
 if [ "$checked_any" -eq 1 ]; then
     absolute=0
     for repo in "${GAME_REPOS[@]}"; do
-        [ -d "../$repo" ] || continue
+        game_source "$repo" || continue
 
         # The directories this game actually SHIPS. A path whose first segment is not
         # one of them -- `res://audio` in a game with no audio/ -- names the HOST's
         # file and is correct as it stands: rebasing it would point into a pack where
         # nothing exists. Only what would really break is counted.
-        owned=" $(cd "../$repo" && find . -maxdepth 1 -type d \
+        owned=" $(cd "$GAME_SRC" && find . -maxdepth 1 -type d \
             ! -name '.' ! -name '.git' ! -name '.godot' ! -name 'addons' \
             ! -name 'examples' ! -name 'tools' ! -name 'screenshots' \
             | sed 's|^\./||' | tr '\n' ' ')"
@@ -261,7 +266,7 @@ if [ "$checked_any" -eq 1 ]; then
             # so made this number rise from 92 to 102 when the fix landed, which reads
             # as a regression and is the exact opposite. A measure that moves the wrong
             # way is worse than no measure.
-            find "../$repo" -name '*.gd' -not -path '*/addons/*' -not -path '*/.godot/*' \
+            find "$GAME_SRC" -name '*.gd' -not -path '*/addons/*' -not -path '*/.godot/*' \
                 -not -path '*/examples/*' -not -path '*/tools/*' -print0 2>/dev/null \
             | xargs -0 -r sed -E 's/[A-Za-z0-9_]*Paths\.rebase\("res:\/\/[^"]*"\)//g' \
             | grep -vE '^[[:space:]]*#' \

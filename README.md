@@ -208,7 +208,7 @@ Exit codes are meaningful, so a supervisor can tell a misconfiguration from a cr
 
 A game can be **in the build** or **delivered**. Built in is the default and is what every game in `content/` is today: the code is compiled into this project, the server names an absolute `res://` scene, and the client shell has a matching entry in `BUILTIN_CLIENTS`. Delivered means the game is a signed dot-cloud pack that the server and every client download and mount at `res://dot_cloud/<id>/<version>/` — so a server owner adds a game by editing one YAML file, and a player who has never heard of it gets it on connect.
 
-**One pack per game, and the pack is the game's own repository.** Not a directory of this project: `setup.sh` vendors all five games into one `game/` and one `scenes/`, so no directory here *is* any single game — the files are separable only by their name prefix.
+**One pack per game, and the pack is the game's own repository.** `setup.sh` used to vendor all five into one `game/` and one `scenes/`, so no directory here *was* any single game — the files were separable only by their name prefix. It publishes out of `games/<repo>` instead, which is that repository itself: cloned there, or linked there from beside this project in a developer checkout.
 
 **A pack's scripts may not use `class_name`.** A mounted pack's globals are not registered in the host, so every cross-file type reference inside it fails to compile: the pack mounts, the scene loads, and every script in it is dead. `preload("relative/path.gd")` and `extends "relative/path.gd"` both work, and `<Game>Paths.rebase("res://…")` moves a path string onto wherever the game landed. All five games are already written this way; `tools/check.sh` refuses a new `class_name` so they stay that way.
 
@@ -217,7 +217,7 @@ A game can be **in the build** or **delivered**. Built in is the default and is 
 1. **Publish it.** `--source` names the tree; `game.yml` still supplies the id, the version and the entry scene, so nothing is said twice.
 
    ```bash
-   ./server pack arena --source ../game-arena
+   ./server pack arena --source games/game-arena
    ```
 
    `content/<id>/pack.json` says what not to ship:
@@ -267,11 +267,11 @@ Every one of these was published and booted as a pack — mounted, module loaded
 
 | game.yml | `--source` | pack | `scene:` | `client_scene:` | `module:` |
 | --- | --- | --- | --- | --- | --- |
-| `arena` | `../game-arena` | `dist/arena` — 140 files, 3.1 MiB | `scenes/arena_server.tscn` | `game/arena.tscn` | `game/arena_module.gd` |
-| `g2gfast` | `../game-g2gfast` | `dist/g2gfast` — 171 files, 3.1 MiB | `scenes/g2g_server.tscn` | `game/g2g.tscn` | `game/g2g_module.gd` |
-| `playground` | `../game-playground` | `dist/playground` — 76 files, 755 KiB | `scenes/pg_server.tscn` | `game/playground.tscn` | `game/playground_module.gd` |
-| `hungry_classic` `hungry_frenzy` `hungry_gauntlet` | `../game-hungario` | `dist/hungry` — 65 files, 644 KiB | `game/modes/<mode>.tscn` | `game/client/hungry_client.tscn` | `game/hungry_module.gd` |
-| `lobby` | `../game-simple-lobby` | `dist/a_room` — 36 files, 399 KiB | `scenes/room_server.tscn` | `scenes/room_client.tscn` | `game/room_module.gd` |
+| `arena` | `games/game-arena` | `dist/arena` — 140 files, 3.1 MiB | `scenes/arena_server.tscn` | `game/arena.tscn` | `game/arena_module.gd` |
+| `g2gfast` | `games/game-g2gfast` | `dist/g2gfast` — 171 files, 3.1 MiB | `scenes/g2g_server.tscn` | `game/g2g.tscn` | `game/g2g_module.gd` |
+| `playground` | `games/game-playground` | `dist/playground` — 76 files, 755 KiB | `scenes/pg_server.tscn` | `game/playground.tscn` | `game/playground_module.gd` |
+| `hungry_classic` `hungry_frenzy` `hungry_gauntlet` | `games/game-hungario` | `dist/hungry` — 65 files, 644 KiB | `game/modes/<mode>.tscn` | `game/client/hungry_client.tscn` | `game/hungry_module.gd` |
+| `lobby` | `games/game-simple-lobby` | `dist/a_room` — 36 files, 399 KiB | `scenes/room_server.tscn` | `scenes/room_client.tscn` | `game/room_module.gd` |
 
 `exclude_dirs` is `addons`, `examples`, `tools`, `screenshots` everywhere, plus `imported` for g2gfast — `maps/imported/` is 66 MB of converted geometry that is published as its own packs, and a game pack carrying it would deliver every map to every player on connect — and `web` for hungario, which has a browser build of its own in the repository.
 
@@ -403,7 +403,7 @@ The pull cannot touch `cfg/`, because `cfg/` is not tracked; the setup run adds 
 
 **`--no-import` is overridden when the class cache is stale, and you want it to be.** `.godot/global_script_class_cache.cfg` registers every `class_name` in the project, and a DELIVERED game's scripts are parsed against it at runtime — so an addon linked or pulled after that cache was built is a class the pack cannot see. The host's own scripts are already cached, so the server boots, loads the game and looks healthy; only the pack fails, as `Could not find type "DotTimerRun"` inside a mounted script, surfacing three layers up as `No G2GGame is registered`, a game with no `map` command, and a grey screen. `setup.sh` compares the cache against the newest `.gd` under `addons/` and imports anyway when it loses, saying so.
 
-**The games are separate clones too, and the loop above says `../game-*` for that reason.** It said `../dot-*` when the games were compiled in, and that was right then: the deploy repo's own pull brought the code. It is not right now. `setup.sh` republishes every pack on an upgrade, from those clones, and `--update` is off by default — so a loop that skips them publishes **stale sources**, silently, on the command an operator runs most. A stale game still declares `class_name`, and a pack whose scripts do that mounts and is dead: the scene loads, the script does not attach, and what surfaces is `No G2GGame is registered` against a module that is fine. `./server pack` refuses such a source now, which is the backstop; pulling them is the fix.
+**The games are separate clones too, and the loop above says `games/game-*` for that reason.** It said `../dot-*` when the games were compiled in, and that was right then: the deploy repo's own pull brought the code. It is not right now. `setup.sh` republishes every pack on an upgrade, from those clones, and `--update` is off by default — so a loop that skips them publishes **stale sources**, silently, on the command an operator runs most. A stale game still declares `class_name`, and a pack whose scripts do that mounts and is dead: the scene loads, the script does not attach, and what surfaces is `No G2GGame is registered` against a module that is fine. `./server pack` refuses such a source now, which is the backstop; pulling them is the fix.
 
 **The addons are separate clones, and by default they are inside this one.** `setup.sh` clones each one it does not have into `addons/.repos/<repo>` and points `addons/<name>` at it with a relative link, so a finished checkout is one directory with nothing outside it — which is what a `cp -r`, a tarball and a container's final stage each need, and it means a box running several servers cannot end up with one server's `git pull` changing another's. `git pull` here updates the host and the launcher and nothing else: a host newer than the addon it configures is a real failure mode — a setting this file reads and hands to a `DotServerConfig` that has no property for it, reported rather than fatal (`UNKNOWN : server.yml: … this dot-server has no …`) and doing nothing. `./setup.sh --update` pulls the addons and the games as well, wherever they turned out to be, and `./upgrade.sh` is that with the guardrails.
 
@@ -416,7 +416,15 @@ for d in ../dot-* ../game-*; do git -C "$d" pull --ff-only; done && ./setup.sh -
 
 **A checkout that is already wired is never rewired.** An `addons/<name>` that is a link and still resolves is left exactly as it is, so an upgrade on a box whose addons are beside it does not silently start a second copy of all fifty — two copies of `dot-cloud` on one machine is the bug where the fix is pulled, installed and still not running. Only `--addons-dir` repoints them.
 
-`./setup.sh --vendor` copies the addons in rather than linking them, and deletes `addons/.repos/` afterwards: vendoring says this tree is to carry content rather than checkouts, and it is what the container build and a release tarball use.
+**The games live in `games/`, for the reason the addons live in `addons/.repos/`.** Each one is its own repository too, and they used to go in the parent directory — which this project does not own, so on a box running several servers it is one checkout shared by all of them with nothing saying so, and `./setup.sh` in one server's directory republishes packs from a tree another server's operator is halfway through editing. `setup.sh` clones a missing game into `games/<repo>` and, in a developer checkout where the games are already beside this one, links `games/<repo> -> ../../<repo>` rather than making a second copy of each. A `.gdignore` goes in beside them: a game walked as part of this project declares its `class_name` globals a second time, and a *delivered* game's scripts then resolve those names to this build's copy instead of their own. The parent directory stays the last place looked, so a tree wired by an older `setup.sh` keeps working.
+
+**`--games-dir DIR` shares one set of games between servers**, the same way `--addons-dir` shares the addons, and it is a separate flag because they are not the same directory — one box keeping a library of addons does not imply it keeps a library of games, and `--addons-dir ..` quietly meaning "and publish packs from the games up there too" is how somebody ends up publishing from a tree they did not expect. `TMC_GAMES_DIR` is the same switch for a unit file or a CI job.
+
+```bash
+./setup.sh --games-dir /srv/tmc/games       # one set of checkouts, several servers
+```
+
+`./setup.sh --vendor` copies the addons in rather than linking them, and deletes `addons/.repos/` and `games/` afterwards: vendoring says this tree is to carry content rather than checkouts — the packs in `dist/` are what a game is once it is published — and it is what the container build and a release tarball use.
 
 **Every game is republished by that run, and a pull that changed one is not live until it is.** The games are packs: `setup.sh` imports each game repository and publishes it into `dist/`, so the upgrade command above is also the command that rebuilds the content this server serves. `--no-import` does not skip it — that flag is about re-importing *this* project, and a game repository that gained an asset since the last run has to be imported or its pack ships bytes nothing can open. `tools/check.sh` fails when a pack is older than its source, which is the backstop.
 

@@ -12,6 +12,8 @@
 #   ./setup.sh --vendor         COPY the addons instead of linking them
 #   ./setup.sh --addons-dir DIR take the addons from a directory you already have
 #                               them in, rather than from this project's own clones
+#   ./setup.sh --games-dir DIR  the same for the game-* repositories, for a box that
+#                               runs several servers off one set of checkouts
 #
 #   ./setup.sh --letsencrypt --domain demo.example.com --email ops@example.com
 #                               ...and then get a real certificate for it
@@ -35,8 +37,12 @@
 #      with nothing pointing out of it -- which is what a tarball, a `cp -r` and a
 #      container image's final stage each need. `--addons-dir DIR` takes them from a
 #      directory you already have instead, and links out to it; `--vendor` copies.
-#   3. Copies every built-in game into the build. They are `kind: builtin`, and the
-#      reason is measured rather than assumed -- see content/lobby/game.yml.
+#   3. Publishes every game as a signed pack in dist/. Each game is its own
+#      repository too, and they go in games/ for the same reason the addons go in
+#      addons/: a directory this project owns, rather than the parent directory,
+#      which on a box running several servers is one checkout shared by all of them
+#      with nothing saying so. `--games-dir DIR` takes them from a directory you
+#      already have instead.
 #   4. Runs Godot's import pass. Without it every class_name global is unresolved,
 #      every cross-file type reference fails, and the whole thing looks like dozens
 #      of unrelated errors.
@@ -112,6 +118,22 @@ VENDOR=0
 # to do, and one directory serves every server on the box.
 ADDONS_DIR="${TMC_ADDONS_DIR:-}"
 
+# Where the game-* repositories come from.
+#
+# [b]The same variable as ADDONS_DIR, for the same reason, and it is separate because
+# the two are not the same directory.[/b] The addons are CODE this project compiles and
+# they end up linked into addons/; a game is a SOURCE this project publishes a pack out
+# of, and it must never be walked as part of this project -- a game repository under
+# addons/ would be imported, which is the arrangement the flip to packs removed. So
+# games/ is its own directory with a .gdignore in it, and a shared one is named
+# separately: a box that keeps one library of addons does not necessarily keep one
+# library of games, and `--addons-dir ..` meaning "and the games too" is exactly the
+# kind of implication that makes somebody publish a pack from a tree they did not
+# expect.
+#
+# Empty means "inside this project": games/<repo>, cloned there when it is missing.
+GAMES_DIR="${TMC_GAMES_DIR:-}"
+
 # The guided install. Everything it decides is asked for, and everything it asks has
 # a default, so --full --yes is the same install with nobody typing.
 DO_FULL=0
@@ -135,6 +157,7 @@ while [ $# -gt 0 ]; do
         --check)     DO_CHECK=1; shift ;;
         --vendor)    VENDOR=1; shift ;;
         --addons-dir) ADDONS_DIR="${2:?--addons-dir needs a value}"; shift 2 ;;
+        --games-dir) GAMES_DIR="${2:?--games-dir needs a value}"; shift 2 ;;
         --letsencrypt) DO_LETSENCRYPT=1; shift ;;
         --domain)    LE_DOMAINS+=("${2:?--domain needs a value}"); shift 2 ;;
         --email)     LE_EMAIL="${2:?--email needs a value}"; shift 2 ;;
@@ -147,10 +170,10 @@ while [ $# -gt 0 ]; do
         # wrapper that re-declares the arguments it forwards is a second list to keep
         # in step, and the half that drifts is always the one nobody uses often.
         --)          shift; LE_EXTRA=("$@"); break ;;
-        # 2..62 is the comment block at the top of this file, printed as help so
+        # 2..68 is the comment block at the top of this file, printed as help so
         # there is one copy of it rather than two that drift. The range moves when
         # that block grows; it ends at the last line of step 8.
-        -h|--help)   sed -n '2,62p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        -h|--help)   sed -n '2,68p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
         *) printf 'unknown option: %s\n' "$1" >&2; exit 2 ;;
     esac
 done
@@ -379,10 +402,10 @@ if [ "$DO_FULL" -eq 1 ]; then
     # --- what the server is ---
     FULL_NAME="$(ask       "Server name" "$(cfg_or cfg/server.yml sv_name 'TMC Test Server')")"
 
-    # The games are copied out of the sibling repositories in step 3, so on a first
-    # run this directory holds the lobby and nothing else. Offering what is here is
-    # therefore a hint rather than the list -- and the answer is checked again after
-    # the copy, where the real list exists.
+    # The games are published out of games/ in step 3, so on a first run this directory
+    # holds the lobby and nothing else. Offering what is here is therefore a hint rather
+    # than the list -- and the answer is checked again after the publish, where the real
+    # list exists.
     installed_games=""
     for gy in content/*/game.yml; do
         [ -f "$gy" ] || continue
@@ -799,7 +822,7 @@ clone_repos() {
 # here vendors, imports, and then fails to compile every script that names the missing
 # class — dozens of "not declared in the current scope" errors in files nobody touched,
 # which reads as a broken project rather than as one missing folder.
-ADDONS=(dot_core dot_net dot_game dot_server dot_server_query dot_server_security dot_2d dot_ui dot_auth dot_cloud dot_user
+ADDONS=(dot_core dot_log dot_net dot_game dot_server dot_server_query dot_server_security dot_2d dot_ui dot_auth dot_cloud dot_user
         dot_user_avatar dot_platform dot_loadout dot_match
         dot_player_controller dot_timer dot_map dot_leaderboard dot_stats
         dot_props dot_vote dot_combat dot_chat dot_voice dot_moderation
@@ -1192,25 +1215,137 @@ GAMES=(
     "game-buses-from-hell:buses"
 )
 
+# This project's own clones, and the default home of every game.
+#
+# [b]Beside the addons rather than under them, and that is not tidiness.[/b] A game
+# repository inside addons/ is a game repository this project IMPORTS -- every script
+# in it compiled as part of this build, which is the arrangement the flip to packs
+# removed and the one a delivered game must never be in. It gets a .gdignore for the
+# same reason addons/.repos does: the leading dot is a behaviour of Godot's scanner and
+# the file is the documented switch, and a game walked as part of this project declares
+# its class_name globals twice.
+#
+# [b]games/ rather than the parent directory, which is where these used to go.[/b] The
+# parent is a directory this project does not own: on a box running several servers it
+# is one checkout shared by all of them with nothing saying so, and `./setup.sh` in one
+# server's directory then republishes packs from a tree another server's operator was
+# halfway through editing. It stays a fallback below -- a developer checkout has the
+# games right there and must not grow a second copy of each.
+GAMES_REPOS="$ROOT/games"
+
+if [ -n "$GAMES_DIR" ]; then
+    # Through a second variable for the reason --addons-dir is: the assignment happens
+    # before the `||` is reached, so writing straight into GAMES_DIR empties it on the
+    # failing path and the message then names no directory at all.
+    GAMES_DIR_ABS="$(cd "$GAMES_DIR" 2>/dev/null && pwd)" \
+        || die "--games-dir: no such directory: $GAMES_DIR" 2
+    GAMES_DIR="$GAMES_DIR_ABS"
+fi
+
+# Where a MISSING game is cloned to. A shared directory was asked for by name, so it is
+# also where the missing ones are put -- otherwise the first run fills it and every run
+# after it quietly starts a second copy inside the project.
+GAMES_CLONE_DEST="${GAMES_DIR:-$GAMES_REPOS}"
+
+# `game_source` and the search order it implements. In its own file because four
+# scripts here ask this question and a fourth copy of the answer is how the three
+# hand-kept copies of the GAMES list drifted. GAMES_DIR is already set above, from
+# --games-dir, and the helper takes it as it finds it.
+# shellcheck source=tools/game_source.sh
+. "$ROOT/tools/game_source.sh"
+
+## Make games/ before anything is written into it, and mark it ignored FIRST: a run
+## interrupted between the two leaves a repository in a directory Godot would then walk.
+prepare_games_dir() {
+    mkdir -p "$GAMES_REPOS" || die "could not create $GAMES_REPOS" 4
+    [ -f "$GAMES_REPOS/.gdignore" ] || : > "$GAMES_REPOS/.gdignore"
+}
+
 resolve_games() {
     MISSING_GAMES=()
+    GAMES_FROM_DIR=0; GAMES_FROM_REPOS=0; GAMES_FROM_SIBLING=0
+    local entry repo
     for entry in "${GAMES[@]}"; do
         repo="${entry%%:*}"
-        [ -d "$ROOT/../$repo/game" ] || MISSING_GAMES+=("$repo")
+
+        if ! game_source "$repo"; then
+            MISSING_GAMES+=("$repo")
+            continue
+        fi
+
+        case "$GAME_KIND" in
+            dir)     GAMES_FROM_DIR=$((GAMES_FROM_DIR + 1)) ;;
+            repos)   GAMES_FROM_REPOS=$((GAMES_FROM_REPOS + 1)) ;;
+            sibling)
+                GAMES_FROM_SIBLING=$((GAMES_FROM_SIBLING + 1))
+                link_sibling_game "$repo"
+                ;;
+        esac
     done
+}
+
+## Give a sibling checkout a name inside games/, so every other script in this project
+## has ONE place to look.
+##
+## [b]A link rather than a clone or a copy.[/b] A developer tree has these repositories
+## beside this one because dot-bootstrap put them there; cloning a second copy is the
+## bug where the fix is committed, pulled, and still not running, and copying one is a
+## tree that goes stale the moment somebody edits the real one. Relative, because the
+## whole set moves together and an absolute link into /home/somebody is a link that
+## dangles on the next machine.
+##
+## NOT under --vendor. That is the release-tarball position: the tree is about to be
+## moved somewhere the siblings do not exist, and a link into them is then a dangling
+## link in a shipped directory -- which tools/package_check.sh fails on, correctly. The
+## games do not travel in a tarball at all; their packs do, in dist/.
+link_sibling_game() {
+    local repo="$1"
+
+    [ "$VENDOR" -eq 1 ] && return 0
+    [ -n "$GAMES_DIR" ] && return 0
+    [ -e "$GAMES_REPOS/$repo" ] && return 0
+
+    prepare_games_dir
+    ln -sfn "../../$repo" "$GAMES_REPOS/$repo"
 }
 
 if [ "$DO_UPDATE" -eq 1 ]; then
     UPDATE_GAMES=()
-    for entry in "${GAMES[@]}"; do UPDATE_GAMES+=("$ROOT/../${entry%%:*}"); done
-    update_repos "${UPDATE_GAMES[@]}"
+    for entry in "${GAMES[@]}"; do
+        # Resolved rather than assumed: pulling "$ROOT/../$repo" on a box whose games
+        # live in games/ pulls nothing and says nothing, which is the update that looks
+        # like it worked and republishes stale sources.
+        game_source "${entry%%:*}" && UPDATE_GAMES+=("$GAME_SRC")
+    done
+    [ ${#UPDATE_GAMES[@]} -gt 0 ] && update_repos "${UPDATE_GAMES[@]}"
 fi
 
 resolve_games
 
 if [ ${#MISSING_GAMES[@]} -gt 0 ] && [ "$DO_CLONE" -eq 1 ]; then
-    clone_repos "$ROOT/.." "${MISSING_GAMES[@]}"
+    [ "$GAMES_CLONE_DEST" = "$GAMES_REPOS" ] && prepare_games_dir
+    clone_repos "$GAMES_CLONE_DEST" "${MISSING_GAMES[@]}"
     resolve_games
+fi
+
+# Where they came from, printed for the reason the addons line is: games/ is new, a
+# developer tree resolves every one of them through a link into the parent directory,
+# and a run that said "games/" over five links would have somebody looking in the wrong
+# checkout for the source of a pack that is wrong.
+if [ ${#MISSING_GAMES[@]} -lt ${#GAMES[@]} ]; then
+    GAMES_WHERE=()
+    [ "$GAMES_FROM_DIR"     -gt 0 ] && GAMES_WHERE+=("$GAMES_FROM_DIR from $GAMES_DIR")
+    [ "$GAMES_FROM_REPOS"   -gt 0 ] && GAMES_WHERE+=("$GAMES_FROM_REPOS in games/")
+    # Worded from what was actually done: --vendor and --games-dir both skip the link,
+    # and a line claiming one that is not there is worse than no line.
+    if [ "$GAMES_FROM_SIBLING" -gt 0 ]; then
+        if [ "$VENDOR" -eq 1 ] || [ -n "$GAMES_DIR" ]; then
+            GAMES_WHERE+=("$GAMES_FROM_SIBLING beside this project")
+        else
+            GAMES_WHERE+=("$GAMES_FROM_SIBLING linked into games/ from beside this project")
+        fi
+    fi
+    ok "$((${#GAMES[@]} - ${#MISSING_GAMES[@]})) game repositories ($(IFS=', '; echo "${GAMES_WHERE[*]}"))"
 fi
 
 # [b]Packs already in dist/ are the release-tarball case and are kept.[/b] A box with
@@ -1219,16 +1354,17 @@ fi
 # deployment should not have. Only when there is nothing to run does this refuse.
 if [ ${#MISSING_GAMES[@]} -gt 0 ]; then
     if [ -n "$(ls -A "$ROOT/dist" 2>/dev/null)" ]; then
-        ok "no game repositories beside this one; keeping the packs in dist/"
+        ok "no game repositories on this machine; keeping the packs in dist/"
         PUBLISHED_GAMES=1
     else
-        die "These game repositories are not beside this one:
+        die "These game repositories are nowhere this run looked:
 
         ${MISSING_GAMES[*]}
 
-    Each game is a separate repository and there is no way to clone the tree at
-    once. They are normally cloned for you; this run could not, or --no-clone was
-    given. A deployment that only serves published packs needs dist/ instead.
+    Looked in ${GAMES_DIR:+$GAMES_DIR, }games/ and the parent directory. Each game is
+    a separate repository and there is no way to clone the tree at once. They are
+    normally cloned into games/ for you; this run could not, or --no-clone was given.
+    A deployment that only serves published packs needs dist/ instead.
 
     If one was RENAMED, fix the GAMES list in this script." 4
     fi
@@ -1275,9 +1411,8 @@ fi
 # it belongs to the publish rather than to the import flag.
 if [ "${PUBLISHED_GAMES:-0}" -ne 1 ]; then
     for entry in "${GAMES[@]}"; do
-        src="$ROOT/../${entry%%:*}"
-        [ -d "$src/game" ] || continue
-        "$GODOT" --headless --path "$src" --import >/dev/null 2>&1 || true
+        game_source "${entry%%:*}" || continue
+        "$GODOT" --headless --path "$GAME_SRC" --import >/dev/null 2>&1 || true
     done
     ok "game assets imported"
 fi
@@ -1291,13 +1426,18 @@ for entry in "${GAMES[@]}"; do
     repo="${entry%%:*}"
     id="${entry#*:}"
 
+    # Resolved once more rather than carried out of resolve_games: bash 3 has no
+    # associative arrays, and a second array indexed by hand beside the first is the
+    # shape this project's list bugs keep taking.
+    game_source "$repo" || die "could not find $repo to publish $id from" 4
+
     # tools/pack.gd directly rather than through `./server`: the launcher is generated
     # in step 7, after this one, and moving that step earlier would put a script naming
     # the runtime before the step that finds the runtime.
     pack_args=(--headless --path "$ROOT" --script res://tools/pack.gd --
                --content "$ROOT/content" --out "$ROOT/dist"
                --key "$ROOT/keys/content.key" --key-id local
-               --id "$id" --source "$ROOT/../$repo")
+               --id "$id" --source "$GAME_SRC")
 
     if "$GODOT" "${pack_args[@]}" >/dev/null 2>&1; then
         ok "$id"
@@ -1313,6 +1453,18 @@ done
 
 if [ "$published_any" -eq 0 ]; then
     die "No games were published and none are in dist/." 4
+fi
+
+# [b]--vendor throws the game clones away too, once their packs exist.[/b] The same rule
+# as addons/.repos/ one step up: vendoring says this tree is to carry CONTENT rather than
+# checkouts, and a container's final stage or a release tarball copies the project
+# directory whole. What has to travel is dist/, which is the signed pack of each of these
+# and is a fraction of the size. A link into a sibling is not removed here because
+# --vendor never makes one -- it would dangle the moment the tree moved, which is exactly
+# what tools/package_check.sh fails on.
+if [ "$VENDOR" -eq 1 ] && [ -d "$GAMES_REPOS" ]; then
+    rm -rf "$GAMES_REPOS"
+    ok "games/ removed -- --vendor means this tree carries packs, not checkouts"
 fi
 
 # --- 5. Configuration ------------------------------------------------------

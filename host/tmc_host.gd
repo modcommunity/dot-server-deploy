@@ -50,6 +50,15 @@ var server: DotServer = null
 ## The query responder. Answers A2S and DQP; see dot-server-query.
 var query_host: DotQueryHost = null
 
+## The sink layer, when `log_router` is not `off`. See [method _build_logging].
+var log_router: DotLogRouter = null
+
+## The guard. Built for every server, and it ships in dry run.
+var guard: DotSecurityManager = null
+
+## The detectors, reporting into the same guard.
+var anticheat: DotAntiCheat = null
+
 ## Voting for the next game, or null when `vote.yml` turns it off.
 var votes: TmcVote = null
 
@@ -189,10 +198,52 @@ func _run() -> void:
 		# Booted, listened, loaded a game and loaded a module — which is everything
 		# `./server --check` claims. Shutting down here rather than serving is what makes
 		# that claim checkable in CI without a client.
+		if not _selftest_operator_surface():
+			server.shutdown("selftest failed")
+			get_tree().quit(EXIT_CONFIG)
+			return
+
 		server.shutdown("selftest complete")
 		print("")
 		print("selftest ok")
 		get_tree().quit(EXIT_OK)
+
+
+## The operator's console, asserted on a REAL server rather than on a fixture.
+##
+## [b]Both of these were installed addons that reached no console at all.[/b] dot-log's
+## command object could only be plugged into a client console until dot-server grew
+## `DotConsole.add_source`, and the guard was in the dependency list and instantiated
+## nowhere — so a server admin had neither `log tail` nor `sec_status`, and nothing
+## anywhere could report their absence because an absent command is an absent command.
+##
+## Checked here and not in `examples/selftest.tscn` because a fixture has no console: what
+## is being asserted is that these names are on the console of a server that actually
+## booted, which is the only place the mistake could have happened.
+func _selftest_operator_surface() -> bool:
+	var expected := PackedStringArray(["status", "sec_status", "sec_why"])
+
+	if log_router != null:
+		expected.append("log")
+
+	var missing := PackedStringArray()
+
+	for name in expected:
+		if server.console.find_command(name) == null:
+			missing.append(name)
+
+	if not missing.is_empty():
+		printerr(
+			"selftest FAILED: the console is missing %s"
+			% " ".join(Array(missing))
+		)
+		return false
+
+	if log_router != null and not log_router.is_started():
+		printerr("selftest FAILED: the log router was built and never started")
+		return false
+
+	return true
 
 
 ## Reads the configuration and brings a server up, without touching the command line.
@@ -308,11 +359,23 @@ func _boot() -> bool:
 	config.server.bans_path = "%s/bans.json" % _data_dir
 	config.server.audit_log_path = "%s/audit.jsonl" % _data_dir
 
+	# [b]Before the server exists, because the first line this boot emits is the
+	# interesting one.[/b] The router registers itself as a DotLog sink when it enters the
+	# tree, so anything built after it is covered and anything built before it is not --
+	# and what a server admin most wants out of a log is the reason the boot went wrong.
+	_build_logging()
+
 	server = DotServer.new()
 	server.name = "Server"
 	server.config = config.server
 	server.config_file = ""
 	server.auto_boot = false
+
+	if log_router != null:
+		# dot-server duck-types this: a `DotLogSink` for a rotating file or a dot-log
+		# router for the whole sink layer, recognised by what it can do rather than by
+		# what it is called. Pointed at the router, it does not make a second file writer.
+		server.log_sink_ref = DotNodeRef.of_path(NodePath("../DotLogRouter"))
 	# Both config slots are named absolutely, so dot-server's search path cannot reach the
 	# `server.cfg` and `autoexec.cfg` its own addon ships. Those are correct defaults for a
 	# deployment configured with `.cfg` files and wrong for one that has chosen YAML: they
@@ -393,6 +456,12 @@ func _boot() -> bool:
 	if not added.ok:
 		_die(EXIT_CONFIG, str(added.error))
 		return false
+
+	# After boot, because both of these want a console to register on and the guard wants
+	# a running server to attach to. Neither is fatal: a server with no guard is a server,
+	# and one whose log command failed to register still logs.
+	_register_log_commands()
+	_build_security()
 
 	for descriptor in content.games:
 		server.games.add_game(descriptor)
@@ -482,6 +551,116 @@ func _boot() -> bool:
 ## is exactly what a misconfigured `auth.yml` looks like from the outside. An operator who
 ## has written one wants to be told it is broken, not to discover months later that their
 ## admins were never admins.
+## Builds the sink layer, when the configuration asks for one.
+##
+## [b]dot-log was in this project's dependency list and instantiated nowhere.[/b] `cfg/log.yml`
+## has documented a level, per-channel levels, a mirror threshold and five file settings
+## since it was written, and every one of them reached dot-core's own `DotLogSink` -- which
+## writes a file and nothing else. Syslog, a hosted collector, a SQL table, redaction,
+## flood gating and the in-memory ring behind `log tail` were all installed, all
+## configured-for, and all unreachable.
+##
+## Not fatal, ever. A collector that cannot be reached is a reason to look at the
+## configuration, not a reason for a server full of people to stop.
+func _build_logging() -> void:
+	log_router = config.build_log_router()
+
+	if log_router == null:
+		return
+
+	log_router.name = "DotLogRouter"
+	# The router is what applies the levels from here on. `DotServer._apply_log_levels`
+	# does it again during boot with the same values out of the same config, which is
+	# idempotent and stays because a server with `log_router: off` still needs it.
+	add_child(log_router)
+
+	DotLog.debug(CHANNEL, "the sink layer is up", log_router.describe())
+
+
+## Puts `log` on the console.
+##
+## [b]dot-log ships a console object and, until dot-server grew `add_source`, it could only
+## be plugged into a CLIENT console.[/b] The one kind of process with a log worth tailing is
+## the one kind that could not reach it. `DotConsole.add_source` wraps each name a
+## duck-typed source claims in a real `DotConCommand`, so `log` gets the permission check,
+## the RCON gate and the audit line like everything else.
+##
+## GENERIC, not root: reading back what the server has been saying is what being staff is
+## for, and `log test` is the only thing here that writes anything at all.
+func _register_log_commands() -> void:
+	if server == null or server.console == null:
+		return
+
+	var source := DotLogCommands.new(log_router)
+	var registered := server.console.add_source(source, DotAdminFlags.GENERIC)
+
+	DotLog.result(CHANNEL, "the log console commands", registered, DotLog.Level.WARN)
+
+
+## Builds the guard, its watchers and the detectors.
+##
+## [b]This addon was in the dependency list and instantiated nowhere either.[/b] It ships in
+## dry run -- every rule evaluates, every trip is logged and ledgered marked WOULD, and
+## nobody is punished -- which is what makes building it for every server the right default
+## rather than an imposition: an operator reads `sec_status` for a week and then decides.
+##
+## [b]Nothing here is fatal.[/b] A server with no guard is a server that runs; one that
+## refused to boot because a rules file was unreadable costs the players what they came
+## for over a permissions mistake.
+func _build_security() -> void:
+	if server == null:
+		return
+
+	if not config.security.enabled:
+		DotLog.info(CHANNEL, "the security guard is off in cfg/security.yml")
+		return
+
+	guard = DotSecurityManager.new()
+	guard.name = "Security"
+	guard.config = config.security
+	# The YAML is the layer. A second file under `user://cfg/` would be a second place a
+	# setting can come from with no order written down between them, which is exactly what
+	# `DotConfig`'s layering exists to avoid.
+	guard.config_file = ""
+	# [b]`".."`, not `"../Server"`.[/b] The guard is a CHILD of the server, so `..` already
+	# IS the server; `../Server` asks the server for a child of its own called Server,
+	# finds nothing, and the guard reports "A security manager needs a server" and then
+	# watches nothing at all for the life of the process. The two watchers below are the
+	# other shape and correctly say `../Security`, because they are siblings of the guard.
+	guard.server_ref = DotNodeRef.of_path(NodePath(".."))
+	server.add_child(guard)
+
+	# One node rather than five. Every source it watches is optional and every one it
+	# cannot find simply does nothing, so a deployment without dot-chat loses the router
+	# half and keeps dot-server's own chat path.
+	var watch := DotSecurityWatch.new()
+	watch.name = "SecurityWatch"
+	watch.guard_ref = DotNodeRef.of_path(NodePath("../Security"))
+	server.add_child(watch)
+
+	if config.anticheat.enabled:
+		anticheat = DotAntiCheat.new()
+		anticheat.name = "AntiCheat"
+		anticheat.config = config.anticheat
+		anticheat.config_file = ""
+		anticheat.guard_ref = DotNodeRef.of_path(NodePath("../Security"))
+		server.add_child(anticheat)
+
+	# The console commands are NOT registered here: `DotSecurityManager.attach()` does it
+	# itself, and a second `DotSecurityCommands.register` produces thirteen "command
+	# registered twice" warnings and two for the cvars -- every one of which is the console
+	# correctly keeping the first registration and telling somebody about the second.
+
+	DotLog.info(
+		CHANNEL,
+		"the security guard is watching",
+		{
+			"dry_run": guard.is_dry_run(),
+			"anticheat": anticheat != null,
+		}
+	)
+
+
 func _build_auth() -> bool:
 	var built := TmcAuth.build(config.auth, _config_dir)
 
@@ -642,7 +821,12 @@ func _on_game_loaded(_content_key: String) -> void:
 	if wanted == "":
 		return
 
-	var loaded := server.modules.load_module(wanted)
+	# Awaited, because a game module's `_module_load` is a coroutine: it builds an
+	# identity layer that reaches a content host and a profile store. Un-awaited, this
+	# returned at the first suspension and the check below read `.ok` off null -- so a
+	# server whose backbone was slow failed to load its game and said "Trying to call an
+	# async function without 'await'".
+	var loaded: DotResult = await server.modules.load_module(wanted)
 
 	if not loaded.ok:
 		# Loud, and not fatal. The server is already running and players may already be on

@@ -7,3 +7,16 @@ log_dir: "user://fixture-logs"
 log_name: "fixture"
 log_keep: 3
 log_json: true
+
+# The sink layer, which needs the dot-log addon.
+log_router: on
+log_ring: true
+log_ring_size: 64
+log_service: "fixture"
+log_env: "test"
+log_syslog: true
+log_syslog_host: "10.0.0.9"
+log_syslog_port: 5140
+log_syslog_tcp: true
+log_redact_ips: true
+log_dedupe_sec: 2.5

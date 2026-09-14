@@ -7,7 +7,7 @@
 #     changelevel playground
 #
 # kind: pack -- delivered, for the reason content/lobby/game.yml sets out at length.
-# Published with `./server pack playground --source ../game-playground`.
+# Published with `./server pack playground --source games/game-playground`.
 #
 # ITS PROPS WERE ALREADY WRITTEN THIS WAY, which is why this game was the easiest to
 # move: every entity and every weapon in the catalogue is named by PATH

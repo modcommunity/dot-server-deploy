@@ -8,7 +8,7 @@
 # WHY THIS EXISTS
 #
 # tools/check.sh runs in a developer checkout: addons/ is twelve symlinks into sibling
-# repositories and ../game-simple-lobby is right there. Every configuration this project is
+# repositories and the games resolve, through games/ or beside it. Every configuration this project is
 # actually SHIPPED in is the opposite -- a release tarball, and the container's final
 # stage, which copies only this directory. In both of those the siblings are gone and
 # the vendored copies are the only ones there will ever be.
@@ -95,6 +95,10 @@ for repo in "${STAGE_REPOS[@]}"; do
     else
         fail "../$repo is not beside this repository; nothing to vendor from"
     fi
+    # The games are staged as siblings rather than into games/ deliberately: the parent
+    # directory is the LAST place setup.sh looks, so staging them there exercises the
+    # fallback as well as the vendor path, and `--vendor` makes no games/ link to dangle
+    # after the move.
 done
 [ "$fails" -eq 0 ] || { echo; printf '%s%d failed%s\n' "$RED" "$fails" "$OFF"; exit 1; }
 
@@ -198,7 +202,7 @@ parse_out="$( (cd "$TREE" && GODOT="$GODOT" tools/check.sh --parse) 2>&1 )"
 parse_rc=$?
 
 if [ "$parse_rc" -eq 0 ]; then
-    pass "check.sh --parse passes with no ../game-simple-lobby"
+    pass "check.sh --parse passes with no game repositories in reach"
 else
     fail "check.sh --parse in the shipped tree"
     printf '%s\n' "$parse_out" | sed 's/^/       /' | tail -20

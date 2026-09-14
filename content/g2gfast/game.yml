@@ -5,7 +5,7 @@
 #     changelevel g2gfast
 #
 # kind: pack -- delivered, for the reason content/lobby/game.yml sets out at length.
-# Published with `./server pack g2gfast --source ../game-g2gfast`.
+# Published with `./server pack g2gfast --source games/game-g2gfast`.
 #
 # ITS IMPORTED MAPS ARE NOT IN THIS PACK, and that is deliberate: `maps/imported/` is 66 MB
 # of converted geometry published as one pack per map, so a player downloads the map the

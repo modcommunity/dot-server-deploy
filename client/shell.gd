@@ -916,8 +916,65 @@ func _fail(text: String) -> void:
 
 
 func _on_disconnected(reason: String) -> void:
+	# [b]Read BEFORE the link is dropped.[/b] `_drop_link` frees the node the error is
+	# on, and a build-mismatch report assembled afterwards names nothing.
+	var err: DotError = link.last_error if link != null else null
+	var wanted: String = link.server_signon if link != null else ""
+
 	_clear_game()
 	_drop_link()
 	_set_busy(false)
 	_menu.visible = true
+
+	# [b]The one disconnection a player can actually act on, and it needs a different
+	# sentence from every other one.[/b] This build's `@rpc` surface does not match the
+	# server's, so no amount of retrying will work -- and "Disconnected: ..." beside a
+	# Connect button invites exactly that. See [DotSignon].
+	if err != null and err.code == DotError.CODE_UNSUPPORTED and wanted != "":
+		_report_build_mismatch(wanted)
+		return
+
 	_say("Disconnected: %s" % (reason if reason != "" else "no reason given"))
+
+
+## Tells the player, and tells the page.
+##
+## [b]The page is the half that can do something about it.[/b] This build cannot become a
+## different build; the thing embedding it can load one. Every build the site has ever
+## published is still at its own immutable prefix, so "open the build this server needs"
+## is a link the page can already form -- it just has to be told which revision is
+## wanted, and there was no way to tell it.
+##
+## Posted rather than thrown: a shell running natively, or in a page that is not
+## listening, must still show the player the sentence. It goes through [DotWeb] because
+## the [code]JavaScriptBridge[/code] singleton is only REGISTERED on the web export --
+## a script naming it directly does not resolve on desktop, which is the trap
+## [DotWeb] exists to close.
+func _report_build_mismatch(wanted: String) -> void:
+	var ours := DotSignon.revision([DotClientLink, DotClientChat])
+
+	_say(
+		"This server needs a different build of the game (it wants %s, this is %s)."
+		% [wanted, ours]
+	)
+
+	DotLog.error(CHANNEL, "build mismatch", {"server": wanted, "client": ours})
+
+	if not DotPlatform.is_web():
+		return
+
+	# The shape the loader reads: one message, one type, the two revisions. Nothing
+	# here decides WHICH build to offer -- the page knows what it published and this
+	# does not, and a client naming a build URL would be a client that can be told to
+	# load one.
+	var payload := JSON.stringify({
+		"type": "tmc.build.mismatch",
+		"server_signon": wanted,
+		"client_signon": ours,
+	})
+
+	DotWeb.eval(
+		"window.parent && window.parent.postMessage(%s, '*')"
+			% JSON.stringify(payload),
+		true
+	)

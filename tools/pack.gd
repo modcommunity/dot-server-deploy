@@ -272,7 +272,7 @@ func _publish_one(
 			],
 			"a mounted pack's globals are not registered in the host, so every script "
 			+ "in it would fail to compile. This is usually a STALE checkout of the "
-			+ "game -- pull ../game-* and publish again"
+			+ "game -- run ./upgrade.sh, or pull it in games/, and publish again"
 		)
 
 	# An empty pack publishes a manifest that mounts and contains nothing, which is

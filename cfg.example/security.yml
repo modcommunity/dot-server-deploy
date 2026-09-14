@@ -1,0 +1,98 @@
+# The guard: what counts as abuse here, and what happens about it.
+#
+# One rule engine over everything worth watching -- chat, connections, the remote
+# console, authentication and the anti-cheat detectors -- with sliding windows,
+# escalation ladders, exemptions and a ledger that can explain every decision.
+# There is no separate chat-spam system and no separate anti-cheat system; a
+# detection is an event like any other, which is why "three impossible speeds in a
+# minute, then ban" is a rule rather than code.
+
+# Whether the guard is built at all.
+#
+# On. It counts and it explains; whether it ACTS is the next setting, and that one
+# ships off. A server with the guard off has no record of what was happening either.
+sec_enabled: true
+
+# Count and log, never punish.
+#
+# ON, AND THAT IS THE POINT. Every rule evaluates, every trip is logged and enters
+# the ledger marked WOULD, and nobody is punished. An addon that starts punishing an
+# existing community the moment it is installed -- on thresholds nobody chose,
+# against a chat culture it has never seen -- is one that gets turned off after the
+# first false positive, and then the server has no guard at all.
+#
+# The intended sequence is: leave this on, read `sec_status` and `sec_log` for a
+# week, adjust what is obviously wrong for your players, and then set it false.
+# `sec_why <who>` answers which rule, which events, how many in how long, which rung
+# of the ladder, and whether it was applied or only would have been.
+sec_dryrun: true
+
+# The rule set, as JSON. Empty uses the shipped defaults, which are deliberately
+# timid. `sec_rules` prints what is loaded; `sec_rules_dump <path>` writes the
+# current set out as a starting point to edit.
+sec_rules_file: ""
+
+# Who is told.
+#
+# The subject is told because a punishment nobody explained reads as the server
+# being broken, and the admins are told because an automatic action nobody saw is
+# an automatic action nobody can review. Removals are announced to the room only if
+# you want them announced -- some communities do, most find it a pile-on.
+sec_notify_subject: true
+sec_notify_admins: true
+sec_notify_flag: generic
+sec_announce_removals: false
+
+# Chat detection, in the units the rules count in.
+#
+# Caps: a line has to be at least this long before its capital ratio means anything,
+# because "OK" and "GG" are not shouting. Duplicates: how far back it looks and how
+# many recent lines it keeps per person.
+sec_caps_min_length: 12
+sec_caps_ratio: 0.7
+sec_duplicate_memory_sec: 30.0
+sec_duplicate_depth: 5
+
+# Domains a link rule never counts. Your own site, your Discord, your demo host.
+sec_link_allow: []
+
+# Seconds within which connect-then-leave counts as churn, rather than as somebody
+# who looked at the map and did not fancy it.
+sec_churn_window_sec: 20.0
+
+# How many decisions the ledger keeps for `sec_why` and for a bug report.
+sec_ledger_size: 512
+
+# --------------------------------------------------------------------------
+# The detectors. Their own dry run, deliberately: an operator commonly trusts the
+# chat rules long before a movement threshold they have not measured on their maps.
+# --------------------------------------------------------------------------
+
+# WHAT THIS CANNOT DO, SAID PLAINLY. There is no client-side component and there
+# will not be one: a Godot game ships its script code to the player, and anything
+# running on their machine could be read, patched or replayed. This catches what a
+# server can PROVE and reports what a server can notice. It will not detect a
+# well-written wallhack -- nothing server-side reliably does, and the mitigation for
+# that is interest management in the netcode rather than detection: a client that was
+# never told where the enemy is cannot draw a box around them.
+ac_enabled: true
+ac_dryrun: true
+
+# Movement. EVERY THRESHOLD IS 0 BY DEFAULT, WHICH MEANS "DO NOT CHECK".
+#
+# That is not timidity either. A speed limit guessed rather than measured is a
+# limit that bans the best player on the server the first time they chain a surf
+# ramp into a boost. Measure yours -- `ac_status` reports the fastest legitimate
+# values it has seen -- and then set them with some headroom.
+ac_watch_movement: true
+ac_max_speed: 0.0
+ac_max_vertical_speed: 0.0
+ac_max_tick_distance: 0.0
+ac_max_airborne_sec: 0.0
+
+# Timing and fire rate. A ratio of 1.05 allows five percent faster than the weapon's
+# own cycle time, which covers a tick boundary and does not cover a script.
+ac_watch_timing: true
+ac_max_time_ratio: 1.05
+ac_watch_fire_rate: true
+ac_fire_interval_tolerance: 0.9

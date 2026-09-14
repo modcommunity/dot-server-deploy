@@ -117,25 +117,43 @@ step "the browser client"
 
 mkdir -p "$LOG_DIR"
 
-if [ ! -d game ] || [ -z "$(ls -A game 2>/dev/null)" ]; then
-    die "No vendored games. Run ./setup.sh first." 4
+if [ ! -d dist ] || [ -z "$(ls -A dist 2>/dev/null)" ]; then
+    die "No published games. Run ./setup.sh first." 4
 fi
 
-# [b]The vendored copy against the repositories it came from.[/b] setup.sh COPIES each
-# game's game/ directory into this one; the addons beside it are symlinks and stay live,
-# so it is only ever the game code that goes stale — and a stale copy exports cleanly,
-# runs, and is last week's game. That is the single most expensive way to waste an hour
-# here, so it is checked rather than remembered.
+# [b]The published packs against the repositories they were built from.[/b] This said
+# `game/` and compared the VENDORED copy, which stopped existing when the games became
+# delivered packs — so the guard above killed every run of this script with "No vendored
+# games. Run ./setup.sh first." on a tree where setup.sh had just succeeded. A pack built
+# before the last edit exports cleanly, runs, and is last week's game, which is the single
+# most expensive way to waste an hour here, so it is checked rather than remembered.
+#
+# The repositories come from tools/game_source.sh, which is also where setup.sh gets
+# them: this loop named all five by hand and looked only in the parent directory, and it
+# is the list that goes stale first — tools/check.sh's copy still named two games by
+# their old directory names long after they were renamed, and checked nothing at all.
+. "$ROOT/tools/game_source.sh"
+
+# The last time ./setup.sh published anything. Empty on a tree whose dist/ arrived in a
+# tarball with no manifests, which is not this script's case but is cheap to survive.
+NEWEST_PACK="$(ls -t dist/*/manifest.json 2>/dev/null | head -1)"
+
 stale=""
-for repo in game-simple-lobby game-hungario game-g2gfast game-playground game-arena; do
-    [ -d "../$repo/game" ] || continue
-    newer="$(find "../$repo/game" -newer game -type f -print -quit 2>/dev/null)"
+[ -n "$NEWEST_PACK" ] && while IFS= read -r entry; do
+    repo="${entry%%:*}"
+    game_source "$repo" || continue
+    # The newest manifest in dist/ rather than this game's own: the pack name is in the
+    # descriptor rather than in either field of the entry (three game ids publish one
+    # `hungry` pack), and tools/check.sh is where that is read properly and per game.
+    # This one only has to answer "is ./setup.sh worth re-running", and the newest pack
+    # is the last time it ran.
+    newer="$(find "$GAME_SRC/game" -newer "$NEWEST_PACK" -type f -print -quit 2>/dev/null)"
     [ -n "$newer" ] && stale="$stale $repo"
-done
+done < <(game_entries)
 
 if [ -n "$stale" ]; then
-    warn "these game repositories are newer than the vendored copy:$stale"
-    say "      ${DIM}./setup.sh    re-vendor them${OFF}"
+    warn "these game repositories are newer than their published packs:$stale"
+    say "      ${DIM}./setup.sh    re-publish them${OFF}"
 fi
 
 # The export is rebuilt when the game is newer than it. Same rule demo.sh uses, and the
@@ -147,7 +165,12 @@ if [ ! -f web/build/index.wasm ]; then
     warn "no export yet"
     rebuild=1
 else
-    newest="$(find game scenes maps npcs props client host addons \
+    # client, host and addons only. `game scenes maps npcs props` were in this list and
+    # none of them exists any more -- the export is the client SHELL and carries no game,
+    # which is the whole point of delivering them. find printed five "No such file" lines
+    # into /dev/null and answered about the three that were left, which is the right
+    # answer arrived at by accident.
+    newest="$(find client host addons \
                    -newer web/build/index.wasm -type f -print -quit 2>/dev/null)"
     [ -n "$newest" ] && { warn "the game is newer than the export ($newest)"; rebuild=1; }
 fi

@@ -102,11 +102,21 @@ _pull_ff() {
 }
 
 
+# Every checkout pull_one has already been given, so one repository reached by two
+# names -- games/<repo> is a link to ../<repo> in a developer tree -- is pulled once
+# rather than twice over the network.
+SEEN=()
+
 pull_one() {
-    local dir="$1" name before after
+    local dir="$1" name before after seen
     name="$(basename "$dir")"
 
     [ -d "$dir/.git" ] || return 0
+
+    for seen in ${SEEN[@]+"${SEEN[@]}"}; do
+        [ "$seen" = "$dir" ] && return 0
+    done
+    SEEN+=("$dir")
 
     before="$(git -C "$dir" rev-parse --short HEAD 2>/dev/null)"
 
@@ -137,8 +147,16 @@ pull_one() {
 # An addon linked out of a --addons-dir somewhere else is NOT pulled here, and that is
 # the point of sharing one: it is updated once, by hand, for every server that links to
 # it -- `./setup.sh --update` pulls whatever the addons actually resolved to.
-for d in "$ROOT"/addons/.repos/dot-* "$ROOT"/../dot-* "$ROOT"/../game-*; do
-    [ -d "$d" ] && pull_one "$d"
+#
+# The games have the same two homes and a third: games/ is where setup.sh clones or
+# links them now, the parent directory is where they used to go, and a --games-dir
+# somewhere else is not pulled here for the same reason a shared addons directory is
+# not. games/<repo> is a LINK to the sibling in a developer checkout, so `-d` matches
+# both names for one repository -- pull_one is given the resolved path, and pulling the
+# same checkout twice would print it twice and do nothing the second time.
+for d in "$ROOT"/addons/.repos/dot-* "$ROOT"/../dot-* \
+         "$ROOT"/games/game-* "$ROOT"/../game-*; do
+    [ -d "$d" ] && pull_one "$(cd "$d" && pwd -P)"
 done
 
 if [ ${#FAILED[@]} -gt 0 ]; then

@@ -14,7 +14,7 @@ extends Node
 
 const CFG := "res://examples/fixtures"
 
-const CHECKS := 109
+const CHECKS := 138
 
 var _passed := 0
 var _failed := 0
@@ -42,6 +42,8 @@ func _run() -> void:
 	_test_content()
 	_test_vote()
 	_test_auth()
+	_test_logging()
+	_test_security()
 
 	print("")
 	_check(
@@ -320,6 +322,139 @@ func _test_config() -> void:
 		"a directory with no files is not an error",
 		"a first run has none of them"
 	)
+	_done()
+
+
+## The sink layer, and the one list the shared settings come from.
+##
+## [b]dot-log was in the dependency list and instantiated nowhere.[/b] `cfg/log.yml` has
+## documented a level, per-channel levels, a mirror threshold and five file settings since
+## it was written, and every one reached dot-core's plain rotating sink -- syslog, a hosted
+## collector, a SQL table, redaction, flood gating and the ring behind `log tail` were
+## installed, configured-for and unreachable.
+func _test_logging() -> void:
+	_section("the sink layer")
+
+	var loaded := TmcConfig.load_dir(CFG)
+
+	if not _check(loaded.ok, "the fixture config loads", str(loaded.error)):
+		_done()
+		return
+
+	var config := loaded.value as TmcConfig
+
+	# `on` is a BOOL in this YAML dialect, which is the whole reason the reader takes one.
+	_check(config.log_router == "on", "log_router: on is read as a mode, not as a bool")
+	_check(config.log.syslog_host == "10.0.0.9", "a router-only key reaches DotLogConfig")
+	_check(config.log.syslog_port == 5140, "and a numeric one is coerced")
+	_check(config.log.syslog_tcp, "and a boolean one")
+	_check(config.log.memory_capacity == 64, "log_ring_size reaches the ring")
+	_check(config.log.redact_ips, "log_redact_ips reaches the redactor")
+	_check(config.log.dedupe_window_sec == 2.5, "log_dedupe_sec reaches the gate")
+
+	var log_unknown := PackedStringArray()
+
+	for entry in config.unknown:
+		if String(entry).contains("log_"):
+			log_unknown.append(String(entry))
+
+	_check(
+		log_unknown.is_empty(),
+		"and not one log key fell through as unknown",
+		" / ".join(Array(log_unknown))
+	)
+
+	var router := config.build_log_router()
+
+	if not _check(router != null, "a router is built"):
+		_done()
+		return
+
+	# [b]The shared settings are copied out of `server` rather than read twice.[/b] The
+	# file's directory, name, rotation and JSON switch have to reach the router's file
+	# target from the SAME keys that reach dot-core's sink, or a deployment that turns the
+	# router on silently starts writing somewhere else.
+	_check(
+		config.log.file_directory == config.server.log_directory
+			and config.log.file_basename == config.server.log_basename
+			and config.log.file_json == config.server.log_json,
+		"the file settings are the same ones dot-server's own sink reads"
+	)
+	_check(config.log.level == config.server.log_level, "and so is the level")
+	_check(
+		config.log.channel_levels.size() == config.server.log_channel_levels.size(),
+		"and the per-channel list"
+	)
+
+	var names := PackedStringArray()
+
+	for target: DotLogTarget in router.targets:
+		names.append(target.target_name)
+
+	_check(router.targets.size() == 3,
+		"the ring, the file and syslog are all targets (%s)" % " ".join(Array(names)))
+	_check(router.redactor != null, "the redactor is in front of all of them")
+	_check(router.gate != null, "and so is the flood gate")
+
+	router.free()
+
+	# An empty service tag is worse than a missing one: it is a label with no value in
+	# every dashboard, grouping every unconfigured server in the fleet together.
+	_check(
+		not config.log.context_tags().has("version"),
+		"a tag nobody set is left out rather than sent empty"
+	)
+
+	# `off` is a supported deployment and not a degraded one: the server then makes its
+	# own plain sink, exactly as it did before any of this existed.
+	config.log_router = "off"
+	_check(config.build_log_router() == null, "log_router: off builds nothing at all")
+
+	_done()
+
+
+## The guard, which was also in the dependency list and instantiated nowhere.
+func _test_security() -> void:
+	_section("the guard")
+
+	var loaded := TmcConfig.load_dir(CFG)
+	var config := loaded.value as TmcConfig
+
+	_check(config.security.enabled, "sec_enabled reaches the guard")
+	# [b]The two dry runs are separate on purpose and the fixture sets them apart.[/b] An
+	# operator commonly trusts the chat rules long before a movement threshold they have
+	# not measured on their own maps, and a single switch for both would make that
+	# unsayable — so the fixture says it, and this check would fail if they were merged.
+	_check(config.security.dry_run, "sec_dryrun reaches the guard's own dry run")
+	_check(not config.anticheat.dry_run, "and the detectors keep a separate one")
+	_check(config.security.caps_ratio == 0.8, "a float reaches the chat detection")
+	_check(config.security.duplicate_depth == 7, "an int reaches it too")
+	_check(config.security.ledger_size == 128, "sec_ledger_size reaches the ledger")
+	_check(
+		Array(config.security.link_allow) == ["example.test"],
+		"and a list stays a list (%s)" % [config.security.link_allow]
+	)
+	_check(config.anticheat.max_horizontal_speed == 420.0, "ac_max_speed reaches the detector")
+	_check(config.anticheat.max_time_ratio == 1.02, "and the timing tolerance")
+
+	var sec_unknown := PackedStringArray()
+
+	for entry in config.unknown:
+		var text := String(entry)
+		if text.contains("sec_") or text.contains("ac_"):
+			sec_unknown.append(text)
+
+	_check(
+		sec_unknown.is_empty(),
+		"and not one of them fell through as unknown",
+		" / ".join(Array(sec_unknown))
+	)
+
+	# The shipped default, restated here because it is the decision rather than the value:
+	# an addon that starts punishing an existing community the moment it is installed is
+	# one that gets turned off after the first false positive.
+	_check(DotSecurityConfig.new().dry_run, "a guard nobody configured is in dry run")
+
 	_done()
 
 

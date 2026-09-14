@@ -57,3 +57,91 @@ log_keep: 10
 # Off: the reader is a person over SSH. Turn it on for a box where something else
 # tails the file into a collector.
 log_json: false
+
+# --------------------------------------------------------------------------
+# The sink layer. Everything above this line works with dot-core alone; every
+# setting below it needs the dot-log addon, which setup.sh installs.
+# --------------------------------------------------------------------------
+
+# Whether the sink layer is built at all: auto, on, or off.
+#
+# `auto` is on. The router writes the same file, in the same directory, under the
+# same name, with the same rotation and the same log_json switch -- it is a strict
+# superset of the plain sink -- so turning it on costs a deployment nothing and buys
+# it `log tail`, `log grep`, `log targets` and `log test` on the console, plus
+# somewhere for syslog and a collector to be configured when they are wanted.
+#
+# `off` gets the plain rotating file and nothing else, which is a smaller thing to
+# have running and is a legitimate choice for a box that ships its logs some other
+# way already.
+log_router: auto
+
+# The in-memory ring `log tail` and `log grep` read back.
+#
+# THIS IS WHAT MAKES A LOG READABLE OVER RCON. Without it an admin diagnosing
+# something has to get at the file on the box, which on a hosted server is the one
+# thing they cannot do. It costs one array of this many records.
+log_ring: true
+log_ring_size: 512
+
+# What this server calls itself to a collector.
+#
+# Empty takes sv_name for the service and bind:port for the instance, which is right
+# for a box running one server and wrong for four on one host -- there, name them.
+# An EMPTY tag is worse than a missing one: it is a label with no value in every
+# dashboard, grouping every unconfigured server in the fleet together, so anything
+# still blank is dropped rather than sent.
+log_service: ""
+log_env: ""
+log_instance: ""
+log_version: ""
+
+# RFC 5424 syslog, to a local daemon or a collector on the network.
+#
+# UDP by default because that is what a local syslog listens on and because a log
+# that blocks the game is worse than a log with a gap in it. TCP for a collector
+# across a network, where losing the interesting line is likelier than a stall.
+log_syslog: false
+log_syslog_host: "127.0.0.1"
+log_syslog_port: 514
+log_syslog_tcp: false
+log_syslog_app: "dot-server"
+log_syslog_level: info
+
+# A hosted collector over HTTPS, batched.
+#
+# The format decides the envelope, the timestamp units and where the credential
+# goes; one of: ndjson, elastic, loki, splunk, datadog, gelf, otlp, seq, sentry.
+# For sentry set log_sentry_dsn instead of a URL and a token.
+#
+# THE TOKEN IS A SECRET AND BELONGS IN THE ENVIRONMENT. dot-log refuses a secret
+# from argv, and a token in a YAML file is a token in a pasted bug report.
+log_remote: false
+log_remote_format: ndjson
+log_remote_url: ""
+log_remote_token: ""
+log_remote_level: info
+log_remote_batch: 100
+log_remote_tags: []
+log_sentry_dsn: ""
+
+# What never leaves this box.
+#
+# On. A session ticket or a password that reaches a hosted collector is in a search
+# index with ninety days of retention behind it, and there is no taking it back.
+# IP addresses are NOT masked by default because an operator investigating abuse
+# needs them and they are already in every other log on the machine; turn it on for
+# a deployment with a data-protection answer that says otherwise.
+log_redact: true
+log_redact_ips: false
+log_redact_emails: true
+log_redact_keys: []
+
+# Flood control, in front of every destination at once.
+#
+# Both off by default, because dropping a log line is a decision an operator should
+# make deliberately. Turn log_dedupe_sec on when one line is repeating faster than
+# anybody can read: the incident gets buried under it, and on a hosted collector so
+# does the bill. A summary of what was suppressed is emitted rather than silence.
+log_dedupe_sec: 0.0
+log_rate_per_channel: 0.0

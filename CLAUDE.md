@@ -300,7 +300,7 @@ Those two failing requests were also what made the wrong domain visible at all.
 
 ## The games are published, and the packs are checked
 
-**There are six games now.** `game-buses-from-hell` was added on 2026-09-14 — the first asymmetric one, and the first that vendors art, which is how the sixth form of the mount constraint above was found. It is also the first game in the family whose module subclasses `DotGameModule` and whose services layer subclasses `DotGameServices`, so `addons/dot_game` is in the addon list: a delivered module `extends DotGameModule`, and a base class the host build does not carry is a module that cannot parse. The symptom is *"Could not find base class"* once, at load, followed by a server that admits players into a game with no netcode in it.
+**There are six games now.** `game-buses-from-hell` was added on 2026-09-14 — the first asymmetric one, and the first that vendors art, which is how the sixth form of the mount constraint above was found. It is also the first game in the family whose module subclasses `DotGameModule`, so `addons/dot_game` is in the addon list: a delivered module `extends DotGameModule`, and a base class the host build does not carry is a module that cannot parse. The symptom is *"Could not find base class"* once, at load, followed by a server that admits players into a game with no netcode in it.
 
 **This build contains no game.** `setup.sh` turns each sibling repository into a signed
 dot-cloud pack in `dist/` — `./server pack <id> --source ../<repo>` — and the server finds
@@ -442,11 +442,14 @@ Verified by running, on this machine: all three exported, the Linux archive unpa
 
 ```bash
 tools/check.sh              # parse, shell syntax, 68 checks, then a real boot
+#                             `./server check` also asserts the operator's console:
+#                             `log`, `sec_status` and `sec_why` on a server that booted.
 tools/package_check.sh      # the same thing in the shape an operator unpacks
 ```
 
 `examples/selftest.tscn` covers the YAML reader, the config translation, the permission
-translation and the content index against fixtures in `examples/fixtures/`. Those fixtures
+translation, the content index, the sink layer and the guard against fixtures in
+`examples/fixtures/` — 138 checks across 10 sections. Those fixtures
 are asserted on value by value, so changing one changes a check — which is the point: they
 are the exact keys an operator writes, checked against the exact settings they are supposed
 to reach.
@@ -456,7 +459,7 @@ and its module in it.
 
 `tools/package_check.sh` runs in the configuration this project is **shipped** in rather
 than the one it is developed in. `check.sh` sees seventeen symlinks in `addons/` and
-`../game-simple-lobby` and its siblings right beside it; a release tarball and the
+every game resolving, through `games/` or beside it; a release tarball and the
 container's final stage see neither. It exports the tracked files only, runs `setup.sh --vendor`, moves the result
 away from the siblings, and then checks that nothing points back out of the tree, that
 `addons/` holds real directories, that the lobby travelled with it, and that it boots.
@@ -492,7 +495,17 @@ Three consequences elsewhere, all of them the same mistake avoided:
 - **`--vendor` deletes `addons/.repos/` once it has copied out of it.** A container's final stage and a release tarball copy this directory whole, and fifty repositories under it would travel — each a second copy of what was just vendored beside it. Nothing is lost that a re-run cannot fetch, and a re-run finds the vendored directories and fetches nothing.
 - **The Dockerfile and `tools/package_check.sh` pass `--addons-dir ..` explicitly.** Both stage the siblings deliberately — the build context is the parent directory, and the package check links them into a staging tree — so both would otherwise reach the network for fifty repositories and prove something about GitHub rather than about the working tree.
 
-The **games** did not move, and that is not an oversight: they are content that gets published into `dist/` rather than code this project compiles, and a game repository under `addons/` would be imported as part of this project, which is the arrangement the flip to packs removed.
+## The games came inside too, into `games/`
+
+They stayed in the parent directory for one pass after the addons moved, and the reason given was that they are content published into `dist/` rather than code this project compiles. That is true of `addons/` and is not an argument for the parent: every bullet above applies to a game repository exactly as it applies to an addon — `git clone` of this project into `~/` putting five more repositories in `~/`, several servers on one box sharing one set of checkouts with nothing saying so, and `./setup.sh` in one server's directory republishing packs out of a tree another server's operator is halfway through editing. The last of those is worse here than for the addons, because what comes out of it is a *signed pack* that every client mounts and runs.
+
+So `setup.sh` clones a missing game into `games/<repo>` and publishes from there. `games/` gets a `.gdignore` for the reason `addons/.repos` does: a game walked as part of this project declares its `class_name` globals a second time, and then a **delivered** game's scripts resolve those names to this build's stale copy rather than to their own — the `Value of type "res://dot_cloud/…" cannot be assigned to a variable of type "G2GIdentity"` failure, which is the same bug the leftover vendored directories caused.
+
+**A developer checkout gets a link, not a second clone.** dot-bootstrap puts every game beside this project; cloning a second copy into `games/` is the arrangement where the fix is committed, pulled and still not running. `link_sibling_game` makes `games/<repo> -> ../../<repo>` instead, relative because the whole set moves together, and `game_source` resolves through it with `pwd -P` so the link and the sibling are one answer rather than two. `--vendor` skips the link: that is the release-tarball position, the tree is about to be moved away from the siblings, and a link into them would then be the dangling link `tools/package_check.sh` fails on — correctly. `--vendor` deletes `games/` afterwards too, for the reason it deletes `addons/.repos/`.
+
+**`--games-dir DIR` is `--addons-dir` for the games, and it is a separate flag on purpose.** A box that keeps one library of addons does not necessarily keep one library of games, and `--addons-dir ..` silently meaning "and publish packs from the games up there as well" is the kind of implication that ends with somebody publishing from a tree they did not expect. `TMC_GAMES_DIR` is the same switch for a unit file.
+
+**The search order lives in `tools/game_source.sh`, sourced rather than repeated.** `--games-dir`, then `games/`, then the parent directory — the last so that every box wired by an older `setup.sh` keeps working. Four scripts ask this question — `setup.sh` publishes, `play.sh` compares a pack against its source, `tools/check.sh` greps for the two things a delivered game may not contain, `tools/package_check.sh` stages them — and each carried its own `../$repo`, which is one edit short of the drift described in the next section. `game_entries` is in the same file, so the list and the place both come from one door.
 
 ## Two lists this project keeps, and both went stale in one pass
 
@@ -535,6 +548,42 @@ files nobody touched, which reads as a broken project rather than as one missing
 
 `tools/package_check.sh` reads the list out of `setup.sh` rather than repeating it, which
 is what stopped the previous two.
+
+## Two addons were in the dependency list and instantiated nowhere
+
+`ADDONS` in `setup.sh` named `dot_server_security`, `setup.sh` linked it into `addons/`, every game vendored beside it compiled against it — and **nothing in this project ever constructed one.** dot-log was worse: it was not even in the list, while `cfg/log.yml` had documented a level, per-channel levels, a mirror threshold and five file settings since the day it was written. Every one of those keys reached dot-core's own `DotLogSink`, which writes a rotating file and does nothing else.
+
+That is the shape this family keeps finding, one level up from the usual: not a value produced and consumed by nothing, but a whole **addon** installed, configured-for, documented, and never once built. An operator reading `cfg/log.yml` would reasonably conclude this deployment could ship logs somewhere; it could not. An operator reading the addon list would reasonably conclude the server was guarded; it was not.
+
+Both are built now, for every game this tool runs.
+
+### The sink layer
+
+`TmcConfig.build_log_router()` and `TmcHost._build_logging()`. `cfg/log.yml` gained everything below its "sink layer" divider: the in-memory ring behind `log tail`, RFC 5424 syslog, a batched HTTP collector in nine wire formats, redaction, and flood control in front of all of them.
+
+**The shared settings are copied out of `server`, not read twice.** The level, the channels, the mirror threshold and every file setting exist on `DotServerConfig` because a deployment with no dot-log still has all of them through dot-core's sink. So `log.yml` names each of them once, they land there, and `build_log_router()` carries them across. A second set of keys for the same six facts is exactly the "two copies of one list" this project has already been bitten by three times, and it would fail in the worst possible way: a deployment that turned the router on would silently start writing its log somewhere else.
+
+**`log_router: auto` is on**, and the reason it costs nothing is that the router's file target is a strict superset of the plain sink — same directory, same basename, same rotation, same timestamped naming, same `log_json` switch. What it adds is `log status`, `log tail`, `log grep`, `log targets` and `log test` on the console, and somewhere for syslog and a collector to be configured when they are wanted. `off` restores the plain sink exactly.
+
+**It is built before the `DotServer`**, and that ordering is the point: the router registers itself as a `DotLog` sink when it enters the tree, so everything built after it is covered and everything before it is not — and what a server admin most wants out of a log is the reason the boot went wrong.
+
+**`log_router` accepts a bool as well as the three words**, because `on` and `off` *are* bools in `TmcYaml`'s dialect — the same rule that famously turns the country code `NO` into `false`, and the right rule here, because `log_router: on` is what an operator will write. Reading only the three words would have reported the most natural spelling of the setting as an unknown key and quietly left the default in force.
+
+### The guard
+
+`TmcHost._build_security()`. A `DotSecurityManager` beside the server, one `DotSecurityWatch` wiring it to chat, connections, RCON, the console and dot-auth, and a `DotAntiCheat` reporting detections into the same rule engine. `cfg/security.yml` is the whole of the policy.
+
+**It ships in dry run and that is why building it for every server is not an imposition.** Every rule evaluates, every trip is logged and ledgered marked `WOULD`, and nobody is punished. An addon that starts punishing an existing community the moment it is installed — on thresholds nobody chose, against a chat culture it has never seen — is one that gets turned off after the first false positive, and then the server has no guard at all. The intended sequence is in the file: leave it on, read `sec_status` and `sec_log` for a week, then set `sec_dryrun: false`.
+
+**Every anti-cheat movement threshold ships at 0, meaning "do not check".** A speed limit guessed rather than measured bans the best player on the server the first time they chain a surf ramp into a boost. `sec_ac_status` reports the fastest legitimate values it has seen; those are what to set them from.
+
+**The console commands are not registered here.** `DotSecurityManager.attach()` does it itself, and the first version of this called `DotSecurityCommands.register` as well — thirteen "command registered twice" warnings and two more for the cvars, every one of them the console correctly keeping the first registration and saying so.
+
+### Three bugs, and the third was in the addon
+
+- **`server_ref` was `"../Server"` and had to be `".."`.** The guard is a *child* of the server, so `..` already is the server; `../Server` asks the server for a child of its own called `Server` and finds nothing. The guard then reported "A security manager needs a server" once at boot and watched nothing for the life of the process. The two watchers *are* siblings of the guard, so their `"../Security"` is right — which is what makes the pair easy to write wrong by copying.
+- **`./server check` asserted nothing about the console.** Both of these addons' entire operator surface is a set of command names, and an absent command is invisible: nothing errors, nothing logs, and the first person to find out is an admin typing `sec_why` during an incident. `_selftest_operator_surface()` now fails the check if `log`, `sec_status` or `sec_why` is missing from a server that actually booted, or if the router was built and never started.
+- **In dot-server-security: the guard latched the moderation store at attach, and on this deployment that meant it never found one.** Fixed there; see that project's notes.
 
 ## Things deliberately not here
 

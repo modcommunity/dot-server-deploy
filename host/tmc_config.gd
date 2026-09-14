@@ -32,7 +32,7 @@ const CHANNEL := "tmc.config"
 ## to name the same thing — which is the order an operator would expect from the filenames.
 const FILES := [
 	"server.yml", "net.yml", "log.yml", "rcon.yml", "auth.yml", "groups.yml",
-	"permissions.yml", "vote.yml",
+	"permissions.yml", "vote.yml", "security.yml",
 ]
 
 ## Operator-facing name -> boot config property.
@@ -95,6 +95,82 @@ const NET_KEYS := {
 	"net_max_entities": "max_entities_per_snapshot",
 }
 
+## Operator-facing name -> [code]DotLogConfig[/code] property.
+##
+## [b]Only what dot-log adds.[/b] The level, the channels, the mirror threshold and every
+## file setting are in [constant BOOT_KEYS] already, because a server with no dot-log still
+## has all of them through dot-core's own sink — so they are read once, into
+## [member server], and copied across in [method build_log_router]. Two lists for one fact
+## is this tree's most repeated bug and the file settings are exactly the fact it would be.
+## [code]log_router[/code] is NOT here: it decides whether the router is built at all
+## rather than setting a property on it, and is handled by name in [method _apply_settings].
+const LOG_KEYS := {
+	"log_ring": "memory_enabled",
+	"log_ring_size": "memory_capacity",
+	"log_service": "service",
+	"log_env": "env",
+	"log_instance": "instance",
+	"log_version": "version",
+	"log_syslog": "syslog_enabled",
+	"log_syslog_host": "syslog_host",
+	"log_syslog_port": "syslog_port",
+	"log_syslog_tcp": "syslog_tcp",
+	"log_syslog_app": "syslog_app",
+	"log_syslog_level": "syslog_level",
+	"log_remote": "remote_enabled",
+	"log_remote_format": "remote_format",
+	"log_remote_url": "remote_url",
+	"log_remote_token": "remote_token",
+	"log_remote_level": "remote_level",
+	"log_remote_batch": "remote_batch",
+	"log_remote_tags": "remote_tags",
+	"log_sentry_dsn": "sentry_dsn",
+	"log_redact": "redact_enabled",
+	"log_redact_ips": "redact_ips",
+	"log_redact_emails": "redact_emails",
+	"log_redact_keys": "redact_drop_keys",
+	"log_dedupe_sec": "dedupe_window_sec",
+	"log_rate_per_channel": "per_channel_rate",
+}
+
+## Operator-facing name -> [code]DotSecurityConfig[/code] property.
+const SECURITY_KEYS := {
+	"sec_enabled": "enabled",
+	"sec_dryrun": "dry_run",
+	"sec_rules_file": "rules_file",
+	"sec_notify_subject": "notify_subject",
+	"sec_notify_admins": "notify_admins",
+	"sec_notify_flag": "notify_flag",
+	"sec_announce_removals": "announce_removals",
+	"sec_caps_min_length": "caps_min_length",
+	"sec_caps_ratio": "caps_ratio",
+	"sec_duplicate_memory_sec": "duplicate_memory_sec",
+	"sec_duplicate_depth": "duplicate_depth",
+	"sec_link_allow": "link_allow",
+	"sec_churn_window_sec": "churn_window_sec",
+	"sec_ledger_size": "ledger_size",
+}
+
+## Operator-facing name -> [code]DotAntiCheatConfig[/code] property.
+##
+## Separate from [constant SECURITY_KEYS] because the anti-cheat has its **own** dry run,
+## and that separation is the addon's own decision rather than this file's: an operator
+## commonly trusts the chat rules long before a movement threshold they have not measured
+## on their own maps.
+const ANTICHEAT_KEYS := {
+	"ac_enabled": "enabled",
+	"ac_dryrun": "dry_run",
+	"ac_watch_movement": "watch_movement",
+	"ac_max_speed": "max_horizontal_speed",
+	"ac_max_vertical_speed": "max_vertical_speed",
+	"ac_max_tick_distance": "max_tick_distance",
+	"ac_max_airborne_sec": "max_airborne_sec",
+	"ac_watch_timing": "watch_timing",
+	"ac_max_time_ratio": "max_time_ratio",
+	"ac_watch_fire_rate": "watch_fire_rate",
+	"ac_fire_interval_tolerance": "fire_interval_tolerance",
+}
+
 ## Keys that exist and are handled somewhere other than a config object.
 ##
 ## Listed so they are not reported as unknown. A key that is silently ignored *and* not
@@ -111,6 +187,29 @@ var server: DotServerConfig = DotServerConfig.new()
 
 ## The netcode configuration a game module reads.
 var net: DotNetConfig = DotNetConfig.new()
+
+## What dot-log adds on top of the file every server already writes.
+##
+## Only the router-only half is read into it; see [constant LOG_KEYS]. The rest is copied
+## out of [member server] by [method build_log_router], so there is one list.
+var log: DotLogConfig = DotLogConfig.new()
+
+## Whether the sink layer is built at all: [code]"auto"[/code], [code]"on"[/code] or
+## [code]"off"[/code].
+##
+## [b]`auto` is on, and that is not the same as the setting being pointless.[/b] The router
+## is a strict superset of the file every server already writes -- same directory, same
+## name, same rotation, same JSON switch -- so turning it on costs a deployment nothing and
+## buys it `log tail`, `log grep` and `log test` on the console, plus somewhere for syslog
+## and a collector to be configured later. `off` is for a box that wants the plain sink and
+## nothing else, which is a legitimate and much smaller thing to have running.
+var log_router: String = "auto"
+
+## The guard, after every file has been applied. See [constant SECURITY_KEYS].
+var security: DotSecurityConfig = DotSecurityConfig.new()
+
+## The detectors. Separate dry run, deliberately. See [constant ANTICHEAT_KEYS].
+var anticheat: DotAntiCheatConfig = DotAntiCheatConfig.new()
 
 ## Console commands to run once the console exists, in file order.
 var console_lines: PackedStringArray = PackedStringArray()
@@ -369,6 +468,54 @@ func _apply_settings(file: String, tree: Dictionary) -> DotResult:
 			server.tags = _string_list(value)
 			continue
 
+		if name == "log_router":
+			# [b]A bool is accepted because `on` and `off` ARE bools in this dialect.[/b]
+			# `TmcYaml` reads `on`, `yes` and `true` as true and `off`, `no` and `false`
+			# as false -- which is the same rule that famously turns the country code `NO`
+			# into a boolean, and is right here because that is what an operator writing
+			# `log_router: on` means. Reading only the three words would report the most
+			# natural spelling of the setting as an unknown key and quietly leave the
+			# default in force.
+			var mode := ""
+
+			if value is bool:
+				mode = "on" if bool(value) else "off"
+			else:
+				mode = String(value).strip_edges().to_lower()
+
+			if mode not in ["auto", "on", "off"]:
+				unknown.append(
+					"%s: log_router must be auto, on or off (got '%s')" % [file, mode]
+				)
+			else:
+				log_router = mode
+
+			continue
+
+		if LOG_KEYS.has(name):
+			var applied_log := _set_on(log, String(LOG_KEYS[name]), value)
+
+			if not applied_log.ok:
+				return applied_log.wrap("%s: %s" % [file, name])
+
+			continue
+
+		if SECURITY_KEYS.has(name):
+			var applied_sec := _set_on(security, String(SECURITY_KEYS[name]), value)
+
+			if not applied_sec.ok:
+				return applied_sec.wrap("%s: %s" % [file, name])
+
+			continue
+
+		if ANTICHEAT_KEYS.has(name):
+			var applied_ac := _set_on(anticheat, String(ANTICHEAT_KEYS[name]), value)
+
+			if not applied_ac.ok:
+				return applied_ac.wrap("%s: %s" % [file, name])
+
+			continue
+
 		if BOOT_KEYS.has(name):
 			var applied := _set_on(server, String(BOOT_KEYS[name]), value)
 
@@ -396,6 +543,57 @@ func _apply_settings(file: String, tree: Dictionary) -> DotResult:
 		console_lines.append(_console_line(name, value))
 
 	return DotResult.success(null)
+
+
+## The sink layer this configuration describes, or null when it is switched off.
+##
+## [b]The shared settings are copied out of [member server] rather than read twice.[/b] The
+## level, the channels, the mirror threshold and every file setting exist on
+## [DotServerConfig] because a deployment with no dot-log still has all of them through
+## dot-core's own sink -- so `log.yml` names each of them once, they land there, and this
+## carries them across. A second set of keys for the same six facts is the shape this
+## project has already been bitten by twice.
+##
+## Returns null for [code]log_router: off[/code], and the server then makes its own
+## [code]DotLogSink[/code] exactly as it did before this existed.
+func build_log_router() -> DotLogRouter:
+	if log_router == "off":
+		return null
+
+	log.level = server.log_level
+	log.channel_levels = server.log_channel_levels
+	log.mirror_min_level = server.log_mirror_min_level
+
+	log.file_enabled = server.log_file_enabled
+	log.file_directory = server.log_directory
+	log.file_basename = server.log_basename
+	log.file_json = server.log_json
+	log.file_max_bytes = server.log_max_file_bytes
+	log.file_max_files = server.log_max_files
+	# The file keeps whatever DotLog itself let through, which is what the plain sink does.
+	# A second threshold in front of the file is a way to have a log file quieter than the
+	# level an operator set, which is never what they meant.
+	log.file_level = server.log_level
+
+	# The tags a collector groups by. `host` is left to the router's own default; the
+	# others are this deployment's identity and an empty one is worse than a missing one,
+	# so `context_tags()` drops whatever is still blank.
+	if log.service == "":
+		log.service = server.hostname
+
+	if log.instance == "":
+		log.instance = "%s:%d" % [server.bind_address, server.port]
+
+	var invalid := log.validate()
+
+	if not invalid.ok:
+		# Reported and skipped rather than fatal, which is this file's rule for every
+		# other unusable setting: a server that will not boot because a syslog port was
+		# mistyped is a worse outcome than one that boots without syslog and says so.
+		unknown.append("log.yml: %s" % invalid.error.message)
+		return null
+
+	return log.build_router()
 
 
 ## Assigns onto a [DotConfig], coercing through its own rules.

@@ -20,7 +20,7 @@
 # kind: pack -- delivered, for the reason content/lobby/game.yml sets out at length.
 # game-arena references its own files by relative path and rebases its own res:// strings,
 # which is what makes it correct both in a build and at res://dot_cloud/arena/<version>/.
-# Published with `./server pack arena --source ../game-arena`.
+# Published with `./server pack arena --source games/game-arena`.
 #
 # ONE MAP, AND THAT IS THE GAME. `dm_box` is an ArenaMap -- a list of AABBs that becomes
 # meshes, static bodies and analytic trace geometry from ONE description, so the server's
