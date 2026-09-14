@@ -1,0 +1,29 @@
+# Hungario: Warrens. A world with things standing in it.
+#
+#     changelevel hungry_warrens
+#
+# Shares a module with hungry_classic — see that directory's game.yml.
+#
+# WHY THIS DIRECTORY EXISTS, for the fourth mode and the second time: `HungryModule`
+# registers every mode it knows when it loads, and a mode with no `game.yml` here is one
+# this deployment registers and then cannot describe — `content/` is what the host reads
+# to build its listing, its client table and its vote source. The first time, three modes
+# were registered against two described. This time it was four against three, and it
+# arrived the same way: the game gained a mode in its own repository and nothing here
+# noticed. `examples/live_switch.tscn` counts them and NAMES them, which is the only
+# reason the second occurrence took a minute rather than an afternoon.
+#
+# The pack already carried `game/modes/warrens.tscn` before this file existed — the mode
+# is part of the game's own repository and travels with it. What was missing was this
+# deployment's description of it, which is a different thing and is why they are separate
+# files at all.
+
+name: "Hungario: Warrens"
+content_id: hungry       # shared with hungry_classic: one client, four modes
+version: 0.1.0
+kind: pack
+max_players: 32
+
+scene: game/modes/warrens.tscn
+client_scene: game/client/hungry_client.tscn
+module: game/hungry_module.gd

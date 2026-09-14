@@ -832,7 +832,61 @@ if [ ${#MISSING[@]} -gt 0 ]; then
 fi
 ok "${#ADDONS[@]} addons $([ "$VENDOR" -eq 1 ] && echo copied || echo linked)"
 
-# --- 3. Import -------------------------------------------------------------
+# --- 3. Leftovers from when the games were vendored ------------------------
+#
+# [b]A vendored game left over from before the flip POISONS the class registry, and
+# only an upgraded box has one.[/b] These directories are where the five games used to
+# be copied, they are gitignored so `git pull` never removes them, and nothing here
+# creates them any more -- so a machine that was set up before the flip keeps a
+# pre-conversion copy of every game for ever. Those copies still declare `class_name`,
+# the import registers them as globals, and then a DELIVERED game's scripts resolve the
+# same names to the host's stale copy rather than to their own:
+#
+#     Parse Error: Value of type "res://dot_cloud/g2gfast/0.1.0/game/g2g_identity.gd"
+#     cannot be assigned to a variable of type "G2GIdentity".
+#     Parse Error: argument 1 should be "G2GCamera.Mode" but is "g2g_camera.gd.Mode".
+#
+# Two scripts, one name, and the type check is right to refuse. Nothing about the
+# message says "delete a directory you have not thought about since August".
+#
+# The previous setup.sh removed these before copying into them; the copy went and the
+# removal went with it. `tools/check.sh` fails when one exists, which catches a
+# developer and not the box that was upgraded last night.
+#
+# Only the directories this project once vendored, and only when they are not tracked --
+# a fork that legitimately keeps sources at one of these paths says so by committing
+# them, and this must not delete somebody's work on the strength of a name.
+VENDORED_DIRS=(game scenes maps avatars npcs props textures)
+stale_vendored=()
+
+for d in "${VENDORED_DIRS[@]}"; do
+    [ -d "$ROOT/$d" ] || continue
+
+    if git -C "$ROOT" rev-parse --git-dir >/dev/null 2>&1 \
+            && [ -n "$(git -C "$ROOT" ls-files "$d")" ]; then
+        warn "$d/ is tracked by git, so it is yours; leaving it alone"
+        continue
+    fi
+
+    rm -rf "${ROOT:?}/$d"
+    stale_vendored+=("$d")
+done
+
+if [ ${#stale_vendored[@]} -gt 0 ]; then
+    ok "removed the vendored game directories this build no longer uses: ${stale_vendored[*]}"
+    # [b]Removing the files is half of it.[/b] The class cache still holds their
+    # class_name entries, pointing at paths that no longer exist:
+    #
+    #     Could not parse global class "G2GIdentity" from "res://game/g2g_identity.gd"
+    #
+    # and a global that resolves to nothing is no better than one that resolves to the
+    # wrong script. The import below is what rewrites that file, so this run needs one
+    # whatever the flags say.
+    FORCE_IMPORT=1
+fi
+
+
+# --- 3b. Import -------------------------------------------------------------
 #
 # [b]Before the games, and that ordering is now load-bearing.[/b] It used to run after
 # them, which was right while the games were COPIED in: the copy added scripts and the
@@ -880,6 +934,13 @@ if [ "$DO_IMPORT" -eq 1 ]; then
     # Re-run after ANY script with a new class_name is added. Without it the
     # identifier does not resolve, the scene fails to load, and the process HANGS
     # rather than exiting, because nothing ever reaches get_tree().quit().
+    "$GODOT" --headless --path "$ROOT" --import >/dev/null 2>&1
+    ok "class_name globals registered"
+elif [ "${FORCE_IMPORT:-0}" -eq 1 ]; then
+    step "importing"
+    warn "a vendored game directory was removed, so --no-import is being overridden"
+    printf '       its class_name entries are still in the class cache, pointing at\n'
+    printf '       files that are gone. Only an import rewrites that.\n'
     "$GODOT" --headless --path "$ROOT" --import >/dev/null 2>&1
     ok "class_name globals registered"
 elif import_is_stale; then
