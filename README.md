@@ -388,8 +388,14 @@ Once the relay is up, the server also posts its command table to `POST /api/inte
 ## Upgrading a server that is already running
 
 ```bash
-git pull && ./setup.sh --no-import
+./upgrade.sh            # pull everything, rebuild, and say what moved
+./upgrade.sh --check    # ...and boot the server once before you restart it
+./upgrade.sh --dry-run  # what would be pulled, changing nothing
 ```
+
+**It is a script because the one-line version was wrong in three ways and none of them errored.** That line was `git pull && ./setup.sh --no-import`, beside a loop that pulled `../dot-*`. Once the games became delivered packs: the loop never pulled `../game-*`, so an upgrade republished stale game sources; `--no-import` left the class cache stale, so the pack would not parse while the host did; and a `git pull` that stopped left one repository behind with nothing saying so. Each produced a server that booted, looked healthy, and did not work. `upgrade.sh` refuses to rebuild from a partial pull, names the repositories that would not fast-forward, and re-execs itself after pulling this one — because bash reads a script as it runs, and pulling one mid-run resumes at a byte offset that now means something else.
+
+It does **not** restart the server: this repository cannot know whether that is systemd, `demo.sh`, a container or a terminal, and stopping the wrong thing is worse than stopping nothing.
 
 The pull cannot touch `cfg/`, because `cfg/` is not tracked; the setup run adds any file you have not got and names any setting the templates have grown.
 
