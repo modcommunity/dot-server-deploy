@@ -39,6 +39,27 @@ module: game/g2g_module.gd
 #
 # 1000 is the bunny-hop figure. A surf-only server runs 150 -- see the note above
 # about why that is a cvar and a rotation rather than a second game id here.
+# THE TICK RATE IS NOT IN THIS FILE AND CANNOT BE, which is worth saying because the
+# number matters more here than in any other game on this server.
+#
+# This game's netcode runs a snapshot rate of 32, and dot-net requires the tick rate to
+# be a MULTIPLE of it: 128 is four snapshots per send window, 64 is two, and the shipped
+# default of 60 is neither. An uneven spacing arrives as jitter no interpolator can
+# remove, and it reads to a player as lag on a server that is otherwise healthy --
+# `tick_rate is not a multiple of snapshot_rate` in the log is the only thing that says
+# so.
+#
+# It is not settable from here because `sv_tickrate` is FLAG_STARTUP_ONLY: the console
+# locks it the moment the listener opens, and a game's `cvars:` block is applied when the
+# GAME loads, which is afterwards. So a server that runs this game sets it before boot:
+#
+#     cfg/server.yml   sv_tickrate: 128
+#     or at launch     ./server -- +sv_tickrate 128
+#
+# 128 is the figure the genre runs and what this game's own project.godot exports, so a
+# developer running it standalone gets 128 and a server left on the default does not --
+# which is exactly the gap this comment exists to close.
+
 cvars:
   sv_airaccelerate: "1000"
   sv_autobunnyhopping: "1"
