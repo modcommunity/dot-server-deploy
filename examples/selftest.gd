@@ -14,7 +14,7 @@ extends Node
 
 const CFG := "res://examples/fixtures"
 
-const CHECKS := 89
+const CHECKS := 101
 
 var _passed := 0
 var _failed := 0
@@ -41,6 +41,7 @@ func _run() -> void:
 	_test_admins()
 	_test_content()
 	_test_vote()
+	_test_auth()
 
 	print("")
 	_check(
@@ -535,4 +536,98 @@ func _test_vote() -> void:
 		+ "it took effect"
 	)
 
+	_done()
+
+
+func _test_auth() -> void:
+	_section("authentication")
+
+	# [b]The case that shipped: a file nothing read.[/b] `TmcConfig.auth` was parsed and
+	# handed to a TmcAuth that did not exist, so a server advertised `auth=none`,
+	# everybody arrived as a guest, and `permissions.yml` did nothing -- which is
+	# indistinguishable from a deployment that chose not to authenticate.
+	var off := TmcAuth.build({}, "cfg")
+	_check(off.ok and off.value == null, "no auth.yml at all is a guest server, not an error")
+
+	var disabled := TmcAuth.build({"enabled": false, "strategy": "ticket"}, "cfg")
+	_check(
+		disabled.ok and disabled.value == null,
+		"and so is one that says enabled: false"
+	)
+
+	# Turning it on has to be a decision somebody made. A deployment that upgrades into
+	# authentication is a deployment whose admins silently changed.
+	var legacy := TmcAuth.build({"backend": {"type": "rest"}}, "cfg")
+	_check(
+		legacy.ok and legacy.value == null,
+		"the old example's shape stays off rather than half-configuring anything"
+	)
+
+	var unknown := TmcAuth.build({"enabled": true, "strategy": "magic"}, "cfg")
+	_check(not unknown.ok, "an unknown strategy is refused")
+	_check(
+		unknown.error != null and str(unknown.error.detail).contains("ticket"),
+		"and the refusal lists the ones that exist",
+		str(unknown.error)
+	)
+
+	# TICKET without a server_id is the replay hole: a ticket that names no audience is
+	# a ticket every server accepts. DotAuthConfig.validate refuses it and this is the
+	# check that the refusal reaches an operator rather than being swallowed here.
+	var work := "user://tmc_auth_test"
+	DotPaths.remove_tree(work)
+	DotPaths.ensure_dir(work)
+
+	var pub := work.path_join("issuer.pub.pem")
+	DotPaths.write_text(pub, "-----BEGIN PUBLIC KEY-----\nMIIB\n-----END PUBLIC KEY-----\n")
+
+	var no_id := TmcAuth.build({
+		"enabled": true, "strategy": "ticket", "issuer_public_key_file": "issuer.pub.pem",
+	}, work)
+	_check(not no_id.ok, "a ticket server with no server_id is refused")
+
+	# [b]A private key here would verify AND mint.[/b] Every operator holding one could
+	# forge any player's identity, which is the one thing the whole ticket design exists
+	# to prevent -- so it is refused by name rather than quietly working.
+	var priv := work.path_join("issuer.key.pem")
+	DotPaths.write_text(priv, "-----BEGIN PRIVATE KEY-----\nMIIB\n-----END PRIVATE KEY-----\n")
+
+	var wrong_half := TmcAuth.build({
+		"enabled": true, "strategy": "ticket", "server_id": "eu-1",
+		"issuer_public_key_file": "issuer.key.pem",
+	}, work)
+	_check(not wrong_half.ok, "and a PRIVATE key is refused, because it would also mint")
+
+	var missing := TmcAuth.build({
+		"enabled": true, "strategy": "ticket", "server_id": "eu-1",
+		"issuer_public_key_file": "nope.pem",
+	}, work)
+	_check(not missing.ok, "a key file that is not there names the path it looked at")
+
+	var good := TmcAuth.build({
+		"enabled": true, "strategy": "ticket", "server_id": "eu-1",
+		"issuer_public_key_file": "issuer.pub.pem", "allow_guests": true,
+	}, work)
+	_check(good.ok, "a complete ticket configuration builds", str(good.error))
+
+	var node: Node = good.value
+	_check(node != null, "and produces an auth server for dot-server to find")
+
+	if node != null:
+		var cfg: DotAuthConfig = node.get("config")
+		_check(
+			cfg.strategy == DotAuthConfig.Strategy.TICKET and cfg.server_id == "eu-1"
+				and cfg.allow_guests,
+			"carrying the strategy, the audience and the guest policy from the YAML"
+		)
+		# `DotAuthServer` layers a JSON file over the config it was handed, and its
+		# default points into `user://` -- a file no operator of this tool writes,
+		# silently outranking the YAML that is the documented surface.
+		_check(
+			str(node.get("config_file")) == "",
+			"and no user:// config file that would outrank the YAML"
+		)
+		node.free()
+
+	DotPaths.remove_tree(work)
 	_done()

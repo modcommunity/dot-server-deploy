@@ -356,6 +356,13 @@ func _boot() -> bool:
 	# its initial change.
 	_build_cloud()
 
+	# [b]Before boot() for a second reason: the challenge.[/b] `DotServer` answers a
+	# connecting client with the strategy it wants, and it works that out by asking the
+	# registry for `dot_auth_server` -- so an auth server registered after the listener
+	# opens is one that every client already in flight was told did not exist.
+	if not _build_auth():
+		return false
+
 	var booted: DotResult = await server.boot()
 
 	if not booted.ok:
@@ -468,6 +475,28 @@ func _boot() -> bool:
 ## `trusted_keys` — is refused from the environment and the command line on purpose:
 ## anything that can set a variable in this process would otherwise become a content
 ## publisher. `DotCloudConfig.sensitive_keys` is where that is decided.
+## Builds the auth server `cfg/auth.yml` asks for. False means the file is wrong.
+##
+## A configuration error is fatal rather than a warning, and that is the whole point of
+## it: every other outcome here leaves the server running with everybody as a guest, which
+## is exactly what a misconfigured `auth.yml` looks like from the outside. An operator who
+## has written one wants to be told it is broken, not to discover months later that their
+## admins were never admins.
+func _build_auth() -> bool:
+	var built := TmcAuth.build(config.auth, _config_dir)
+
+	if not built.ok:
+		_die(EXIT_CONFIG, str(built.error))
+		return false
+
+	var node: Node = built.value
+
+	if node != null:
+		server.add_child(node)
+
+	return true
+
+
 func _build_cloud() -> void:
 	var cloud := DotCloudClient.new()
 	cloud.name = "Cloud"

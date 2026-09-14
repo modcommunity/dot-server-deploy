@@ -1,4 +1,4 @@
-# Authentication.
+# Authentication. Who a connecting player is, and whether the server can prove it.
 #
 # Absent or disabled, everybody arrives as a guest with a per-device id through
 # DotGuestIdentity, and the server works. That is the simplest deployment there is
@@ -6,21 +6,54 @@
 #
 # WORTH KNOWING: DotAdminManager refuses permissions to any unauthenticated
 # session -- a guest uid is a random per-device string, so granting anything to one
-# grants it to anyone. Until this is wired up, cfg/permissions.yml has no effect and
-# the local console is the only administrator. That is correct, and it looks exactly
+# grants it to anyone. While this is off, cfg/permissions.yml has no effect and the
+# local console is the only administrator. That is correct, and it looks exactly
 # like the file being ignored.
 
 enabled: false
 
-backend:
-  type: "rest"
-  url: "http://localhost:8000"
-  timeout: 30
-  retries: 3
-  verify:
-    type: "jwt"
-    # A connect ticket is verified offline against a public key. A server operator
-    # holds a public key and nothing else, which is what makes third-party servers
-    # safe to allow at all. Never a shared secret: a secret that verifies a ticket
-    # also MINTS one, so every operator holding it can forge any player's identity.
-    public_key_file: "cfg/issuer.pub.pem"
+# ticket | introspect | local | anonymous
+#
+#   ticket       The client presents a short-lived, server-scoped ticket signed by an
+#                issuer, and this server verifies it OFFLINE against the issuer's
+#                public key. No network call per join, and the player's account token
+#                never reaches the server. THE RIGHT CHOICE FOR A PUBLIC SERVER, and
+#                the only one that is safe to hand to an operator you do not employ.
+#
+#   introspect   The client sends its backbone access token and this server calls the
+#                backbone to resolve it. FIRST-PARTY ONLY: it hands the operator a live
+#                credential for the player's entire site account, and adds a round trip
+#                to every join. Reasonable when you run the box; never for community
+#                servers.
+#
+#   local        Accounts in a file on this server. No backbone involved.
+#   anonymous    Nobody is authenticated. The same as leaving this file disabled.
+strategy: ticket
+
+# What tickets must name as their audience, and how this server is known.
+#
+# A ticket minted for one server id must not be accepted by another, or a ticket
+# captured on one server is a login on every server -- which is the whole thing
+# tickets exist to prevent. Required by `ticket`.
+server_id: ""
+
+# The issuer's PUBLIC half, relative to this directory.
+#
+# A public key verifies a ticket and cannot mint one, which is what makes a
+# third-party server safe to allow at all. NEVER a shared secret: a secret that
+# verifies also mints, so every operator holding it could forge any player's
+# identity. This file refuses anything that is not a public key.
+issuer_public_key_file: "issuer.pub.pem"
+
+# Where `introspect` resolves a token. Ignored by every other strategy.
+backbone_url: "https://moddingcommunity.com"
+
+# Admit players whose authentication failed or was unavailable, as guests.
+#
+# Sensible for a casual server that would rather have players than identities. Off
+# where bans need to mean something, because a guest can always come back as a
+# different guest.
+allow_guests: false
+
+# Accounts file for `local`, relative to this directory.
+# local_accounts_file: "accounts.json"
