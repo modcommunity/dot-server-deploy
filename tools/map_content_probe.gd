@@ -183,5 +183,117 @@ func _init() -> void:
 	else:
 		print("  ok   the world changed to %s" % id)
 
+	# --- The set, rather than the one -----------------------------------------
+	#
+	# [b]Everything downstream of the catalogue reads it as a SET, and the check above
+	# proves one id at a time.[/b] A delivered server that can fetch any map when asked
+	# by name still lists three built-in scenes under `maps`, rotates between those three
+	# when the time limit runs out, and offers those three to a vote -- which is a surf
+	# server that never plays a surf map, working perfectly, saying nothing.
+	#
+	# `sv_content_maps` is the answer and this is what proves it arrived: the ids come
+	# from the published tree rather than from a list here, so a probe cannot pass by
+	# agreeing with itself about which maps exist.
+	var published := _published_ids()
+	published.erase(id)
+
+	print("-- fetch_content_maps over %d published map(s)" % published.size())
+
+	if published.is_empty():
+		print("  [skipped] nothing else is published to sweep")
+	else:
+		game.config.content_maps = published
+		await game.fetch_content_maps()
+
+		var missing := PackedStringArray()
+		for other in published:
+			if not game.maps.catalogue.has(StringName(other)):
+				missing.append(other)
+
+		if missing.is_empty():
+			print("  ok   the catalogue holds every published map: %s" % ", ".join(published))
+		else:
+			print("  [FAIL] the sweep finished and %s are still missing" % ", ".join(missing))
+			failures += 1
+
+	# --- The command an operator actually types -------------------------------
+	#
+	# [b]The refusal that made all of the above unreachable.[/b] `DotMapCommands` checked
+	# the catalogue and answered "No map called 'surf_kitsune'" before `change_fn` -- the
+	# one piece of code written to go and fetch it -- was ever called. Nothing above this
+	# line catches that: `ensure_map_content` and `change_map` both work, and the operator
+	# is told the map does not exist.
+	print("-- map <id> for something the catalogue has never held")
+
+	var fresh: Node = G2GGame.new()
+	fresh.name = "Fresh"
+	fresh.config = G2GConfig.new()
+	fresh.config.authoritative = false
+	fresh.config.initial_map = &""
+	root.add_child(fresh)
+	await process_frame
+	await process_frame
+
+	var typed := PackedStringArray(["%s" % id])
+	var commands := DotMapCommands.new()
+	commands.session = fresh.maps
+	commands.may_fetch_unknown = true
+	commands.change_fn = func(want: StringName) -> DotResult:
+		return await fresh.change_map(want)
+	var host := ProbeHost.new()
+	commands.bind(host)
+
+	var ctx := ProbeCtx.new()
+	ctx.args = typed
+	await (host.commands["map"] as Callable).call(ctx)
+
+	if fresh.maps.current != null and fresh.maps.current.id == id:
+		print("  ok   `map %s` fetched it and changed the world" % id)
+	else:
+		print("  [FAIL] `map %s` did not change the map. Replies: %s" % [id, ", ".join(ctx.replies)])
+		failures += 1
+
 	print("%s" % ("all checks passed" if failures == 0 else "%d failed" % failures))
 	quit(0 if failures == 0 else 1)
+
+
+## Every content id under `dist/` that looks like a published map.
+##
+## Read from the disk rather than listed, for [G2GMapCatalogue]'s own reason: a list in a
+## probe goes stale the first time somebody publishes a ninth map, and it goes stale by
+## passing.
+func _published_ids() -> PackedStringArray:
+	var out := PackedStringArray()
+	var root_dir := ProjectSettings.globalize_path("res://dist")
+	var dir := DirAccess.open(root_dir)
+
+	if dir == null:
+		return out
+
+	for name in dir.get_directories():
+		if FileAccess.file_exists("%s/%s/manifest.json" % [root_dir, name]) \
+				and name.begins_with("surf_"):
+			out.append(name)
+
+	out.sort()
+	return out
+
+
+## The two duck-typed shapes `DotMapCommands` binds against, in the smallest form that
+## satisfies it: a host with `add_command`, and a context with `reply` and `args`.
+class ProbeHost:
+	extends RefCounted
+	var commands: Dictionary = {}
+
+	func add_command(name: String, handler: Callable, _help: String, _perm: String) -> Object:
+		commands[name] = handler
+		return null
+
+
+class ProbeCtx:
+	extends RefCounted
+	var args: PackedStringArray = PackedStringArray()
+	var replies: PackedStringArray = PackedStringArray()
+
+	func reply(text: String) -> void:
+		replies.append(text)

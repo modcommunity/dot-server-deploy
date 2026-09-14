@@ -61,6 +61,26 @@ module: game/g2g_module.gd
 # which is exactly the gap this comment exists to close.
 
 cvars:
+  # [b]The map list a delivered server has instead of a directory.[/b] The game finds
+  # its maps by looking, and on a box running from source that is enough -- all eight
+  # are on its disk. This server mounts the game as a pack with `maps/imported/`
+  # excluded (see the note above about why), so it looks at a directory that is not
+  # there, finds the three built-in scenes, and that is the whole set: `maps` lists
+  # three, the rotation can only ever choose between three, and `rtv` offers three.
+  #
+  # Naming them here does not put 66 MB in this repository -- each is published as its
+  # own pack and fetched in the background after boot, once, into the content cache.
+  # The ids are the content ids, which is why there is no second list anywhere mapping
+  # one to the other.
+  #
+  # A map added to the CDN is added to this line. That is a list, and a list is what the
+  # game's own catalogue refuses to keep for exactly the right reason -- but the reason
+  # is that the disk cannot go stale and a list can, and a CDN is not a disk this process
+  # can read. An id here that nobody published is one warning in the log and no other
+  # harm; the alternative, which is what this server shipped with, is a surf server that
+  # never plays a surf map.
+  sv_content_maps: "surf_mesa surf_beginner2 surf_kitsune surf_aquaflow surf_arcade surf_interference surf_summit surf_year3000"
+
   sv_airaccelerate: "1000"
   sv_autobunnyhopping: "1"
   sv_enablebunnyhopping: "1"
