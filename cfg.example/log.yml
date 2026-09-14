@@ -1,0 +1,59 @@
+# What the server logs, and where it goes.
+#
+# Every dot-* addon logs through one levelled, channelled logger, so these settings
+# cover all of them at once rather than one subsystem at a time.
+
+# The level below which nothing is emitted.
+#
+#   trace   per-frame or per-packet detail        nobody reads this; you are debugging
+#   debug   a decision or a state transition      you, later, reading it back
+#   info    what an admin would want kept         the record. This is where to sit.
+#   warn    recoverable; someone should look eventually
+#   error   the operation failed                  somebody, today
+#   fatal   the process cannot continue           somebody, now
+#
+# `debug` is per-decision and on a busy server it is the difference between a log
+# somebody reads and a log somebody greps in despair. Raise it for an afternoon, not
+# for a deployment.
+log_level: info
+
+# Turn ONE subsystem up without turning everything up, as channel=level.
+#
+# This is the setting to reach for instead of a global `debug`: turning on DEBUG to
+# diagnose a download also turns on every physics and RPC trace, and the lines you
+# wanted scroll past. The channel names are the ones in the log's second column.
+#
+#   log_channels: ["cloud=debug", "net=debug"]
+log_channels: []
+
+# The lowest level mirrored into the engine's own warning and error output.
+#
+# LEAVE THIS AT error. Godot appends an `at:` line and a full GDScript backtrace to
+# every push_warning and push_error, and nothing suppresses that per call -- so at
+# `warn` every recoverable, expected warning costs eight lines of stderr and reads
+# like a crash to whoever is scanning the log. The one-line WRN already says the same
+# thing. Lower it only while hunting where one specific warning comes from.
+log_mirror_level: error
+
+# Write a log file as well as stdout.
+#
+# On. stdout is captured by whatever supervises the process and is gone the moment
+# that rotates or restarts; the file is the copy an admin can still read on Tuesday.
+log_file: true
+
+# Where the files go, what they are called, and how many are kept.
+#
+# A timestamp and .log are appended to the name, so a directory listing is in
+# chronological order. Files are rotated on size and the oldest deleted beyond the
+# count -- an unbounded log directory is the most common way a game server fills a
+# disk, and a full disk stops the server rather than the logging.
+log_dir: "user://logs"
+log_name: "server"
+log_max_bytes: 16777216
+log_keep: 10
+
+# One JSON object per line instead of the human format.
+#
+# Off: the reader is a person over SSH. Turn it on for a box where something else
+# tails the file into a collector.
+log_json: false

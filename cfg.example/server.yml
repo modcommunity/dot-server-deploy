@@ -8,6 +8,26 @@
 sv_name: "TMC Test Server"
 sv_maxplayers: 64
 
+# How long to hold the slot of a player whose browser tab went into the background.
+#
+# A BROWSER STOPS DRIVING THE GAME'S MAIN LOOP FOR A HIDDEN TAB. It stops calling
+# requestAnimationFrame, which stops _process, every timer and the multiplayer poll
+# together -- so the client sends no heartbeat and reads nothing, while its socket
+# sits open and perfectly healthy. To the server that is indistinguishable from a
+# machine that died, and `sv_timeout` (60s by default) drops the player about a
+# minute into a tab switch. This is the setting that stops that.
+#
+# The client announces the switch on its way out, while the page is still live, and
+# announces its return; the server holds the slot for up to this many seconds. It is
+# a ceiling on what a client may ask for, not a grant -- a number a client chose for
+# itself would be a way to sit on a slot of a full server indefinitely.
+#
+# KEEP IT IN MINUTES. While the tab is hidden the server goes on sending to a client
+# that is not reading, and those bytes queue: the longer the grace, the bigger the
+# burst on the way back and the more a parked tab costs everyone still playing.
+# 0 refuses the grace entirely and restores the old behaviour.
+sv_background_grace: 300
+
 # Empty means anyone may join.
 sv_password: ""
 

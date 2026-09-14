@@ -31,8 +31,8 @@ const CHANNEL := "tmc.config"
 ## `net.yml` after `server.yml` so a network setting wins over a general one that happens
 ## to name the same thing — which is the order an operator would expect from the filenames.
 const FILES := [
-	"server.yml", "net.yml", "rcon.yml", "auth.yml", "groups.yml", "permissions.yml",
-	"vote.yml",
+	"server.yml", "net.yml", "log.yml", "rcon.yml", "auth.yml", "groups.yml",
+	"permissions.yml", "vote.yml",
 ]
 
 ## Operator-facing name -> boot config property.
@@ -71,6 +71,18 @@ const BOOT_KEYS := {
 	# process: [DotStdinConsole] is a thread blocked in a read the engine cannot cancel,
 	# so the second one keeps the process alive after everything else has stopped.
 	"sv_stdin_console": "stdin_console_enabled",
+	# log.yml. The level is the one an operator changes most often and the one they most
+	# often cannot find: it is not a cvar, because it has to apply before the console
+	# exists in order to cover the boot it is being raised to diagnose.
+	"log_level": "log_level",
+	"log_channels": "log_channel_levels",
+	"log_mirror_level": "log_mirror_min_level",
+	"log_file": "log_file_enabled",
+	"log_dir": "log_directory",
+	"log_name": "log_basename",
+	"log_json": "log_json",
+	"log_max_bytes": "log_max_file_bytes",
+	"log_keep": "log_max_files",
 }
 
 ## Operator-facing name -> netcode config property.

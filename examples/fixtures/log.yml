@@ -1,0 +1,9 @@
+# The logging block, as an operator would write it.
+log_level: debug
+log_channels: ["cloud=trace", "net=warn"]
+log_mirror_level: error
+log_file: true
+log_dir: "user://fixture-logs"
+log_name: "fixture"
+log_keep: 3
+log_json: true

@@ -14,7 +14,7 @@ extends Node
 
 const CFG := "res://examples/fixtures"
 
-const CHECKS := 101
+const CHECKS := 109
 
 var _passed := 0
 var _failed := 0
@@ -248,6 +248,32 @@ func _test_config() -> void:
 		"net_bind_ip reaches the bind address"
 	)
 	_check(config.server.max_players == 12, "sv_maxplayers reaches max_players")
+
+	# log.yml. Every one of these has to reach a property rather than fall through to
+	# the console as an unknown cvar: the console does not have them, and it runs after
+	# the boot they are most often being raised to diagnose.
+	_check(config.server.log_level == "debug", "log_level reaches the level")
+	_check(
+		config.server.log_channel_levels.size() == 2
+		and config.server.log_channel_levels[0] == "cloud=trace",
+		"log_channels reaches the per-channel list"
+	)
+	_check(
+		config.server.log_mirror_min_level == "error",
+		"log_mirror_level reaches the engine-mirror threshold"
+	)
+	_check(config.server.log_directory == "user://fixture-logs", "log_dir reaches the directory")
+	_check(config.server.log_basename == "fixture", "log_name reaches the basename")
+	_check(config.server.log_max_files == 3, "log_keep reaches the retention count")
+	_check(config.server.log_json, "log_json reaches the format")
+	# Not `unknown.any(...)`: `unknown` is a PackedStringArray, which is its own Variant
+	# type and has none of Array's higher-order methods. It is a parse error, and a parse
+	# error in a suite scene makes the process HANG rather than fail.
+	var log_unknown := 0
+	for entry in config.unknown:
+		if String(entry).contains("log_"):
+			log_unknown += 1
+	_check(log_unknown == 0, "and not one of them was reported unknown")
 	_check(config.server.tickrate == 30, "sv_tickrate reaches the tickrate")
 	_check(
 		config.net.per_client_budget == 500000,
