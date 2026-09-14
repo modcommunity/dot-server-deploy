@@ -35,7 +35,7 @@ TMC's server tool, as a thing you can run.
 This repository is where the [dot-*](https://github.com/modcommunity) family comes together into something a server owner starts with one command. It is a Godot project that boots a [dot-server](https://github.com/modcommunity/dot-server), reads its configuration from `cfg/*.yml`, loads games out of `content/`, and serves a browser client. It ships **no game of its own**. The games are copied in from their own repositories by `setup.sh`: [game-simple-lobby](https://github.com/modcommunity/game-simple-lobby), which is the lobby it serves by default, [game-hungario](https://github.com/modcommunity/game-hungario) and [game-g2gfast](https://github.com/modcommunity/game-g2gfast).
 
 ```bash
-./setup.sh              # get a runtime, wire the addons, write ./server
+./setup.sh              # get a runtime, wire the addons into addons/, write ./server
 ./server                # start it
 
 ./setup.sh --full       # or: the guided install, from a vanilla box to a public server
@@ -405,13 +405,18 @@ The pull cannot touch `cfg/`, because `cfg/` is not tracked; the setup run adds 
 
 **The games are separate clones too, and the loop above says `../game-*` for that reason.** It said `../dot-*` when the games were compiled in, and that was right then: the deploy repo's own pull brought the code. It is not right now. `setup.sh` republishes every pack on an upgrade, from those clones, and `--update` is off by default — so a loop that skips them publishes **stale sources**, silently, on the command an operator runs most. A stale game still declares `class_name`, and a pack whose scripts do that mounts and is dead: the scene loads, the script does not attach, and what surfaces is `No G2GGame is registered` against a module that is fine. `./server pack` refuses such a source now, which is the backstop; pulling them is the fix.
 
-**The addons are separate clones, one directory up.** `git pull` here updates the host and the launcher; it does not touch `../dot-server`, `../dot-cloud` or the other fifty, and a host newer than the addon it configures is a real failure mode — a setting this file reads and hands to a `DotServerConfig` that has no property for it. That is reported rather than fatal (`UNKNOWN : server.yml: … this dot-server has no …`), but it means the setting does nothing. Several servers on one box **share** those clones, so one pull fixes all of them — and changes all of them:
+**The addons are separate clones, and by default they are inside this one.** `setup.sh` clones each one it does not have into `addons/.repos/<repo>` and points `addons/<name>` at it with a relative link, so a finished checkout is one directory with nothing outside it — which is what a `cp -r`, a tarball and a container's final stage each need, and it means a box running several servers cannot end up with one server's `git pull` changing another's. `git pull` here updates the host and the launcher and nothing else: a host newer than the addon it configures is a real failure mode — a setting this file reads and hands to a `DotServerConfig` that has no property for it, reported rather than fatal (`UNKNOWN : server.yml: … this dot-server has no …`) and doing nothing. `./setup.sh --update` pulls the addons and the games as well, wherever they turned out to be, and `./upgrade.sh` is that with the guardrails.
+
+**`--addons-dir DIR` shares one set between servers instead**, which is the shape a developer machine and every box set up before this default already have. It takes either layout — a directory of addons (`DIR/dot_core`) or a directory of the repositories (`DIR/dot-core/addons/dot_core`) — links what it finds and clones what it does not *into that directory*, so one pull there fixes every server on the box, and changes every server on the box:
 
 ```bash
+./setup.sh --addons-dir ..                              # what a developer checkout is
 for d in ../dot-* ../game-*; do git -C "$d" pull --ff-only; done && ./setup.sh --no-import
 ```
 
-`./setup.sh --vendor` copies the addons into this checkout instead of linking them, if one server has to be pinned while the others move.
+**A checkout that is already wired is never rewired.** An `addons/<name>` that is a link and still resolves is left exactly as it is, so an upgrade on a box whose addons are beside it does not silently start a second copy of all fifty — two copies of `dot-cloud` on one machine is the bug where the fix is pulled, installed and still not running. Only `--addons-dir` repoints them.
+
+`./setup.sh --vendor` copies the addons in rather than linking them, and deletes `addons/.repos/` afterwards: vendoring says this tree is to carry content rather than checkouts, and it is what the container build and a release tarball use.
 
 **Every game is republished by that run, and a pull that changed one is not live until it is.** The games are packs: `setup.sh` imports each game repository and publishes it into `dist/`, so the upgrade command above is also the command that rebuilds the content this server serves. `--no-import` does not skip it — that flag is about re-importing *this* project, and a game repository that gained an asset since the last run has to be imported or its pack ships bytes nothing can open. `tools/check.sh` fails when a pack is older than its source, which is the backstop.
 

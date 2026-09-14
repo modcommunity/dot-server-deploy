@@ -3,8 +3,9 @@
 #   docker compose up -d          from this directory
 #
 # BUILD CONTEXT IS THE PARENT DIRECTORY, not this one. Every dot-* addon is its own
-# repository and there is no way to clone the tree at once, so the addons this project
-# needs are siblings rather than subdirectories. docker-compose.yml sets
+# repository and there is no way to clone the tree at once, so this build takes them
+# from the checkouts beside the project -- `setup.sh --addons-dir ..` below -- rather
+# than cloning fifty repositories inside the image. docker-compose.yml sets
 # `context: ..` for that reason; building by hand needs the same:
 #
 #   docker build -f dot-server-deploy/Dockerfile -t tmc-server ..
@@ -12,6 +13,12 @@
 # If you have vendored the addons into ./addons/ instead -- which is what a release
 # tarball looks like -- the sibling copy below finds nothing and setup.sh uses what is
 # already there.
+#
+# A self-contained build -- context `.`, no siblings, setup.sh cloning the addons into
+# addons/.repos/ itself -- is what setup.sh does by DEFAULT now, and it would need git
+# and a network in the build stage. That is a trade this image has not made: a build
+# that reaches the internet for fifty repositories is a build that fails differently
+# every week.
 
 # --- Stage 1: the runtime ---------------------------------------------------
 #
@@ -48,12 +55,12 @@ WORKDIR /src
 COPY . /src
 
 WORKDIR /src/dot-server-deploy
-# --vendor COPIES the addons rather than linking them. Every dot-* addon is a sibling
-# repository, and the final stage copies only this project -- so a symlink out of it
-# dangles, every dot-* class_name is unresolved at once, and the server dies at
-# startup with what reads as a broken project rather than a dangling link. Found by
-# running the container.
-RUN ./setup.sh --godot /usr/local/bin/godot --vendor
+# --vendor COPIES the addons rather than linking them, and --addons-dir .. is where
+# they are: the build context is the parent directory. The final stage copies only
+# this project -- so a symlink out of it dangles, every dot-* class_name is unresolved
+# at once, and the server dies at startup with what reads as a broken project rather
+# than a dangling link. Found by running the container.
+RUN ./setup.sh --godot /usr/local/bin/godot --vendor --addons-dir ..
 
 # The configuration generated during the build is thrown away. cfg/ is a volume at
 # run time and the RCON password printed into a build log is a password in a build

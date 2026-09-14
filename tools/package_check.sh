@@ -119,8 +119,13 @@ done
 echo
 echo "setup.sh --vendor"
 
+# --addons-dir .. is the staged directory above, where the siblings were just linked.
+# Without it setup.sh would do what it does by default -- clone fifty repositories into
+# addons/.repos/ -- and this check would then be testing what GitHub has rather than
+# what is in the working tree, over a network, on a run that is meant to prove a
+# tarball can be built from what is here.
 if (cd "$STAGE/dot-server-deploy" \
-    && ./setup.sh --godot "$(command -v "$GODOT" || echo "$GODOT")" --vendor) \
+    && ./setup.sh --godot "$(command -v "$GODOT" || echo "$GODOT")" --vendor --addons-dir ..) \
     >"$WORK/setup.log" 2>&1; then
     pass "vendored and imported"
 else

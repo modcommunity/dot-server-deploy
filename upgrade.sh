@@ -129,7 +129,15 @@ pull_one() {
 # is running -- bash reads a script as it goes, so a pull mid-run can resume at a byte
 # offset that means something else now -- so the rest of the work happens in a fresh
 # process, below.
-for d in "$ROOT"/../dot-* "$ROOT"/../game-*; do
+# Both homes of an addon: this project's own clones, which is where setup.sh puts them
+# by default, and the parent directory, which is a developer checkout and every box set
+# up before that default changed. A machine has one or the other and the glob that
+# matches nothing expands to a name no directory has, which pull_one skips.
+#
+# An addon linked out of a --addons-dir somewhere else is NOT pulled here, and that is
+# the point of sharing one: it is updated once, by hand, for every server that links to
+# it -- `./setup.sh --update` pulls whatever the addons actually resolved to.
+for d in "$ROOT"/addons/.repos/dot-* "$ROOT"/../dot-* "$ROOT"/../game-*; do
     [ -d "$d" ] && pull_one "$d"
 done
 

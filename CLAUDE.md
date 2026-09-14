@@ -467,6 +467,28 @@ browser.** It loads the export in a real Chromium, connects it to a real server,
 reports the WebSocket, the console and a screenshot. Three of the bugs above are its, and
 none of them was reachable any other way.
 
+## The addons come from inside this project now
+
+`setup.sh` used to require the fifty dot-* repositories **beside** this one, and to clone them into the parent directory when they were not there. That is the right shape for a developer checkout, which is what dot-bootstrap makes, and the wrong default for the machine this project is for:
+
+- **It writes into a directory this project does not own.** A `git clone` of dot-server-deploy into `~/` puts fifty repositories in `~/`, which nobody asked for and nothing cleans up.
+- **Several servers on one box share one set of clones without saying so.** Pulling for one changes all of them, at whatever moment each next restarts — and "the fix is installed and still not running" and "a server nobody touched changed" are the same arrangement seen from two ends.
+- **Every link points out of the tree.** Move the directory and all fifty dangle at once, which surfaces as every `dot-*` class_name unresolved and reads as a broken project. `--vendor` exists for exactly that, and having to know about it was the flaw.
+
+The default is now inside: a missing addon is cloned into `addons/.repos/<repo>` and `addons/<name>` is a **relative** link into it. The tree can be moved, tarred, `cp -r`d or COPYed into an image's final stage and still resolve. `.repos` is hidden from Godot twice over — the leading dot, which its scanner skips, and a `.gdignore` written before the first clone — because each of those directories is a whole repository with its own `addons/<name>` in it, and scanning both halves means every class_name in the family arriving twice.
+
+**`--addons-dir DIR` is the old behaviour, asked for by name.** It takes a directory of addons (`DIR/dot_core`) or a directory of the repositories (`DIR/dot-core/addons/dot_core`) — both, because guessing wrong is a silent re-clone of fifty repositories the box already has — links what it finds there with an absolute path, and clones what it does not find *into that directory*, since that is the point of sharing one. `--addons-dir ..` is exactly what this script did before. `TMC_ADDONS_DIR` is the same switch for a unit file or a CI job that cannot add an argument to a line somebody else wrote.
+
+**An existing link that still resolves is left alone, and that rule is what makes the change safe to pull.** Every box set up before this, and every developer checkout, has `addons/<name> -> ../../<repo>/addons/<name>`; re-pointing those on the run where somebody typed the usual upgrade command would clone fifty repositories the machine already has into a second copy. So `addon_source` reports where each addon actually came from and the summary line says so — `50 addons in addons/ (50 already linked elsewhere)` — rather than restating the default.
+
+Three consequences elsewhere, all of them the same mistake avoided:
+
+- **`--update` runs after resolution, not before.** It is given directories rather than repository names, because there are three places an addon can be and a pull that only knows one layout is a fix that is installed and still not running.
+- **`--vendor` deletes `addons/.repos/` once it has copied out of it.** A container's final stage and a release tarball copy this directory whole, and fifty repositories under it would travel — each a second copy of what was just vendored beside it. Nothing is lost that a re-run cannot fetch, and a re-run finds the vendored directories and fetches nothing.
+- **The Dockerfile and `tools/package_check.sh` pass `--addons-dir ..` explicitly.** Both stage the siblings deliberately — the build context is the parent directory, and the package check links them into a staging tree — so both would otherwise reach the network for fifty repositories and prove something about GitHub rather than about the working tree.
+
+The **games** did not move, and that is not an oversight: they are content that gets published into `dist/` rather than code this project compiles, and a game repository under `addons/` would be imported as part of this project, which is the arrangement the flip to packs removed.
+
 ## Two lists this project keeps, and both went stale in one pass
 
 `setup.sh` carries the list of **addons** every vendored game needs and the list of

@@ -7,9 +7,11 @@
 #   ./setup.sh --no-import      skip the Godot import pass (fast, for a re-run)
 #   ./setup.sh --godot PATH     use a specific runtime
 #   ./setup.sh --no-download    never fetch a runtime; fail if there is none
-#   ./setup.sh --no-clone       never git clone a sibling; fail if one is missing
-#   ./setup.sh --update         git pull every sibling repository first
+#   ./setup.sh --no-clone       never git clone anything; fail if one is missing
+#   ./setup.sh --update         git pull every addon and game repository first
 #   ./setup.sh --vendor         COPY the addons instead of linking them
+#   ./setup.sh --addons-dir DIR take the addons from a directory you already have
+#                               them in, rather than from this project's own clones
 #
 #   ./setup.sh --letsencrypt --domain demo.example.com --email ops@example.com
 #                               ...and then get a real certificate for it
@@ -28,8 +30,11 @@
 #      unverified. `--no-download` keeps the old behaviour of refusing to fetch.
 #   2. Wires in the dot-* addons. Each one is a separate repository and there is no
 #      way to clone the tree at once, so this is the one place that knowledge lives.
-#      Symlinks when the sibling repositories are there, which is a developer
-#      checkout; a copy otherwise, which is what a release tarball needs.
+#      They go INSIDE this project: a missing one is cloned into addons/.repos/ and
+#      addons/<name> is a relative link into it, so the whole build is one directory
+#      with nothing pointing out of it -- which is what a tarball, a `cp -r` and a
+#      container image's final stage each need. `--addons-dir DIR` takes them from a
+#      directory you already have instead, and links out to it; `--vendor` copies.
 #   3. Copies every built-in game into the build. They are `kind: builtin`, and the
 #      reason is measured rather than assumed -- see content/lobby/game.yml.
 #   4. Runs Godot's import pass. Without it every class_name global is unresolved,
@@ -88,6 +93,25 @@ DO_UPDATE=0
 DO_CHECK=0
 VENDOR=0
 
+# Where the dot-* addons come from.
+#
+# [b]Empty is the default, and it means "inside this project".[/b] An addon that is not
+# here is cloned into addons/.repos/<repo> and addons/<name> becomes a RELATIVE link
+# into it, so the finished build is one directory with nothing pointing out of it: it
+# can be moved, tarred, `cp -r`d or COPYed into a container's final stage and still
+# resolve. The old shape -- fifty repositories in the PARENT directory -- wrote into a
+# directory this project does not own, which on a box running several servers is one
+# clone shared by all of them with nothing saying so.
+#
+# A directory named here is used instead, and may be either shape: a directory OF
+# addons (`DIR/dot_core`, which is what somebody's hand-kept library or another Godot
+# project's addons/ looks like) or a directory of the REPOSITORIES
+# (`DIR/dot-core/addons/dot_core`, which is what dot-bootstrap and a developer checkout
+# look like). Found there, it is linked; not found there, it is cloned there. That is
+# the point of a shared directory: `--addons-dir ..` is exactly what this script used
+# to do, and one directory serves every server on the box.
+ADDONS_DIR="${TMC_ADDONS_DIR:-}"
+
 # The guided install. Everything it decides is asked for, and everything it asks has
 # a default, so --full --yes is the same install with nobody typing.
 DO_FULL=0
@@ -110,6 +134,7 @@ while [ $# -gt 0 ]; do
         --update)      DO_UPDATE=1; shift ;;
         --check)     DO_CHECK=1; shift ;;
         --vendor)    VENDOR=1; shift ;;
+        --addons-dir) ADDONS_DIR="${2:?--addons-dir needs a value}"; shift 2 ;;
         --letsencrypt) DO_LETSENCRYPT=1; shift ;;
         --domain)    LE_DOMAINS+=("${2:?--domain needs a value}"); shift 2 ;;
         --email)     LE_EMAIL="${2:?--email needs a value}"; shift 2 ;;
@@ -122,7 +147,10 @@ while [ $# -gt 0 ]; do
         # wrapper that re-declares the arguments it forwards is a second list to keep
         # in step, and the half that drifts is always the one nobody uses often.
         --)          shift; LE_EXTRA=("$@"); break ;;
-        -h|--help)   sed -n '2,50p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        # 2..62 is the comment block at the top of this file, printed as help so
+        # there is one copy of it rather than two that drift. The range moves when
+        # that block grows; it ends at the last line of step 8.
+        -h|--help)   sed -n '2,62p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
         *) printf 'unknown option: %s\n' "$1" >&2; exit 2 ;;
     esac
 done
@@ -634,7 +662,13 @@ fi
 # needs no credential at all.
 GIT_BASE="${TMC_GIT_BASE:-https://github.com/modcommunity}"
 
-## Fast-forward every named repository that is already beside this one.
+## Fast-forward every named repository that is already on this machine.
+##
+## [b]It is given DIRECTORIES, not names, and that is what makes one pull find them.[/b]
+## An addon can be in this project's own addons/.repos/, in a --addons-dir somebody
+## shares between servers, or beside this repository because an older setup.sh wired it
+## there -- and a checkout that is pulled only when it happens to be in the layout this
+## script was written for is a fix that is installed and still not running.
 ##
 ## [b]Each addon is its own clone, and `git pull` here pulls only this one.[/b] That is
 ## the shape of the family -- fifty-odd repositories, installable separately -- and on a
@@ -654,8 +688,8 @@ update_repos() {
 
     local repo dir behind=() failed=()
 
-    for repo in "$@"; do
-        dir="$ROOT/../$repo"
+    for dir in "$@"; do
+        repo="$(basename "$dir")"
 
         [ -d "$dir/.git" ] || continue
 
@@ -694,23 +728,33 @@ update_repos() {
 }
 
 
-## Clone every named repository that is not already beside this one.
+## Clone every named repository that is not already in the given directory.
+##
+## The destination is an argument because there are three of them now: this project's
+## own addons/.repos/, a shared --addons-dir, and the parent directory, which is still
+## where the GAMES go -- they are content that gets published into dist/ rather than
+## code this project compiles, and a game repository under addons/ would be imported as
+## part of this project, which is the arrangement the flip to packs removed.
 ##
 ## Never touches a checkout that exists -- not even to pull. A setup script that
 ## silently updated somebody's working tree would be a setup script that can lose work.
 clone_repos() {
-    command -v git >/dev/null 2>&1 || die "--clone needs git, and this machine has none." 4
+    local dest="$1"; shift
+
+    command -v git >/dev/null 2>&1 || die "cloning needs git, and this machine has none." 4
 
     local wanted=("$@") missing=() repo failed=()
 
     for repo in "${wanted[@]}"; do
-        [ -d "$ROOT/../$repo" ] || missing+=("$repo")
+        [ -d "$dest/$repo" ] || missing+=("$repo")
     done
 
     [ ${#missing[@]} -gt 0 ] || return 0
 
+    mkdir -p "$dest" || die "could not create $dest" 4
+
     printf '    %scloning %d repositories into %s%s\n' \
-        "$DIM" "${#missing[@]}" "$(cd "$ROOT/.." && pwd)" "$OFF"
+        "$DIM" "${#missing[@]}" "$(cd "$dest" && pwd)" "$OFF"
 
     # [b]Shallow by default.[/b] This path exists to stand a SERVER up: fifty repositories
     # of history is bandwidth and disk nobody on that box will ever read, and it is most
@@ -720,7 +764,7 @@ clone_repos() {
     [ "${TMC_GIT_DEPTH:-1}" = "0" ] || depth=(--depth "${TMC_GIT_DEPTH:-1}")
 
     for repo in "${missing[@]}"; do
-        if git clone --quiet "${depth[@]}" "$GIT_BASE/$repo.git" "$ROOT/../$repo" 2>/dev/null; then
+        if git clone --quiet "${depth[@]}" "$GIT_BASE/$repo.git" "$dest/$repo" 2>/dev/null; then
             printf '    %s+%s    %s\n' "$GRN" "$OFF" "$repo"
         else
             # Collected rather than fatal. One repository that is not published yet --
@@ -769,68 +813,215 @@ ADDONS=(dot_core dot_net dot_server dot_server_query dot_server_security dot_2d 
 step "dot-* addons"
 mkdir -p addons
 
+# This project's own clones, and the default home of every addon.
+#
+# [b]Under addons/, and hidden.[/b] Each of these is a whole repository with its own
+# addons/<name> inside it, so it must not be walked as part of this project: a leading
+# dot is skipped by Godot's scanner, and a .gdignore is written into it as well because
+# that is the documented switch and the other is a behaviour. Without either, every
+# script arrives twice -- once here and once through the link beside it -- and the
+# import pass fails on class_name globals that are somehow already declared.
+ADDONS_REPOS="$ROOT/addons/.repos"
+
+if [ -n "$ADDONS_DIR" ]; then
+    # Through a second variable, because the assignment happens before the `||` is
+    # reached: writing straight into ADDONS_DIR empties it on the failing path and the
+    # message then names no directory at all.
+    ADDONS_DIR_ABS="$(cd "$ADDONS_DIR" 2>/dev/null && pwd)" \
+        || die "--addons-dir: no such directory: $ADDONS_DIR" 2
+    ADDONS_DIR="$ADDONS_DIR_ABS"
+fi
+
+# Where a MISSING addon is cloned to. A shared directory was asked for by name, so it
+# is also where the missing ones are put -- otherwise the first run fills it and every
+# run after it quietly starts a second copy inside the project.
+ADDONS_CLONE_DEST="${ADDONS_DIR:-$ADDONS_REPOS}"
+
+## Resolve one addon, setting:
+##
+##   SRC       the directory that holds it (its plugin.cfg and all)
+##   SRC_LINK  what addons/<name> should point AT, or empty for "leave the link alone"
+##
+## Returns 1 when this machine does not have it anywhere, which is what drives the
+## clone: the list of what to fetch is what is ACTUALLY absent rather than the list of
+## addons in the abstract, so a vendored tree with no network fetches nothing.
+addon_source() {
+    local name="$1" repo="${1//_/-}"
+    SRC=""; SRC_LINK=""; SRC_KIND=""
+
+    if [ -n "$ADDONS_DIR" ]; then
+        # Both shapes of a shared directory: a directory of addons, and a directory of
+        # the repositories they live in. Guessing wrong is a silent re-clone of fifty
+        # repositories the box already has, so it checks for both rather than
+        # documenting which one it wanted.
+        if [ -d "$ADDONS_DIR/$name" ]; then
+            SRC="$ADDONS_DIR/$name"
+        elif [ -d "$ADDONS_DIR/$repo/addons/$name" ]; then
+            SRC="$ADDONS_DIR/$repo/addons/$name"
+        fi
+
+        # Absolute, deliberately. A shared directory is outside this project by
+        # definition -- there is no relative path to it that survives the project being
+        # moved, and an absolute one at least SAYS where it went when it dangles.
+        if [ -n "$SRC" ]; then SRC_LINK="$SRC"; SRC_KIND="dir"; return 0; fi
+    fi
+
+    if [ -d "$ADDONS_REPOS/$repo/addons/$name" ]; then
+        SRC="$ADDONS_REPOS/$repo/addons/$name"
+        # Relative, and pointing INSIDE addons/, which is the whole point of the
+        # default: nothing in the finished tree points out of it.
+        SRC_LINK=".repos/$repo/addons/$name"
+        SRC_KIND="repos"
+        return 0
+    fi
+
+    # A link this machine already has that still resolves -- addons/<name> ->
+    # ../../<repo>/addons/<name>, which is every checkout wired by an earlier setup.sh
+    # and every developer tree dot-bootstrap made. [b]Kept exactly as it is.[/b] Cloning
+    # fifty repositories a box already has, into a second copy, on the run where
+    # somebody typed the usual upgrade command, is the one thing a setup script must not
+    # do -- and two copies of dot-cloud on one machine is the bug where the fix is
+    # installed, pulled and still not running. `--addons-dir` repoints them on purpose;
+    # nothing else does.
+    if [ -L "$ROOT/addons/$name" ] && [ -d "$ROOT/addons/$name" ]; then
+        SRC="$(cd "$ROOT/addons/$name" && pwd -P)"
+        SRC_LINK=""
+        SRC_KIND="link"
+        return 0
+    fi
+
+    return 1
+}
+
+## The git checkout an addon came out of, or nothing. Walks up rather than assuming the
+## layout, because there are three of them and a flat directory of addons is not a
+## repository at all.
+git_root_of() {
+    local dir="$1"
+    while [ -n "$dir" ] && [ "$dir" != "/" ]; do
+        [ -d "$dir/.git" ] && { printf '%s\n' "$dir"; return 0; }
+        dir="$(dirname "$dir")"
+    done
+    return 1
+}
+
 ## Link, copy or record-as-missing every addon. Run twice: once to find out what is
-## absent, and once more after cloning it, so the clone is driven by what is ACTUALLY
-## needed rather than by the list in the abstract.
+## absent, and once more after cloning it.
 ##
 ## A vendored addon is not missing and is never cloned -- that is the release tarball,
-## which has no siblings, no network and nothing wrong with it.
+## which has no clones, no network and nothing wrong with it.
 resolve_addons() {
     MISSING=()
+    FROM_DIR=0; FROM_REPOS=0; FROM_LINK=0; FROM_VENDOR=0
+    local name repo link
     for name in "${ADDONS[@]}"; do
         repo="${name//_/-}"
-        source_dir="$ROOT/../$repo/addons/$name"
+        link="addons/$name"
 
-        if [ -d "$source_dir" ]; then
+        if addon_source "$name"; then
             if [ "$VENDOR" -eq 1 ]; then
-                # Copied, not linked. A symlink out of this directory is fine on a
-                # developer's machine and breaks the moment the directory is moved
-                # somewhere the siblings are not -- a release tarball, or a container
-                # image whose final stage copies only this project. The symptom is
-                # every dot-* class_name unresolved at once, which reads as a broken
-                # project rather than as a dangling link.
-                rm -rf "addons/$name"
-                cp -rL "$source_dir" "addons/$name"
-            elif [ -L "addons/$name" ] || [ ! -e "addons/$name" ]; then
-                ln -sfn "../../$repo/addons/$name" "addons/$name"
+                # Copied, not linked. A symlink is fine where the thing it points at
+                # stays put and breaks the moment the directory is moved somewhere it
+                # is not -- a release tarball, or a container image whose final stage
+                # copies only this project. The symptom is every dot-* class_name
+                # unresolved at once, which reads as a broken project rather than as a
+                # dangling link.
+                rm -rf "$link"
+                cp -rL "$SRC" "$link"
+            elif [ -n "$SRC_LINK" ] && { [ -L "$link" ] || [ ! -e "$link" ]; }; then
+                ln -sfn "$SRC_LINK" "$link"
             fi
-        elif [ -d "addons/$name" ]; then
-            : # already vendored, which is what a release tarball looks like
+            case "$SRC_KIND" in
+                dir)   FROM_DIR=$((FROM_DIR + 1)) ;;
+                repos) FROM_REPOS=$((FROM_REPOS + 1)) ;;
+                link)  FROM_LINK=$((FROM_LINK + 1)) ;;
+            esac
+        elif [ -d "$link" ]; then
+            # already vendored, which is what a release tarball looks like
+            FROM_VENDOR=$((FROM_VENDOR + 1))
         else
             MISSING+=("$repo")
         fi
     done
 }
 
-if [ "$DO_UPDATE" -eq 1 ]; then
-    UPDATE_REPOS=()
-    for name in "${ADDONS[@]}"; do UPDATE_REPOS+=("${name//_/-}"); done
-    update_repos "${UPDATE_REPOS[@]}"
-fi
-
 resolve_addons
 
 if [ ${#MISSING[@]} -gt 0 ] && [ "$DO_CLONE" -eq 1 ]; then
-    clone_repos "${MISSING[@]}"
+    if [ "$ADDONS_CLONE_DEST" = "$ADDONS_REPOS" ]; then
+        mkdir -p "$ADDONS_REPOS"
+        # Written before the first clone, not after: a run interrupted between the two
+        # leaves repositories in a directory Godot would then walk.
+        [ -f "$ADDONS_REPOS/.gdignore" ] || : > "$ADDONS_REPOS/.gdignore"
+    fi
+    clone_repos "$ADDONS_CLONE_DEST" "${MISSING[@]}"
     resolve_addons
 fi
 
 if [ ${#MISSING[@]} -gt 0 ]; then
-    die "These addon repositories are not beside this one:
+    die "These addon repositories are not on this machine:
 
         ${MISSING[*]}
 
     Each dot-* project is a separate repository and there is no way to clone the
     tree at once.
 
-    They are normally cloned for you from $GIT_BASE over HTTPS; this run could not,
-    or --no-clone was given.
+    They are normally cloned for you into ./addons/.repos/, from $GIT_BASE
+    over HTTPS; this run could not, or --no-clone was given.
+
+    --addons-dir DIR takes them from a directory you already have them in -- either
+    a directory of addons (DIR/dot_core) or a directory of the repositories
+    (DIR/dot-core/addons/dot_core) -- and links them from there. --addons-dir .. is
+    a developer checkout, which is what dot-bootstrap makes.
 
     Or vendor their addons/<name> folders into ./addons/, which is what a release
-    tarball looks like; or use dot-bootstrap, which clones the whole family and is
-    the right tool on a development machine." 4
+    tarball looks like." 4
 fi
-ok "${#ADDONS[@]} addons $([ "$VENDOR" -eq 1 ] && echo copied || echo linked)"
+
+# `--update` runs AFTER the addons have been resolved, not before, because the
+# directories to pull are wherever they actually turned out to be -- which is the whole
+# reason an addon in a shared directory or in an old sibling checkout gets pulled at all
+# instead of being silently skipped for not being where this script expected it.
+if [ "$DO_UPDATE" -eq 1 ]; then
+    UPDATE_DIRS=()
+    for name in "${ADDONS[@]}"; do
+        addon_source "$name" || continue
+        root_dir="$(git_root_of "$SRC")" || continue
+        UPDATE_DIRS+=("$root_dir")
+    done
+    # One repository can hold more than one of them -- a shared directory is allowed to
+    # be another project's addons/ -- and pulling it twice prints it twice.
+    if [ ${#UPDATE_DIRS[@]} -gt 0 ]; then
+        mapfile -t UPDATE_DIRS < <(printf '%s\n' "${UPDATE_DIRS[@]}" | sort -u)
+        update_repos "${UPDATE_DIRS[@]}"
+    fi
+fi
+
+# [b]--vendor throws the clones away once they have been copied.[/b] Vendoring says this
+# tree is to carry CONTENT rather than checkouts: a container's final stage and a
+# release tarball copy the project directory whole, and fifty repositories under
+# addons/.repos/ would travel with it -- every one of them a second copy of what was
+# just vendored beside it. Nothing is lost that a re-run cannot fetch again, and a
+# re-run finds the vendored directories and fetches nothing at all.
+if [ "$VENDOR" -eq 1 ] && [ -d "$ADDONS_REPOS" ]; then
+    rm -rf "$ADDONS_REPOS"
+    ok "addons/.repos/ removed -- --vendor means this tree carries content, not clones"
+fi
+
+# Where they came from, rather than where the default would have put them. A tree that
+# was wired by an older setup.sh keeps its links, and a run that says "linked from
+# addons/.repos/" over fifty links into the parent directory is a run that would have
+# somebody looking for a directory that does not exist.
+if [ "$VENDOR" -eq 1 ]; then
+    ok "${#ADDONS[@]} addons copied into addons/"
+else
+    WHERE=()
+    [ "$FROM_DIR"    -gt 0 ] && WHERE+=("$FROM_DIR from $ADDONS_DIR")
+    [ "$FROM_REPOS"  -gt 0 ] && WHERE+=("$FROM_REPOS from addons/.repos/")
+    [ "$FROM_LINK"   -gt 0 ] && WHERE+=("$FROM_LINK already linked elsewhere")
+    [ "$FROM_VENDOR" -gt 0 ] && WHERE+=("$FROM_VENDOR already vendored")
+    ok "${#ADDONS[@]} addons in addons/ ($(IFS=', '; echo "${WHERE[*]}"))"
+fi
 
 # --- 3. Leftovers from when the games were vendored ------------------------
 #
@@ -924,9 +1115,11 @@ import_is_stale() {
     [ -f "$cache" ] || return 0
     [ -d "$ROOT/addons" ] || return 1
 
-    # -L: addons/ is symlinks on a developer machine, and the mtime that matters is the
-    # file in the sibling repository rather than the link.
-    [ -n "$(find -L "$ROOT/addons" -newer "$cache" -name '*.gd' -print -quit 2>/dev/null)" ]
+    # -L: addons/ is symlinks, and the mtime that matters is the file in the checkout
+    # rather than the link. .repos/ is pruned because every file under it is reachable
+    # through the link beside it, and walking both halves the answer costs twice.
+    [ -n "$(find -L "$ROOT/addons" -path "$ROOT/addons/.repos" -prune -o \
+            -newer "$cache" -name '*.gd' -print -quit 2>/dev/null)" ]
 }
 
 if [ "$DO_IMPORT" -eq 1 ]; then
@@ -1008,14 +1201,14 @@ resolve_games() {
 
 if [ "$DO_UPDATE" -eq 1 ]; then
     UPDATE_GAMES=()
-    for entry in "${GAMES[@]}"; do UPDATE_GAMES+=("${entry%%:*}"); done
+    for entry in "${GAMES[@]}"; do UPDATE_GAMES+=("$ROOT/../${entry%%:*}"); done
     update_repos "${UPDATE_GAMES[@]}"
 fi
 
 resolve_games
 
 if [ ${#MISSING_GAMES[@]} -gt 0 ] && [ "$DO_CLONE" -eq 1 ]; then
-    clone_repos "${MISSING_GAMES[@]}"
+    clone_repos "$ROOT/.." "${MISSING_GAMES[@]}"
     resolve_games
 fi
 
