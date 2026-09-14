@@ -72,8 +72,6 @@ Thumbs.db
 
 # Node modules for the browser check (playwright is borrowed from website-city)
 node_modules/
-/addons/dot_player_controller
-/addons/dot_player
 /.play/
 
 # Filled in from deploy/env.example. Never committed.

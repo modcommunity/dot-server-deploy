@@ -214,7 +214,7 @@ func _build(name: String, tree: Dictionary) -> DotResult:
 	var cvars: Variant = TmcYaml.at(tree, "cvars", {})
 
 	if cvars is Dictionary:
-		descriptor.cvars = cvars as Dictionary
+		descriptor.cvars = _flatten_cvars(cvars as Dictionary)
 
 	# The module is named rather than derived from the id. A module is a script path and a
 	# guessed one produces a load failure that reads as a missing game — and a game with no
@@ -252,6 +252,43 @@ func _build(name: String, tree: Dictionary) -> DotResult:
 		return valid
 
 	return DotResult.success(descriptor)
+
+
+## A `cvars:` block with its list values joined, because a cvar's value is a string.
+##
+## [b]A console cvar is a line of text, and YAML is not.[/b] dot-server applies a
+## descriptor's cvars by handing each value to the console, so an Array arrives through
+## `str()` as `["surf_mesa", "surf_beginner2"]` — brackets, quotes and commas included —
+## and the cvar is set to that, verbatim and wrong. Nothing errors: it is a valid string.
+##
+## Written as a list where a list is what it is:
+##
+## [codeblock]
+## cvars:
+##   sv_content_maps:
+##     - surf_mesa
+##     - surf_beginner2
+## [/codeblock]
+##
+## Joined with spaces rather than commas because that is what a console line looks like,
+## and every list-shaped cvar in this family splits on either. The cost is that an
+## element containing a space cannot be expressed — which is equally true of typing the
+## cvar at the console, so the YAML is not promising anything the console would keep.
+func _flatten_cvars(cvars: Dictionary) -> Dictionary:
+	var out := {}
+
+	for name: Variant in cvars:
+		var value: Variant = cvars[name]
+
+		if value is Array:
+			var parts := PackedStringArray()
+			for item: Variant in (value as Array):
+				parts.append(str(item))
+			out[name] = " ".join(parts)
+		else:
+			out[name] = value
+
+	return out
 
 
 func find(game_id: String) -> DotGameDescriptor:

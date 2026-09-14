@@ -79,7 +79,15 @@ cvars:
   # can read. An id here that nobody published is one warning in the log and no other
   # harm; the alternative, which is what this server shipped with, is a surf server that
   # never plays a surf map.
-  sv_content_maps: "surf_mesa surf_beginner2 surf_kitsune surf_aquaflow surf_arcade surf_interference surf_summit surf_year3000"
+  sv_content_maps:
+    - surf_mesa
+    - surf_beginner2
+    - surf_kitsune
+    - surf_aquaflow
+    - surf_arcade
+    - surf_interference
+    - surf_summit
+    - surf_year3000
 
   sv_airaccelerate: "1000"
   sv_autobunnyhopping: "1"
