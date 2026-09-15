@@ -83,8 +83,30 @@ fi
 GAME_REPOS=()
 for entry in "${GAME_ENTRIES[@]}"; do GAME_REPOS+=("${entry%%:*}"); done
 
+# [b]What this build deliberately left out.[/b] `./setup.sh --only-games` /
+# `--skip-games` writes the repositories it did not build into dist/.skipped-games, and
+# without reading it the loop below fails every one of them for having a source and no
+# pack -- which on a developer box, where all six repositories are beside this project,
+# is five failures for one supported flag. A check that cries wolf on a documented
+# option is a check people learn to scroll past.
+#
+# setup.sh DELETES that file on any run that filtered nothing, so this can never excuse
+# a pack that was supposed to exist: an unfiltered build has no marker and every game is
+# checked, which is the arrangement every box that never passes the flag is in.
+SKIPPED_GAMES=()
+[ -f dist/.skipped-games ] && mapfile -t SKIPPED_GAMES < dist/.skipped-games
+
+game_was_skipped() {
+    local repo="$1" s
+    for s in ${SKIPPED_GAMES[@]+"${SKIPPED_GAMES[@]}"}; do
+        [ "$s" = "$repo" ] && return 0
+    done
+    return 1
+}
+
 drift=0
 checked_any=0
+skipped_note=""
 
 for entry in "${GAME_ENTRIES[@]}"; do
     repo="${entry%%:*}"
@@ -96,6 +118,14 @@ for entry in "${GAME_ENTRIES[@]}"; do
     # words a release tarball uses, which is the branch nobody looks twice at.
     game_source "$repo" || continue
     src="$GAME_SRC"
+
+    # Before checked_any, on purpose: a build that excluded every game but one must not
+    # be able to claim it checked the five it was told to leave alone.
+    if game_was_skipped "$repo"; then
+        skipped_note="$skipped_note $dir"
+        continue
+    fi
+
     checked_any=1
 
     yml="content/$dir/game.yml"
@@ -159,6 +189,11 @@ elif [ "$drift" -eq 0 ]; then
 else
     fails=$((fails + drift))
 fi
+
+# Printed whatever the verdict was, and printed at all because "every game is published"
+# over a build missing two of them is true and misleading in the same line.
+[ -n "$skipped_note" ] && printf '  %sok%s   not checked, left out of this build:%s\n' \
+    "$GRN" "$OFF" "$skipped_note"
 
 # --- Nothing may be vendored into this build any more ----------------------
 #

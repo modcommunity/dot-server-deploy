@@ -138,9 +138,17 @@ fi
 # tarball with no manifests, which is not this script's case but is cheap to survive.
 NEWEST_PACK="$(ls -t dist/*/manifest.json 2>/dev/null | head -1)"
 
+# What ./setup.sh --only-games / --skip-games left out. A game this build never
+# published is not stale, it is absent, and telling somebody to re-run ./setup.sh over
+# it would re-run it without the flag they meant. tools/check.sh reads the same file for
+# the same reason; setup.sh deletes it on any run that filtered nothing.
+SKIPPED_GAMES=""
+[ -f dist/.skipped-games ] && SKIPPED_GAMES=" $(tr '\n' ' ' < dist/.skipped-games)"
+
 stale=""
 [ -n "$NEWEST_PACK" ] && while IFS= read -r entry; do
     repo="${entry%%:*}"
+    case "$SKIPPED_GAMES" in *" $repo "*) continue ;; esac
     game_source "$repo" || continue
     # The newest manifest in dist/ rather than this game's own: the pack name is in the
     # descriptor rather than in either field of the entry (three game ids publish one

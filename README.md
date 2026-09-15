@@ -424,6 +424,31 @@ for d in ../dot-* ../game-*; do git -C "$d" pull --ff-only; done && ./setup.sh -
 ./setup.sh --games-dir /srv/tmc/games       # one set of checkouts, several servers
 ```
 
+**`--only-games` and `--skip-games` choose which of them this build carries at all.** A box that hands out one game spends five clones, five imports and five publishes on games it will never serve, and a developer changing one of them waits for the other five on every run. A name may be the repository (`game-g2gfast`), the repository without its prefix (`g2gfast`) or the content directory (`hungry_classic`); both flags are repeatable and take a comma- or space-separated list, and `TMC_ONLY_GAMES` / `TMC_SKIP_GAMES` are the same switches for a unit file or a compose file. Given both, `--only-games` decides the set and `--skip-games` narrows it. A name matching no game is refused with the list of the ones this build has, rather than quietly narrowing the build — and so is a filter that leaves nothing to publish.
+
+```bash
+./setup.sh --only-games g2gfast             # a timer server, and nothing else
+./setup.sh --skip-games hungry_classic      # everything but the one you are not serving
+```
+
+A game left out is left out *everywhere except `dist/`*: **a pack an earlier run already published stays there and this server keeps serving it**, because deleting published content on the strength of a command-line flag is not a thing a setup script should do. Delete it by hand when that is what you meant. The repositories it did not build are recorded in `dist/.skipped-games`, which is how `tools/check.sh` knows not to report them as unpublished and how `play.sh` knows not to call them stale; any run that filters nothing deletes that file, so it can never excuse a pack that was supposed to be there.
+
+**The addons follow automatically, because each game declares its own.** Every project in the family lists the addons it needs as `/addons/<name>` lines in its own `.gitignore` — the same declaration `dot-bootstrap` reads to wire a developer checkout — so a filtered build asks the games that are left and wires in exactly what they name, plus the eleven this project's own scripts name. Addons already linked that the build no longer needs are unlinked: leaving them means the import registers their `class_name` globals, and a pack that quietly depends on one then parses on the box that built it and fails on the fresh box that only ever had the smaller set.
+
+| build | addons wired in |
+| --- | --- |
+| `--only-games buses-from-hell` | 27 |
+| `--only-games simple-lobby` | 33 |
+| `--only-games hungario` | 42 |
+| `--only-games arena` | 45 |
+| `--only-games g2gfast` | 46 |
+| `--only-games playground` | 48 |
+| all six (the default) | 53 |
+
+**The derivation is reachable only on a run that filtered something**, and for an unfiltered build it reproduces the hand-kept `ADDONS_ALL` list exactly, name for name — so the default path cannot change, and the derivation can never be the reason an ordinary build breaks. A build with no game repositories at all — a release tarball serving the packs already in `dist/` — falls back to the full list, because a published pack does not say which classes it parses against.
+
+**A filtered build also stops the server OFFERING what it did not publish.** The catalogue is `content/<id>/game.yml`, which is checked in — all nine of them — so without this a vote can land on a game whose pack this build never made: the server fetches it from the configured content origin, mounts it, and fails to parse it against addons this build deliberately does not have, while the boot check still exits 0. `setup.sh` writes `vote_exclude` into `cfg/vote.yml` when it is the run that creates that file, and names the exact line to add when the file is already yours. It excludes every content directory sharing the dropped pack, so leaving out hungario excludes all four `hungry_*` ids rather than only the one the `GAMES` entry names.
+
 `./setup.sh --vendor` copies the addons in rather than linking them, and deletes `addons/.repos/` and `games/` afterwards: vendoring says this tree is to carry content rather than checkouts — the packs in `dist/` are what a game is once it is published — and it is what the container build and a release tarball use.
 
 **Every game is republished by that run, and a pull that changed one is not live until it is.** The games are packs: `setup.sh` imports each game repository and publishes it into `dist/`, so the upgrade command above is also the command that rebuilds the content this server serves. `--no-import` does not skip it — that flag is about re-importing *this* project, and a game repository that gained an asset since the last run has to be imported or its pack ships bytes nothing can open. `tools/check.sh` fails when a pack is older than its source, which is the backstop.
