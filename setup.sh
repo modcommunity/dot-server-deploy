@@ -223,6 +223,11 @@ RED=$'\033[31m'; GRN=$'\033[32m'; YLW=$'\033[33m'; DIM=$'\033[2m'; BLD=$'\033[1m
 step() { printf '\n%s==>%s %s\n' "$BLD" "$OFF" "$1"; }
 ok()   { printf '    %sok%s   %s\n' "$GRN" "$OFF" "$1"; }
 warn() { printf '    %s!!%s   %s\n' "$YLW" "$OFF" "$1"; }
+# Advice rather than a finding: something the operator has to do somewhere ELSE, on a
+# run where nothing went wrong. It is not `ok` (nothing was done) and not `warn` (this
+# box is fine), and a message that has to pick one of those either reads as done or
+# reads as broken.
+note() { printf '    %s--%s   %s\n' "$DIM" "$OFF" "$1"; }
 die()  { printf '\n    %s%s%s\n\n' "$RED" "$1" "$OFF" >&2; exit "${2:-1}"; }
 
 # --- Asking, and the rules it follows --------------------------------------
@@ -2033,7 +2038,7 @@ io.open("cfg/content.json", "w", encoding="utf-8").write(json.dumps(doc, indent=
     then
         ok "the signing key on this box is trusted by its server (cfg/content.json)"
         note "a BROWSER client needs it too: add keys/content.pub to client/content.json
-    under trusted_keys before ./server export-web, or players get our packs only"
+       under trusted_keys before ./server export-web, or players get our packs only"
     fi
 fi
 
