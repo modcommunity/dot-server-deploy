@@ -723,7 +723,48 @@ fi
 # developer's machine with a key loaded; the machine this flag is for is a fresh server
 # where that is the one thing not configured. These repositories are public, so HTTPS
 # needs no credential at all.
-GIT_BASE="${TMC_GIT_BASE:-https://github.com/modcommunity}"
+GIT_BASE_DEFAULT="https://github.com/modcommunity"
+GIT_BASE="${TMC_GIT_BASE:-$GIT_BASE_DEFAULT}"
+
+## Where one repository is cloned from, which is $GIT_BASE for all but one of them.
+##
+## [b]`game-buses-from-hell` lives under a different GitHub owner, and nothing here could
+## have known that.[/b] Every other repository in the family is `modcommunity/<name>`, and
+## the rule that the repository name IS the directory name is what lets this script clone
+## fifty-odd siblings without carrying a list of them. That rule holds; what does not is
+## the OWNER, for exactly one game.
+##
+## The failure it caused is quiet in the way that costs an afternoon: on a developer box
+## the game is already beside this project, so it is linked and never cloned and the URL
+## is never used. Only a fresh server -- the machine this whole clone path exists for --
+## reaches the clone, and a private-or-absent repository answers HTTPS by asking for a
+## username, so the error is `could not read Username for 'https://github.com'` rather
+## than anything naming an owner. It is then collected into "could not clone" beside
+## repositories that genuinely are not published yet, which is the one place an operator
+## would not look for a typo in an account name.
+##
+## [b]A `case` rather than a second list of games.[/b] This is an exception table keyed by
+## the name the existing rule already produces, so it stays empty-by-default and a game
+## that moves to `modcommunity` is deleted from here and needs no other edit. The
+## alternative -- a per-game `owner` field in `GAMES` -- would put an owner on all six to
+## express a fact about one, and `GAMES` is walked by everything.
+##
+## [b]Skipped entirely when the operator named a base.[/b] `TMC_GIT_BASE` means "get them
+## from here" -- a mirror, an internal host, a directory of bare repositories on a box
+## with no route to github.com -- and honouring an override against it would send exactly
+## one clone somewhere the operator did not point us, which on an air-gapped machine is
+## the one that hangs.
+repo_url() {
+    local repo="$1"
+
+    if [ "$GIT_BASE" = "$GIT_BASE_DEFAULT" ]; then
+        case "$repo" in
+            game-buses-from-hell) printf 'https://github.com/gamemann/%s.git\n' "$repo"; return ;;
+        esac
+    fi
+
+    printf '%s/%s.git\n' "$GIT_BASE" "$repo"
+}
 
 ## Fast-forward every named repository that is already on this machine.
 ##
@@ -827,7 +868,7 @@ clone_repos() {
     [ "${TMC_GIT_DEPTH:-1}" = "0" ] || depth=(--depth "${TMC_GIT_DEPTH:-1}")
 
     for repo in "${missing[@]}"; do
-        if git clone --quiet "${depth[@]}" "$GIT_BASE/$repo.git" "$dest/$repo" 2>/dev/null; then
+        if git clone --quiet "${depth[@]}" "$(repo_url "$repo")" "$dest/$repo" 2>/dev/null; then
             printf '    %s+%s    %s\n' "$GRN" "$OFF" "$repo"
         else
             # Collected rather than fatal. One repository that is not published yet --
