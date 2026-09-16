@@ -29,7 +29,7 @@
 # thing to add after a second map exists rather than before.
 
 name: Arena
-content_id: arena
+content_id: tmc/arena
 version: 0.1.0
 kind: pack
 max_players: 16

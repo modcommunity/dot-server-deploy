@@ -24,7 +24,7 @@
 # rather than a mode. Both maps are in the catalogue and `g2g_map` switches them.
 
 name: g2gfast
-content_id: g2gfast
+content_id: tmc/g2gfast
 version: 0.1.0
 kind: pack
 max_players: 32

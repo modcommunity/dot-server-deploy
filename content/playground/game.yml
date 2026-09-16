@@ -27,7 +27,7 @@
 # client's scene and puts everybody through signon.
 
 name: Playground
-content_id: playground
+content_id: tmc/playground
 version: 0.1.0
 kind: pack
 max_players: 32

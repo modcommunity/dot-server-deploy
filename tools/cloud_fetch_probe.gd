@@ -55,8 +55,10 @@ func _init() -> void:
 	# stays empty -- which reads as "the signal never fired" for a mount that worked. This
 	# tree's own hazards list calls it out; capturing a reference type is the fix.
 	var mount_prefix: Array[String] = [""]
-	client.content_ready.connect(func(_m: DotCloudManifest, prefix: String) -> void:
-		mount_prefix[0] = prefix)
+	var delivered: Array[DotCloudManifest] = [null]
+	client.content_ready.connect(func(m: DotCloudManifest, prefix: String) -> void:
+		mount_prefix[0] = prefix
+		delivered[0] = m)
 
 	var url := "%s/%s/manifest.json" % [base, id]
 	print("[fetch] %s" % url)
@@ -68,7 +70,14 @@ func _init() -> void:
 		quit(1)
 		return
 
-	print("[fetch] acquired. mounted=%s" % client.is_mounted(StringName(id), "1.0.0"))
+	# [b]Ask about the version that was delivered, not a version this probe assumed.[/b]
+	# It asked for "1.0.0" whatever it had just downloaded, so every pack on any other
+	# version printed `mounted=false` directly underneath the line where the mounter
+	# said it had mounted it.
+	var got: DotCloudManifest = delivered[0]
+	var got_version := got.version if got != null else "?"
+	print("[fetch] acquired. mounted=%s (%s@%s)" % [
+		client.is_mounted(StringName(id), got_version), id, got_version])
 
 	# The bytes, through the engine's own filesystem rather than through the client that
 	# just claimed to have put them there.
@@ -77,23 +86,45 @@ func _init() -> void:
 		quit(1)
 		return
 
-	var probe_path := "%s/%s.json" % [mount_prefix[0], id]
+	# [b]Read back a file the manifest actually names.[/b] This probed
+	# `<prefix>/<id>.json`, which is a file `surf_mesa` happens to have and nothing else
+	# does -- so every other pack reported "mounted but not readable" for content that
+	# was mounted and readable. It is worse than a false alarm now that an id can be
+	# `<owner>/<name>`: the guessed path picked up the slash and probed
+	# `.../tmc/arena.json`, which never existed under any naming scheme.
+	if got == null or got.files.is_empty():
+		print("[fetch] mounted but the manifest named no files")
+		quit(1)
+		return
+
+	var want: DotCloudFile = null
+	for f in got.wanted_files():
+		if f.required:
+			want = f
+			break
+
+	if want == null:
+		print("[fetch] mounted but nothing in the manifest is required on this platform")
+		quit(1)
+		return
+
+	var probe_path := got.resource_path(want)
 
 	if not FileAccess.file_exists(probe_path):
 		print("[fetch] mounted but %s is not readable" % probe_path)
 		quit(1)
 		return
 
-	var text := FileAccess.get_file_as_string(probe_path)
-	var parsed: Variant = JSON.parse_string(text)
+	# The bytes, not just the entry: a pack whose file table is right and whose contents
+	# are empty would pass a file_exists check on its own.
+	var bytes := FileAccess.get_file_as_bytes(probe_path)
 
-	if typeof(parsed) != TYPE_DICTIONARY:
-		print("[fetch] the mounted manifest did not parse")
+	if bytes.size() != want.size:
+		print("[fetch] %s is %d bytes, the manifest says %d" % [
+			probe_path, bytes.size(), want.size])
 		quit(1)
 		return
 
-	var doc: Dictionary = parsed
-	print("[fetch] read the map out of the mount: id=%s surfaces=%d" % [
-		doc.get("id", "?"), (doc.get("surfaces", []) as Array).size()])
+	print("[fetch] read %d bytes back out of the mount: %s" % [bytes.size(), probe_path])
 	print("[fetch] OK -- fetched over HTTP, signature verified, mounted, read back")
 	quit(0)

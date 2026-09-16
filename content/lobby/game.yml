@@ -24,7 +24,7 @@
 # the only spelling that resolves.
 
 name: The Room
-content_id: a_room       # which built-in client shows this; see client/shell.gd
+content_id: tmc/a_room       # which built-in client shows this; see client/shell.gd
 version: 0.1.0
 kind: pack
 default: true

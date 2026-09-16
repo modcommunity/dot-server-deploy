@@ -25,7 +25,7 @@
 # same reason game-arena has none: this game's geometry IS its gameplay.
 
 name: Buses From Hell
-content_id: buses
+content_id: tmc/buses
 version: 0.1.0
 kind: pack
 max_players: 24

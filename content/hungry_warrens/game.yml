@@ -19,7 +19,7 @@
 # files at all.
 
 name: "Hungario: Warrens"
-content_id: hungry       # shared with hungry_classic: one client, four modes
+content_id: tmc/hungry       # shared with hungry_classic: one client, four modes
 version: 0.1.0
 kind: pack
 max_players: 32
