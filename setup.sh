@@ -764,7 +764,8 @@ repo_url() {
 
     if [ "$GIT_BASE" = "$GIT_BASE_DEFAULT" ]; then
         case "$repo" in
-            game-buses-from-hell) printf 'https://github.com/gamemann/%s.git\n' "$repo"; return ;;
+            mg-buses-from-hell) printf 'https://github.com/gamemann/game-buses-from-hell.git\n'; return ;;
+            mg-smash-copter) printf 'https://github.com/gamemann/%s.git\n' "$repo"; return ;;
         esac
     fi
 
@@ -932,7 +933,8 @@ GAMES=(
     "game-g2gfast:g2gfast"
     "game-playground:playground"
     "game-arena:arena"
-    "game-buses-from-hell:buses"
+    "mg-buses-from-hell:buses"
+    "mg-smash-copter:smash"
 )
 
 # --- Which of those this run builds ----------------------------------------
@@ -1224,7 +1226,7 @@ ADDONS_ALL=(dot_core dot_log dot_net dot_game dot_entity dot_server dot_server_q
         dot_settings dot_console dot_audio dot_fx dot_lighting
         dot_procedural_generation dot_inventory dot_peer_to_peer dot_weapon
         dot_physics dot_spawn dot_team dot_player dot_player_class
-        dot_player_char)
+        dot_player_char zee_weapons)
 
 # What THIS project's own scripts name, whatever games it carries.
 #
@@ -1358,6 +1360,16 @@ ADDONS_CLONE_DEST="${ADDONS_DIR:-$ADDONS_REPOS}"
 addon_source() {
     local name="$1" repo="${1//_/-}"
     SRC=""; SRC_LINK=""; SRC_KIND=""
+
+    # An addon whose repository is not just its own name with the underscores turned into
+    # hyphens. `zee_weapons` lives in `zee-dot-weapons` -- a third-party pack that sits on
+    # top of the family and took its own prefix so it could never collide with a `Dot*`
+    # global -- so the derivation that works for all fifty-three dot-* addons finds nothing
+    # for it, and a silent nothing here is a host build that compiles until the first game
+    # naming ZeeWeaponRig is mounted into it.
+    case "$name" in
+        zee_weapons) repo="zee-dot-weapons" ;;
+    esac
 
     if [ -n "$ADDONS_DIR" ]; then
         # Both shapes of a shared directory: a directory of addons, and a directory of

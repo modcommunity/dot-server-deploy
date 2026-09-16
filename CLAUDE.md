@@ -47,7 +47,7 @@ trying to stop. `content/lobby/game.yml` sets out the whole of it.
 It is the same shape as the constraint dot-cloud already documents for avatar packs — "the
 pack is data, the code ships in the build" — reached from further along.
 
-### The constraint has six forms, and all of them are closed
+### The constraint has seven forms, and all of them are closed
 
 One root cause — a delivered pack mounts at `res://dot_cloud/<id>/<version>/` and not at
 the path its content was authored at — reaching the code by three separate routes. Each
@@ -62,6 +62,11 @@ game is actually delivered.
 | script → superclass by `extends "res://…"` | the same, for the class a script inherits from | **closed** — made relative; a relative superclass path travels with the script |
 | an asset the engine has to IMPORT | a `.glb` or `.png` in the pack is bytes nothing can open: `exists=false file=true load=null`, and no error anywhere because the file is right there | **closed** — the publisher ships `.godot/imported/` and the `.import` markers, and rewrites the three absolute paths inside each marker onto the mount |
 | an imported asset's own reference to its SIBLING | the mesh loads and its texture does not: the imported form is a binary `.scn` whose dependency is a UID plus the authored absolute path, and the pack can rewrite neither. Two warnings, no error, and a game that appears to have shipped without art | **closed** — `DotCloudMounter` registers the pack's own UIDs against the mounted files after mounting, so the binary form's reference resolves with nothing rewritten |
+| a path the publisher ALREADY rewrote, rebased a second time | `res://dot_cloud/tmc/smash/0.1.0/dot_cloud/tmc/smash/0.1.0/assets/…`, which does not load, in a path long enough that the doubling reads as noise | **closed** — `<Game>Paths.rebase()` returns a path already under the mount unchanged |
+
+The seventh is the second and third forms meeting, and it only exists because both of them are closed. The publisher rewrites every `res://` string inside a `.tscn`, a `.tres` and a `.import`; it does not rewrite the ones inside a `.gd`, because a script is not a resource file it can parse. So a delivered game holds both kinds — a `const` in a script that still says `res://props/x.tscn` and needs rebasing, and an exported property on a node that arrives already absolute and must not be — and one function is handed both. It was found by booting a server that mounted mg-smash-copter: the cannon fired, the prop spawned, and `ScPropBody` could not load its model.
+
+**The check for it cannot be written against the real root, and that is the lesson worth more than the fix.** Built in, `root()` is `res://` and every `res://` path is already under it, so every property of `rebase()` that matters in a pack is a tautology in a build. mg-smash-copter's suite asserted the idempotence, the bug was put back, and the suite reported 101 passed and 0 failed. `rebase_onto(path, root)` exists so a suite can hand it a mount prefix; `rebase()` is one line over it. Any game adding a `<Game>Paths` should split it the same way.
 
 The sixth was found by **publishing the first game in this family that vendors art** and looking at a screenshot of a real client: game-buses-from-hell's crates arrived as white boxes with the node their model was instanced under reported as having "vanished". It is the same root cause reaching the code by a route nothing here could rewrite — see dot-cloud's own notes.
 
@@ -299,6 +304,16 @@ calls `try_web_handoff()`, which is the only sign-in this shell was ever meant t
 Those two failing requests were also what made the wrong domain visible at all.
 
 ## The games are published, and the packs are checked
+
+### A real client in a delivered game
+
+`examples/smash_client.tscn`, 27 checks, in `tools/check.sh`. Everything else here that opens a socket connects to `a_room` — a 2D lobby small enough that a mount which half worked would still look right. This one connects to a 3D game whose map is rebuilt every round out of a pack, and asserts the whole delivery path from the operator's end: the pack mounts at the prefix the game computes, the module's script is the mounted copy rather than a built-in one, the world describes itself with platforms and its own gravity, a round starts and the cannon puts something in the air, the client rebuilds a field of its own, and the game's own console command still answers afterwards.
+
+**It is written entirely by duck typing, because this build cannot name a type the pack declares.** The world is `module.get("game")` and everything asked of it goes through `describe()`. That is not a workaround: it is the same bargain every module in the family makes with dot-game, and the reason a game exposes `describe()` at all.
+
+The first boot of that game against a real server found four things, and not one of them is reachable from inside the game's own project, where its files are at `res://` and its `class_name` globals are registered: a path the publisher had already rewritten being rebased a second time, a combat manager setting itself up twice, lag compensation reporting as unwired on a server where it works, and dot-match warning once per player per round about a game that places its own players.
+
+**Its fixture turns the stdin console off**, which is worth knowing before writing another one. dot-server's reader is a thread blocked in a read the engine cannot cancel, so a suite that shuts the server down while stdin is still open leaves the thread to be destroyed unjoined — one "Thread object is being destroyed" warning with a full backtrace, at the end of a run that passed. That trade is the right one for a real server, where the alternative is a ctrl-c that hangs until somebody presses enter.
 
 **There are six games now.** `game-buses-from-hell` was added on 2026-09-14 — the first asymmetric one, and the first that vendors art, which is how the sixth form of the mount constraint above was found. It is also the first game in the family whose module subclasses `DotGameModule`, so `addons/dot_game` is in the addon list: a delivered module `extends DotGameModule`, and a base class the host build does not carry is a module that cannot parse. The symptom is *"Could not find base class"* once, at load, followed by a server that admits players into a game with no netcode in it.
 

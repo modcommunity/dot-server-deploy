@@ -1,0 +1,14 @@
+# A fixture for examples/smash_client.tscn. Loopback, a port nothing else here uses, and
+# the game booted directly rather than reached by a changelevel — this suite is about
+# whether a DELIVERED game serves a real socket, not about switching to one.
+sv_name: "Smash Fixture"
+sv_maxplayers: 8
+sv_game: "smash"
+
+# Off, because nobody is typing. dot-server's stdin reader is a thread blocked in a read
+# the engine cannot cancel, so shutting the server down while stdin is still open leaves it
+# to be destroyed unjoined -- one "Thread object is being destroyed" warning with a full
+# backtrace, at the end of a run that passed. That trade is the right one for a real server,
+# where the alternative is a ctrl-c that hangs until somebody presses enter; in a suite it is
+# a warning about nothing, and a warning about nothing is how a reader learns to skim them.
+sv_stdin_console: false

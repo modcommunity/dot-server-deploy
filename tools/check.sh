@@ -356,6 +356,18 @@ echo
 echo "changing games under a live client"
 "$GODOT" --headless --path . res://examples/live_switch.tscn || fails=$((fails + 1))
 
+# And a real client in a DELIVERED game, which is a different question from a real client
+# in the lobby. Everything above connects to a_room, a 2D lobby small enough that a mount
+# that half worked would still look right. This one connects to a 3D game whose map is
+# rebuilt every round out of a pack: the first boot of it found a path the publisher had
+# already rewritten being rebased a second time, a combat manager setting itself up twice,
+# and lag compensation reporting as unwired on a server where it works. None of those are
+# reachable from inside the game's own project, where its files are at res:// and its
+# globals are registered.
+echo
+echo "a real client in a delivered game"
+"$GODOT" --headless --path . res://examples/smash_client.tscn || fails=$((fails + 1))
+
 # And the REAL shell, connected twice. Everything above connects at most once, and a
 # second connection in one session put the game on screen with an empty world -- the
 # dropped link was still in the tree, so the replacement was renamed and every RPC the

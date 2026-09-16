@@ -1,0 +1,35 @@
+# mg-smash-copter, as this server publishes it.
+#
+# Two to six teams survive on platforms balanced on single pillars while a cannon throws
+# things at them, and then finish the round in the corners with weapons they did not
+# choose. The whole map is built in code from the numbers below and the cvars, so a pack
+# of it is scripts and a little art rather than a level.
+
+name: Smash Copter
+content_id: tmc/smash
+version: 0.1.0
+kind: pack
+max_players: 24
+
+scene: scenes/sc_server.tscn
+client_scene: game/sc.tscn
+module: game/sc_module.gd
+
+cvars:
+  # TWO SIDES by default, and the map supports six. Two is the arrangement where a corner
+  # means the same thing whatever the server is running: opposite ends of the showdown,
+  # with the ring between them.
+  sc_teams: "2"
+
+  # Two minutes on the platforms, ninety seconds in the corners. The first half has to be
+  # long enough for the cannon to reach its fourth tier — which is unlocked at fifty-five
+  # seconds — or the thing the round is remembered for never happens.
+  sc_survival_seconds: "120"
+  sc_showdown_seconds: "90"
+
+  # On, and this game needs it as much as the asymmetric one does. An elimination round
+  # ends the moment a side has nobody alive, and a side with nobody AT ALL satisfies that
+  # on the first tick — so one person on an empty server would watch a round start and end
+  # several times a second, with every decision correct.
+  sc_bots: "1"
+  sc_min_players: "4"
