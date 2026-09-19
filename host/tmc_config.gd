@@ -431,15 +431,18 @@ func _apply_settings(file: String, tree: Dictionary) -> DotResult:
 			# games a host offers, because the set is this host's idea rather than the
 			# server's. `sv_game` picks one OF these and is a cvar, which is why the two
 			# spellings are deliberately not alike.
+			# Each entry through TmcGameRef, exactly as the command-line override is:
+			# `games: [gamemann/game-g2gfast01@1.2.0]` in a file has to mean the same
+			# directory as the same words in a panel field.
 			if value is Array:
 				for entry in (value as Array):
-					var one_game := String(entry).strip_edges()
-					if one_game != "":
-						games_allow.append(one_game)
+					for dir_name in TmcGameRef.dirs_in(String(entry)):
+						if not dir_name in games_allow:
+							games_allow.append(dir_name)
 			else:
-				var only_game := String(value).strip_edges()
-				if only_game != "":
-					games_allow.append(only_game)
+				for dir_name in TmcGameRef.dirs_in(String(value)):
+					if not dir_name in games_allow:
+						games_allow.append(dir_name)
 
 			continue
 

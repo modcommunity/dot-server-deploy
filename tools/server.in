@@ -419,6 +419,18 @@ esac
 abs() { case "$1" in /*) printf '%s' "$1" ;; *) printf '%s/%s' "$PROJECT" "$1" ;; esac; }
 
 [ -d "$(abs "$CONFIG_DIR")" ]  || die "no config directory at $(abs "$CONFIG_DIR")  (run ./setup.sh)" 5
+# [b]Created rather than refused when this box is about to install into it.[/b] A server
+# whose games all arrive from a content origin has no reason to carry a content directory
+# in advance -- the first thing it does is write descriptors into one. Refusing there
+# turns "nothing is installed yet" into exit 7 and a message about a directory, which is
+# the same message a typo produces and is not the same problem.
+#
+# Only when a list says something is coming. With no TMC_GAMES, an absent content
+# directory really is a typo or a broken install, and the refusal is the right answer.
+if [ ! -d "$(abs "$CONTENT_DIR")" ] && [ -n "$OPT_GAMES" ] && [ -z "$NO_INSTALL" ]; then
+    mkdir -p "$(abs "$CONTENT_DIR")" 2>/dev/null
+fi
+
 [ -d "$(abs "$CONTENT_DIR")" ] || die "no content directory at $(abs "$CONTENT_DIR")" 7
 mkdir -p "$(abs "$DATA_DIR")"  || die "could not create $(abs "$DATA_DIR")" 5
 

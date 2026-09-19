@@ -336,15 +336,12 @@ func _apply_overrides(args: PackedStringArray) -> void:
 	var offered := _value(args, "--games", "")
 
 	if offered != "":
-		var wanted := PackedStringArray()
-
-		for entry in offered.split(",", false):
-			var one := entry.strip_edges()
-
-			if one != "" and not one in wanted:
-				wanted.append(one)
-
-		config.games_allow = wanted
+		# [b]Through TmcGameRef, because the same string also names things to FETCH.[/b]
+		# `TMC_GAMES` may say `gamemann/game-g2gfast01@1.2.0`, which installs into
+		# `content/game-g2gfast01/` -- so a filter that compared the raw entry against a
+		# directory name would find nothing, report the game as missing, and offer none
+		# of it on a server that had just downloaded it.
+		config.games_allow = TmcGameRef.dirs_in(offered)
 
 	# [b]Where content comes from, as an argument, for the same reason the list of games
 	# is one.[/b] A panel operator has a text box and no shell; `cfg/server.yml` is
@@ -795,9 +792,18 @@ func _build_cloud() -> void:
 			"hint": "set content_urls in cfg/server.yml to fetch maps and packs",
 		})
 
-	# Same reasoning as `client/shell.gd`: the published layout carries no version
-	# segment, and the default template asks for one.
-	cloud.manifest_url_template = "{base}/{id}/manifest.json"
+	# [b]The published layout is `{id}/{version}/`, and that is dot-cloud's own default.[/b]
+	# This used to override it to a flat `{id}/manifest.json`, which was right when the
+	# only origin was this project's own `dist/` and every pack had one version in it.
+	# The site publishes `content/<owner>/<name>/<version>/manifest.json` -- a member may
+	# have four versions of one game up at once -- so the versioned shape is the primary
+	# one now.
+	#
+	# The flat form stays as a FALLBACK because an origin holds both: eight imported map
+	# packs were published under it and are still the maps a game asks for by name.
+	# Re-publishing everything in existence is not a precondition for this server starting.
+	cloud.manifest_url_template = "{base}/{id}/{version}/manifest.json"
+	cloud.manifest_url_fallbacks = PackedStringArray(["{base}/{id}/manifest.json"])
 
 	# [b]Say what a download is doing, on the console an operator is watching.[/b] A
 	# server fetching a 15 MB map printed one line when it started and nothing again

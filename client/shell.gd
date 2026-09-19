@@ -509,7 +509,14 @@ func _ensure_cloud() -> void:
 	# findable by content id, and the tracked descriptors carry none -- so a game pack is
 	# resolved through this template against the bases below, exactly as a map is. Getting
 	# the template wrong would now break every game rather than only the maps.
-	_cloud.manifest_url_template = "{base}/{id}/manifest.json"
+	#
+	# [b]Versioned first, flat as a fallback, and the same pair the SERVER uses.[/b] A
+	# player is sent to whatever their server mounted, so a client resolving a different
+	# shape from the server that told it what to fetch is a game that loads on one and not
+	# the other. The site publishes `{id}/{version}/`; the flat form is what the imported
+	# map packs were published under and is still asked for by name.
+	_cloud.manifest_url_template = "{base}/{id}/{version}/manifest.json"
+	_cloud.manifest_url_fallbacks = PackedStringArray(["{base}/{id}/manifest.json"])
 
 	# [b]Straight off the content client, not through the link.[/b] DotClientLink
 	# forwards a fraction and a sentence, which is all a join needs -- but the payload

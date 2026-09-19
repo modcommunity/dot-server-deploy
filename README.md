@@ -235,6 +235,18 @@ Both land in `dist/`, which is already what gets uploaded, so there is no second
 
 **The list is also a filter.** Installing two games does not stop a content directory that already has ten from offering all of them, so `--games` narrows what the server scans — the `games` listing, `changelevel`, the vote menu and the boot game all read that one set. `--games-mode` says what happens to a game that is installed and no longer listed: `hide` (default — kept, not offered), `remove` (deleted, and **only** games `install-games` installed itself, recorded in `data/installed-games.json`), or `keep` (kept and still offered).
 
+### Installing somebody else's game
+
+```bash
+./server --games gamemann/game-g2gfast01@1.2.0     # that version
+./server --games gamemann/game-g2gfast01@latest    # or the newest
+./server --games g2gfast,alice/her-game            # mix freely
+```
+
+A published pack is addressed `<owner>/<name>`, and `tmc` is only the owner reserved for first-party content — any member's game installs the same way. The descriptor comes **out of the pack**: a game's repository has its own `game.yml`, so the file that says which scene the server runs is already inside the signed manifest, and it is hash-checked before it is written. It lands in `content/<name>/`, which is the id you type at the console — `changelevel gamemann/game-g2gfast01` is not something anybody should have to type.
+
+`@latest` resolves through `content/<id>/latest.json`, which a publish writes beside the versions. An origin is a bucket behind a CDN: it has no query interface and listing is not public, so the newest version has to be written down rather than asked for.
+
 Empty `--games` offers everything in `content/`, which is what a development checkout and a hand-run server want, and is what this repository does by default.
 
 ### A box that installs its games builds none of them

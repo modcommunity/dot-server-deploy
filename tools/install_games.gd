@@ -73,6 +73,9 @@ const MANIFEST_DIR := "manifests"
 ## The descriptor, under a content directory and in the published tree alike.
 const DESCRIPTOR := "game.yml"
 
+## The pointer a publish writes beside a pack's versions, naming the newest.
+const LATEST_FILE := "latest.json"
+
 
 func _init() -> void:
 	DotLog.timestamps = false
@@ -114,8 +117,44 @@ func _init() -> void:
 	# where this was learned.
 	await process_frame
 
+	# [b]Made before anything is written into it.[/b] A box whose games all arrive from an
+	# origin has no reason to carry a content directory in advance, and a server handed a
+	# `--content` that is not there exits 7 with "No content directory", which reads as a
+	# broken install rather than as a directory nobody created yet.
+	DirAccess.make_dir_recursive_absolute(content_dir)
+
 	var state := _read_state(data_dir)
 	var installed: Dictionary = state["installed"]
+
+	# Every entry taken apart once, through the same reader TmcHost filters with. A
+	# `g2gfast` and a `gamemann/game-g2gfast01@1.2.0` differ in where the descriptor comes
+	# from and in nothing else afterwards -- both end up as a directory under content/.
+	var wants: Array[Dictionary] = []
+
+	for raw in wanted:
+		wants.append(TmcGameRef.parse(raw))
+
+	# Built once and shared. A published pack needs it to fetch and VERIFY a manifest
+	# before its descriptor is trusted, and the prefetch below needs the same store, the
+	# same trusted keys and the same bases -- two clients would download everything twice
+	# and disagree about what was already here.
+	var cloud := _build_cloud(content_dir, data_dir, config_dir, bases)
+
+	# [b]Started here, because everything below reaches it by a route that does not.[/b]
+	# `acquire` and `ensure` start the client themselves; `fetch_manifest` and
+	# `verify_manifest` do not, and they are what a published pack's descriptor is read
+	# through. Unstarted, the first has no HTTP client at all -- "Nonexistent function
+	# 'get_bytes' in base 'Nil'" -- and the second would check a signature against a
+	# `config_file` that has never been read, which is the failure dot-cloud's own
+	# `ensure` has a paragraph about.
+	if cloud != null:
+		var started: DotResult = await cloud.start()
+
+		if not started.ok:
+			DotLog.error(CHANNEL, "the content client could not start", {
+				"why": str(started.error),
+			})
+			cloud = null
 
 	var missing := PackedStringArray()
 	var added := PackedStringArray()
@@ -131,8 +170,11 @@ func _init() -> void:
 	# restart during an origin outage safe.
 	var need_index := refresh
 
-	for id in wanted:
-		if not FileAccess.file_exists(_descriptor_path(content_dir, id)):
+	for want in wants:
+		if want["from_origin"]:
+			continue
+
+		if not FileAccess.file_exists(_descriptor_path(content_dir, str(want["dir"]))):
 			need_index = true
 
 	if need_index:
@@ -151,11 +193,36 @@ func _init() -> void:
 			index = catalogue.get("games", {})
 			origin = str(catalogue.get("base", ""))
 
-	for id in wanted:
+	for want in wants:
+		var id := str(want["dir"])
 		var path := _descriptor_path(content_dir, id)
 		var have := FileAccess.file_exists(path)
 
 		if have and not refresh:
+			continue
+
+		# --- A published pack carries its own descriptor ----------------------
+		if want["from_origin"]:
+			var got := await _install_from_pack(want, content_dir, bases, cloud)
+
+			if not got.ok:
+				DotLog.error(CHANNEL, "could not install a game", {
+					"game": str(want["id"]),
+					"why": str(got.error),
+				})
+
+				if not have:
+					missing.append(str(want["raw"]))
+
+				continue
+
+			var what := got.value as Dictionary
+			installed[id] = {
+				"content_id": str(what["content_id"]),
+				"version": str(what["version"]),
+				"source": str(want["raw"]),
+			}
+			added.append(id)
 			continue
 
 		var row: Dictionary = index.get(id, {})
@@ -199,15 +266,17 @@ func _init() -> void:
 	# --- What this box should now have -------------------------------------
 	var present := PackedStringArray()
 
-	for id in wanted:
-		if FileAccess.file_exists(_descriptor_path(content_dir, id)):
-			present.append(id)
+	for want in wants:
+		var dir_name := str(want["dir"])
+
+		if FileAccess.file_exists(_descriptor_path(content_dir, dir_name)):
+			present.append(dir_name)
 
 	if not opts.has("no-prefetch"):
-		await _prefetch(present, content_dir, data_dir, config_dir, bases, index)
+		await _prefetch(present, content_dir, data_dir, bases, index, cloud)
 
 	if prune:
-		_prune(wanted, installed, content_dir)
+		_prune(present, installed, content_dir)
 
 	state["installed"] = installed
 	_write_state(data_dir, state)
@@ -321,16 +390,32 @@ func _install_descriptor(
 	if bytes.is_empty():
 		return DotResult.fail(DotError.CODE_IO, "%s is empty" % url)
 
-	var dir := content_dir.path_join(id)
+	var written := _write_descriptor(content_dir, id, bytes)
+
+	if not written.ok:
+		return written
+
+	DotLog.info(CHANNEL, "game installed", {"game": id, "from": url})
+
+	return DotResult.success(url)
+
+
+## Puts one descriptor under `content/<dir>/`, whole or not at all.
+##
+## [b]Written to a temporary name and moved into place.[/b] A descriptor half-written by a
+## connection that dropped is a directory that scans as a game and fails to parse, and the
+## server refuses to boot over it -- so the file under `content/` is either the old one or
+## the new one and never a piece of either. Shared by both install paths, because the
+## failure it prevents has nothing to do with where the bytes came from.
+func _write_descriptor(
+	content_dir: String, dir_name: String, bytes: PackedByteArray
+) -> DotResult:
+	var dir := content_dir.path_join(dir_name)
 	var made := DirAccess.make_dir_recursive_absolute(dir)
 
 	if made != OK and made != ERR_ALREADY_EXISTS:
 		return DotResult.fail(DotError.CODE_IO, "could not create %s" % dir)
 
-	# [b]Written whole, then moved into place.[/b] A descriptor half-written by a
-	# connection that dropped is a directory that scans as a game and fails to parse, and
-	# the server refuses to boot over it — so the file under `content/` is either the old
-	# one or the new one and never a piece of either.
 	var staging := dir.path_join("%s.part" % DESCRIPTOR)
 	var file := FileAccess.open(staging, FileAccess.WRITE)
 
@@ -356,9 +441,7 @@ func _install_descriptor(
 			DotError.CODE_IO, "could not put %s in place" % target
 		)
 
-	DotLog.info(CHANNEL, "game installed", {"game": id, "from": url})
-
-	return DotResult.success(url)
+	return DotResult.success(target)
 
 
 # --- The packs --------------------------------------------------------------
@@ -375,9 +458,9 @@ func _prefetch(
 	ids: PackedStringArray,
 	content_dir: String,
 	data_dir: String,
-	config_dir: String,
 	bases: PackedStringArray,
-	index: Dictionary
+	index: Dictionary,
+	cloud: DotCloudClient
 ) -> void:
 	var targets := {}
 
@@ -413,12 +496,7 @@ func _prefetch(
 
 		targets[content_id] = version
 
-	if targets.is_empty():
-		return
-
-	var cloud := _build_cloud(content_dir, data_dir, config_dir, bases)
-
-	if cloud == null:
+	if targets.is_empty() or cloud == null:
 		return
 
 	for content_id in targets.keys():
@@ -445,6 +523,234 @@ func _prefetch(
 		})
 
 		await _cache_manifest(str(content_id), version, data_dir, bases)
+
+
+## Installs a game from a PUBLISHED pack, descriptor and all.
+##
+## [b]The descriptor travels inside the pack, and for a pack somebody else published it
+## is the only place it can be.[/b] `games.json` and `descriptors/` are this project's
+## own index over first-party content; a member who publishes `alice/her-game` through
+## the site writes no such thing and should not have to. What they DO ship is their
+## repository, and a game's repository has its `game.yml` in it -- so the file that says
+## how to start the game is already in the signed pack, addressed by hash like everything
+## else in there.
+##
+## That also makes it as trustworthy as the rest of the pack: the manifest is verified
+## against a key this server already trusts before a single object is read, and the
+## descriptor is one of the objects the manifest names. A tampered `game.yml` is a
+## tampered manifest, which is a signature that does not check.
+##
+## [b]The directory is the NAME half of the id.[/b] `gamemann/game-g2gfast01` installs
+## into `content/game-g2gfast01/`, because the directory name is what an operator types at
+## the console and `changelevel gamemann/game-g2gfast01` is not a thing to ask of anybody.
+## A directory already holding a DIFFERENT content id is refused rather than overwritten:
+## two owners may legitimately publish `arena`, and silently replacing one with the other
+## is how a server ends up running content nobody chose.
+func _install_from_pack(
+	want: Dictionary,
+	content_dir: String,
+	bases: PackedStringArray,
+	cloud: DotCloudClient
+) -> DotResult:
+	var content_id := str(want["id"])
+	var version := str(want["version"])
+	var dir_name := str(want["dir"])
+
+	if cloud == null:
+		return DotResult.fail(
+			DotError.CODE_INVALID,
+			"No content origin to install %s from." % content_id,
+			"set content_urls in cfg/server.yml, or TMC_CONTENT_URL"
+		)
+
+	if version == "":
+		var latest := await _resolve_latest(content_id, bases)
+
+		if not latest.ok:
+			return latest
+
+		version = str(latest.value)
+
+	# Fetched through the client rather than by hand, so this is the same fetch, the same
+	# candidate URLs and the same trusted keys the server itself will use -- an installer
+	# that verified content its own way would be a second opinion nobody asked for.
+	var urls := cloud.manifest_urls_for(StringName(content_id), version)
+	var manifest: DotCloudManifest = null
+	var last: DotResult = null
+
+	for url in urls:
+		var fetched: DotResult = await cloud.fetch_manifest(url)
+
+		if fetched.ok:
+			manifest = fetched.value as DotCloudManifest
+			break
+
+		last = fetched
+
+	if manifest == null:
+		return (last if last != null else DotResult.fail(
+			DotError.CODE_IO, "No origin has %s@%s." % [content_id, version]
+		)).wrap("could not read the manifest for %s@%s" % [content_id, version])
+
+	var verified := cloud.verify_manifest(manifest)
+
+	if not verified.ok:
+		return verified.wrap("%s@%s is not signed by a key this server trusts" % [
+			content_id, version
+		])
+
+	var descriptor: DotCloudFile = null
+
+	for file in manifest.files:
+		if file.path == DESCRIPTOR:
+			descriptor = file
+			break
+
+	if descriptor == null:
+		return DotResult.fail(
+			DotError.CODE_INVALID,
+			"%s@%s carries no %s." % [content_id, version, DESCRIPTOR],
+			"that pack is content rather than a game: it can be mounted, "
+			+ "but nothing in it says which scene a server should run"
+		)
+
+	var existing := _descriptor_path(content_dir, dir_name)
+
+	if FileAccess.file_exists(existing):
+		var parsed := TmcYaml.parse_file(existing)
+
+		if parsed.ok:
+			var have := str(TmcYaml.at(parsed.value as Dictionary, "content_id", ""))
+
+			if have != "" and have != content_id:
+				return DotResult.fail(
+					DotError.CODE_STATE,
+					"content/%s is already %s." % [dir_name, have],
+					"%s wants the same directory; rename one of them" % content_id
+				)
+
+	# The object, by hash, under the version this manifest is for. `object_path()` is the
+	# engine's own sharding -- two hex characters then the full digest -- so this asks for
+	# exactly what the publisher wrote rather than a second spelling of it.
+	var prefix := _version_prefix(content_id, version, manifest)
+	var http := DotHttp.new()
+	http.name = "DescriptorHttp"
+	root.add_child(http)
+
+	var got: DotResult = null
+
+	for base in bases:
+		var url := "%s/%s/objects/%s" % [
+			base.rstrip("/"), prefix, descriptor.object_path()
+		]
+		got = await http.get_bytes(url)
+
+		if got.ok:
+			break
+
+	http.queue_free()
+
+	if got == null or not got.ok:
+		return (got if got != null else DotResult.fail(
+			DotError.CODE_IO, "nowhere to fetch the descriptor from"
+		)).wrap("could not download %s out of %s@%s" % [DESCRIPTOR, content_id, version])
+
+	var bytes := got.value as PackedByteArray
+
+	# [b]The hash is checked HERE and not left to the mounter.[/b] Everything else in a
+	# pack is verified when dot-cloud syncs it; this one file is pulled out early, by a
+	# different path, and is then WRITTEN TO DISK as configuration the server obeys. A
+	# proxy that served a different body would be handing this box a game descriptor of
+	# its own choosing, and nothing downstream would look at it again.
+	var digest := _sha256_hex(bytes)
+
+	if digest != descriptor.sha256:
+		return DotResult.fail(
+			DotError.CODE_INVALID,
+			"the %s served for %s@%s is not the one the manifest names" % [
+				DESCRIPTOR, content_id, version
+			],
+			"expected %s, got %s" % [descriptor.sha256, digest]
+		)
+
+	var written := _write_descriptor(content_dir, dir_name, bytes)
+
+	if not written.ok:
+		return written
+
+	DotLog.info(CHANNEL, "game installed from a published pack", {
+		"game": dir_name, "content": content_id, "version": version,
+	})
+
+	return DotResult.success({"content_id": content_id, "version": version})
+
+
+## The newest published version of a pack, from the pointer beside its versions.
+##
+## [b]A static origin cannot answer a question, so the answer is a file.[/b] The versions
+## of a pack are directories and an S3 bucket behind a CDN has no way to say which is
+## newest -- listing is not public, and should not be. So a publish writes
+## `latest.json` next to them, which is one small document, cacheable, and readable by
+## exactly the same anonymous GET everything else here uses.
+##
+## Deliberately NOT a guess at the newest directory name: without listing there is
+## nothing to guess from, and with listing there would be a sort over version strings,
+## which is how `0.10.0` ends up older than `0.9.0`.
+func _resolve_latest(content_id: String, bases: PackedStringArray) -> DotResult:
+	var http := DotHttp.new()
+	http.name = "LatestHttp"
+	root.add_child(http)
+
+	var last := ""
+
+	for base in bases:
+		var url := "%s/%s/%s" % [base.rstrip("/"), content_id, LATEST_FILE]
+		var res: DotResult = await http.get_json(url)
+
+		if not res.ok:
+			last = str(res.error)
+			continue
+
+		var body: Variant = res.value
+
+		if body is Dictionary and str((body as Dictionary).get("version", "")) != "":
+			var v := str((body as Dictionary)["version"])
+			http.queue_free()
+			DotLog.debug(CHANNEL, "resolved the newest version", {
+				"content": content_id, "version": v, "from": url,
+			})
+			return DotResult.success(v)
+
+		last = "%s named no version" % url
+
+	http.queue_free()
+
+	return DotResult.fail(
+		DotError.CODE_IO,
+		"Could not find out which version of %s is newest." % content_id,
+		("name one explicitly -- %s@1.0.0 -- or publish %s beside its versions. %s"
+			% [content_id, LATEST_FILE, last])
+	)
+
+
+## Where one published version lives, under a base.
+##
+## The manifest's own `mount_root` is not consulted: that is where content lands inside
+## the client, and this is where it sits on the origin. They are the same two segments by
+## convention and are not the same decision.
+static func _version_prefix(
+	content_id: String, version: String, manifest: DotCloudManifest
+) -> String:
+	var v := version if version != "" else manifest.version
+	return "%s/%s" % [content_id, v]
+
+
+## SHA-256 of a buffer, as lowercase hex.
+static func _sha256_hex(bytes: PackedByteArray) -> String:
+	var ctx := HashingContext.new()
+	ctx.start(HashingContext.HASH_SHA256)
+	ctx.update(bytes)
+	return ctx.finish().hex_encode()
 
 
 ## Keeps a copy of a pack's manifest where an offline boot can find it.
@@ -556,9 +862,18 @@ func _build_cloud(
 
 	cloud.local_search_dirs = searched
 	cloud.http_base_urls = bases
-	# The published layout carries no version segment, and the default template asks for
-	# one. `client/shell.gd` and `TmcHost._build_cloud` say the same thing.
-	cloud.manifest_url_template = "{base}/{id}/manifest.json"
+	# [b]The published layout is `{id}/{version}/`, and that is dot-cloud's own default.[/b]
+	# This used to override it to a flat `{id}/manifest.json`, which was right when the
+	# only origin was this project's own `dist/` and every pack had one version in it.
+	# The site publishes `content/<owner>/<name>/<version>/manifest.json` -- a member may
+	# have four versions of one game up at once -- so the versioned shape is the primary
+	# one now.
+	#
+	# The flat form stays as a FALLBACK because an origin holds both: eight imported map
+	# packs were published under it and are still the maps a game asks for by name.
+	# Re-publishing everything in existence is not a precondition for this server starting.
+	cloud.manifest_url_template = "{base}/{id}/{version}/manifest.json"
+	cloud.manifest_url_fallbacks = PackedStringArray(["{base}/{id}/manifest.json"])
 
 	root.add_child(cloud)
 
@@ -570,10 +885,14 @@ func _build_cloud(
 
 ## Removes descriptors this tool installed and the list no longer asks for.
 func _prune(
-	wanted: PackedStringArray, installed: Dictionary, content_dir: String
+	keeping: PackedStringArray, installed: Dictionary, content_dir: String
 ) -> void:
+	# [b]Compared against DIRECTORIES, not against the raw list.[/b] `TMC_GAMES` may say
+	# `gamemann/game-g2gfast01@1.2.0` and the thing on disk is `content/game-g2gfast01/`,
+	# so a prune that matched the raw entry would find no match for a game it had just
+	# installed and would delete it on the next restart -- once per restart, for ever.
 	for id in installed.keys():
-		if id in wanted:
+		if id in keeping:
 			continue
 
 		var dir := content_dir.path_join(str(id))
