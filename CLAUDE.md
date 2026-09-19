@@ -70,7 +70,7 @@ The seventh is the second and third forms meeting, and it only exists because bo
 
 **The check for it cannot be written against the real root, and that is the lesson worth more than the fix.** Built in, `root()` is `res://` and every `res://` path is already under it, so every property of `rebase()` that matters in a pack is a tautology in a build. mg-smash-copter's suite asserted the idempotence, the bug was put back, and the suite reported 101 passed and 0 failed. `rebase_onto(path, root)` exists so a suite can hand it a mount prefix; `rebase()` is one line over it. Any game adding a `<Game>Paths` should split it the same way.
 
-The sixth was found by **publishing the first game in this family that vendors art** and looking at a screenshot of a real client: game-buses-from-hell's crates arrived as white boxes with the node their model was instanced under reported as having "vanished". It is the same root cause reaching the code by a route nothing here could rewrite — see dot-cloud's own notes.
+The sixth was found by **publishing the first game in this family that vendors art** and looking at a screenshot of a real client: mg-buses-from-hell's crates arrived as white boxes with the node their model was instanced under reported as having "vanished". It is the same root cause reaching the code by a route nothing here could rewrite — see dot-cloud's own notes.
 
 The fourth was found by accident: a const collision made somebody open
 `npc_chaser.gd`, whose own comment said it extended a path rather than a class *"because
@@ -429,7 +429,7 @@ The first boot of that game against a real server found four things, and not one
 
 **Its fixture turns the stdin console off**, which is worth knowing before writing another one. dot-server's reader is a thread blocked in a read the engine cannot cancel, so a suite that shuts the server down while stdin is still open leaves the thread to be destroyed unjoined — one "Thread object is being destroyed" warning with a full backtrace, at the end of a run that passed. That trade is the right one for a real server, where the alternative is a ctrl-c that hangs until somebody presses enter.
 
-**There are six games now.** `game-buses-from-hell` was added on 2026-09-14 — the first asymmetric one, and the first that vendors art, which is how the sixth form of the mount constraint above was found. It is also the first game in the family whose module subclasses `DotGameModule`, so `addons/dot_game` is in the addon list: a delivered module `extends DotGameModule`, and a base class the host build does not carry is a module that cannot parse. The symptom is *"Could not find base class"* once, at load, followed by a server that admits players into a game with no netcode in it.
+**There are six games now.** `mg-buses-from-hell` was added on 2026-09-14 — the first asymmetric one, and the first that vendors art, which is how the sixth form of the mount constraint above was found. It is also the first game in the family whose module subclasses `DotGameModule`, so `addons/dot_game` is in the addon list: a delivered module `extends DotGameModule`, and a base class the host build does not carry is a module that cannot parse. The symptom is *"Could not find base class"* once, at load, followed by a server that admits players into a game with no netcode in it.
 
 **This build contains no game.** `setup.sh` turns each sibling repository into a signed
 dot-cloud pack in `dist/` — `./server pack <id> --source ../<repo>` — and the server finds

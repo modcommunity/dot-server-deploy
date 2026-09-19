@@ -780,8 +780,8 @@ GIT_BASE="${TMC_GIT_BASE:-$GIT_BASE_DEFAULT}"
 
 ## Where one repository is cloned from, which is $GIT_BASE for all but one of them.
 ##
-## [b]`game-buses-from-hell` lives under a different GitHub owner, and nothing here could
-## have known that.[/b] Every other repository in the family is `modcommunity/<name>`, and
+## [b]`mg-buses-from-hell` lived under a different GitHub owner AND a different name, and
+## nothing here could have known either.[/b] Every other repository in the family is `modcommunity/<name>`, and
 ## the rule that the repository name IS the directory name is what lets this script clone
 ## fifty-odd siblings without carrying a list of them. That rule holds; what does not is
 ## the OWNER, for exactly one game.
@@ -806,9 +806,12 @@ GIT_BASE="${TMC_GIT_BASE:-$GIT_BASE_DEFAULT}"
 ## `$GIT_BASE` and anything else comes from the games owner -- which means a game added
 ## tomorrow needs no edit here at all, and neither does a game deleted.
 ##
-## The one thing that is still an exception is a NAME rather than an owner:
-## `mg-buses-from-hell` is checked out under a directory that is not what the repository
-## is called.
+## [b]And there is no exception left at all.[/b] There was exactly one -- the buses game
+## was checked out as `mg-buses-from-hell` and its repository was called
+## `mg-buses-from-hell` -- and it has been renamed to match. A directory name that is
+## not the repository name is a fact with nowhere to live except a table like this one,
+## and a table with a single entry in it is the shape that gets a second entry added
+## without anybody noticing the rule was already broken.
 ##
 ## [b]Skipped entirely when the operator named a base.[/b] `TMC_GIT_BASE` means "get them
 ## from here" -- a mirror, an internal host, a directory of bare repositories on a box
@@ -822,9 +825,6 @@ repo_url() {
 
     if [ "$GIT_BASE" = "$GIT_BASE_DEFAULT" ]; then
         case "$repo" in
-            # The directory is `mg-buses-from-hell`; the repository is not.
-            mg-buses-from-hell)
-                printf '%s/game-buses-from-hell.git\n' "$GAMES_GIT_BASE"; return ;;
             # The addons, and this project. Falls through to $GIT_BASE below.
             dot-*) ;;
             # Everything else is a game: game-*, mg-*, and the weapons pack, which
