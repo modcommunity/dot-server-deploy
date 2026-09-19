@@ -226,6 +226,21 @@ Verified on a fresh clone installed the way the egg installs it: `games/` empty,
 
 One thing that box cannot do is find a map nobody published: g2gfast's `maps/imported/` is gitignored and travels as one pack per map, so an origin serving the game and not its maps gives a server that boots, reports `could not fetch the map surf_mesa`, and carries on. That is the same on a box that built its own pack, because a fresh clone has no maps either.
 
+### A reinstall is root looking at somebody else's checkout
+
+Every REINSTALL — never a first install — died before it did anything:
+
+```
+[install] updating an existing checkout
+fatal: detected dubious ownership in repository at '/mnt/server'
+```
+
+The install container runs as **root**; wings hands the volume back to the server's own user when an install finishes. So the second install is root opening a checkout owned by somebody else, which git has refused since 2.35.2 — and the refusal is correct, because on a shared machine that is precisely how one user gets another to run hooks they wrote. A first install never sees it, because `/mnt/server` has no `.git` yet, which is why this only ever appeared on the *second* attempt.
+
+`git config --global --add safe.directory '*'` in the egg's install script, and **the placement is the decision**. It is not in `setup.sh`, and must not be: that script runs on people's own machines, where this check is a real protection, and a setup tool that turns it off globally for everyone to fix a container is a setup tool that hands out a foothold. In the egg it is written to root's config inside a container that is destroyed minutes later, it never reaches the server container, and every repository it covers is one this same script is about to create on that volume. `*` rather than `/mnt/server` because setup.sh clones fifty-odd more underneath it, each with the same owner and the same question.
+
+Reproduced and fixed against a checkout chowned to another uid: `fatal: detected dubious ownership` as root without it, and `fetch` + `reset --hard` clean with it.
+
 ### The owner was never the problem: the NAME was derived twice
 
 The install after the move died on `could not clone: zee-weapons` — naming a repository that exists under no owner at all, which is why checking the owner would never have found it.
