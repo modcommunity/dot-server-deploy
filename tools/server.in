@@ -80,6 +80,43 @@ OPT_MAX_PLAYERS="${TMC_MAX_PLAYERS:-}"
 OPT_GAME="${TMC_GAME:-}"
 OPT_MAP="${TMC_MAP:-}"
 
+# --- What this box installs, and where from ---------------------------------
+#
+# [b]A server no longer carries every game it could run.[/b] A game is a signed pack on
+# the content origin plus a `game.yml` that says how to start it, and until `install-games`
+# existed the descriptor half arrived only by cloning this repository -- so every
+# deployment got all ten whether it ran one of them or ten, and adding an eleventh meant
+# re-cloning every box. TMC_GAMES names the two or three this one is for; they are fetched
+# from the origin at startup, packs and all.
+#
+# Empty is the hand-run case and changes nothing: no list means "offer whatever is in the
+# content directory", which is how this worked before and how a development tree works.
+OPT_GAMES="${TMC_GAMES:-}"
+
+# Where the games come from. Empty means the installer reads `content_urls` out of
+# cfg/server.yml, which is where the address already lives -- a default repeated here
+# would be a second copy of one fact, and the copy nobody edits is the one that wins on
+# the day somebody repoints a deployment at a mirror.
+OPT_CONTENT_URL="${TMC_CONTENT_URL:-}"
+
+# What happens to a game that is installed and is no longer in the list.
+#
+#   hide    (default) left on the disk, not offered. A restart with the id put back
+#           costs nothing, and nothing an operator wrote is ever deleted.
+#   remove  deleted -- but only games this tool installed itself, which it records in
+#           data/installed-games.json. A game somebody authored under content/ by hand is
+#           not ours to remove, and the day those two get confused is the day somebody
+#           loses work.
+#   keep    left on the disk AND still offered, which is the pre-install-games behaviour:
+#           the list only adds. For a box whose content directory is managed by somebody
+#           other than the panel.
+GAMES_MODE="${TMC_GAMES_MODE:-hide}"
+
+# Start without checking the origin. For a box that is deliberately offline, and for
+# getting a server back up when the origin is the thing that is broken.
+NO_INSTALL="${TMC_NO_INSTALL:+1}"
+REFRESH=""
+
 RED=$'\033[31m'; YLW=$'\033[33m'; DIM=$'\033[2m'; BLD=$'\033[1m'; OFF=$'\033[0m'
 
 die() { printf '\n  %s%s%s\n\n' "$RED" "$1" "$OFF" >&2; exit "${2:-2}"; }
@@ -108,6 +145,13 @@ usage() {
                         an avatar set, a prop pack or a texture set is
                         published exactly the same way. --all does every one.
     verify <id>         Check dist/<id>'s manifest against keys/content.pub.
+    index               Write dist/games.json and dist/descriptors/, the half of
+                        a publish a server INSTALLS from. Run it after
+                        `pack --all`; a stale index points servers at versions
+                        the origin no longer has.
+    install-games       Fetch the descriptors and packs for --games from the
+                        content origin, into content/ and data/content_cache.
+                        `run` does this for you when TMC_GAMES is set.
     export-web          Build the browser client into web/build, plus the
                         loader website-city uploads. Takes --base and --zip.
     export-native       Build the native client the desktop app installs, into
@@ -124,6 +168,21 @@ usage() {
     --name TEXT         Server name shown in listings.
     --max-players N
     --game ID           Load this game at boot instead of the default.
+    --games A,B,C       The games this server installs and offers. Fetched from
+                        the content origin at startup; anything else in
+                        content/ is not offered. Empty offers everything, which
+                        is what a hand-run server wants.
+    --content-url URL   Where games come from, comma-separated for mirrors.
+                        Replaces content_urls in cfg/server.yml, for the server
+                        and for the clients it tells.
+    --games-mode MODE   What happens to a game that is installed and no longer
+                        listed: hide (default, kept but not offered), remove
+                        (deleted -- only ones install-games installed itself),
+                        keep (kept AND offered; the list only adds).
+    --refresh           Take the origin's copy of a descriptor even when there
+                        is one on the disk. A local game.yml is an operator's
+                        file and is never overwritten without this.
+    --no-install        Start without asking the origin for anything.
     --map ID            Start that game on this map instead of its own default.
                         `+map ID` after a -- does the same thing and is the
                         spelling every other dedicated server uses. A game that
@@ -203,6 +262,8 @@ usage() {
     TMC_MAX_PLAYERS     --max-players         TMC_GODOT         --godot
     TMC_GAME            --game                TMC_ENGINE_BASE   --base
     TMC_MAP             --map                 TMC_EXPORT_ZIP    --zip
+    TMC_GAMES           --games               TMC_GAMES_MODE    --games-mode
+    TMC_CONTENT_URL     --content-url         TMC_NO_INSTALL    --no-install
     TMC_NATIVE_PLATFORM --platform            TMC_BUILD_VERSION --build-version
     TMC_VERBOSE         --verbose (set to anything)
 
@@ -229,6 +290,7 @@ USAGE
 
 case "${1:-}" in
     run|check|config|games|export-web|export-native|stamp-loader) COMMAND="$1"; shift ;;
+    install-games|index) COMMAND="$1"; shift ;;
     pack|publish)
         COMMAND="pack"; shift
         PACK_ID="${1:-}"
@@ -248,6 +310,11 @@ while [ $# -gt 0 ]; do
         --name)        [ $# -ge 2 ] || die "$1 needs a value"; OPT_NAME="$2";        shift 2 ;;
         --max-players) [ $# -ge 2 ] || die "$1 needs a value"; OPT_MAX_PLAYERS="$2"; shift 2 ;;
         --game)        [ $# -ge 2 ] || die "$1 needs a value"; OPT_GAME="$2";        shift 2 ;;
+        --games)       [ $# -ge 2 ] || die "$1 needs a value"; OPT_GAMES="$2";       shift 2 ;;
+        --content-url) [ $# -ge 2 ] || die "$1 needs a value"; OPT_CONTENT_URL="$2"; shift 2 ;;
+        --games-mode)  [ $# -ge 2 ] || die "$1 needs a value"; GAMES_MODE="$2";      shift 2 ;;
+        --no-install)  NO_INSTALL=1;     shift ;;
+        --refresh)     REFRESH=1;        shift ;;
         --map)         [ $# -ge 2 ] || die "$1 needs a value"; OPT_MAP="$2";         shift 2 ;;
         --base)    ENGINE_BASE="${2:-}"; shift 2 ;;
         --platform) [ $# -ge 2 ] || die "$1 needs a value"; NATIVE_PLATFORM="$2"; shift 2 ;;
@@ -280,6 +347,15 @@ done
 [ -n "$OPT_MAX_PLAYERS" ] && OVERRIDES+=(--max-players "$OPT_MAX_PLAYERS")
 [ -n "$OPT_GAME" ]        && OVERRIDES+=(--game "$OPT_GAME")
 [ -n "$OPT_MAP" ]         && OVERRIDES+=(--map "$OPT_MAP")
+[ -n "$OPT_CONTENT_URL" ] && OVERRIDES+=(--content-url "$OPT_CONTENT_URL")
+
+# [b]The list reaches the SERVER too, and not only the installer.[/b] Installing the two
+# games this box is for does not by itself stop it offering the eight already sitting in
+# its content directory -- a development tree, a box that was reinstalled onto, or any
+# checkout of this repository has all of them -- so a panel that says "arena, g2gfast"
+# would be describing a server whose vote menu offered ten. `keep` is the one mode that
+# deliberately does not narrow it.
+[ -n "$OPT_GAMES" ] && [ "$GAMES_MODE" != "keep" ] && OVERRIDES+=(--games "$OPT_GAMES")
 
 # --- The runtime -----------------------------------------------------------
 
@@ -293,7 +369,17 @@ if [ ! -x "$GODOT" ]; then
         # that ran setup.sh for itself.
         CACHE_ROOT="${TMC_GODOT_CACHE:-${XDG_CACHE_HOME:-${HOME:-/nonexistent}/.cache}/tmc/godot}"
         FOUND=""
-        for candidate in "$CACHE_ROOT"/*/godot "$PROJECT"/.godot-runtime/*/godot godot godot4 Godot; do
+        # [b]`$PROJECT/.runtime` is in this list because a panel moves the project.[/b]
+        # Pterodactyl installs a server with its volume mounted at /mnt/server and RUNS it
+        # with the same volume at /home/container, and the egg puts the runtime on the
+        # volume -- so the absolute path setup.sh baked in above names a directory that
+        # exists only during the install, and TMC_GODOT_CACHE, which named it, is not set
+        # at startup either. Every candidate that followed was an absolute path or a PATH
+        # lookup, so a correctly installed server died with "no Godot runtime found" on a
+        # box where the runtime was sitting beside it. A path relative to the project is
+        # the one form that survives the volume being mounted somewhere else.
+        for candidate in "$CACHE_ROOT"/*/godot "$PROJECT"/.runtime/*/godot \
+                "$PROJECT"/.godot-runtime/*/godot godot godot4 Godot; do
             if [ -x "$candidate" ] && [ ! -d "$candidate" ]; then FOUND="$candidate"; break; fi
             if command -v "$candidate" >/dev/null 2>&1; then FOUND="$(command -v "$candidate")"; break; fi
         done
@@ -518,6 +604,39 @@ do_pack() {
     "$GODOT" "${args[@]}" || exit 7
 
     note "serve dist/ over HTTP, or leave it here -- a server searches dist/ before the network"
+    exit 0
+}
+
+INSTALL_TOOL="res://tools/install_games.gd"
+INDEX_TOOL="res://tools/index.gd"
+
+## Fetch the descriptors and the packs for TMC_GAMES. Returns the tool's exit code:
+## 0 everything asked for is here, 2 none of it is, 3 some of it is not.
+do_install_games() {
+    if [ -z "$OPT_GAMES" ]; then
+        note "no games list: TMC_GAMES, or --games arena,g2gfast"
+        note "without one this server offers whatever is already in $CONTENT_DIR"
+        return 0
+    fi
+
+    local args=(--headless --path "$PROJECT" --script "$INSTALL_TOOL" --
+                --games "$OPT_GAMES"
+                --content "$CONTENT_DIR" --data "$DATA_DIR" --config "$CONFIG_DIR")
+
+    [ -n "$OPT_CONTENT_URL" ] && args+=(--base "$OPT_CONTENT_URL")
+    [ "$GAMES_MODE" = "remove" ] && args+=(--prune)
+    [ -n "$REFRESH" ] && args+=(--refresh)
+    [ -n "$VERBOSE" ] && args+=(--verbose)
+
+    "$GODOT" "${args[@]}"
+    return $?
+}
+
+do_index() {
+    "$GODOT" --headless --path "$PROJECT" --script "$INDEX_TOOL" -- \
+        --content "$(abs "$CONTENT_DIR")" --out "$PROJECT/dist" || exit 7
+
+    note "upload dist/ as usual -- games.json and descriptors/ ride with the packs"
     exit 0
 }
 
@@ -814,6 +933,11 @@ case "$COMMAND" in
     config)     ARGS+=(--print-config) ;;
     games)      ARGS+=(--list-games) ;;
     pack)       do_pack ;;
+    index)      do_index ;;
+    install-games)
+        do_install_games
+        exit $?
+        ;;
     verify)     do_verify ;;
     export-native) do_export_native ;;
     export-web)
@@ -899,6 +1023,26 @@ PY
         exit 0
         ;;
 esac
+
+# [b]Install before boot, and never refuse to boot over it.[/b] A panel has no shell, so
+# the only moment a server can fetch what it was configured to run is the moment it
+# starts. What it must NOT do is make an unreachable content origin into a server that
+# will not start: a box whose games are already installed does not touch the network at
+# all, and one that cannot reach the origin says so and comes up with what it has. An
+# operator can act on a warning at the top of a log; they cannot act on a server that
+# exits before it listens.
+if [ -z "$NO_INSTALL" ] && [ -n "$OPT_GAMES" ] \
+        && { [ "$COMMAND" = "run" ] || [ "$COMMAND" = "check" ]; }; then
+    printf '\n  %sgames%s\n' "$BLD" "$OFF"
+    do_install_games
+    install_status=$?
+
+    case "$install_status" in
+        0) ;;
+        3) warn "some games could not be installed; starting with the rest" ;;
+        *) warn "no games could be installed from the content origin" ;;
+    esac
+fi
 
 [ -n "$VERBOSE" ] && ARGS+=("$VERBOSE")
 [ ${#OVERRIDES[@]} -gt 0 ] && ARGS+=("${OVERRIDES[@]}")

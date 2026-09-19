@@ -256,6 +256,25 @@ var initial_game: String = ""
 ## prefix to spell, which is the whole difficulty on a box that runs seven of them.
 var initial_map: String = ""
 
+## The only games this server offers, or empty for everything in the content directory.
+##
+## `games` in the YAML, `--games a,b,c` on the command line, `TMC_GAMES` in a container.
+##
+## [b]A filter, not an installer.[/b] `tools/install_games.gd` is what puts a game's
+## descriptor on the disk; this decides which of the ones that ARE on the disk a player
+## may reach — the `games` listing, `changelevel`, the vote menu and the boot game all
+## read the scanned set, and the scan is where the list has to be applied for all four to
+## agree. Filtering at any one of them leaves the other three offering a game this server
+## was told not to run.
+##
+## [b]Empty means everything, and that is not the same as "none".[/b] A server with no
+## list is the ordinary hand-run one and must not lose its content the day this key is
+## added; a deployment that genuinely wants one game names one game. An id here that is
+## not on the disk is reported at boot and is not fatal, because the usual cause is a
+## pack that has not finished downloading yet and a server that refuses to boot over it
+## is a server an operator cannot get back.
+var games_allow: PackedStringArray = PackedStringArray()
+
 ## Where this server fetches content it does not have, in order.
 ##
 ## `content_urls` in the YAML. Empty means the network half is off and only packs
@@ -401,6 +420,27 @@ func _apply_settings(file: String, tree: Dictionary) -> DotResult:
 			# The one that exists belongs to whichever game is loaded, which at the
 			# time the startup config runs is none of them.
 			initial_map = String(value)
+			continue
+
+		if name == "games":
+			# A list, or one string, exactly as `content_urls` below takes either --
+			# `games: arena` is what an operator with one game writes and there is no
+			# reason to make them write a list of one.
+			#
+			# Not passed through as a console line: dot-server has no cvar for the set of
+			# games a host offers, because the set is this host's idea rather than the
+			# server's. `sv_game` picks one OF these and is a cvar, which is why the two
+			# spellings are deliberately not alike.
+			if value is Array:
+				for entry in (value as Array):
+					var one_game := String(entry).strip_edges()
+					if one_game != "":
+						games_allow.append(one_game)
+			else:
+				var only_game := String(value).strip_edges()
+				if only_game != "":
+					games_allow.append(only_game)
+
 			continue
 
 		if name == "content_urls":
@@ -719,6 +759,14 @@ func describe_lines() -> PackedStringArray:
 	# a setting worth having is worth being able to read back without booting.
 	out.append("map      : %s" % (
 		initial_map if initial_map != "" else "(the game's default)"))
+	# Same argument a third time. A server offering three of the ten games on its disk
+	# is a deliberate choice somewhere, and "somewhere" is this line -- without it the
+	# only way to tell a filtered server from an empty content directory is to boot one
+	# and count what came back.
+	out.append("games    : %s" % (
+		", ".join(games_allow) if not games_allow.is_empty() else "(everything in content/)"))
+	out.append("content  : %s" % (
+		", ".join(content_urls) if not content_urls.is_empty() else "(local only)"))
 	out.append("rcon     : %s" % ("on, port %d" % server.effective_rcon_port() if server.rcon_password != "" else "off"))
 	out.append("groups   : %d" % groups.size())
 	out.append("admins   : %d" % users.size())

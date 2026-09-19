@@ -63,6 +63,15 @@ var default_game: String = ""
 ## Directories skipped, and why. Reported at boot rather than silently ignored.
 var skipped: PackedStringArray = PackedStringArray()
 
+## Ids the list asked for that are not on the disk. Reported, never fatal.
+var missing: PackedStringArray = PackedStringArray()
+
+## The list this scan was filtered against, or empty when nothing was filtered.
+##
+## Kept so a report can say "three of ten, on purpose" rather than leaving an operator to
+## infer it from a count that looks like a missing upload.
+var allowed: PackedStringArray = PackedStringArray()
+
 ## Absolute path of the content root, for publishing.
 var root: String = ""
 
@@ -72,9 +81,12 @@ var root: String = ""
 ## A directory with no `game.yml` is skipped and reported — it is what a half-finished
 ## upload looks like, and also what `README.md` sitting in `content/` looks like, and an
 ## operator should be able to tell which.
-static func scan(directory: String) -> DotResult:
+static func scan(
+	directory: String, allow: PackedStringArray = PackedStringArray()
+) -> DotResult:
 	var index := TmcContent.new()
 	index.root = directory.rstrip("/")
+	index.allowed = allow
 
 	var dir := DirAccess.open(index.root)
 
@@ -90,6 +102,19 @@ static func scan(directory: String) -> DotResult:
 
 	for name in names:
 		if name in NOT_GAMES or name.begins_with("."):
+			continue
+
+		# [b]The allow list is applied HERE and nowhere else.[/b] Four things read the
+		# scanned set -- the `games` listing, `changelevel`, the vote menu and the boot
+		# game -- so a filter applied at any one of them lets the other three offer a game
+		# this server was told not to run. One gate, before a descriptor is ever built.
+		#
+		# Reported rather than silently dropped: a directory that is present, valid and
+		# deliberately not offered is exactly the thing an operator will otherwise spend
+		# an evening on, and it reads differently from a half-finished upload because it
+		# says so.
+		if not allow.is_empty() and not name in allow:
+			index.skipped.append("%s (not in the games list)" % name)
 			continue
 
 		var path := "%s/%s/%s" % [index.root, name, DESCRIPTOR]
@@ -126,6 +151,22 @@ static func scan(directory: String) -> DotResult:
 
 	if index.default_game == "" and not index.games.is_empty():
 		index.default_game = index.games[0].game_id
+
+	# [b]An id that was asked for and is not there is the one outcome worth a WARN.[/b]
+	# It is what a download that has not finished, a typo in a panel variable and a game
+	# that was renamed on the content origin all look like, and none of them is visible
+	# from a count of what WAS found. Not fatal, for the reason `initial_map` is not:
+	# a server that refuses to boot over one absent game is a server whose operator has
+	# lost the other nine as well.
+	for wanted in allow:
+		if index.find(wanted) == null:
+			index.missing.append(wanted)
+
+	if not index.missing.is_empty():
+		DotLog.warn(CHANNEL, "games were asked for and are not installed", {
+			"missing": index.missing,
+			"hint": "./server install-games, or check the games list",
+		})
 
 	DotLog.info(CHANNEL, "content scanned", {
 		"games": index.games.size(),
@@ -325,5 +366,8 @@ func describe_lines() -> PackedStringArray:
 
 	for entry in skipped:
 		out.append("skipped %s" % entry)
+
+	for entry in missing:
+		out.append("MISSING %s (asked for; not installed)" % entry)
 
 	return out

@@ -99,6 +99,26 @@ sv_tags: [lobby, tmc]
 a2s_enabled: true
 query_bind_ip: "*"
 
+# The games this server offers, or nothing for everything in content/.
+#
+# A server no longer has to carry the whole catalogue. A game is a signed pack on
+# the content origin plus a `game.yml` that says how to start it; `./server install-games`
+# fetches both, and `./server` does it at startup when this is set. So a box holds the two
+# or three games it is for, and adding one is a restart rather than a redeploy.
+#
+# It is also a FILTER, and it has to be, because installing two games does not by itself
+# stop a content directory that already has ten from offering all of them. The `games`
+# listing, `changelevel`, the vote menu and the boot game all read the same scanned set,
+# and this narrows it once, before any of them see it.
+#
+# Empty means everything, which is what a development checkout and a hand-run server want.
+# `sv_game` must name one of these; a game that is asked for and is not installed is
+# reported at boot and is not fatal.
+#
+#games:
+#  - g2gfast
+#  - arena
+
 # Where this server fetches content it does not have, tried in order.
 #
 # A game's imported maps are not in its repository -- `maps/imported/` is gitignored,

@@ -171,7 +171,7 @@ func _run() -> void:
 		get_tree().quit(EXIT_OK)
 		return
 
-	var scanned := TmcContent.scan(_content_dir)
+	var scanned := TmcContent.scan(_content_dir, config.games_allow)
 
 	if not scanned.ok:
 		_die(EXIT_CONTENT, str(scanned.error))
@@ -270,7 +270,7 @@ func start(
 
 	config = loaded.value as TmcConfig
 
-	var scanned := TmcContent.scan(_content_dir)
+	var scanned := TmcContent.scan(_content_dir, config.games_allow)
 
 	if not scanned.ok:
 		return scanned
@@ -323,6 +323,55 @@ func _apply_overrides(args: PackedStringArray) -> void:
 
 	if game != "":
 		config.initial_game = game
+
+	# [b]The set this server offers, as one comma-separated argument.[/b] It is one
+	# argument rather than a repeated flag because the thing on the other end of it is a
+	# panel text box and a unit file's `Environment=`, neither of which can repeat a flag
+	# -- TMC_GAMES reaches here through `server` exactly as TMC_GAME reaches the line
+	# above it.
+	#
+	# REPLACES the YAML rather than adding to it, like every other override here: a list
+	# that could only grow is a list an operator cannot use to narrow a box that already
+	# has a `games:` key, which is the case it exists for.
+	var offered := _value(args, "--games", "")
+
+	if offered != "":
+		var wanted := PackedStringArray()
+
+		for entry in offered.split(",", false):
+			var one := entry.strip_edges()
+
+			if one != "" and not one in wanted:
+				wanted.append(one)
+
+		config.games_allow = wanted
+
+	# [b]Where content comes from, as an argument, for the same reason the list of games
+	# is one.[/b] A panel operator has a text box and no shell; `cfg/server.yml` is
+	# written by setup.sh and is not theirs to edit. It replaces the file's list rather
+	# than adding to it: a deployment pointing at its own mirror must be able to say "not
+	# the public origin", which an additive flag cannot express.
+	#
+	# The clients are told the same thing in the same breath. `content_urls` in the YAML
+	# does this a few lines into TmcConfig for the reason written there -- two settings
+	# for one fact is this tree's most repeated bug -- and an override that changed only
+	# the server's half would send every client to the origin this box was just told not
+	# to use.
+	var urls := _value(args, "--content-url", "")
+
+	if urls != "":
+		var origins := PackedStringArray()
+
+		for entry in urls.split(",", false):
+			var url := entry.strip_edges()
+
+			if url != "" and not url in origins:
+				origins.append(url)
+
+		config.content_urls = origins
+
+		if "content_base_urls" in config.server:
+			config.server.content_base_urls = origins
 
 	# [b]Two spellings, and the second one is the reason this exists.[/b] `--map` is
 	# the flag `server` and TMC_MAP hand down, matching `--game` beside it; `+map` is
@@ -707,6 +756,21 @@ func _build_cloud() -> void:
 
 	if DirAccess.dir_exists_absolute(published):
 		searched.append(published)
+
+	# [b]And the manifests `install-games` kept, which is what makes a restart survive an
+	# origin outage.[/b] dot-cloud resolves a manifest before it looks at what the store
+	# already holds, and a manifest is fetched over the network every time -- so a server
+	# with every byte of a pack on its disk still refused to boot while the content origin
+	# was down. Measured: exit 7, `Could not download the content manifest`, on a box
+	# holding all 212 files of the game it was being asked to start.
+	#
+	# Searched, not trusted: a manifest found here goes through the same signature check
+	# as one off the wire, because it is the same code path -- these directories are
+	# tried before the URLs and are otherwise nothing special.
+	var manifests := "%s/manifests" % _data_dir
+
+	if DirAccess.dir_exists_absolute(manifests):
+		searched.append(manifests)
 
 	cloud.local_search_dirs = searched
 

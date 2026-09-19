@@ -192,6 +192,8 @@ The YAML reader is a deliberately small subset and refuses everything else with 
 ./server check                boot, load the game, shut down. Exit 0 if it worked
 ./server config               the resolved configuration
 ./server games                what is in content/
+./server install-games        fetch the games in --games from the content origin
+./server index                publish the catalogue a server installs FROM
 ./server export-web           build the browser client
 ./server export-native        build the native client, for every platform
 ./server --help               every option
@@ -203,6 +205,37 @@ The YAML reader is a deliberately small subset and refuses everything else with 
 Exit codes are meaningful, so a supervisor can tell a misconfiguration from a crash: `2` usage, `3` no runtime, `4` no project, `5` bad config, `6` port in use, `7` bad content.
 
 **Secrets are not options.** `--rcon-password` is refused outright: argv is readable by every other process on the machine and ends up in pasted bug reports, which is why `DotConfig` refuses secrets from argv and the environment too.
+
+## Installing games, instead of carrying all of them
+
+A server holds the games it is for, and fetches them:
+
+```bash
+./server --games g2gfast,arena          # install them if needed, then start
+TMC_GAMES=g2gfast,arena ./server        # the same thing, for a panel with no shell
+./server install-games --games arena    # just the install, no server
+```
+
+**A game is two halves and only one of them was ever published.** The pack on the content origin is the game — scenes, scripts, art, signed and content-addressed. What it does not contain is `content/<id>/game.yml`, the descriptor that says which scene the *server* runs, which module drives it, how many players it takes and what its cvars are. That file lived only in this repository, so every deployment got the whole catalogue by cloning, and adding a game to the catalogue meant redeploying every box that might want it. `./server index` publishes the missing half beside the packs:
+
+```
+dist/games.json                      id -> content id, version, name, kind
+dist/descriptors/<id>/game.yml       one copy of each descriptor
+```
+
+Both land in `dist/`, which is already what gets uploaded, so there is no second deployment step and no second set of credentials. **Run it after `./server pack --all`** — an index naming a version the origin no longer serves sends every installing server to a manifest that is not there.
+
+**Keyed by the directory id, not the content id.** `hungry_classic`, `hungry_frenzy`, `hungry_gauntlet` and `hungry_warrens` are four descriptors over one pack; keying by content id would give those four one file and three of the modes would quietly become the fourth.
+
+**The packs are fetched at startup, not at first join.** Without that, the download happens the first time somebody switches to that game, with players connected and waiting — and on a panel that reads as a hang. A box whose games are already installed touches the network for nothing and starts as fast as it ever did.
+
+**It never refuses to boot.** An origin that cannot be reached is a warning at the top of the log and a server that comes up with what it has. It also survives the origin being down entirely: `install-games` keeps each verified manifest under `data/manifests/`, because dot-cloud resolves a manifest before it looks at what it already has — without that, a box holding all 212 files of a game still exited 7 with `Could not download the content manifest` while somebody else's web server was down.
+
+**A `game.yml` already on the disk is never overwritten.** It is the file an operator edits, so a startup that re-downloaded it would undo their work on the *next* restart, which is the worst kind of bug to own. `--refresh` is the explicit way to take the origin's copy.
+
+**The list is also a filter.** Installing two games does not stop a content directory that already has ten from offering all of them, so `--games` narrows what the server scans — the `games` listing, `changelevel`, the vote menu and the boot game all read that one set. `--games-mode` says what happens to a game that is installed and no longer listed: `hide` (default — kept, not offered), `remove` (deleted, and **only** games `install-games` installed itself, recorded in `data/installed-games.json`), or `keep` (kept and still offered).
+
+Empty `--games` offers everything in `content/`, which is what a development checkout and a hand-run server want, and is what this repository does by default.
 
 ## Delivering a game as a pack
 

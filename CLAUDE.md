@@ -194,6 +194,30 @@ consulting any source when a session is not authenticated — a guest uid is a r
 per-device string, so granting anything to one grants it to anyone. Correct, and it looks
 exactly like the file being ignored, which is why `cfg/auth.yml` says so at the top.
 
+## A server installs its games, and the descriptor was the half nobody published
+
+`./server install-games` and `./server index`, added because a deployment that wants two games should not carry ten and should not need a redeploy to get an eleventh.
+
+**A game is two halves and only one of them was ever published.** The pack on the content origin is the game: scenes, scripts, art, signed, content-addressed, mounted at `res://dot_cloud/<id>/<version>/`. What a pack does not contain is `content/<id>/game.yml` — which scene the *server* runs, which module drives it, how many players it takes, what its cvars are. That file existed only in this repository, so the only way to get a game was to clone the repository, which means getting all ten; and publishing an eleventh reached nobody until every box re-cloned. Decoding `dist/tmc/arena/manifest.json` and looking for `game.yml` among its 212 files is what made this concrete: it is not there, and nothing had ever needed it to be.
+
+`tools/index.gd` publishes the missing half into `dist/`, which is already what gets uploaded — `games.json` plus `descriptors/<id>/game.yml`. `tools/install_games.gd` is the other end: read the catalogue, fetch the descriptors this box was asked for, then `DotCloudClient.ensure` each distinct pack.
+
+**Keyed by directory id, not by content id.** `hungry_classic`, `hungry_frenzy`, `hungry_gauntlet` and `hungry_warrens` are four descriptors over one pack, `tmc/hungry`. A descriptor store keyed by content id gives those four one file, the last write wins, and three modes silently become the fourth. The same fact appears again one layer down: prefetching iterates distinct **content ids**, or the origin is asked for the same 30 MB four times.
+
+**Prefetching without keeping the manifest achieves nothing, and the measurement is the point.** dot-cloud resolves a manifest *before* it consults the store, and a manifest is fetched over the network every time. So a server holding all 212 files of a game, with the origin stopped, exited **7** with `Could not download the content manifest` — a box that could not restart because somebody else's web server was down. `install-games` now keeps each verified manifest under `data/manifests/` and `TmcHost._build_cloud` searches it; the same run then boots offline with `need=0` and exit 0. Found by stopping the local origin, moving `dist/` aside so the developer tree could not stand in for a deployment, and trying it — with `dist/` in place every such test passes, because `dist/` is in `local_search_dirs` and is a mirror of the origin.
+
+**The list has to be a filter as well as an installer.** Installing two games does not stop a content directory that already has ten from offering all ten, and four separate things read that set — the `games` listing, `changelevel`, the vote menu, the boot game. Filtering at any one of them leaves the other three offering a game the panel says this server does not run, so `TmcContent.scan` takes the allow list and applies it once, before a descriptor is built.
+
+**Nothing an operator wrote is deleted.** `--games-mode remove` prunes only ids recorded in `data/installed-games.json` as installed by this tool; a game authored by hand under `content/` is not ours. The default is `hide` — kept on the disk, not offered — because the cost of being wrong in that direction is a directory nobody looks at, and in the other it is somebody's work.
+
+**A `game.yml` already on the disk is never overwritten without `--refresh`.** It is the file an operator edits, and a startup that re-downloaded it would undo their edit on the *following* restart, which is a bug that presents itself days later to somebody who has changed nothing.
+
+**`tools/server.ps1.in` does not have it**, and deliberately: the Windows launcher implements no `TMC_*` environment layer at all — no `TMC_GAME`, no `TMC_PORT` — because it is a developer's front door on a machine somebody is typing at, and every panel and every container this exists for is Linux. `--games` as a filter would fit it; `install-games` would be sixty lines of PowerShell for a case nobody has. Add it when a Windows box is actually installing games, not before.
+
+### And the egg could not have started a server
+
+Found while adding the panel variables, not by running it: Pterodactyl installs with the volume at `/mnt/server` and **runs** with the same volume at `/home/container`. The egg puts the runtime on the volume and `setup.sh` bakes its absolute path into `./server`, so at startup that path names a directory that exists only during the install — and `TMC_GODOT_CACHE`, which named it, is not set at startup either. Every remaining candidate in the fallback search was another absolute path or a `PATH` lookup, and the yolks image has no Godot on `PATH`: `no Godot runtime found`, exit 3, on a box with the runtime sitting beside the script. `$PROJECT/.runtime/*/godot` is now in that list, because a path relative to the project is the one form that survives the volume being mounted somewhere else. Reproduced both ways with `env -i PATH=/usr/bin:/bin HOME=/nonexistent`.
+
 ## Bugs this project found
 
 Every one parsed cleanly and none produced an error where it was written. Four are in
