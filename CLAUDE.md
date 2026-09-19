@@ -226,6 +226,23 @@ So the specific fix is the owner, and the general one is that no `git` this proj
 
 `./server install-games` in the egg is capped with `timeout` now for the same reason — this family's own rule is that a headless Godot run **hangs** rather than failing, and an uncapped one inside an installer is the same invisible spinner.
 
+### And before that, it filled a 100 MiB /tmp and asked what to do about it
+
+The next install got as far as the runtime and stopped here:
+
+```
+    sha512 verified
+/tmp/godot-fetch.cwjBJb/x/Godot_v4.7.2-stable_linux.x86_64:  write error (disk full?).  Continue? (y/n/^C)
+```
+
+on a host with 201 GB free, which is the detail that makes it look impossible. **A container's `/tmp` is not the machine's `/tmp`.** Wings mounts one as a tmpfs sized by `docker.tmpfs_size` — 100 MiB by default — and `fetch-godot.sh` staged there: a 70 MB archive unpacking to a 146 MB binary, in 100 MiB.
+
+**And `unzip` does not fail when a write fails. It asks.** On a developer box somebody answers; in an install container the question goes to a terminal nobody is reading, and the panel sits on "installing" for ever. The same shape as the credential prompt above, from a completely different cause — which is the lesson worth keeping: **every non-interactive path here has to be non-interactive on purpose, because the tools it drives are all willing to stop and ask.**
+
+Fixed in three parts. The staging directory is now the DESTINATION's filesystem rather than `/tmp` — it is where the binary is going, it was just created and is known writable, and the install becomes a rename inside one filesystem instead of a copy across two. `unzip` is given `< /dev/null`, so a write error is an error again. And a `df` runs before the download rather than after, so "there is not enough room here" arrives in one second with the number in it instead of ninety seconds later as a question.
+
+`tools/fetch-export-templates.sh` had the identical defect with a gigabyte behind it, and has the identical fix. Both were verified against a real 100 MiB tmpfs.
+
 ### And the egg could not have started a server
 
 Found while adding the panel variables, not by running it: Pterodactyl installs with the volume at `/mnt/server` and **runs** with the same volume at `/home/container`. The egg puts the runtime on the volume and `setup.sh` bakes its absolute path into `./server`, so at startup that path names a directory that exists only during the install — and `TMC_GODOT_CACHE`, which named it, is not set at startup either. Every remaining candidate in the fallback search was another absolute path or a `PATH` lookup, and the yolks image has no Godot on `PATH`: `no Godot runtime found`, exit 3, on a box with the runtime sitting beside the script. `$PROJECT/.runtime/*/godot` is now in that list, because a path relative to the project is the one form that survives the volume being mounted somewhere else. Reproduced both ways with `env -i PATH=/usr/bin:/bin HOME=/nonexistent`.

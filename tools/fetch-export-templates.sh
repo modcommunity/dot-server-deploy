@@ -139,8 +139,32 @@ fi
 
 # --- Download ---------------------------------------------------------------
 
-TMP="$(mktemp -d "${TMPDIR:-/tmp}/godot-templates.XXXXXX")" || die "could not make a temporary directory" 1
+# --- Staged BESIDE the destination, not in /tmp -----------------------------
+#
+# The same reasoning as tools/fetch-godot.sh, and more of it: this archive is about a
+# gigabyte and unpacks to more. A container's /tmp is not the machine's /tmp -- wings
+# mounts one as a tmpfs sized by `docker.tmpfs_size`, 100 MiB by default -- and `unzip`
+# answers a write error with "Continue? (y/n/^C)" rather than an exit code, so it stops
+# and waits on a terminal nobody is reading.
+#
+# Staging under the destination also makes the install a rename inside one filesystem.
+# TMPDIR still wins when it is set, because somebody who set it meant it.
+mkdir -p "$DEST" 2>/dev/null
+TMP="$(mktemp -d "${TMPDIR:-$DEST}/godot-templates.XXXXXX")" \
+    || die "could not make a temporary directory in ${TMPDIR:-$DEST}" 1
 trap 'rm -rf "$TMP"' EXIT
+
+# Said before a gigabyte is downloaded rather than after.
+AVAIL_KB="$(df -Pk "$TMP" 2>/dev/null | awk 'NR==2 {print $4}')"
+
+if [ -n "${AVAIL_KB:-}" ] && [ "$AVAIL_KB" -lt 3145728 ] 2>/dev/null; then
+    die "only $((AVAIL_KB / 1024)) MB free on the filesystem holding $TMP.
+
+    The export templates need about 3 GB to download and unpack. If this is a
+    container, that is very likely a small tmpfs rather than the machine's disk --
+    wings sizes /tmp with docker.tmpfs_size, 100 MiB by default. Set TMPDIR to
+    somewhere on the real volume." 1
+fi
 
 say "downloading $ASSET (about a gigabyte)"
 say "from $BASE_URL"
@@ -194,7 +218,10 @@ ok "sha512 verified"
 # preset then reports a missing template beside a directory full of them.
 
 case "$UNZIP" in
-    unzip)   unzip -q -o "$TMP/$ASSET" -d "$TMP/x" || die "could not unpack $ASSET" 3 ;;
+    # `< /dev/null` because unzip asks rather than fails when a write fails, and a
+    # question on an unwatched terminal is a hang. See fetch-godot.sh.
+    unzip)   unzip -q -o "$TMP/$ASSET" -d "$TMP/x" < /dev/null \
+                 || die "could not unpack $ASSET (out of space in $TMP?)" 3 ;;
     python3) python3 -c 'import sys, zipfile; zipfile.ZipFile(sys.argv[1]).extractall(sys.argv[2])' \
                  "$TMP/$ASSET" "$TMP/x" || die "could not unpack $ASSET" 3 ;;
 esac

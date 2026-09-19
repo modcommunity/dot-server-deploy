@@ -168,8 +168,39 @@ fi
 
 # --- Download ---------------------------------------------------------------
 
-TMP="$(mktemp -d "${TMPDIR:-/tmp}/godot-fetch.XXXXXX")" || die "could not make a temporary directory" 1
+# --- Staged BESIDE the destination, not in /tmp -----------------------------
+#
+# [b]A container's /tmp is not the machine's /tmp.[/b] Pterodactyl's wings mounts one as a
+# tmpfs sized by `docker.tmpfs_size` -- 100 MiB by default -- and this downloads a 70 MB
+# archive and unpacks a 130 MB binary out of it. So the extraction ran out of room on a
+# host with 201 GB free, and `unzip` does not fail when a write fails: it asks.
+#
+#     write error (disk full?).  Continue? (y/n/^C)
+#
+# on a terminal nobody is watching, in an install container, which is a panel stuck on
+# "installing" for ever and a log file that does not exist yet.
+#
+# The cache is the right filesystem for this on every machine, not only that one: it is
+# where the binary is going, it was just created and is therefore known writable, and
+# staging there makes the last step a rename within one filesystem instead of a copy
+# across two. TMPDIR is still honoured when it is set, because an operator who points it
+# somewhere has a reason.
+TMP="$(mktemp -d "${TMPDIR:-$CACHE}/godot-fetch.XXXXXX")" \
+    || die "could not make a temporary directory in ${TMPDIR:-$CACHE}" 1
 trap 'rm -rf "$TMP"' EXIT
+
+# And say so BEFORE downloading, rather than half way through unpacking. `df -Pk` is the
+# portable spelling; a df that cannot answer is not a reason to refuse to try.
+AVAIL_KB="$(df -Pk "$TMP" 2>/dev/null | awk 'NR==2 {print $4}')"
+
+if [ -n "${AVAIL_KB:-}" ] && [ "$AVAIL_KB" -lt 409600 ] 2>/dev/null; then
+    die "only $((AVAIL_KB / 1024)) MB free on the filesystem holding $TMP.
+
+    The runtime needs about 400 MB to download and unpack. If this is a container,
+    that is very likely a small tmpfs rather than the machine's disk -- wings sizes
+    /tmp with docker.tmpfs_size, 100 MiB by default. Set TMC_GODOT_CACHE, or TMPDIR,
+    to somewhere on the real volume." 1
+fi
 
 say "downloading $ASSET"
 say "from $BASE_URL"
@@ -221,7 +252,11 @@ say "sha512 verified"
 # --- Unpack -----------------------------------------------------------------
 
 case "$UNZIP" in
-    unzip)   unzip -q -o "$TMP/$ASSET" -d "$TMP/x" || die "could not unpack $ASSET" 3 ;;
+    # `< /dev/null` is not decoration. unzip answers a write error with an interactive
+    # "Continue? (y/n/^C)" rather than an exit code, so with a terminal attached it hangs
+    # instead of failing. Closed stdin turns that back into the error it should have been.
+    unzip)   unzip -q -o "$TMP/$ASSET" -d "$TMP/x" < /dev/null \
+                 || die "could not unpack $ASSET (out of space in $TMP?)" 3 ;;
     python3) python3 -c 'import sys, zipfile; zipfile.ZipFile(sys.argv[1]).extractall(sys.argv[2])' \
                  "$TMP/$ASSET" "$TMP/x" || die "could not unpack $ASSET" 3 ;;
 esac
