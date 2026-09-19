@@ -1444,19 +1444,33 @@ ADDONS_CLONE_DEST="${ADDONS_DIR:-$ADDONS_REPOS}"
 ## Returns 1 when this machine does not have it anywhere, which is what drives the
 ## clone: the list of what to fetch is what is ACTUALLY absent rather than the list of
 ## addons in the abstract, so a vendored tree with no network fetches nothing.
-addon_source() {
-    local name="$1" repo="${1//_/-}"
-    SRC=""; SRC_LINK=""; SRC_KIND=""
-
-    # An addon whose repository is not just its own name with the underscores turned into
-    # hyphens. `zee_weapons` lives in `zee-dot-weapons` -- a third-party pack that sits on
-    # top of the family and took its own prefix so it could never collide with a `Dot*`
-    # global -- so the derivation that works for all fifty-three dot-* addons finds nothing
-    # for it, and a silent nothing here is a host build that compiles until the first game
-    # naming ZeeWeaponRig is mounted into it.
-    case "$name" in
-        zee_weapons) repo="zee-dot-weapons" ;;
+## The repository an addon lives in.
+##
+## The addon name with its underscores turned into hyphens, for all fifty-three `dot_*`
+## addons -- and `zee_weapons` -> `zee-dot-weapons` for the one that is not one of them: a
+## third-party pack that sits on top of the family and took its own prefix so it could
+## never collide with a `Dot*` global.
+##
+## [b]A function because this was derived in two places and they disagreed.[/b]
+## `addon_source` knew about the exception and `resolve_addons` did not, so this machine
+## looked for `zee-dot-weapons` on disk, failed to find it, and then tried to clone
+## `zee-weapons` -- a repository that exists under no owner at all. The install died with
+## "could not clone: zee-weapons", naming a repository nobody has ever had, and no amount
+## of checking the owner would have found it because the owner was never the problem.
+##
+## That is this project's most repeated bug, in its smallest form: one fact written down
+## twice. Everything that needs the repository name asks here.
+addon_repo() {
+    case "$1" in
+        zee_weapons) printf 'zee-dot-weapons\n' ;;
+        *)           printf '%s\n' "${1//_/-}" ;;
     esac
+}
+
+addon_source() {
+    local name="$1" repo
+    repo="$(addon_repo "$1")"
+    SRC=""; SRC_LINK=""; SRC_KIND=""
 
     if [ -n "$ADDONS_DIR" ]; then
         # Both shapes of a shared directory: a directory of addons, and a directory of
@@ -1544,7 +1558,10 @@ resolve_addons() {
     FROM_DIR=0; FROM_REPOS=0; FROM_LINK=0; FROM_VENDOR=0
     local name repo link
     for name in "${ADDONS[@]}"; do
-        repo="${name//_/-}"
+        # The same derivation addon_source uses, because it IS addon_source's: this line
+        # used to spell it out again and was the half that did not know about
+        # zee-dot-weapons.
+        repo="$(addon_repo "$name")"
         link="addons/$name"
 
         if addon_source "$name"; then

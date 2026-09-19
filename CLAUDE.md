@@ -226,6 +226,18 @@ Verified on a fresh clone installed the way the egg installs it: `games/` empty,
 
 One thing that box cannot do is find a map nobody published: g2gfast's `maps/imported/` is gitignored and travels as one pack per map, so an origin serving the game and not its maps gives a server that boots, reports `could not fetch the map surf_mesa`, and carries on. That is the same on a box that built its own pack, because a fresh clone has no maps either.
 
+### The owner was never the problem: the NAME was derived twice
+
+The install after the move died on `could not clone: zee-weapons` — naming a repository that exists under no owner at all, which is why checking the owner would never have found it.
+
+`addon_source` turns an addon's name into its repository by swapping underscores for hyphens, with one exception: `zee_weapons` lives in `zee-dot-weapons`. `resolve_addons` — the function that decides what is MISSING and therefore what gets cloned — spelled the same derivation out again, one line, without the exception. So this machine looked for `zee-dot-weapons` on disk, correctly failed to find it, and then asked GitHub for `zee-weapons`.
+
+Both halves had to be wrong for it to hide this long: on a developer box the pack is already in `addons/.repos/`, so `addon_source` finds it and `resolve_addons` never needs the name it would have got wrong.
+
+**One fact written down twice, which is this project's most repeated bug in its smallest form.** There is an `addon_repo()` now and it is the only place the question is answered. Reproduced on a fresh clone with no addons on disk — `could not clone: zee-weapons`, exit non-zero, the operator's message word for word — then fixed in the same tree: `+ zee-dot-weapons`, **54 addons in addons/**, `./server` written.
+
+It also corrects what the entry above claims. The owner fix was right and was not what was breaking this install.
+
 ### And a fresh install hung before it ever got that far
 
 A Pterodactyl install stuck on "installing", with **no log to read**: wings writes `/var/log/pterodactyl/install/<uuid>.log` when the install container EXITS, so a hung install has an empty log directory and a spinner, and the only output that exists is `docker logs -f <uuid>_installer`.
