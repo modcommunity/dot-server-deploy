@@ -1046,9 +1046,28 @@ fi
 # idempotent -- and buys a message naming every game this build actually has, which is
 # what somebody who just mistyped one needs. The same trade is made for sv_game at the
 # end of --full, for the same reason.
+# [b]`${repo#*-}`, not `${repo#game-}`, and that one character is the whole of a rule.[/b]
+# A game repository is named `<kind>-<what it is>`: `game-` for the five, `mg-` for the
+# two minigames. Stripping the literal `game-` is a table with one row, and the day a
+# second prefix arrived -- `mg-buses-from-hell` -- that row silently stopped covering half
+# the catalogue, so `--only-games buses-from-hell` began refusing a game this build has
+# while the documented example for it sat in the README. Stripping whatever the prefix
+# happens to be is the rule that was meant, and it has no rows to forget.
+# [b]`repo` is assigned on its own line, and that is not a style preference.[/b] It used
+# to share the `local` above it -- `local entry="$1" repo="${entry%%:*}"` -- and bash
+# creates every name in one `local` command BEFORE it runs any of the assignments, so
+# `$entry` on the right-hand side expanded to the local that had just been made and was
+# still unset. `repo` was the empty string on every call this function has ever had.
+#
+# It failed the way a wrong answer fails quietly: two of the three forms were dead and the
+# third, the content directory, is spelled the same as the repository minus its prefix for
+# five of the seven games -- so `--only-games g2gfast` worked, and `--only-games
+# game-g2gfast` (the form the README documents first) was refused as a game this build
+# does not have.
 game_name_matches() {
-    local entry="$1" want="$2" repo="${entry%%:*}"
-    [ "$want" = "$repo" ] || [ "$want" = "${repo#game-}" ] || [ "$want" = "${entry#*:}" ]
+    local entry="$1" want="$2"
+    local repo="${entry%%:*}"
+    [ "$want" = "$repo" ] || [ "$want" = "${repo#*-}" ] || [ "$want" = "${entry#*:}" ]
 }
 
 ## Every name in both lists, against the whole of GAMES, BEFORE anything is dropped.
@@ -1076,7 +1095,7 @@ if [ ${#ONLY_GAMES[@]} -gt 0 ] || [ ${#SKIP_GAMES[@]} -gt 0 ]; then
     This build has:$known
 
     A name may be any one of the two forms on a line, or the repository without its
-    game- prefix." 2
+    kind prefix (game-, mg-)." 2
     fi
 
     KEPT_GAMES=(); DROPPED_GAMES=(); DROPPED_DIRS=()
