@@ -82,6 +82,27 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT" || exit 1
 
+# [b]No git clone here may ever ask a human for anything.[/b] A repository that is
+# private, renamed or absent does not 404 over HTTPS -- GitHub answers it by asking for a
+# username, and git asks the terminal. On a developer box there is no terminal to ask, so
+# it fails and is collected into "could not clone", which is the behaviour every comment
+# in this file describes. In a PANEL'S INSTALL CONTAINER there is a terminal: git blocks
+# on a prompt that nobody can see, the clone loop sends stderr to /dev/null, and the
+# install sits at "installing" for ever with no log at all -- wings writes
+# /var/log/pterodactyl/install/<uuid>.log only when the container exits, so the one file
+# anybody would look in does not exist yet either.
+#
+# Found exactly that way: `modcommunity/zee-dot-weapons` does not exist -- the pack lives
+# under another owner and `repo_url` did not say so -- and a fresh install hung on the
+# invisible prompt for it.
+#
+# Three variables because git has three ways to ask. GIT_TERMINAL_PROMPT stops the
+# built-in one, GIT_ASKPASS stops it delegating to a helper, and BatchMode stops SSH
+# asking to confirm a host key -- which is the same hang with a different question.
+export GIT_TERMINAL_PROMPT=0
+export GIT_ASKPASS="${GIT_ASKPASS:-/bin/echo}"
+export GIT_SSH_COMMAND="${GIT_SSH_COMMAND:-ssh -oBatchMode=yes -oStrictHostKeyChecking=accept-new}"
+
 GODOT_ARG=""
 DO_IMPORT=1
 # A box with no network, or a policy that says binaries arrive one way and it is not
@@ -766,6 +787,12 @@ repo_url() {
         case "$repo" in
             mg-buses-from-hell) printf 'https://github.com/gamemann/game-buses-from-hell.git\n'; return ;;
             mg-smash-copter) printf 'https://github.com/gamemann/%s.git\n' "$repo"; return ;;
+            # The third one, and the one that was missing. `zee_weapons` is derived into
+            # `zee-dot-weapons` by addon_source above, so this table was reached with the
+            # right name and sent it to an owner that has no such repository -- and a
+            # fresh install hung on the credential prompt that answers. Checked:
+            # modcommunity/zee-dot-weapons is 404, gamemann/zee-dot-weapons is 200.
+            zee-dot-weapons) printf 'https://github.com/gamemann/%s.git\n' "$repo"; return ;;
         esac
     fi
 

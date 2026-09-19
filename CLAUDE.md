@@ -214,6 +214,18 @@ exactly like the file being ignored, which is why `cfg/auth.yml` says so at the 
 
 **`tools/server.ps1.in` does not have it**, and deliberately: the Windows launcher implements no `TMC_*` environment layer at all — no `TMC_GAME`, no `TMC_PORT` — because it is a developer's front door on a machine somebody is typing at, and every panel and every container this exists for is Linux. `--games` as a filter would fit it; `install-games` would be sixty lines of PowerShell for a case nobody has. Add it when a Windows box is actually installing games, not before.
 
+### And a fresh install hung before it ever got that far
+
+A Pterodactyl install stuck on "installing", with **no log to read**: wings writes `/var/log/pterodactyl/install/<uuid>.log` when the install container EXITS, so a hung install has an empty log directory and a spinner, and the only output that exists is `docker logs -f <uuid>_installer`.
+
+The cause was one missing line in an exception table. `addon_source` derives `zee_weapons` into the repository `zee-dot-weapons`, and `repo_url` sends everything it does not recognise to `modcommunity` — where **that repository does not exist**; the pack lives under another owner, which is written down in the family map and was not written down here. Checked: `modcommunity/zee-dot-weapons` is 404, `gamemann/zee-dot-weapons` is 200.
+
+**And a 404 over HTTPS is not an error, it is a question.** GitHub answers an unauthenticated request for a repository it will not admit to with a demand for a username, git puts that on the terminal, and the clone loop sends stderr to `/dev/null`. On a developer box there is no terminal, so it fails and lands in "could not clone" — which is what every comment in `setup.sh` describes and what anybody reading it would expect. An install container HAS a terminal. Same code, same repository, and the difference between a warning and an infinite hang is whether something is attached to file descriptor 0.
+
+So the specific fix is the owner, and the general one is that no `git` this project runs may ask anybody anything: `GIT_TERMINAL_PROMPT=0` stops git's own prompt, `GIT_ASKPASS` stops it delegating to a helper, and `ssh -oBatchMode=yes` stops the same hang wearing a host-key question instead. Measured afterwards: the 404 repository fails in 0.18s and is reported, rather than waiting for ever.
+
+`./server install-games` in the egg is capped with `timeout` now for the same reason — this family's own rule is that a headless Godot run **hangs** rather than failing, and an uncapped one inside an installer is the same invisible spinner.
+
 ### And the egg could not have started a server
 
 Found while adding the panel variables, not by running it: Pterodactyl installs with the volume at `/mnt/server` and **runs** with the same volume at `/home/container`. The egg puts the runtime on the volume and `setup.sh` bakes its absolute path into `./server`, so at startup that path names a directory that exists only during the install — and `TMC_GODOT_CACHE`, which named it, is not set at startup either. Every remaining candidate in the fallback search was another absolute path or a `PATH` lookup, and the yolks image has no Godot on `PATH`: `no Godot runtime found`, exit 3, on a box with the runtime sitting beside the script. `$PROJECT/.runtime/*/godot` is now in that list, because a path relative to the project is the one form that survives the volume being mounted somewhere else. Reproduced both ways with `env -i PATH=/usr/bin:/bin HOME=/nonexistent`.
