@@ -25,6 +25,13 @@
 #                               twenty-seven of the fifty-three and unlinks the rest --
 #                               so there is nothing to pass for those
 #
+#   ./setup.sh --no-games       build NO games: no clone, no import, no pack, no
+#                               signing key. For a box that INSTALLS its games from a
+#                               content origin (./server install-games) and therefore
+#                               has no use for a game repository. It wires in the FULL
+#                               addon list, unlike --only-games, because which games
+#                               this server runs is not decided until it runs them.
+#
 #   ./setup.sh --letsencrypt --domain demo.example.com --email ops@example.com
 #                               ...and then get a real certificate for it
 #
@@ -180,6 +187,24 @@ GAMES_DIR="${TMC_GAMES_DIR:-}"
 # or a CI job, which cannot add an argument to a line somebody else wrote. The
 # separator is a comma or a space in both forms, because the argument gets typed by
 # hand and the environment variable gets written by whatever is generating the unit.
+# Build NO games at all, because this box installs them instead.
+#
+# [b]A deployment that fetches signed packs from a content origin has no use for a game
+# repository.[/b] `./server install-games` downloads the descriptor and the pack for each
+# id in its list, so cloning seven repositories, importing seven trees and publishing
+# seven packs is work whose entire output is thrown away -- and it needs a signing key on
+# a box that should not have one.
+#
+# [b]--only-games is NOT the answer to that, and the reason is the addon list.[/b] The
+# addons this build wires in are DERIVED from the games being built, so `--only-games
+# g2gfast` produces a shell that can parse g2gfast and nothing else -- and the first game
+# this server is later told to install mounts, loads, and every script in it is dead. A
+# box that decides at RUNTIME which games it runs cannot answer that question at install
+# time, so it takes the full list, which is exactly what "no game sources at all" already
+# does here.
+NO_GAMES=0
+[ -n "${TMC_NO_GAMES:-}" ] && NO_GAMES=1
+
 ONLY_GAMES=()
 SKIP_GAMES=()
 DROPPED_GAMES=()
@@ -206,6 +231,7 @@ while [ $# -gt 0 ]; do
         --no-import) DO_IMPORT=0; shift ;;
         --no-download) DO_DOWNLOAD=0; shift ;;
         --no-clone)    DO_CLONE=0; shift ;;
+        --no-games)    NO_GAMES=1; shift ;;
         --update)      DO_UPDATE=1; shift ;;
         --check)     DO_CHECK=1; shift ;;
         --vendor)    VENDOR=1; shift ;;
@@ -963,6 +989,29 @@ GAMES=(
     "mg-buses-from-hell:buses"
     "mg-smash-copter:smash"
 )
+
+# --- Or none of them -------------------------------------------------------
+#
+# Set before the filter rather than expressed through it, because `--only-games` with a
+# name that matches nothing is a refusal by design -- "left no games to build at all" --
+# and "none, deliberately" has to be sayable without going through the thing that exists
+# to catch a typo.
+#
+# `PUBLISHED_GAMES=1` is the existing statement of "do not publish anything": it is what
+# a release tarball with a populated dist/ sets, and every guard downstream already reads
+# it -- no signing key is generated, no game tree is imported, nothing is packed, and the
+# "No games were published" refusal does not fire. The addon list falls back to the full
+# one because no game is left to derive a shorter one from, which is the point.
+if [ "$NO_GAMES" -eq 1 ]; then
+    if [ ${#ONLY_GAMES[@]} -gt 0 ] || [ ${#SKIP_GAMES[@]} -gt 0 ]; then
+        warn "--no-games was given, so --only-games/--skip-games have nothing to filter"
+        ONLY_GAMES=(); SKIP_GAMES=()
+    fi
+
+    GAMES=()
+    PUBLISHED_GAMES=1
+    ok "building no games: this box installs them (./server install-games)"
+fi
 
 # --- Which of those this run builds ----------------------------------------
 #

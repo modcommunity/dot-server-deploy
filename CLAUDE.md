@@ -214,6 +214,18 @@ exactly like the file being ignored, which is why `cfg/auth.yml` says so at the 
 
 **`tools/server.ps1.in` does not have it**, and deliberately: the Windows launcher implements no `TMC_*` environment layer at all — no `TMC_GAME`, no `TMC_PORT` — because it is a developer's front door on a machine somebody is typing at, and every panel and every container this exists for is Linux. `--games` as a filter would fit it; `install-games` would be sixty lines of PowerShell for a case nobody has. Add it when a Windows box is actually installing games, not before.
 
+### A server that installs its games must build none of them
+
+The install finished, and then put all seven game repositories in `games/` on a box whose panel said `g2gfast`. `setup.sh` clones every game, imports it and publishes it, which was right when a deployment's games came from its own `dist/` and is now seven clones, seven imports and seven packs whose entire output is thrown away — plus a content **signing key** generated on a machine that should only ever consume signed content.
+
+`--only-games` looks like the answer and is a trap. **The addon list is derived from the games being built** — that is what `ADDONS_SHELL` and the derivation beside it are for — so `--only-games g2gfast` wires in the addons g2gfast declares and unlinks the rest. The server then works, until somebody adds `arena` to `TMC_GAMES`: it downloads, it mounts, and every script in it fails to compile against classes this build does not have. A box that decides at RUNTIME which games it runs cannot answer "which addons will I need" at install time.
+
+`--no-games` is the honest form of the question, and the file already had the machinery: `GAMES=()` plus `PUBLISHED_GAMES=1`, which is the existing statement of "do not publish anything" that a release tarball with a populated `dist/` sets. Every guard downstream already reads it — no keygen, no game import, no pack, and the "No games were published" refusal does not fire — and the addon derivation falls back to the full list because there is no game left to derive a shorter one from. That fallback is documented in this file as being for "a build with no game sources at all, because a published pack in dist/ does not say which classes it parses against", which is exactly this case arrived at from the other direction.
+
+Verified on a fresh clone installed the way the egg installs it: `games/` empty, `dist/` empty, `keys/` empty, **54 addons linked**, and then a server booted with `TMC_GAMES=g2gfast` against a local origin — descriptor fetched, pack fetched, module loaded from the mount, selftest ok.
+
+One thing that box cannot do is find a map nobody published: g2gfast's `maps/imported/` is gitignored and travels as one pack per map, so an origin serving the game and not its maps gives a server that boots, reports `could not fetch the map surf_mesa`, and carries on. That is the same on a box that built its own pack, because a fresh clone has no maps either.
+
 ### And a fresh install hung before it ever got that far
 
 A Pterodactyl install stuck on "installing", with **no log to read**: wings writes `/var/log/pterodactyl/install/<uuid>.log` when the install container EXITS, so a hung install has an empty log directory and a spinner, and the only output that exists is `docker logs -f <uuid>_installer`.

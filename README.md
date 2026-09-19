@@ -237,6 +237,14 @@ Both land in `dist/`, which is already what gets uploaded, so there is no second
 
 Empty `--games` offers everything in `content/`, which is what a development checkout and a hand-run server want, and is what this repository does by default.
 
+### A box that installs its games builds none of them
+
+`./setup.sh --no-games` — no game repository is cloned, nothing is imported, nothing is packed, and no signing key is generated. It is what the Pterodactyl egg runs, because a server that fetches signed packs from a content origin has no use for seven game repositories and should not be holding a key that can sign content.
+
+**`--only-games` is not the same answer, and the reason is the addon list.** The addons a build wires in are *derived from the games being built*, so `--only-games g2gfast` produces a shell that can parse g2gfast and nothing else — and the first game added to `TMC_GAMES` afterwards downloads, mounts, and has every script in it fail to compile. With no game sources at all the full list is wired in, which is the only answer that still works when the set of games is decided at runtime rather than at install time.
+
+The trade: such a box has an empty `dist/`, so **every** game comes from the origin — including a game's maps, which are published one pack per map and are not in any repository. Drop the flag for a self-contained box that builds its own.
+
 ## Delivering a game as a pack
 
 A game can be **in the build** or **delivered**. Built in is the default and is what every game in `content/` is today: the code is compiled into this project, the server names an absolute `res://` scene, and the client shell has a matching entry in `BUILTIN_CLIENTS`. Delivered means the game is a signed dot-cloud pack that the server and every client download and mount at `res://dot_cloud/<id>/<version>/` — so a server owner adds a game by editing one YAML file, and a player who has never heard of it gets it on connect.
