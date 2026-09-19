@@ -795,30 +795,41 @@ GIT_BASE="${TMC_GIT_BASE:-$GIT_BASE_DEFAULT}"
 ## repositories that genuinely are not published yet, which is the one place an operator
 ## would not look for a typo in an account name.
 ##
-## [b]A `case` rather than a second list of games.[/b] This is an exception table keyed by
-## the name the existing rule already produces, so it stays empty-by-default and a game
-## that moves to `modcommunity` is deleted from here and needs no other edit. The
-## alternative -- a per-game `owner` field in `GAMES` -- would put an owner on all six to
-## express a fact about one, and `GAMES` is walked by everything.
+## [b]A RULE, not a table of exceptions.[/b] It used to be three names -- the two `mg-`
+## games and `zee-dot-weapons` -- and the third of those was missing, which is how a fresh
+## install came to hang on a credential prompt for a repository that does not exist. Then
+## every `game-*` moved as well, and a table would have grown to eight entries, each of
+## them a fact nobody would think to check.
+##
+## The split is the one the family actually has: **the addons are the organisation's and
+## the games are their author's.** So a name that begins with `dot-` comes from
+## `$GIT_BASE` and anything else comes from the games owner -- which means a game added
+## tomorrow needs no edit here at all, and neither does a game deleted.
+##
+## The one thing that is still an exception is a NAME rather than an owner:
+## `mg-buses-from-hell` is checked out under a directory that is not what the repository
+## is called.
 ##
 ## [b]Skipped entirely when the operator named a base.[/b] `TMC_GIT_BASE` means "get them
 ## from here" -- a mirror, an internal host, a directory of bare repositories on a box
-## with no route to github.com -- and honouring an override against it would send exactly
-## one clone somewhere the operator did not point us, which on an air-gapped machine is
-## the one that hangs.
+## with no route to github.com -- and honouring an override against it would send some
+## clones somewhere the operator did not point us, which on an air-gapped machine is
+## exactly the one that hangs.
+GAMES_GIT_BASE="https://github.com/gamemann"
+
 repo_url() {
     local repo="$1"
 
     if [ "$GIT_BASE" = "$GIT_BASE_DEFAULT" ]; then
         case "$repo" in
-            mg-buses-from-hell) printf 'https://github.com/gamemann/game-buses-from-hell.git\n'; return ;;
-            mg-smash-copter) printf 'https://github.com/gamemann/%s.git\n' "$repo"; return ;;
-            # The third one, and the one that was missing. `zee_weapons` is derived into
-            # `zee-dot-weapons` by addon_source above, so this table was reached with the
-            # right name and sent it to an owner that has no such repository -- and a
-            # fresh install hung on the credential prompt that answers. Checked:
-            # modcommunity/zee-dot-weapons is 404, gamemann/zee-dot-weapons is 200.
-            zee-dot-weapons) printf 'https://github.com/gamemann/%s.git\n' "$repo"; return ;;
+            # The directory is `mg-buses-from-hell`; the repository is not.
+            mg-buses-from-hell)
+                printf '%s/game-buses-from-hell.git\n' "$GAMES_GIT_BASE"; return ;;
+            # The addons, and this project. Falls through to $GIT_BASE below.
+            dot-*) ;;
+            # Everything else is a game: game-*, mg-*, and the weapons pack, which
+            # `addon_source` derives into `zee-dot-weapons` before it reaches here.
+            *)  printf '%s/%s.git\n' "$GAMES_GIT_BASE" "$repo"; return ;;
         esac
     fi
 

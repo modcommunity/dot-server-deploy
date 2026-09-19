@@ -32,7 +32,7 @@ It prints a link. Open it.
 ## A Server You Start With One Command
 TMC's server tool, as a thing you can run.
 
-This repository is where the [dot-*](https://github.com/modcommunity) family comes together into something a server owner starts with one command. It is a Godot project that boots a [dot-server](https://github.com/modcommunity/dot-server), reads its configuration from `cfg/*.yml`, loads games out of `content/`, and serves a browser client. It ships **no game of its own**. The games are copied in from their own repositories by `setup.sh`: [game-simple-lobby](https://github.com/modcommunity/game-simple-lobby), which is the lobby it serves by default, [game-hungario](https://github.com/modcommunity/game-hungario) and [game-g2gfast](https://github.com/modcommunity/game-g2gfast).
+This repository is where the [dot-*](https://github.com/modcommunity) family comes together into something a server owner starts with one command. It is a Godot project that boots a [dot-server](https://github.com/modcommunity/dot-server), reads its configuration from `cfg/*.yml`, loads games out of `content/`, and serves a browser client. It ships **no game of its own**. The games are copied in from their own repositories by `setup.sh`: [game-simple-lobby](https://github.com/gamemann/game-simple-lobby), which is the lobby it serves by default, [game-hungario](https://github.com/gamemann/game-hungario) and [game-g2gfast](https://github.com/gamemann/game-g2gfast).
 
 ```bash
 ./setup.sh              # get a runtime, wire the addons into addons/, write ./server
