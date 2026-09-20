@@ -1,0 +1,46 @@
+# The install-from-origin deployment.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.games.yml up -d --build
+#
+# An overlay rather than a second full compose file, and rather than a commented
+# block somebody uncomments: the two deployments differ in exactly three settings
+# and everything else about them is identical, so a copy would drift the moment
+# one of them gained a volume.
+#
+# WHAT IT CHANGES, and why each is needed rather than nice:
+#
+#   * the image carries NO GAME. `setup.sh --no-games` clones nothing, imports
+#     nothing, packs nothing and generates no signing key -- which is the point,
+#     because a box that only ever consumes signed content should not be holding
+#     a key that can sign it. It is also a much shorter build than seven games.
+#   * TMC_GAMES says which games this server is for. They are fetched from the
+#     content origin at startup, descriptor and pack, and then started from disk.
+#   * TMC_CONTENT_URL says where from. Comma-separated for mirrors, tried in
+#     order. The clients that connect are told the same address, so they download
+#     the game from wherever this says.
+#
+# The content mount is read-write in the base file for this reason -- see the
+# comment there. A server that installs games writes their descriptors.
+
+services:
+  server:
+    build:
+      args:
+        TMC_BUILD_GAMES: none
+
+    environment:
+      # Change these. The rest of the deployment is the base file's.
+      TMC_GAMES: 'g2gfast'
+      TMC_GAME: 'g2gfast'
+      TMC_CONTENT_URL: 'https://dotgames.org/content'
+
+      # What happens to a game that is installed and is no longer in TMC_GAMES.
+      #
+      #   hide    (default) kept on disk and not offered. Putting the id back
+      #           costs no download, which is what makes this the safe default.
+      #   remove  deleted -- but only games `install-games` installed ITSELF,
+      #           recorded in data/installed-games.json. Anything hand-authored
+      #           under content/ is never touched.
+      #   keep    kept AND still offered, which is how a server behaved before
+      #           TMC_GAMES existed.
+      TMC_GAMES_MODE: 'hide'

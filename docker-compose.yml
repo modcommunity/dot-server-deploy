@@ -47,9 +47,19 @@ services:
       # reached from a container's direction — an image rebuild must not throw away
       # the settings an operator has been using.
       - ./cfg:/srv/tmc/cfg
-      # Read-only. The server never writes to its content, and saying so here is what
-      # stops a compromised game from rewriting itself.
-      - ./content:/srv/tmc/content:ro
+      # READ-WRITE, and it used to be `:ro` for a reason that has since stopped
+      # being true.
+      #
+      # The old comment said "the server never writes to its content". It does
+      # now: `./server install-games` fetches a game's `game.yml` descriptor out
+      # of its signed pack and writes it to `content/<id>/game.yml`, so a
+      # container started with TMC_GAMES and a read-only content mount fails to
+      # install a single game -- and fails at startup, on a box that looks
+      # correctly configured.
+      #
+      # Put `:ro` back on a deployment that carries its own content and sets no
+      # TMC_GAMES. It is a real protection and it costs nothing there.
+      - ./content:/srv/tmc/content
       # Everything the server writes: admins, bans, the audit log, the generated config.
       - ./data:/srv/tmc/data
 
@@ -62,6 +72,33 @@ services:
       # TMC_NAME: "My server"
       # TMC_MAX_PLAYERS: "64"
       # TMC_GAME: "lobby"
+
+      # --- Installing games instead of carrying them ---------------------------
+      #
+      # `./server` reads these three out of the environment itself, so they need
+      # no translation in docker-entrypoint.sh -- which is why that script still
+      # lists only four.
+      #
+      # TMC_GAMES is the list this server is FOR. An entry is one of three
+      # spellings and the spelling decides where the game comes from:
+      #
+      #   g2gfast                        a game this image already carries
+      #   gamemann/game-g2gfast01        somebody's published pack, newest version
+      #   gamemann/game-g2gfast01@1.2.0  that version
+      #
+      # It is also a filter: the games listing, `changelevel`, the vote menu and
+      # the boot game all read this one set. TMC_GAME must name one of them, by
+      # its short directory name rather than by the owner/name it installs under.
+      #
+      # Empty means "offer everything this image has", which is the right meaning
+      # of saying nothing and is what a development box wants.
+      #
+      # Pair this with `--build-arg TMC_BUILD_GAMES=none` (see the Dockerfile) for
+      # an image that carries no game and installs every one of them, or use the
+      # docker-compose.games.yml overlay, which sets both.
+      # TMC_GAMES: "g2gfast,arena"
+      # TMC_CONTENT_URL: "https://dotgames.org/content"
+      # TMC_GAMES_MODE: "hide"
 
     # A game server should not be able to write anywhere but its data directory, and
     # should not be able to gain privileges it did not start with.

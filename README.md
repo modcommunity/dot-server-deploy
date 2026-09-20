@@ -553,9 +553,21 @@ docker compose logs -f
 
 The build context is the **parent** directory: every dot-* addon is its own repository and there is no way to clone the tree at once, so they are siblings rather than subdirectories.
 
-`cfg/` and `data/` are bind mounts, so the first run writes a configuration you can edit and an RCON password that survives a rebuild. `content/` is mounted read-only. The container runs as your own uid (`UID=$(id -u) GID=$(id -g) docker compose up -d`), not as root, and drops every capability.
+`cfg/` and `data/` are bind mounts, so the first run writes a configuration you can edit and an RCON password that survives a rebuild. `content/` is mounted read-write, and used to be read-only: `install-games` writes each game's `game.yml` descriptor there, so a container started with `TMC_GAMES` and a read-only content mount fails to install a single game — at startup, on a box that looks correctly configured. Put `:ro` back on a deployment that carries its own content and sets no `TMC_GAMES`. The container runs as your own uid (`UID=$(id -u) GID=$(id -g) docker compose up -d`), not as root, and drops every capability.
 
 RCON is published on **loopback only**. It is a remote console and the password is the only thing between it and whoever finds the port; reach it through an SSH tunnel, or put an address allow-list in `cfg/rcon.yml` and widen the mapping deliberately.
+
+### A container that installs its games instead of carrying them
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.games.yml up -d --build
+```
+
+The same deployment the Pterodactyl egg makes, and for the same reasons. The overlay changes three things: the image is built with `--build-arg TMC_BUILD_GAMES=none`, so `setup.sh --no-games` clones nothing, packs nothing and **generates no signing key** — a box that only ever consumes signed content should not hold a key that can sign it — and `TMC_GAMES` and `TMC_CONTENT_URL` say which games this server is for and where they come from. It is also a far shorter build than seven games.
+
+An overlay rather than a second compose file, because the two deployments differ in exactly three settings and a copy would drift the moment one of them gained a volume.
+
+`TMC_BUILD_GAMES` defaults to `all`, so an existing `docker compose up` keeps producing the image it produced yesterday. Whether a box carries its games or fetches them is a decision about a deployment, not something a rebuild should make quietly.
 
 ## TLS, and the one question that picks the method
 
@@ -628,3 +640,7 @@ node tools/browser_check.mjs \
 - **A connecting player is a guest until this server can PROVE otherwise.** Signing in on the website fills in the display name and nothing more: that name travels as a label, exactly like the one a player types, and no server should trust a name a client chose. `cfg/auth.yml` is what turns a label into an identity — `strategy: ticket` verifies a short-lived, server-scoped ticket offline against the issuer's public key, which is the only shape safe to hand to an operator you do not employ. **The issuer is publisher-run and TMC does not run one yet**, so `ticket` is configurable and not yet usable end to end; `introspect` works today against the backbone and is first-party only, because it hands the operator a live credential for the player's whole site account.
 - **No game has been delivered as a pack yet.** The lobby ships inside the build. See CLAUDE.md for the constraint that decides what a delivered game may look like.
 - **No TLS in the server itself.** A page on HTTPS cannot open `ws://`, and the certificate and the reverse proxy in front of it are deployment rather than code — `deploy/issue-letsencrypt.sh` and `deploy/install-server-tls.sh` are how you get both.
+
+## Licence
+
+MIT. See [LICENSE](LICENSE).

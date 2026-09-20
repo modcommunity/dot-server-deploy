@@ -66,7 +66,40 @@ WORKDIR /src/dot-server-deploy
 # found before anything is cloned. What --vendor decides for them is that games/ gets no
 # link into a sibling this image's final stage will not have, and is deleted if a clone
 # put anything there -- what travels is dist/, the signed pack of each game.
-RUN ./setup.sh --godot /usr/local/bin/godot --vendor --addons-dir ..
+# --- Which games this image CARRIES ------------------------------------------
+#
+# Two shapes of deployment, and they want opposite answers.
+#
+#   all  (default)  the image builds every game and ships dist/, so the container
+#                   is self-contained and needs no content origin at all. This is
+#                   what this image has always been and what an air-gapped or
+#                   offline deployment wants.
+#
+#   none            `setup.sh --no-games`: nothing is cloned, nothing is imported,
+#                   nothing is packed, and NO SIGNING KEY IS GENERATED. The server
+#                   installs what TMC_GAMES names from the content origin at
+#                   startup instead. This is what the Pterodactyl egg does, and for
+#                   the reason written there: a box that only ever CONSUMES signed
+#                   content should not be holding a key that can sign it, and
+#                   seven game repositories are a long build for a server that was
+#                   told it serves one.
+#
+#       docker compose build --build-arg TMC_BUILD_GAMES=none
+#
+# The default stays `all` so an existing `docker compose up` keeps producing the
+# image it produced yesterday. Flipping it is a decision about a deployment, not
+# something a rebuild should make quietly.
+#
+# NOT `--only-games`, in either case. The addons a build wires in are derived from
+# the games being built, so a filtered build produces a shell that can parse those
+# games and nothing else -- and the first game added to TMC_GAMES afterwards
+# downloads, mounts, and has every script in it fail to compile. With no game
+# sources at all the full addon list is wired in, which is the only answer that
+# still works when the set of games is decided at run time.
+ARG TMC_BUILD_GAMES=all
+
+RUN ./setup.sh --godot /usr/local/bin/godot --vendor --addons-dir .. \
+        $([ "$TMC_BUILD_GAMES" = "none" ] && echo --no-games)
 
 # The configuration generated during the build is thrown away. cfg/ is a volume at
 # run time and the RCON password printed into a build log is a password in a build
@@ -77,7 +110,13 @@ RUN rm -rf cfg data
 # Proves the image can actually serve before it is tagged. A build that succeeds and
 # an image that cannot boot are the same thing from CI's point of view, and this is
 # the cheapest place to tell them apart.
+# TMC_BUILD_GAMES is passed AGAIN here, and forgetting it is the whole trap: this
+# is a second `setup.sh` invocation, so without the flag a `none` build would clone
+# and publish all seven games at check time -- undoing the build above, generating
+# the signing key that flag exists to avoid, and doing it in the step whose job is
+# to prove the image is fine.
 RUN mkdir -p cfg data && ./setup.sh --godot /usr/local/bin/godot --no-import --check \
+        $([ "$TMC_BUILD_GAMES" = "none" ] && echo --no-games) \
  && rm -rf cfg data
 
 # --- Stage 3: what actually runs --------------------------------------------
