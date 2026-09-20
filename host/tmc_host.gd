@@ -319,6 +319,48 @@ func _apply_overrides(args: PackedStringArray) -> void:
 	if players != "":
 		config.server.max_players = players.to_int()
 
+	# [b]The other three ports, and the interface the query listener binds.[/b]
+	#
+	# All four are derivable and all four are derived WRONG on a panel. RCON defaults to
+	# the game port plus one, and both query ports default to the game port itself --
+	# which is right on a box where you choose the numbers, and is not how Pterodactyl
+	# works: it hands a server the allocations it was given, which are whatever was free
+	# on that node. A server that assumes `port + 1` on a machine where `port + 1`
+	# belongs to somebody else does not fail cleanly, it fails as "address in use" on a
+	# port nobody configured.
+	#
+	# Not secrets, so argv is fine -- unlike `--rcon-password` below, which is refused.
+	# A port number is visible in `ss -ltn` to anybody who can read argv anyway.
+	var rcon_port := _value(args, "--rcon-port", "")
+
+	if rcon_port != "":
+		config.server.rcon_port = rcon_port.to_int()
+
+	# A2S first, because `query_port` DERIVES FROM IT: dot-server's
+	# `effective_query_port()` falls back to `effective_a2s_port()`, so setting only
+	# `--a2s-port` moves both onto one socket -- which is the arrangement the two
+	# protocols are designed for, told apart by their first four bytes. Setting
+	# `--query-port` as well is how you split them.
+	var a2s_port := _value(args, "--a2s-port", "")
+
+	if a2s_port != "":
+		config.server.a2s_port = a2s_port.to_int()
+
+	var query_port := _value(args, "--query-port", "")
+
+	if query_port != "":
+		config.server.query_port = query_port.to_int()
+
+	# [b]The one setting a reverse-proxied server cannot do without.[/b] nginx forwards
+	# the game's WebSocket and CANNOT forward UDP, so with `--bind` on loopback the
+	# query listener binds where no tracker on earth can reach it -- and a tracker
+	# cannot tell that from a server that is down. `*` puts the query port, and only
+	# the query port, on every interface. RCON deliberately does not follow it.
+	var query_bind := _value(args, "--query-bind", "")
+
+	if query_bind != "":
+		config.server.query_bind_address = query_bind
+
 	var game := _value(args, "--game", "")
 
 	if game != "":

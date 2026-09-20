@@ -557,6 +557,30 @@ The build context is the **parent** directory: every dot-* addon is its own repo
 
 RCON is published on **loopback only**. It is a remote console and the password is the only thing between it and whoever finds the port; reach it through an SSH tunnel, or put an address allow-list in `cfg/rcon.yml` and widen the mapping deliberately.
 
+### Ports, and the three that are guessed for you
+
+A server opens four listeners and only one of them is a number you gave it:
+
+| | derives as | protocol |
+| --- | --- | --- |
+| the game | `--port` | TCP (WebSocket) |
+| RCON | the game port **+ 1** | TCP |
+| A2S | the game port **itself** | UDP |
+| DQP | the A2S port | UDP |
+
+A2S landing on the game port is not a collision: the game is a WebSocket listener and therefore TCP, so the same number is free on UDP — and it is the only port a tracker will try. DQP sharing the A2S port is not one either; the two are told apart by their first four bytes, which is what lets a tracker that found the server over A2S be pointed at the better protocol without being given a second address.
+
+Those defaults are right on a box where you choose the numbers and are **guesses on a panel**, which hands out whatever was free on the node. `--rcon-port`, `--a2s-port` and `--query-port` (and `TMC_RCON_PORT`, `TMC_A2S_PORT`, `TMC_QUERY_PORT`) move them; each has a variable in the Pterodactyl egg.
+
+`--query-bind` is the one a reverse-proxied server cannot do without. With nginx terminating TLS in front of the game you bind the game to loopback — and nginx forwards a WebSocket but **cannot forward UDP**, so a query listener that followed that setting would listen where nothing can ask it, and a tracker cannot tell that apart from a server that is down. `*` puts the query ports, and only the query ports, on every interface:
+
+```
+a2s   *:27015        query  *:27016
+game  127.0.0.1:6190  rcon   127.0.0.1:27020
+```
+
+RCON deliberately does not follow it.
+
 ### A container that installs its games instead of carrying them
 
 ```bash

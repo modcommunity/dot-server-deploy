@@ -13,7 +13,7 @@
         "Debian 12": "ghcr.io/parkervcp/yolks:debian"
     },
     "file_denylist": [],
-    "startup": "./server",
+    "startup": "./server --port {{server.build.default.port}}",
     "config": {
         "files": "{}",
         "startup": "{\"done\": \"server   ready\"}",
@@ -70,12 +70,52 @@
         },
         {
             "name": "Port",
-            "description": "The game port. RCON is always this plus one, so two servers a single port apart collide on RCON and nowhere else -- leave a gap of at least 2.",
+            "description": "The game port. LEAVE THIS EMPTY unless you know why you are not: the startup command passes the panel's own primary allocation as --port, and an argument beats this variable, so the server listens where wings actually published it. This used to be a hardcoded 6090 that only an admin could change -- which meant a server on any other allocation listened on a port nothing forwarded, and looked healthy doing it. It stays here for a hand-run container and for an operator who deliberately wants a different number inside the container from the one outside it.",
             "env_variable": "TMC_PORT",
-            "default_value": "6090",
+            "default_value": "",
             "user_viewable": true,
             "user_editable": false,
-            "rules": "required|integer|between:1024,65535",
+            "rules": "nullable|integer|between:1024,65535",
+            "field_type": "text"
+        },
+        {
+            "name": "RCON port",
+            "description": "Where RCON listens. Empty derives the game port PLUS ONE, which is the right default on a box where you pick the numbers and is a guess here -- the panel hands out whatever was free on the node, and the port after yours probably belongs to somebody else. IT ALSO DECIDES WHETHER RCON IS REACHABLE AT ALL. wings only publishes ports this server has an allocation for, so a derived port+1 is reachable from inside the container and nowhere else -- which is a perfectly good way to run if you never use RCON remotely. To reach it, add a second allocation and put its port here. The PASSWORD is deliberately not a variable and never will be: the panel displays variables and puts them in the container environment, where any process can read them. It goes in cfg/rcon.yml, which is a file with a mode on it.",
+            "env_variable": "TMC_RCON_PORT",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|integer|between:1024,65535",
+            "field_type": "text"
+        },
+        {
+            "name": "A2S port",
+            "description": "Where A2S answers, over UDP. Empty derives THE GAME PORT ITSELF, and that is usually what you want: the game is a WebSocket listener and therefore TCP, so the same number is free on UDP, and an allocation opens both protocols -- one allocation serves the game and the query. It is also the only port a tracker will try. Set this only when something else on the node has taken that UDP port, and give the server an allocation for whatever you set.",
+            "env_variable": "TMC_A2S_PORT",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|integer|between:1024,65535",
+            "field_type": "text"
+        },
+        {
+            "name": "Query port (DQP)",
+            "description": "Where the dot query protocol answers, over UDP. Empty derives the A2S port above, so the two share ONE socket -- they are told apart by their first four bytes, which means a tracker that found this server over A2S can be pointed at the better protocol without being given a second address. Set this only to split them onto separate ports, and allocate the port you set.",
+            "env_variable": "TMC_QUERY_PORT",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|integer|between:1024,65535",
+            "field_type": "text"
+        },
+        {
+            "name": "Query bind address",
+            "description": "Which interface the query listeners bind. `*` is every one and is the default. This is the setting a reverse-proxied server cannot do without: when nginx terminates TLS in front of the game you set the bind address to loopback, and nginx forwards a WebSocket but CANNOT forward UDP -- so a query listener that followed that setting would be listening where nothing can ask it, and a tracker cannot tell that from a server that is down. RCON deliberately does not follow it.",
+            "env_variable": "TMC_QUERY_BIND",
+            "default_value": "*",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string|max:64",
             "field_type": "text"
         },
         {

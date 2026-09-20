@@ -75,6 +75,13 @@ OVERRIDES=()
 # one command line is not a thing to make the other side arbitrate.
 OPT_PORT="${TMC_PORT:-}"
 OPT_BIND="${TMC_BIND:-}"
+# The other three ports. All derivable, and all derived WRONG on a panel: RCON defaults
+# to the game port plus one and both query ports default to the game port itself, which
+# is right when you choose the numbers and is not how an allocation-based host works.
+OPT_RCON_PORT="${TMC_RCON_PORT:-}"
+OPT_QUERY_PORT="${TMC_QUERY_PORT:-}"
+OPT_A2S_PORT="${TMC_A2S_PORT:-}"
+OPT_QUERY_BIND="${TMC_QUERY_BIND:-}"
 OPT_NAME="${TMC_NAME:-}"
 OPT_MAX_PLAYERS="${TMC_MAX_PLAYERS:-}"
 OPT_GAME="${TMC_GAME:-}"
@@ -165,6 +172,17 @@ usage() {
   Options
     --port N            Listen here instead of what cfg/net.yml says.
     --bind ADDR         Interface to bind. * or 0.0.0.0 is every one.
+    --rcon-port N       RCON listens here. Default is the game port plus one.
+    --a2s-port N        A2S answers here (UDP). Default is the game port --
+                        which is free because the game itself is WebSocket.
+    --query-port N      DQP answers here (UDP). Default is --a2s-port, so the
+                        two share one socket and are told apart by their first
+                        four bytes. Give both to split them.
+    --query-bind ADDR   Interface the query listeners bind. `*` is every one.
+                        The setting a reverse-proxied server cannot do without:
+                        nginx forwards the game's WebSocket and cannot forward
+                        UDP, so with --bind on loopback a tracker cannot reach
+                        the query port and cannot tell that from a dead server.
     --name TEXT         Server name shown in listings.
     --max-players N
     --game ID           Load this game at boot instead of the default.
@@ -258,6 +276,8 @@ usage() {
 
     TMC_PORT            --port                TMC_CONFIG_DIR    --config
     TMC_BIND            --bind                TMC_CONTENT_DIR   --content
+    TMC_RCON_PORT       --rcon-port           TMC_QUERY_PORT    --query-port
+    TMC_A2S_PORT        --a2s-port            TMC_QUERY_BIND    --query-bind
     TMC_NAME            --name                TMC_DATA_DIR      --data
     TMC_MAX_PLAYERS     --max-players         TMC_GODOT         --godot
     TMC_GAME            --game                TMC_ENGINE_BASE   --base
@@ -307,6 +327,10 @@ while [ $# -gt 0 ]; do
     case "$1" in
         --port)        [ $# -ge 2 ] || die "$1 needs a value"; OPT_PORT="$2";        shift 2 ;;
         --bind)        [ $# -ge 2 ] || die "$1 needs a value"; OPT_BIND="$2";        shift 2 ;;
+        --rcon-port)   [ $# -ge 2 ] || die "$1 needs a value"; OPT_RCON_PORT="$2";   shift 2 ;;
+        --query-port)  [ $# -ge 2 ] || die "$1 needs a value"; OPT_QUERY_PORT="$2";  shift 2 ;;
+        --a2s-port)    [ $# -ge 2 ] || die "$1 needs a value"; OPT_A2S_PORT="$2";    shift 2 ;;
+        --query-bind)  [ $# -ge 2 ] || die "$1 needs a value"; OPT_QUERY_BIND="$2";  shift 2 ;;
         --name)        [ $# -ge 2 ] || die "$1 needs a value"; OPT_NAME="$2";        shift 2 ;;
         --max-players) [ $# -ge 2 ] || die "$1 needs a value"; OPT_MAX_PLAYERS="$2"; shift 2 ;;
         --game)        [ $# -ge 2 ] || die "$1 needs a value"; OPT_GAME="$2";        shift 2 ;;
@@ -343,6 +367,10 @@ done
 # this" and "somebody asked for the empty string" stay different.
 [ -n "$OPT_PORT" ]        && OVERRIDES+=(--port "$OPT_PORT")
 [ -n "$OPT_BIND" ]        && OVERRIDES+=(--bind "$OPT_BIND")
+[ -n "$OPT_RCON_PORT" ]   && OVERRIDES+=(--rcon-port "$OPT_RCON_PORT")
+[ -n "$OPT_QUERY_PORT" ]  && OVERRIDES+=(--query-port "$OPT_QUERY_PORT")
+[ -n "$OPT_A2S_PORT" ]    && OVERRIDES+=(--a2s-port "$OPT_A2S_PORT")
+[ -n "$OPT_QUERY_BIND" ]  && OVERRIDES+=(--query-bind "$OPT_QUERY_BIND")
 [ -n "$OPT_NAME" ]        && OVERRIDES+=(--name "$OPT_NAME")
 [ -n "$OPT_MAX_PLAYERS" ] && OVERRIDES+=(--max-players "$OPT_MAX_PLAYERS")
 [ -n "$OPT_GAME" ]        && OVERRIDES+=(--game "$OPT_GAME")
@@ -493,8 +521,17 @@ if [ "$COMMAND" = "run" ]; then
             [ -n "$(cfg_value "$(abs "$CONFIG_DIR")/$f.yml" rcon_password)" ] && RCON_ON=1
         done
 
+        # [b]The override outranks the file, exactly as it does in the engine.[/b] This
+        # is the same bug the comment above describes, one layer up: the launcher used
+        # to read only the YAML, so `--rcon-port` moved the listener and the preflight
+        # still refused to start over the port it had just vacated. A check that
+        # contradicts the setting it is checking is worse than no check.
         RCON_PORT=""
         [ -z "$RCON_ON" ] && RCON_PORT="skip"
+        if [ -n "$RCON_ON" ] && [ -n "$OPT_RCON_PORT" ]; then
+            RCON_PORT="$OPT_RCON_PORT"
+            RCON_WHY="--rcon-port"
+        fi
         for f in rcon server net; do
             [ "$RCON_PORT" = "skip" ] && break
             [ -n "$RCON_PORT" ] && break
@@ -505,7 +542,7 @@ if [ "$COMMAND" = "run" ]; then
         if [ "$RCON_PORT" = "skip" ]; then
             RCON_PORT=""
         elif [ -n "$RCON_PORT" ]; then
-            RCON_WHY="rcon_port"
+            [ -n "${RCON_WHY:-}" ] || RCON_WHY="rcon_port"
         else
             RCON_PORT="$((PORT + 1))"
             RCON_WHY="the game port plus one"

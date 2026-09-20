@@ -100,6 +100,27 @@ services:
       # TMC_CONTENT_URL: "https://dotgames.org/content"
       # TMC_GAMES_MODE: "hide"
 
+      # --- The other three ports -----------------------------------------------
+      #
+      # RCON derives the game port plus one; A2S derives the game port itself,
+      # which is free because the game is a WebSocket listener and therefore TCP;
+      # and DQP derives the A2S port, so the two query protocols share one socket
+      # and are told apart by their first four bytes.
+      #
+      # Set these only to move them, and publish whatever you set in `ports:`
+      # above -- a listener on an unpublished port is reachable from inside the
+      # container and nowhere else.
+      # TMC_RCON_PORT: "27020"
+      # TMC_A2S_PORT: "27015"
+      # TMC_QUERY_PORT: "27016"
+
+      # Which interface the query listeners bind. `*` is every one, and is the
+      # setting a reverse-proxied server cannot do without: nginx forwards the
+      # game's WebSocket and cannot forward UDP, so a query listener following a
+      # loopback bind address listens where no tracker can reach it. RCON
+      # deliberately does not follow this.
+      TMC_QUERY_BIND: "*"
+
     # A game server should not be able to write anywhere but its data directory, and
     # should not be able to gain privileges it did not start with.
     security_opt:
