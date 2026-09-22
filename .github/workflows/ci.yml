@@ -1,0 +1,56 @@
+# Every script parses, then every suite runs. The whole check is in modcommunity/dot-ci,
+# so that fixing it is one commit rather than one per repository; its README says what
+# the inputs are and why a release does not touch the content origin.
+#
+# branches: ['**'] rather than [main] on purpose. Several repositories in this family
+# sit on a task branch for days, and a main-only trigger is a check that reports
+# nothing about the work anybody is actually doing -- the same assumption that made
+# push-github.sh push a stale ref, succeed, and send nothing.
+name: CI
+
+on:
+    push:
+        branches: ['**']
+        paths-ignore:
+            - '**/*.md'
+            - 'screenshots/**'
+    pull_request:
+    workflow_dispatch:
+
+jobs:
+    validate:
+        uses: modcommunity/dot-ci/.github/workflows/validate.yml@v1
+        with:
+            godot: false
+            shell-command: 'for f in setup.sh demo.sh upgrade.sh play.sh tools/*.sh deploy/*.sh; do bash -n "$f" || exit 1; done'
+        secrets:
+            DEPS_TOKEN: ${{ secrets.DOT_DEPS_TOKEN }}
+
+    # The Godot pin is in two places: tools/fetch-godot.sh here, which is
+    # authoritative because it is what the containers, the release tarballs and every
+    # developer box are built from, and dot-ci/godot.pin, which is what the family's
+    # checks run on. CI cannot read this file before it can fetch anything, so it
+    # holds a copy -- and a copy with nothing comparing it is a pin that goes stale in
+    # the direction nobody notices, because moving it HERE is what makes it wrong
+    # THERE. The check is on this side so it names the person who moved it.
+    godot-pin:
+        runs-on: ubuntu-latest
+        timeout-minutes: 5
+        steps:
+            - uses: actions/checkout@v4
+            - name: The CI pin and this one agree
+              run: |
+                  set -euo pipefail
+                  mine="$(grep -oE '^GODOT_VERSION="[^"]+"' tools/fetch-godot.sh | head -1 | cut -d'"' -f2)"
+                  theirs="$(curl -fsSL https://raw.githubusercontent.com/modcommunity/dot-ci/v1/godot.pin \
+                      | grep -oE '^GODOT_VERSION=.+$' | head -1 | cut -d= -f2-)"
+                  echo "here:   $mine"
+                  echo "dot-ci: $theirs"
+                  if [ "$mine" != "$theirs" ]; then
+                      echo
+                      echo "The pin moved here and not in dot-ci, so every check in the family is"
+                      echo "still running on $theirs while everything built from this repository"
+                      echo "is on $mine. Update dot-ci/godot.pin -- version AND the sha512, taken"
+                      echo "from that release's own SHA512-SUMS.txt -- and tag it."
+                      exit 1
+                  fi
