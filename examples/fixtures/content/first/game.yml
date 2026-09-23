@@ -3,3 +3,12 @@ version: 1.0.0
 kind: builtin
 scene: res://scenes/room_server.tscn
 module: res://game/room_module.gd
+
+# The operator's own metadata block, passed through to the descriptor. `module` here
+# must NOT override the `module:` above: the selftest asserts it does not.
+metadata:
+  module: res://nowhere.gd
+  vote:
+    time_limit_sec: 60
+  map_vote:
+    extend_seconds: 900

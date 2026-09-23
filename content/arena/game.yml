@@ -59,3 +59,24 @@ cvars:
   # At one they spawn, walk around a real map with real weapons, and the round starts
   # properly the moment somebody else arrives.
   arena_minplayers: "1"
+
+# The MAP vote inside this game — what the players pick between when a map ends, and
+# whether they may extend the one they are on. Its defaults are in the game's own
+# game/arena_vote.gd; anything written here overrides them, and the server's own
+# user://cfg/arena_vote.json, DOT_VOTE_* and --vote-* override this. Keyed exactly as
+# dot-vote's DotVoteRules, enums by name.
+#
+# `vote:` beside it is a different thing: how the SERVER's vote for the next game
+# (cfg/vote.yml) treats this game — its time limit there, its weight, whether it is
+# official. Both are read from the descriptor's metadata.
+#
+# metadata:
+#   map_vote:
+#     end_vote: true           # ask the players when the map's time runs out
+#     vote_lead_sec: 90        # this long before the end
+#     include_extend: true     # with "extend this map" on the ballot
+#     extend_seconds: 600      # by this much
+#     max_extends: 3           # at most this many times
+#   vote:
+#     time_limit_sec: 2400
+

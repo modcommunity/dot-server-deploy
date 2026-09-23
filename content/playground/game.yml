@@ -43,3 +43,29 @@ module: game/playground_module.gd
 # thirty minutes. 0 disables the limit.
 cvars:
   pg_map_seconds: "0"
+
+# The MAP vote inside this game — what the players pick between when a map ends, and
+# whether they may extend the one they are on. Its defaults are in the game's own
+# game/playground_vote.gd; anything written here overrides them, and the server's own
+# user://cfg/playground_vote.json, DOT_VOTE_* and --vote-* override this. Keyed exactly as
+# dot-vote's DotVoteRules, enums by name.
+#
+# `vote:` beside it is a different thing: how the SERVER's vote for the next game
+# (cfg/vote.yml) treats this game — its time limit there, its weight, whether it is
+# official. Both are read from the descriptor's metadata.
+#
+# NOTE pg_map_seconds: "0" above stops the MAP's own timer, and it does not stop this
+# vote's clock, which has a thirty-minute default of its own — so today the map is
+# still put to a vote at twenty-eight minutes. For "runs until somebody votes it out",
+# uncomment the block and set `trigger: rtv_only` and `duration_sec: 0`.
+#
+# metadata:
+#   map_vote:
+#     end_vote: true           # ask the players when the map's time runs out
+#     vote_lead_sec: 120       # this long before the end
+#     include_extend: true     # with "extend this map" on the ballot
+#     extend_seconds: 900      # by this much
+#     max_extends: 4           # at most this many times
+#   vote:
+#     time_limit_sec: 2400
+

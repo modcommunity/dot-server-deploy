@@ -287,6 +287,24 @@ func _build(name: String, tree: Dictionary) -> DotResult:
 		"directory": "%s/%s" % [root, name],
 	}
 
+	# [b]The operator's own `metadata:` block, which nothing was reading.[/b] dot-vote's
+	# README, its game source and cfg/vote.yml all tell an operator to write a game's time
+	# limit under `metadata: vote:` in game.yml, and DotVoteGameSource reads
+	# `descriptor.metadata.vote` — but the descriptor was built from the three keys above
+	# and the block was dropped, so every per-game vote setting anybody wrote was ignored
+	# in silence. `map_vote:` rides the same way: it is what a game's own map vote layers
+	# over its defaults (DotVoteGameSource.running_game_metadata).
+	#
+	# The three keys this file sets win over anything the block says. They are how the
+	# host finds the game's module and directory, and a game.yml that could redirect them
+	# through a metadata key would be a second, undocumented way to say `module:`.
+	var extra: Variant = TmcYaml.at(tree, "metadata", {})
+
+	if extra is Dictionary:
+		for key: Variant in (extra as Dictionary):
+			if not descriptor.metadata.has(str(key)):
+				descriptor.metadata[str(key)] = (extra as Dictionary)[key]
+
 	var valid := descriptor.validate()
 
 	if not valid.ok:
