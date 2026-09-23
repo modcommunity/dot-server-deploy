@@ -172,9 +172,18 @@ func _wire() -> void:
 
 		return out
 
+	# The map flag, which is what the vote's admin commands are gated on too. This asked
+	# for "changelevel" — the name of a COMMAND, not a flag anybody holds — and
+	# DotAdminFlags.granted matches exactly, so only root was ever an admin here: an
+	# admin's nomination never bypassed a cap and rtv_admin_instant never fired.
 	director.is_admin_fn = func(voter: StringName) -> bool:
 		var session := _session_for(voter)
-		return session != null and session.has_permission("changelevel")
+		return session != null and session.has_permission(DotAdminFlags.CHANGEMAP)
+
+	# A votekick on screen: a ballot opened on top of it would be two menus fighting for
+	# the same number keys. The due vote waits, through dot-vote's own retry.
+	director.busy_fn = func() -> bool:
+		return server.votes != null and server.votes.is_active()
 
 	director.is_spectator_fn = func(voter: StringName) -> bool:
 		var session := _session_for(voter)

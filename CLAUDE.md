@@ -156,10 +156,7 @@ only thing missing was letting the players ask.
 
 **The `game_` prefix is load-bearing.** A game in `content/` may run a vote of its own — one of them votes for the next *map*, which is what that genre has always done — and its module registers `rtv`, `nominate`, `timeleft` and `nextmap` before `TmcVote.install` ever runs. `DotConsole.register_command` keeps the first registration of a name and hands it back, so an unprefixed server vote does not fail loudly: it gets four dead commands and nine live ones, and a player nominating a game is told there is no such map while `!nominations` shows them an empty ballot. The four names also belong to the game's module, so the first `changelevel` away unregisters them for the rest of the process. `!rtv` is about the game in front of you; `!game_rtv` is about which game is next. For the same reason this director sets `register_service = false` — `dot_vote_director` in `DotRegistry` belongs to the loaded game's vote, and the registry is last-wins.
 
-The engine is **dot-vote**, and the whole of the policy is `vote.yml`, which is a
-`DotVoteRules` and therefore layers `defaults < vote.yml < DOT_VOTE_* < --vote-*` like
-everything else here. `host/tmc_vote.gd` is only the wiring: who counts as a player,
-who counts as an admin, where the announcements go.
+The engine is **dot-vote**, and the whole of the policy is `vote.yml`, which is a `DotVoteRules` and therefore layers `defaults < vote.yml < DOT_GAME_VOTE_* < --game-vote-*` like everything else here. **Not `DOT_VOTE_*`**, which is the prefix of the MAP vote inside a loaded game — same process, its own rules — and one prefix for both would make one flag change two votes. The layer was claimed by this file and never applied until 2026-09-23; `TmcConfig._layer_vote_overrides` is where it is now, and the selftest asserts the plain prefix does not reach it. `host/tmc_vote.gd` is only the wiring: who counts as a player, who counts as an admin, where the announcements go.
 
 Three decisions in that file are this deployment's rather than dot-vote's:
 
@@ -167,10 +164,7 @@ Three decisions in that file are this deployment's rather than dot-vote's:
   screen rather than a game, and "vote to go back to the menu" is not something anybody
   votes for. It is a TMC key rather than a `DotVoteRules` one for exactly that reason:
   dot-vote should not have an opinion about what a lobby is.
-- **A game's time limit lives in its own `game.yml`**, under `metadata: vote:
-  time_limit_sec:`. Forty minutes of surf and ten minutes of a lobby-sized deathmatch
-  are not the same number and never will be, and the alternative is a second table of
-  game ids that goes stale — which this project has already been bitten by twice.
+- **A game's time limit lives in its own `game.yml`**, under `metadata: vote: time_limit_sec:`. Forty minutes of surf and ten minutes of a lobby-sized deathmatch are not the same number and never will be, and the alternative is a second table of game ids that goes stale — which this project has already been bitten by twice. **That block was dropped until 2026-09-23**: `TmcContent` built the descriptor's metadata from `kind`, `module` and `directory` and nothing else, so every per-game vote setting anybody wrote was ignored in silence. It is passed through now, and `metadata: map_vote:` rides with it — the game's own map vote reads that as the layer between its code defaults and `user://cfg/<game>_vote.json`. The three keys this host sets win over the block, so it is not a second way to say `module:`.
 - **`begin_on_apply` is off.** dot-vote's director would otherwise announce a change
   it made *and* this host would announce the same change through `game_loaded` — which
   is two notifications of one play, two entries in the play history, and every cooldown

@@ -227,9 +227,9 @@ var auth: Dictionary = {}
 ##
 ## Applied through [method DotConfig.apply_dictionary] rather than key by key, because
 ## that is what reads an enum written by name and coerces every YAML scalar through the
-## property's own type — the same path `DOT_VOTE_*` and `--vote-*` take. A second
-## translation table here would be a second place for `method: instant_runoff` to mean
-## something different.
+## property's own type — the same path `DOT_GAME_VOTE_*` and `--game-vote-*` take (see
+## [method _layer_vote_overrides]). A second translation table here would be a second
+## place for `method: instant_runoff` to mean something different.
 var vote: DotVoteRules = DotVoteRules.new()
 
 ## Game ids `vote.yml` says are never on a ballot.
@@ -349,12 +349,34 @@ static func load_dir(directory: String) -> DotResult:
 		if not applied.ok:
 			return applied
 
+	config._layer_vote_overrides()
+
 	var valid := config.server.validate()
 
 	if not valid.ok:
 		return valid.wrap("The configuration in %s is not usable" % base)
 
 	return DotResult.success(config)
+
+
+## The environment and the command line over `vote.yml`, like every DotConfig.
+##
+## [b]Under DOT_GAME_VOTE_* and --game-vote-*, not dot-vote's own prefixes.[/b] A game
+## loaded out of `content/` runs its own MAP vote in this same process and layers that
+## under `DOT_VOTE_*` and `--vote-*`; one prefix for both would make a single flag change
+## two votes, one of which the operator did not mean. The server-level vote's commands
+## are `game_*` for the same reason, so the prefix says the same thing twice.
+##
+## These layers used to be claimed and not applied: the note on [member vote] said
+## `DOT_VOTE_*` took the same path as the file, and nothing ever called it.
+func _layer_vote_overrides() -> void:
+	var before := vote.unknown_keys.size()
+
+	vote.apply_env("DOT_GAME_VOTE_")
+	vote.apply_cli("--game-vote-")
+
+	for i in range(before, vote.unknown_keys.size()):
+		unknown.append("--game-vote-: %s" % vote.unknown_keys[i])
 
 
 func _apply(file: String, tree: Dictionary) -> DotResult:

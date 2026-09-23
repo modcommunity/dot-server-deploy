@@ -14,7 +14,7 @@ extends Node
 
 const CFG := "res://examples/fixtures"
 
-const CHECKS := 138
+const CHECKS := 143
 
 var _passed := 0
 var _failed := 0
@@ -608,6 +608,26 @@ func _test_content() -> void:
 		"and the module it names"
 	)
 
+	# The operator's `metadata:` block. dot-vote's game source reads `metadata.vote` and a
+	# game's own map vote reads `metadata.map_vote`, and both were dropped here: every
+	# per-game vote setting anybody wrote in a game.yml was ignored, in silence.
+	var vote_meta: Variant = builtin.metadata.get("vote", {}) if builtin != null else {}
+	_check(
+		vote_meta is Dictionary and int((vote_meta as Dictionary).get("time_limit_sec", 0)) == 60,
+		"a game's `metadata: vote:` reaches its descriptor (%s)" % str(vote_meta),
+		"it is what DotVoteGameSource reads a game's own time limit from"
+	)
+	_check(
+		builtin != null and builtin.metadata.get("map_vote", {}) is Dictionary
+			and not (builtin.metadata.get("map_vote", {}) as Dictionary).is_empty(),
+		"and so does `metadata: map_vote:`, which the game's own map vote layers"
+	)
+	_check(
+		builtin != null and String(builtin.metadata.get("module", "")) != "res://nowhere.gd",
+		"and a `module` inside it does not override the game's real one",
+		"a second, undocumented way to say `module:` is a game that loads the wrong script"
+	)
+
 	# The refusal the trap above deserves. A builtin game that named a client scene would
 	# produce a connection that appears to work and silently does not.
 	var bad := TmcContent.scan("res://examples/fixtures/bad-content")
@@ -628,7 +648,14 @@ func _test_content() -> void:
 func _test_vote() -> void:
 	_section("voting for the next game")
 
+	# The environment layers over vote.yml under the SERVER vote's own prefix, and
+	# dot-vote's plain one is left to the map vote inside a game. Set before the load and
+	# cleared straight after, so nothing else in this suite sees either.
+	OS.set_environment("DOT_GAME_VOTE_EXTEND_SECONDS", "1234")
+	OS.set_environment("DOT_VOTE_MAX_EXTENDS", "9")
 	var loaded := TmcConfig.load_dir(CFG)
+	OS.unset_environment("DOT_GAME_VOTE_EXTEND_SECONDS")
+	OS.unset_environment("DOT_VOTE_MAX_EXTENDS")
 
 	if not _check(loaded.ok, "the fixture config loads", str(loaded.error)):
 		_done()
@@ -637,6 +664,17 @@ func _test_vote() -> void:
 	var config := loaded.value as TmcConfig
 
 	_check(config.vote.enabled, "vote.yml turns voting on")
+	_check(
+		is_equal_approx(config.vote.extend_seconds, 1234.0),
+		"DOT_GAME_VOTE_* overrides vote.yml (%.0f)" % config.vote.extend_seconds,
+		"these layers were claimed in a comment and never applied"
+	)
+	_check(
+		config.vote.max_extends != 9,
+		"and DOT_VOTE_* does not reach it (%d)" % config.vote.max_extends,
+		"that prefix is the map vote inside a game, in the same process: one flag "
+		+ "changing two votes is a flag nobody can use"
+	)
 	_check(
 		Array(config.vote_exclude) == ["lobby", "playground"],
 		"and names the games that are never on a ballot (%s)" % [config.vote_exclude],
