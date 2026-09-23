@@ -40,7 +40,9 @@ extends RefCounted
 ## deliberately — and today this has exactly one consumer. Moving it before a second one
 ## exists would put a parser in fourteen repositories to serve one.
 
-const CHANNEL := "tmc.yaml"
+# No log channel: a parser that returns a DotResult naming the line it refused. Every
+# caller (TmcConfig, TmcContent, install_games) wraps that with the file's path and
+# returns it, and the host says why it did not start; a line here would say it twice.
 
 ## Longest line accepted, in characters.
 ##
