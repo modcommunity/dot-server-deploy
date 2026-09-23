@@ -14,7 +14,7 @@ extends Node
 
 const CFG := "res://examples/fixtures"
 
-const CHECKS := 162
+const CHECKS := 165
 
 var _passed := 0
 var _failed := 0
@@ -713,7 +713,66 @@ func _test_content() -> void:
 		"and a missing content directory is an error, not an empty list",
 		"a server with no content is legitimate; a missing directory is a typo"
 	)
+
+	_test_deployed_map_clocks()
 	_done()
+
+
+## A deployed game whose map runs until it is voted out says so twice, and the two must
+## agree: `<game>_map_seconds: "0"` stops the MAP session's timer, and the vote has a
+## clock of its own. The playground shipped with the first and not the second, and was put
+## to a ballot at twenty-eight minutes under people mid-build.
+##
+## Read off the real `content/`, not a fixture, because the contradiction is in a file an
+## operator ships — and layered exactly as the game layers it, `metadata: map_vote:` over
+## dot-vote's defaults, so what is asserted is what a running server would do.
+func _test_deployed_map_clocks() -> void:
+	var scanned := TmcContent.scan("res://content")
+
+	if not _check(scanned.ok, "the shipped content scans", str(scanned.error)):
+		return
+
+	var content := scanned.value as TmcContent
+	var untimed := PackedStringArray()
+	var disagree := PackedStringArray()
+
+	for descriptor in content.games:
+		var stopped := false
+
+		for name: Variant in descriptor.cvars:
+			if str(name).ends_with("_map_seconds") and str(descriptor.cvars[name]).strip_edges() == "0":
+				stopped = true
+
+		if not stopped:
+			continue
+
+		untimed.append(descriptor.game_id)
+
+		var overlay: Variant = descriptor.metadata.get("map_vote", {})
+		var rules := DotVoteRules.new()
+		var layered := rules.layer_over_defaults(
+			"", overlay as Dictionary if overlay is Dictionary else {}
+		)
+
+		if (
+			not layered.ok or not rules.validate().ok
+			or rules.duration_sec > 0.0
+			or rules.trigger != DotVoteRules.Trigger.RTV_ONLY
+		):
+			disagree.append("%s (trigger %s, duration %.0f)" % [
+				descriptor.game_id, rules.enum_name("trigger"), rules.duration_sec
+			])
+
+	_check(
+		untimed.has("playground"),
+		"the playground ships with its map clock stopped (%s)" % ", ".join(untimed),
+		"the check below is about nothing if no shipped game stops its map clock"
+	)
+	_check(
+		disagree.is_empty(),
+		"and every game that stops its map clock stops its vote's clock too: rtv_only, no duration",
+		", ".join(disagree)
+	)
 
 
 func _test_vote() -> void:
