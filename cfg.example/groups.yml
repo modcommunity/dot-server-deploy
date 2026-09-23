@@ -12,7 +12,11 @@
 #   reservation join a full server
 #   kick ban unban mute
 #   changemap   change the game or the map
-#   cvar        change console variables        cheats  change cheat-flagged ones
+#   cvar        change console variables        cheats  change cheat-flagged ones, and
+#                                                       noclip, god, buddha, hp, speed,
+#                                                       gravity, give, strip on players
+#   slay        slay, slap, freeze, respawn, rename, burn, blind, beacon a player
+#   teleport    bring, goto, send and return players
 #   config      execute config files            modules load and unload modules
 #   rcon        drive this server from outside the game
 #   chat        use admin chat                  vote    start and end votes
@@ -48,13 +52,29 @@ groups:
       - "chat"
       - "vote"
       - "rcon"
+      - "slay"
+      - "teleport"
+      # Noclip, god, health, speed, gravity, give. An administrator's and not a
+      # moderator's, because these change the GAME rather than handle a person: a
+      # community that trusts somebody to freeze a griefer has not thereby trusted them to
+      # fly through walls in a live round or hand themselves a weapon. `cheats` also opens
+      # the cheat-flagged cvars, which an administrator already could via `cvar`.
+      - "cheats"
     immunity: 60
 
   # In-game only, deliberately: a moderator handles people, not the server.
+  #
+  # `slay` and `teleport` are the live tools that handle a PERSON — slay, slap, freeze and
+  # unfreeze, respawn, rename, and bring, goto, send and return — which is what a
+  # moderator is there for when somebody is griefing: stop them, move them, or take the
+  # offensive name off the scoreboard, without waiting for an administrator. Not `cheats`;
+  # see the admin group.
   moderator:
     permissions:
       - "generic"
       - "kick"
       - "mute"
       - "chat"
+      - "slay"
+      - "teleport"
     immunity: 20

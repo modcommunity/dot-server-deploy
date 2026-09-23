@@ -502,7 +502,7 @@ func _test_admins() -> void:
 		"and holds the group's flags"
 	)
 	_check(
-		admin.ok and PackedStringArray(admin.value["flags"]).has("slay"),
+		admin.ok and PackedStringArray(admin.value["flags"]).has("spawn_npc"),
 		"plus their own extra one",
 		"sources merge rather than first-match-wins, and so does a user's own list"
 	)
@@ -520,14 +520,16 @@ func _test_admins() -> void:
 
 	# A permission name that is not a flag is REPORTED, never refused.
 	#
-	# Refusing would be worse: a game defines its own flags -- the fixture's `slay` is one
-	# -- and this file cannot know them. But silence was worse than either. `cfg/groups.yml`
+	# Refusing would be worse: a game defines its own flags -- the fixture's `spawn_npc` is
+	# one -- and this file cannot know them. (It was `slay`, until dot-server made `slay` a
+	# standard flag for dot-moderation's live tools and this check started failing on a
+	# name that had become real.) But silence was worse than either. `cfg/groups.yml`
 	# shipped `warn`, `announce` and `change`, none of which is a flag, so the group called
 	# `admin` granted kick, ban and mute and could not change the map, use admin chat, or
 	# be recognised as staff. Every one of those reads as a correctly configured group that
 	# mysteriously does not work.
 	_check(
-		Array(admins.unknown_flags).has("slay"),
+		Array(admins.unknown_flags).has("spawn_npc"),
 		"a name that is not a flag is reported (%s)" % [admins.unknown_flags]
 	)
 	_check(

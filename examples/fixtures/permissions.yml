@@ -5,7 +5,7 @@ users:
   # The long form, with an extra flag and an immunity of its own.
   helper:
     group: admin
-    permissions: [slay]
+    permissions: [spawn_npc]
     immunity: 42
 
   # A uid, which is what a command relayed from the website resolves to.
