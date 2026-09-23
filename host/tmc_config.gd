@@ -32,7 +32,7 @@ const CHANNEL := "tmc.config"
 ## to name the same thing — which is the order an operator would expect from the filenames.
 const FILES := [
 	"server.yml", "net.yml", "log.yml", "rcon.yml", "auth.yml", "groups.yml",
-	"permissions.yml", "vote.yml", "security.yml",
+	"permissions.yml", "vote.yml", "security.yml", "party.yml", "matchmaking.yml",
 ]
 
 ## Operator-facing name -> boot config property.
@@ -211,6 +211,46 @@ var security: DotSecurityConfig = DotSecurityConfig.new()
 ## The detectors. Separate dry run, deliberately. See [constant ANTICHEAT_KEYS].
 var anticheat: DotAntiCheatConfig = DotAntiCheatConfig.new()
 
+## `party.yml`: the timings both party nodes read. Every [DotPartyConfig] property,
+## written with a `party_` prefix — `party_seat_hold_sec: 120`. See [method _apply_party].
+var party: DotPartyConfig = DotPartyConfig.new()
+
+## `party.yml`: this server's terms for a party booking it, written `party_reserve_*`.
+##
+## Ships with [member DotPartyReservePolicy.enabled] off, as the site does: an owner opts
+## into letting parties book the server. A booking made at the console with
+## `party_reserve` is the owner's own act and is not held to it.
+var party_policy: DotPartyReservePolicy = DotPartyReservePolicy.new()
+
+## Whether this server takes part in parties at all. On: a server with no backbone still
+## gets console bookings and party chat, and one with no booking admits everybody.
+var party_enabled: bool = true
+
+## Whether each game's chat router gets a grouped `party` channel. See [TmcParty].
+var party_chat: bool = true
+
+## This server's id on the backbone, for bookings a local hub would make. 0 is none.
+var party_server_id: int = 0
+
+## `matchmaking.yml`: the queue's own settings, written `mm_*` over [DotMatchmakingConfig].
+var matchmaking: DotMatchmakingConfig = DotMatchmakingConfig.new()
+
+## Off unless `matchmaking.yml` says so. A matchmaker with no playlists queues nobody,
+## and a server that silently ran one would be a server answering `mm_queue` for a queue
+## that can never fill.
+var mm_enabled: bool = false
+
+## The region every ticket from this server is filed under. The matchmaker places a match
+## on a server in the ticket's region, so it has to be the same word `mm_servers` uses.
+var mm_region: String = "local"
+
+## `mm_playlists:`, one mapping per queue, each built into a [DotMmPlaylist].
+var mm_playlists: Array[DotMmPlaylist] = []
+
+## `mm_servers:`, id -> {address, region, playlists}. Empty means a ready match carries no
+## allocation and the players are told who they are playing with and nothing about where.
+var mm_servers: Dictionary = {}
+
 ## Console commands to run once the console exists, in file order.
 var console_lines: PackedStringArray = PackedStringArray()
 
@@ -350,6 +390,7 @@ static func load_dir(directory: String) -> DotResult:
 			return applied
 
 	config._layer_vote_overrides()
+	config._layer_party_overrides()
 
 	var valid := config.server.validate()
 
@@ -379,8 +420,28 @@ func _layer_vote_overrides() -> void:
 		unknown.append("--game-vote-: %s" % vote.unknown_keys[i])
 
 
+## The environment and the command line over `party.yml` and `matchmaking.yml`.
+##
+## The addons' own prefixes -- `DOT_PARTY_*` / `--party-*` and `DOT_MM_*` / `--mm-*` --
+## because unlike the vote there is only one of each in the process: no game runs a
+## party server or a matchmaker of its own, so there is no second one for a prefix to
+## collide with.
+func _layer_party_overrides() -> void:
+	for target in [party, matchmaking]:
+		var cfg := target as DotConfig
+		var before := cfg.unknown_keys.size()
+		cfg.apply_env()
+		cfg.apply_cli()
+		for i in range(before, cfg.unknown_keys.size()):
+			unknown.append("%s: %s" % [cfg.cli_prefix(), cfg.unknown_keys[i]])
+
+
 func _apply(file: String, tree: Dictionary) -> DotResult:
 	match file:
+		"party.yml":
+			return _apply_party(tree)
+		"matchmaking.yml":
+			return _apply_matchmaking(tree)
 		"groups.yml":
 			groups = TmcYaml.at(tree, "groups", {}) as Dictionary
 			return DotResult.success(null)
@@ -415,6 +476,197 @@ func _apply_vote(tree: Dictionary) -> DotResult:
 		unknown.append("vote.yml: %s" % vote.unknown_keys[i])
 
 	return DotResult.success(null)
+
+
+## `party.yml`: three switches of this deployment's, then two objects by prefix.
+##
+## [b]By prefix rather than by a table of keys.[/b] Every other file here keeps a table,
+## because an operator's name and the property's differ (`net_port` is `port`). Here they
+## do not: `party_seat_hold_sec` is `seat_hold_sec` on [DotPartyConfig] and
+## `party_reserve_empty_only` is `empty_only` on the policy, so a table would be a second
+## copy of each addon's property list -- the list that goes stale when the addon gains a
+## setting. An unknown one is still reported, by the object that did not have it.
+func _apply_party(tree: Dictionary) -> DotResult:
+	for key in tree.keys():
+		var name := String(key)
+		var value: Variant = tree[key]
+
+		match name:
+			"party_enabled":
+				party_enabled = _truthy(value)
+				continue
+			"party_chat":
+				party_chat = _truthy(value)
+				continue
+			"party_server_id":
+				party_server_id = int(value)
+				continue
+
+		if name.begins_with("party_reserve_"):
+			var applied_policy := _set_on_resource(
+				party_policy, name.trim_prefix("party_reserve_"), value
+			)
+			if not applied_policy.ok:
+				unknown.append("party.yml: %s (%s)" % [name, applied_policy.error.message])
+			continue
+
+		if name.begins_with("party_"):
+			var applied := _set_on(party, name.trim_prefix("party_"), value)
+			if not applied.ok:
+				unknown.append("party.yml: %s" % name)
+			continue
+
+		unknown.append("party.yml: %s" % name)
+
+	var valid := party.validate()
+
+	if not valid.ok:
+		# The one party setting worth refusing a boot over: a heartbeat past the
+		# backbone's staleness limit drops every member from their own party, which is
+		# the feature failing while looking configured.
+		return valid.wrap("party.yml")
+
+	return DotResult.success(null)
+
+
+## `matchmaking.yml`: `mm_enabled`, `mm_region`, `mm_playlists`, `mm_servers`, and every
+## [DotMatchmakingConfig] property by its `mm_` name.
+func _apply_matchmaking(tree: Dictionary) -> DotResult:
+	for key in tree.keys():
+		var name := String(key)
+		var value: Variant = tree[key]
+
+		match name:
+			"mm_enabled":
+				mm_enabled = _truthy(value)
+				continue
+			"mm_region":
+				mm_region = String(value).strip_edges()
+				continue
+			"mm_servers":
+				if value is Dictionary:
+					mm_servers = (value as Dictionary).duplicate(true)
+				elif value != null and str(value) != "":
+					unknown.append("matchmaking.yml: mm_servers must be a mapping of id to {address, region}")
+				continue
+			"mm_playlists":
+				var built := _playlists_from(value)
+				if not built.ok:
+					return built.wrap("matchmaking.yml")
+				continue
+
+		if name.begins_with("mm_"):
+			var applied := _set_on(matchmaking, name.trim_prefix("mm_"), value)
+			if not applied.ok:
+				unknown.append("matchmaking.yml: %s" % name)
+			continue
+
+		unknown.append("matchmaking.yml: %s" % name)
+
+	return DotResult.success(null)
+
+
+## `mm_playlists:` as a mapping of id to settings. The id is the key, so two playlists
+## cannot share one -- which [method DotMatchmaker.add_playlist] would refuse anyway, but
+## later and with less to say about where.
+func _playlists_from(value: Variant) -> DotResult:
+	if value == null or (value is String and String(value) == ""):
+		return DotResult.success(null)
+
+	if not (value is Dictionary):
+		return DotResult.fail(DotError.CODE_INVALID, "mm_playlists must be a mapping of id to settings")
+
+	for id in (value as Dictionary).keys():
+		var settings: Variant = (value as Dictionary)[id]
+		var pl := DotMmPlaylist.new()
+		pl.id = StringName(String(id))
+		pl.display_name = String(id)
+
+		if settings is Dictionary:
+			for k in (settings as Dictionary).keys():
+				var applied := _set_on_resource(pl, String(k), (settings as Dictionary)[k])
+				if not applied.ok:
+					unknown.append("matchmaking.yml: mm_playlists.%s.%s" % [id, k])
+
+		var valid := pl.validate()
+
+		if not valid.ok:
+			return valid.wrap("playlist %s" % id)
+
+		mm_playlists.append(pl)
+
+	return DotResult.success(null)
+
+
+## Sets one property on a plain [Resource], coerced through the property's own type.
+##
+## [DotConfig] has this built in and these two are not DotConfigs: the reservation policy
+## is the site's `Server` columns ported, and a playlist is a document a matchmaker holds
+## several of. A plain `set()` would store a YAML string into an int and fail far away.
+static func _set_on_resource(target: Object, property: String, value: Variant) -> DotResult:
+	for prop in target.get_property_list():
+		if String(prop["name"]) != property:
+			continue
+		if int(prop["usage"]) & PROPERTY_USAGE_SCRIPT_VARIABLE == 0:
+			break
+
+		var want := int(prop["type"])
+		var coerced: Variant = value
+
+		match want:
+			TYPE_BOOL:
+				coerced = _truthy(value)
+			TYPE_INT:
+				# An enum is an int, and an operator writes its NAME. Matched against the
+				# hint string the same way DotConfig reads one.
+				if int(prop["hint"]) == PROPERTY_HINT_ENUM and value is String \
+						and not String(value).is_valid_int():
+					var names := String(prop["hint_string"]).to_lower().split(",")
+					var wanted := String(value).strip_edges().to_lower().replace(" ", "_")
+					var index := -1
+					for i in names.size():
+						var label := names[i].get_slice(":", 0).strip_edges().replace(" ", "_")
+						if label == wanted:
+							# `NAME:value` when the enum says so, the position when not.
+							index = names[i].get_slice(":", 1).to_int() if names[i].contains(":") else i
+					if index < 0:
+						return DotResult.fail(
+							DotError.CODE_INVALID,
+							"'%s' is not one of %s" % [value, prop["hint_string"]]
+						)
+					coerced = index
+				else:
+					coerced = int(value)
+			TYPE_FLOAT:
+				coerced = float(value)
+			TYPE_STRING:
+				coerced = str(value)
+			TYPE_STRING_NAME:
+				coerced = StringName(str(value))
+			TYPE_ARRAY:
+				var list: Array = value if value is Array else ([] if str(value) == "" else [value])
+				var current: Variant = target.get(property)
+				if current is Array and (current as Array).is_typed() \
+						and (current as Array).get_typed_builtin() == TYPE_INT:
+					var ints: Array[int] = []
+					for entry in list:
+						ints.append(int(entry))
+					coerced = ints
+				else:
+					coerced = list
+
+		target.set(property, coerced)
+		return DotResult.success(coerced)
+
+	return DotResult.fail(DotError.CODE_INVALID, "'%s' is not a setting of %s" % [property, target.get_class()])
+
+
+static func _truthy(value: Variant) -> bool:
+	if value is bool:
+		return value
+	if value is int or value is float:
+		return value != 0
+	return str(value).strip_edges().to_lower() in ["1", "true", "yes", "on"]
 
 
 ## `server.yml` and `net.yml`: flat keys, three possible destinations.
@@ -795,6 +1047,15 @@ func describe_lines() -> PackedStringArray:
 	out.append("rcon     : %s" % ("on, port %d" % server.effective_rcon_port() if server.rcon_password != "" else "off"))
 	out.append("groups   : %d" % groups.size())
 	out.append("admins   : %d" % users.size())
+	out.append("party    : %s" % (
+		"off" if not party_enabled else "on, chat %s, bookings %s" % [
+			"on" if party_chat else "off",
+			"offered" if party_policy.enabled else "console only",
+		]))
+	out.append("matchmk  : %s" % (
+		"off" if not mm_enabled else "on, %d playlist(s), region %s, %d server(s)" % [
+			mm_playlists.size(), mm_region, mm_servers.size()
+		]))
 	out.append("cvars    : %d queued" % console_lines.size())
 
 	for line in unknown:

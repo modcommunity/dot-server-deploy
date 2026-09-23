@@ -33,6 +33,10 @@ const CONTENT_CONFIG := "res://client/content.json"
 ## Where an operator names the backbone this build signs in against. See [method _sign_in].
 const AUTH_CONFIG := "res://client/auth.json"
 
+## The shell's own messages, in the website's locale layout: one directory per language,
+## one JSON file per namespace. English ships; a language without a file falls back to it.
+const LOCALE_DIR := "res://client/locales"
+
 var link: DotClientLink = null
 
 var _game_root: Node = null
@@ -50,6 +54,16 @@ var _identity: Label = null
 var _join: Button = null
 var _progress: ProgressBar = null
 var _detail: Label = null
+
+## The player's party, when they are signed in. See [method _build_party].
+var _party: DotPartyClient = null
+
+## Which party this link has already told the server about, so a poll does not claim twice.
+var _claimed_party: String = ""
+var _party_line: Label = null
+
+## Every sentence this shell shows a player goes through here. See [method _build_locale].
+var _locale: DotLocale = null
 
 
 func _ready() -> void:
@@ -71,6 +85,7 @@ func _ready() -> void:
 	_game_root.name = GAME_ROOT
 	add_child(_game_root)
 
+	_build_locale()
 	_build_menu()
 
 	# Who is playing, before anything is dialled.
@@ -196,6 +211,146 @@ func _sign_in() -> void:
 	_identity.text = "• Signed in as %s" % identity.display_name
 	_identity.visible = true
 
+	_build_party(identity)
+
+
+## The shell's translator, from the shipped messages and the player's language.
+##
+## [b]A refusal is a key, and this is what turns one into a sentence.[/b] The site refuses
+## with keys (`party.join.deny.full`) and dot-party carries them in `DotError.detail`;
+## [method DotLocale.explain] renders one when the catalogue has it and falls back to the
+## error's own English message when it does not. So nothing here gets worse for a key the
+## shell ships no translation of -- it gets the message it always showed.
+##
+## Layered like every config here: `--locale-language de` or `--locale-pseudo true` after a
+## `--` on a desktop build, which is how a translator checks a build without a settings
+## screen. A browser has neither argv nor environment and gets the page's language.
+func _build_locale() -> void:
+	var cfg := DotLocaleConfig.new()
+	cfg.directory = LOCALE_DIR
+	var layered := cfg.load_layered()
+
+	if not layered.ok:
+		DotLog.warn(CHANNEL, "the locale settings were not usable; using the defaults", {
+			"why": str(layered.error),
+		})
+		cfg = DotLocaleConfig.new()
+		cfg.directory = LOCALE_DIR
+
+	var made := cfg.make()
+	_locale = made.value as DotLocale if made.ok else DotLocale.new()
+
+
+## A player's text for [param key], or [param fallback] when no language has the key.
+##
+## The key itself is DotLocale's last resort and is right for a game under development; a
+## player who connects to a server with a stripped build should still read a sentence.
+func _text(key: String, args: Dictionary, fallback: String) -> String:
+	if _locale == null or not _locale.has(key):
+		return fallback
+	return _locale.t(key, args)
+
+
+## A refusal in the player's language, or its own message.
+func _explain(error: DotError) -> String:
+	if error == null:
+		return ""
+	return _locale.explain(error) if _locale != null else error.message
+
+
+## The player's party, followed wherever it goes.
+##
+## [b]Only when signed in[/b], because a party is the site's and the site only knows who a
+## signed-in player is. [code]connect_fn[/code] is this shell's own connect path -- the
+## Connect button's -- so following the party to a server is exactly what the player would
+## have done by hand, including dropping the link they are on.
+##
+## [b]The site does not serve the player's party routes yet[/b] (dot-party's
+## docs/backbone-contract.md). Until it does, every poll is a 404; the first one switches
+## this off for the session rather than asking again every twenty seconds for something
+## the site has said it does not have.
+func _build_party(identity: DotAuthIdentity) -> void:
+	if _auth == null or identity == null:
+		return
+
+	var backend := DotPartyBackendApp.new()
+	backend.client = _auth
+
+	_party = DotPartyClient.new()
+	_party.name = "Party"
+	_party.backend = backend
+	_party.user_id = identity.uid.trim_prefix("backbone:")
+	_party.connect_fn = _follow_party
+	add_child(_party)
+
+	_party.party_changed.connect(_on_party_changed)
+	_party.left_party.connect(_on_left_party)
+	_party.request_failed.connect(_on_party_request_failed)
+	_party.refresh()
+
+
+func _follow_party(url: String, info: Dictionary) -> DotResult:
+	# Already there: a poll in the middle of a ready round must not reconnect a player who
+	# is on the right server, which would drop them and put them back.
+	if link != null and link.is_connected_to_server() and _address.text.strip_edges() == url:
+		return DotResult.success(null)
+
+	_say(_text("shell.party.following", {"server": str(info.get("serverName", url))},
+		"Your party is playing on %s. Joining…" % str(info.get("serverName", url))))
+	_address.text = url
+	await _connect_to(url)
+
+	if link == null:
+		return DotResult.fail(DotError.CODE_NETWORK, "Could not follow the party.", url)
+
+	return DotResult.success(null)
+
+
+func _on_party_changed(p: DotParty) -> void:
+	if _party_line == null:
+		return
+
+	_party_line.visible = p != null
+
+	if p != null:
+		_party_line.text = _text("shell.party.line", {"name": p.name, "count": p.size()},
+			"Party: %s (%d)" % [p.name, p.size()])
+
+	_claim_party()
+
+
+func _on_left_party(_party_id: String, reason: String) -> void:
+	_claimed_party = ""
+	_say(_text("shell.party.left.%s" % reason, {}, "You are no longer in your party."))
+
+
+func _on_party_request_failed(what: String, error: DotError) -> void:
+	if error != null and error.http_status == 404 and _party != null:
+		DotLog.info(CHANNEL, "the site does not serve party routes yet; parties are off", {
+			"what": what,
+		})
+		_party.queue_free()
+		_party = null
+		return
+
+	DotLog.debug(CHANNEL, "a party request failed", {"what": what, "why": _explain(error)})
+
+
+## Tells the server which party this player is in, once per party per connection.
+##
+## A chat command rather than a handshake field -- see `TmcParty` on the server for why --
+## and a slash command, which dot-server runs before any game's chat hook sees the line and
+## never broadcasts. The server checks the party's roster before believing it.
+func _claim_party() -> void:
+	if _party == null or _party.party == null or link == null or not link.is_connected_to_server():
+		return
+
+	if link.phase != DotClientLink.Phase.PLAYING or _claimed_party == _party.party.id:
+		return
+
+	_claimed_party = _party.party.id
+	link.send_chat("/party_claim %s" % _party.party.id)
+
 
 ## The menu's accent.
 ##
@@ -291,6 +446,13 @@ func _build_menu() -> void:
 	_identity.add_theme_color_override("font_color", ACCENT)
 	_identity.add_theme_font_size_override("font_size", 13)
 	box.add_child(_identity)
+
+	# The party, when there is one. A standing fact like the line above, so its own line.
+	_party_line = Label.new()
+	_party_line.visible = false
+	_party_line.theme_type_variation = &"DotDim"
+	_party_line.add_theme_font_size_override("font_size", 13)
+	box.add_child(_party_line)
 
 	box.add_child(_gap(4))
 
@@ -742,7 +904,8 @@ func _connect_to(address: String) -> void:
 	var connecting: DotResult = await link.connect_to_server(target)
 
 	if not connecting.ok:
-		_status.text = "Could not connect: %s" % str(connecting.error)
+		_status.text = _text("shell.connect.failed", {"reason": _explain(connecting.error)},
+			"Could not connect: %s" % _explain(connecting.error))
 		_set_busy(false)
 		_drop_link()
 
@@ -795,6 +958,10 @@ func _on_game_changed(game_id: String, _content_id: String, display_name: String
 func _on_spawned() -> void:
 	_set_busy(false)
 	_menu.visible = false
+	# A new connection is a new session on the server, which knows nothing of the last
+	# one's claim.
+	_claimed_party = ""
+	_claim_party.call_deferred()
 
 	if _game_root.get_child_count() > 0:
 		# The server named a scene and the link built it out of downloaded content.
@@ -941,7 +1108,15 @@ func _on_disconnected(reason: String) -> void:
 		_report_build_mismatch(wanted)
 		return
 
-	_say("Disconnected: %s" % (reason if reason != "" else "no reason given"))
+	# The error's key, when the server refused with one the catalogue can say in the
+	# player's language; otherwise the reason it gave, which is what this always showed.
+	var why := reason if reason != "" else _text("shell.connect.no_reason", {}, "no reason given")
+
+	if err != null and err.detail != "" and _locale != null and _locale.has(err.detail):
+		why = _explain(err)
+
+	_claimed_party = ""
+	_say(_text("shell.connect.disconnected", {"reason": why}, "Disconnected: %s" % why))
 
 
 ## Tells the player, and tells the page.

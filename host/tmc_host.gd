@@ -66,6 +66,10 @@ var votes: TmcVote = null
 ## when there is no token, which is every LAN deployment and every test.
 var listing: TmcReport = null
 
+## Parties, the booking this server keeps, party chat and the optional queue. Built for
+## every game, like the guard. See [TmcParty].
+var parties: TmcParty = null
+
 var _config_dir := "cfg"
 var _content_dir := "content"
 
@@ -221,7 +225,7 @@ func _run() -> void:
 ## is being asserted is that these names are on the console of a server that actually
 ## booted, which is the only place the mistake could have happened.
 func _selftest_operator_surface() -> bool:
-	var expected := PackedStringArray(["status", "sec_status", "sec_why"])
+	var expected := PackedStringArray(["status", "sec_status", "sec_why", "party_status", "mm_status"])
 
 	if log_router != null:
 		expected.append("log")
@@ -242,6 +246,28 @@ func _selftest_operator_surface() -> bool:
 	if log_router != null and not log_router.is_started():
 		printerr("selftest FAILED: the log router was built and never started")
 		return false
+
+	# [b]Asked, not only looked up.[/b] A command that is registered and answers nothing
+	# is the same absent command one layer down. `party_status` prints what was built,
+	# and a booking with nobody behind it is the one thing it must always be able to say.
+	# An Array rather than a PackedStringArray: a lambda captures by value, and only a
+	# container's contents survive the copy (docs/gdscript-hazards.md).
+	var answered: Array = []
+	var asking := DotCmdContext.internal("party_status", PackedStringArray())
+	asking.reply_sink = func(line: String) -> void: answered.append(line)
+
+	var said := server.console.execute("party_status", asking)
+
+	if not said.ok or answered.is_empty():
+		printerr("selftest FAILED: party_status did not answer (%s)" % str(said.error))
+		return false
+
+	if config.party_enabled and (parties == null or parties.reservations == null):
+		printerr("selftest FAILED: cfg/party.yml asked for parties and none were built")
+		return false
+
+	for line in answered:
+		print("party_status: %s" % line)
 
 	return true
 
@@ -603,6 +629,21 @@ func _boot() -> bool:
 	# blinks on every restart.
 	listing = TmcReport.install(
 		self, server, content, "%s/listing.json" % _data_dir
+	)
+
+	# [b]After the listing, because the listing is where the backbone client is.[/b] A
+	# party is reported over the same integration credential the listing uses, and a
+	# second client for the same token would be two rate limiters for one budget. With no
+	# token there is no client, parties are not reported, and bookings still come from the
+	# console -- the same "never fatal" as the guard above.
+	#
+	# After the first game, too: the booking chains onto `dot_ban_source`, and the game's
+	# module is what registers dot-moderation there. Built before it, the booking would be
+	# displaced the moment the module loaded.
+	parties = TmcParty.install(
+		self, server, config,
+		listing.backbone if listing != null else null,
+		_data_dir
 	)
 
 	return true

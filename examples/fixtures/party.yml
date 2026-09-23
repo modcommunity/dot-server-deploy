@@ -1,0 +1,12 @@
+# Parties as an operator would write them: a booking window that crosses midnight.
+party_enabled: true
+party_chat: true
+party_server_id: 42
+party_seat_hold_sec: 120
+party_state_report_sec: 20
+party_reserve_enabled: true
+party_reserve_lobbies: public_and_private
+party_reserve_empty_only: false
+party_reserve_days: [5, 6]
+party_reserve_from_minute: 1320
+party_reserve_to_minute: 120

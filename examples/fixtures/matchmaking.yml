@@ -1,0 +1,19 @@
+# A queue turned on, with one ranked playlist and one server to put its matches on.
+mm_enabled: true
+mm_region: eu
+mm_tau: 0.6
+mm_playlists:
+  duel:
+    display_name: Duel
+    team_size: 1
+    ranked: true
+    accept_timeout_sec: 15
+  squads:
+    team_size: 4
+    max_party_size: 4
+    ranked: false
+mm_servers:
+  eu1:
+    address: "ws://127.0.0.1:6064"
+    region: eu
+    playlists: [duel]

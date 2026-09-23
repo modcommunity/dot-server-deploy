@@ -1,0 +1,17 @@
+{
+	"connect": {
+		"failed": "Could not connect: {reason}",
+		"disconnected": "Disconnected: {reason}",
+		"no_reason": "no reason given"
+	},
+	"party": {
+		"line": "Party: {name} ({count, plural, one {# member} other {# members}})",
+		"following": "Your party is playing on {server}. Joining…",
+		"left": {
+			"kicked": "You were removed from your party.",
+			"banned": "You were banned from your party.",
+			"ended": "Your party has ended.",
+			"left": "You left your party."
+		}
+	}
+}

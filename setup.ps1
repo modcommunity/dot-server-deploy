@@ -211,7 +211,7 @@ Ok "$exe ($version)"
 
 $addons = @('dot_core','dot_net','dot_server','dot_server_query','dot_server_security','dot_2d','dot_ui','dot_auth',
             'dot_cloud','dot_user','dot_user_avatar','dot_platform',
-            'dot_loadout','dot_match')
+            'dot_loadout','dot_match','dot_party','dot_matchmaking','dot_locale')
 
 Step "dot-* addons"
 New-Item -ItemType Directory -Force -Path 'addons' | Out-Null

@@ -376,6 +376,14 @@ echo
 echo "reconnecting after the server restarts"
 "$GODOT" --headless --path . res://examples/reconnect.tscn || fails=$((fails + 1))
 
+# Parties on a real server. The booking chains onto dot_ban_source, and a game's module
+# puts dot-moderation there when it loads -- so the first `changelevel` after boot took
+# every booking off the seam, in silence, until the host started putting it back. Armed:
+# with the rechain disabled, two of its checks fail.
+echo
+echo "parties, bookings and party chat"
+"$GODOT" --headless --path . res://examples/party_live.tscn < /dev/null || fails=$((fails + 1))
+
 # The other half: a real DotServer, a real listener, the lobby loaded and a module in
 # it. Everything the selftest cannot reach without starting one.
 if [ -x ./server ]; then

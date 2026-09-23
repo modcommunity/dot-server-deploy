@@ -1,0 +1,79 @@
+# Parties: people who play together, tracked from the website's lobby to this server.
+#
+# Three things are built from this file, for whatever game the server is running:
+#
+#   - the BOOKING keeper. A party can book a server for an evening; a private booking
+#     admits that party and nobody else (plus anybody with the `reservation` flag), a
+#     public one holds seats for the party while it loads in. With no booking it admits
+#     everybody and costs nothing. It chains onto the ban list rather than replacing it,
+#     so a banned player is still banned on a booked server.
+#   - the TRACKER, which tells the website who from which party is here so their play
+#     time, rounds and scores are recorded. Only when this server has an integration
+#     token (data/listing.json): without one it has nobody to report to.
+#   - a `party` chat channel in each game's chat: `/party_say hello` reaches your party
+#     and nobody else.
+#
+# Console: party_status, party_reserve <partyId> <minutes> [private], party_release.
+# A player's client says which party it is in with /party_claim <partyId>; the server
+# checks the party's roster on the website before believing it.
+
+# Whether any of the above is built.
+party_enabled: true
+
+# The grouped `party` chat channel in each game's chat.
+party_chat: true
+
+# This server's id on the website, for bookings made through a local hub. 0 is none.
+party_server_id: 0
+
+# --- Timings -------------------------------------------------------------------
+#
+# The website's own numbers, mirrored. Every setting of the addon's DotPartyConfig is
+# accepted here with a `party_` prefix, and DOT_PARTY_* / --party-* override them.
+
+# Seconds between full roster reports to the website (it asks for 10 to 30).
+party_state_report_sec: 15
+
+# Seconds between re-reading the rosters of the parties on this server.
+party_roster_refresh_sec: 60
+
+# Seconds between asking the website whether this server is booked.
+party_reservation_sync_sec: 30
+
+# Seconds after a booking starts during which seats are held for members still loading.
+party_seat_hold_sec: 180
+
+# Seconds before a booking ends to warn the people on the server.
+party_reservation_warn_sec: 300
+
+# Seconds a booked server may sit with none of its party on it before the booking is
+# released early. 0 never releases early.
+party_release_when_empty_sec: 600
+
+# --- Your terms for a party booking this server --------------------------------
+#
+# What a party booking on the website may ask for. Off, as on the site: an owner opts
+# into letting parties book their server. `party_reserve` at the console is the owner's
+# own act and is not held to these.
+party_reserve_enabled: false
+
+# public_only, public_and_private or private_only.
+party_reserve_lobbies: public_only
+
+# Only when nobody is playing. Booking a server out from under the people on it is not
+# something to opt into by accident.
+party_reserve_empty_only: true
+
+# Your ceiling in minutes; 0 means the site's (three hours).
+party_reserve_max_minutes: 0
+
+# Minutes after a booking ends before the same party may book again.
+party_reserve_cooldown_minutes: 15
+
+# UTC days a booking may be made, 0 = Sunday. Empty is every day.
+party_reserve_days: []
+
+# UTC minutes of the day the window opens and closes. Equal means all day; from after to
+# is a window that crosses midnight (1320 to 120 is 22:00 to 02:00).
+party_reserve_from_minute: 0
+party_reserve_to_minute: 0

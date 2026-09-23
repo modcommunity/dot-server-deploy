@@ -14,7 +14,7 @@ extends Node
 
 const CFG := "res://examples/fixtures"
 
-const CHECKS := 143
+const CHECKS := 162
 
 var _passed := 0
 var _failed := 0
@@ -44,6 +44,7 @@ func _run() -> void:
 	_test_auth()
 	_test_logging()
 	_test_security()
+	_test_party()
 
 	print("")
 	_check(
@@ -414,6 +415,74 @@ func _test_logging() -> void:
 
 
 ## The guard, which was also in the dependency list and instantiated nowhere.
+func _test_party() -> void:
+	_section("parties and matchmaking")
+
+	var loaded := TmcConfig.load_dir(CFG)
+	var config := loaded.value as TmcConfig
+
+	_check(config.files_read.has("party.yml"), "party.yml is read")
+	_check(config.files_read.has("matchmaking.yml"), "and matchmaking.yml")
+	_check(config.party_enabled and config.party_chat, "the two switches reach the host")
+	_check(config.party_server_id == 42, "party_server_id reaches the booking keeper")
+	# By prefix, onto the addon's own config: the table this file does not keep.
+	_check(config.party.seat_hold_sec == 120.0, "party_seat_hold_sec reaches DotPartyConfig")
+	_check(config.party.state_report_sec == 20.0, "and the roster report interval")
+	_check(config.party_policy.enabled, "party_reserve_enabled reaches the owner's terms")
+	# Written by NAME, as an operator writes it, and read as the enum.
+	_check(
+		config.party_policy.lobbies == DotPartyReservePolicy.Lobbies.PUBLIC_AND_PRIVATE,
+		"a booking shape written by name is read as the enum (%d)" % config.party_policy.lobbies
+	)
+	_check(not config.party_policy.empty_only, "a bool reaches the terms")
+	_check(
+		config.party_policy.days.size() == 2 and config.party_policy.days[0] == 5
+			and config.party_policy.days[1] == 6,
+		"a list of days stays a typed list (%s)" % [config.party_policy.days]
+	)
+	# 22:00 to 02:00: the wrapped window the site's own rules have. 2026-09-26 is a
+	# Saturday, and this is 23:00 UTC on it.
+	_check(
+		config.party_policy.window_open(1790463600),
+		"a window crossing midnight is open late on a booking day"
+	)
+
+	_check(config.mm_enabled, "mm_enabled reaches the host")
+	_check(config.mm_region == "eu", "and the region tickets are filed under")
+	_check(is_equal_approx(config.matchmaking.tau, 0.6), "mm_tau reaches DotMatchmakingConfig")
+	_check(config.mm_playlists.size() == 2, "two playlists, one per key (%d)" % config.mm_playlists.size())
+
+	var duel: DotMmPlaylist = config.mm_playlists[0] if config.mm_playlists.size() > 0 else null
+	_check(
+		duel != null and duel.id == &"duel" and duel.team_size == 1 and duel.accept_timeout_sec == 15.0,
+		"a playlist's settings reach it by their own names"
+	)
+	_check(config.mm_servers.has("eu1"), "mm_servers is kept for the allocator")
+
+	var party_unknown := PackedStringArray()
+
+	for entry in config.unknown:
+		var text := String(entry)
+		if text.contains("party") or text.contains("mm_") or text.contains("matchmaking"):
+			party_unknown.append(text)
+
+	_check(
+		party_unknown.is_empty(),
+		"and not one of them fell through as unknown",
+		" / ".join(Array(party_unknown))
+	)
+
+	# The shipped defaults, restated because they are the decision: a booking is the
+	# owner's opt-in, and a queue nobody configured is not running.
+	var shipped := TmcConfig.new()
+	_check(
+		shipped.party_enabled and not shipped.party_policy.enabled and not shipped.mm_enabled,
+		"shipped: parties on, bookings by parties off, matchmaking off"
+	)
+
+	_done()
+
+
 func _test_security() -> void:
 	_section("the guard")
 

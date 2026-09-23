@@ -1,0 +1,45 @@
+# Matchmaking: a queue that finds players of similar skill, keeps parties together,
+# balances the sides, asks everybody to accept, and moves ratings when a result is filed.
+#
+# OFF. A server that ran a queue nobody configured would be answering /mm_queue for a
+# queue that can never fill. Turn it on here with at least one playlist.
+#
+# Console: mm_status. Players: /mm_queue <playlist>, /mm_leave, /mm_accept <matchId>,
+# /mm_decline <matchId>. A player in a party queues with everybody from it who is here.
+mm_enabled: false
+
+# The region every ticket from this server is filed under. A match is placed on a server
+# in the same region, so it must match the `region` of the servers below.
+mm_region: local
+
+# Every setting of the addon's DotMatchmakingConfig is accepted with an `mm_` prefix, and
+# DOT_MM_* / --mm-* override them. Ratings are kept in data/matchmaking/ unless
+# mm_ratings_file names somewhere else.
+mm_pass_interval_sec: 1.0
+mm_leaver_takes_loss: true
+
+# One entry per queue. The key is the playlist id: lowercase, no spaces.
+#
+# mm_playlists:
+#   duel:
+#     display_name: Duel
+#     teams: 2
+#     team_size: 1
+#     ranked: true
+#     accept_timeout_sec: 20
+#   squads:
+#     teams: 2
+#     team_size: 4
+#     max_party_size: 4
+#     ranked: false
+mm_playlists:
+
+# Where a ready match is played. Empty: the players are told who they are playing with
+# and nothing about where. One match per server at a time.
+#
+# mm_servers:
+#   eu1:
+#     address: "wss://eu1.example.com:6064"
+#     region: local
+#     playlists: [duel]
+mm_servers:
