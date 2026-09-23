@@ -80,9 +80,19 @@ echo "staging"
 # `dot-a-room`, and it was missing every addon added since — so the staged tree was
 # vendored without them and the packaged check passed on a build the real one could not
 # make. setup.sh is the one place that knows what this project is made of.
+#
+# [b]And it read an array that no longer exists.[/b] `ADDONS=(` became `ADDONS_ALL=(` when
+# the list became derivable, this pattern matched nothing, and not one addon was staged:
+# `--addons-dir ..` then found none of them beside the tree and cloned every one from
+# GitHub into the staging directory -- proving something about GitHub rather than about
+# the working tree, which is the thing this script exists not to do. It surfaced only when
+# three addons were added that had not been pushed yet, and so could not be cloned.
+# `zee_weapons` is the one name whose repository is not the name with hyphens -- see
+# `addon_repo` in setup.sh -- and `dot_` alone never matched it either.
 mapfile -t STAGE_REPOS < <(
     {
-        sed -n '/^ADDONS=(/,/)/p' "$ROOT/setup.sh" | grep -oE 'dot_[a-z0-9_]+' | tr '_' '-'
+        sed -n '/^ADDONS_ALL=(/,/)/p' "$ROOT/setup.sh" | grep -oE '(dot|zee)_[a-z0-9_]+' \
+            | sed 's/^zee_weapons$/zee-dot-weapons/' | tr '_' '-'
         sed -n '/^GAMES=(/,/^)/p' "$ROOT/setup.sh" | grep -oE '"[^"]+"' | tr -d '"' | cut -d: -f1
     } | sort -u
 )
@@ -170,7 +180,11 @@ fi
 # signed pack per game and is the only record of them once the siblings are gone. A tree
 # that arrived without it boots into a server that can serve nothing, and the failure --
 # every game refusing to mount -- points at the content host rather than at the tarball.
-packs="$(find "$TREE/dist" -mindepth 2 -maxdepth 2 -name manifest.json 2>/dev/null | wc -l)"
+#
+# Depth 2 to 4: `<id>/manifest.json` was the layout when this was written, and packs are
+# `<owner>/<name>/manifest.json` now (dist/tmc/arena/) with a version segment under the
+# site's scheme. At a fixed depth of 2 this found none of the seven it had just published.
+packs="$(find "$TREE/dist" -mindepth 2 -maxdepth 4 -name manifest.json 2>/dev/null | wc -l)"
 if [ "$packs" -gt 0 ]; then
     pass "$packs published pack(s) travelled with it"
 else
