@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://examples/shell_notice.gd" id="1_shell_notice"]
+
+[node name="ShellNotice" type="Node"]
+script = ExtResource("1_shell_notice")

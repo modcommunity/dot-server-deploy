@@ -527,6 +527,15 @@ func _test_vote_changes_the_game() -> void:
 	# already answers to, and a test that hardcoded `revote` would still pass on the
 	# day somebody dropped the prefix and reintroduced that collision.
 	var revote := "%srevote" % TmcVote.COMMAND_PREFIX
+
+	# [b]What the shells are told, heard at the server.[/b] Nobody is connected, so every
+	# notice reaches nobody -- and `notice_sent` fires anyway, which is what lets a suite
+	# with no client assert what a client would have been sent. The half with a client is
+	# `shell_notice`.
+	var notices: Array[DotNotice] = []
+	var on_notice := func(n: DotNotice, _count: int) -> void: notices.append(n)
+	_server().notice_sent.connect(on_notice)
+
 	var opened := await _console(revote)
 	_check(opened.ok, "an operator opens the ballot with `%s`" % revote, str(opened.error))
 	_check(
@@ -542,6 +551,20 @@ func _test_vote_changes_the_game() -> void:
 		"with the nomination on it"
 	)
 
+	var line := _notice_for(notices, TmcVote.NOTICE_TOPIC)
+	_check(
+		line != null and line.has_countdown()
+			and line.text.contains("!%s%s" % [TmcVote.COMMAND_PREFIX, TmcVote.COMMAND_NAMES["vote"]]),
+		"the ballot goes on every HUD, with its time and the command that votes (%s)"
+			% (str(line.describe()) if line != null else "nothing"),
+		"the vote reached players as chat only before dot-server had a notice"
+	)
+	_check(
+		_notice_with_cue(notices, &"tmc_vote_start"),
+		"and its opening cue goes with it (%d notices)" % notices.size(),
+		"vote.yml's cue_vote_start is read, emitted and relayed, or none of it"
+	)
+
 	# Counted BEFORE, because the sections above already switched through this game and
 	# each of those was a real play. The number that matters is the delta.
 	var played_before := director.history.times_played(&"hungry_frenzy")
@@ -553,6 +576,24 @@ func _test_vote_changes_the_game() -> void:
 		result.winner_id == &"hungry_frenzy",
 		"the vote elects it (%s)" % result.summary
 	)
+
+	_check(
+		_notice_with_cue(notices, &"tmc_vote_end"),
+		"with its closing cue"
+	)
+
+	# Taken down by TmcVote's poll, which runs on the next physics tick. Polled, because
+	# the director emits nothing when an admin calls a countdown off, and a line left up
+	# would count to zero on every screen for a ballot that never opens.
+	notices.clear()
+	var took_down := func() -> bool:
+		for n in notices:
+			if n.is_clear() and n.topic == TmcVote.NOTICE_TOPIC:
+				return true
+		return false
+	var cleared := await _until(took_down, 5.0)
+	_check(cleared, "and the closed ballot comes off every HUD")
+	_server().notice_sent.disconnect(on_notice)
 
 	var switched := await _until(func() -> bool: return _at_game("hungry_frenzy"), 20.0)
 
@@ -600,3 +641,18 @@ func _test_vote_changes_the_game() -> void:
 	)
 
 	_done()
+
+
+## The last notice sent for [param topic], or null.
+func _notice_for(notices: Array[DotNotice], topic: StringName) -> DotNotice:
+	for i in range(notices.size() - 1, -1, -1):
+		if notices[i].topic == topic:
+			return notices[i]
+	return null
+
+
+func _notice_with_cue(notices: Array[DotNotice], cue: StringName) -> bool:
+	for n in notices:
+		if n.cue == cue:
+			return true
+	return false

@@ -72,9 +72,10 @@ warn_at_sec: "600,300,60,30"
 
 # A counted-down warning before the ballot opens ("a vote starts in 10s"), and a
 # shorter one before a runoff. 0 opens it at once. Only the start is announced in
-# chat unless announce_countdown_every_sec is on.
-# vote_warning_sec: 0
-# runoff_warning_sec: 0
+# chat unless announce_countdown_every_sec is on; every second of it is on the
+# shell's HUD, counting, with the cues below.
+vote_warning_sec: 10
+runoff_warning_sec: 5
 # announce_countdown_every_sec: false
 
 # Nothing may open another ballot for this long after one closes. Without it a vote
@@ -194,12 +195,13 @@ apply_delay_sec: 5
 # dot-audio ids for the ballot opening and closing, the countdown starting (and the
 # runoff one), and each second of it (%d is the second). Empty is silent.
 #
-# NOT RELAYED YET: the server-level vote has no message that carries a cue to a
-# client, so on this server these are read and emitted and nothing plays them. They
-# are listed so a client bridge that adds one has the ids to play.
-# cue_vote_start: ""
-# cue_vote_end: ""
-# cue_warning: ""
-# cue_runoff_warning: ""
-# cue_countdown: ""
-# cue_countdown_at: "10,5,4,3,2,1"
+# Sent to every playing client as a dot-server notice and played by the client
+# shell, out of its own catalogue (client/notice_overlay.gd). These four are the ids
+# it has; an id it does not have is silence, not an error, so a cue named here that
+# the players' build predates costs a sound and nothing else.
+cue_vote_start: "tmc_vote_start"
+cue_vote_end: "tmc_vote_end"
+cue_warning: "tmc_vote_warning"
+cue_runoff_warning: "tmc_vote_warning"
+cue_countdown: "tmc_vote_count"
+cue_countdown_at: "10,5,4,3,2,1"

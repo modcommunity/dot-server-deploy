@@ -28,3 +28,9 @@ min_players_to_vote: 0
 # what cfg/vote.yml uses; here the point is the change, not the waiting.
 apply: immediate
 apply_delay_sec: 0
+
+# The two cues a ballot with no countdown makes. Named so the suite can assert that a
+# cue out of vote.yml reaches the wire as a notice, which is the whole of what the shell
+# needs to play it.
+cue_vote_start: "tmc_vote_start"
+cue_vote_end: "tmc_vote_end"

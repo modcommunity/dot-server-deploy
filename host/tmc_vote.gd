@@ -37,13 +37,21 @@ extends Node
 ## wiring: who counts as a player, who counts as an admin, where the announcements go,
 ## and which games are not on the ballot.
 ##
-## [b]Heard in chat, and only in chat.[/b] [method DotVoteDirector.announce_fn] is chat,
-## which the shell already draws. [signal DotVoteDirector.cue] is connected to nothing and
-## the cues ship empty in `vote.yml`: the shell's only channels are [DotClientLink]'s and
-## [DotClientChat]'s RPC sets, carrying a sound id would mean a new `@rpc` pair in
-## dot-server and a new signon revision — every shell in the field timed out until rebuilt
-## — and a loaded game's own wire is the game's, which this file does not name. See this
-## project's CLAUDE.md.
+## [b]Heard in chat, and seen and heard on the shell's HUD.[/b]
+## [method DotVoteDirector.announce_fn] is chat, as it always was. The countdown to a
+## ballot, the ballot's own time and every [signal DotVoteDirector.cue] go out as
+## [DotNotice]s — dot-server's one message to the client APPLICATION rather than to the
+## game on screen — and the shell's [code]TmcNoticeOverlay[/code] draws the line and plays
+## the cue out of its own catalogue. It was chat only until 2026-09-24, because the shell
+## had no channel but chat and a loaded game's wire is the game's; the pair that closed it
+## changed the signon revision, which is written up in dot-server's CLAUDE.md.
+##
+## [b]One HUD line, [constant NOTICE_TOPIC], and this file owns it.[/b] Each countdown
+## second replaces it; the ballot replaces it with its own time; and it is taken down by
+## [method _physics_process] the moment the director is neither counting down nor voting —
+## polled rather than signalled, because [method DotVoteDirector.cancel_countdown] emits
+## nothing, and a countdown an admin called off would otherwise run to zero on every
+## screen for a ballot that never opens.
 ##
 ## [b]The lobby is excluded by default and that is a real decision.[/b] It is this
 ## server's home screen rather than a game, and "vote to go back to the menu" is not a
@@ -65,11 +73,21 @@ const COMMAND_PREFIX := "game_"
 ## nobody types twice. Everything else keeps dot-vote's own name behind the prefix.
 const COMMAND_NAMES := {"nextmap": "next", "vote": "vote"}
 
+## The HUD line this vote owns on every client. See the class notes.
+const NOTICE_TOPIC := &"game_vote"
+
 var director: DotVoteDirector = null
 var source: DotVoteGameSource = null
 var commands: DotVoteCommands = null
 
 var server: DotServer = null
+
+## Whether clients have been told a line is up, so it is taken down exactly once.
+var _notice_live := false
+
+## What the line says, without its number: kept so a player who joins mid-countdown is
+## shown the same sentence everybody else is looking at.
+var _notice_text := ""
 
 
 ## Builds the whole thing and attaches it to [param p_server].
@@ -147,6 +165,7 @@ static func install(
 
 	p_server.games.game_loaded.connect(votes._on_game_loaded)
 	p_server.client_disconnected.connect(votes._on_client_left)
+	p_server.client_spawned.connect(votes._on_client_spawned)
 
 	# The game that is already running when this is installed. Without it the director
 	# is on no game at all: its clock never starts, nothing is on cooldown, and the
@@ -204,6 +223,75 @@ func _wire() -> void:
 		if server.chat != null:
 			server.chat.broadcast_system(line)
 
+	director.countdown_tick.connect(_on_countdown_tick)
+	director.vote_opened.connect(_on_vote_opened)
+	director.cue.connect(_on_cue)
+
+
+# --- The HUD ------------------------------------------------------------------
+
+## One second of the countdown to a ballot. The number is the notice's own countdown, so a
+## client counts smoothly between these rather than jumping once a second.
+func _on_countdown_tick(seconds_left: int, runoff: bool) -> void:
+	_show_line(
+		"A runoff for the next game starts in" if runoff
+		else "A vote for the next game starts in",
+		float(seconds_left)
+	)
+
+
+## The ballot is open: the line becomes how to vote, and the ballot's own time.
+func _on_vote_opened(options: Array, seconds: float) -> void:
+	_show_line(
+		"Vote for the next game: !%s%s 1-%d" % [
+			COMMAND_PREFIX, COMMAND_NAMES["vote"], options.size()
+		],
+		seconds
+	)
+
+
+## A sound, and nothing on the line. The director names an id out of `vote.yml`'s `cue_*`
+## and never an empty one; the shell plays it if its catalogue has it.
+func _on_cue(id: StringName) -> void:
+	server.broadcast_notice(DotNotice.make(id))
+
+
+func _show_line(text: String, seconds: float) -> void:
+	_notice_text = text
+	_notice_live = true
+	server.broadcast_notice(DotNotice.make(&"", text, seconds, NOTICE_TOPIC))
+
+
+## Somebody finished joining while the line is up. The server sends notices to playing
+## sessions only, so without this a player who arrives mid-ballot sees nothing for its
+## whole thirty seconds.
+func _on_client_spawned(session: DotClientSession) -> void:
+	if not _notice_live:
+		return
+
+	var seconds := (
+		director.countdown_remaining() if director.is_counting_down()
+		else director.vote_seconds_remaining()
+	)
+
+	server.send_notice(
+		session, DotNotice.make(&"", _notice_text, ceilf(seconds), NOTICE_TOPIC)
+	)
+
+
+## Takes the line down once nothing it could be saying is true any more — a ballot that
+## closed, a countdown an admin cancelled, a vote a game change swept away.
+func _sync_notice() -> void:
+	if not _notice_live:
+		return
+
+	if director.is_counting_down() or director.is_voting():
+		return
+
+	_notice_live = false
+	_notice_text = ""
+	server.broadcast_notice(DotNotice.clear(NOTICE_TOPIC))
+
 
 ## The id a session votes under.
 ##
@@ -235,6 +323,7 @@ func _session_for(voter: StringName) -> DotClientSession:
 func _physics_process(delta: float) -> void:
 	if director != null:
 		director.advance(delta)
+		_sync_notice()
 
 
 func _on_game_loaded(_content_key: String) -> void:
@@ -262,7 +351,9 @@ func describe_lines() -> PackedStringArray:
 	if director == null:
 		return PackedStringArray(["voting is off"])
 
-	return director.describe_lines()
+	var out := director.describe_lines()
+	out.append("hud line   %s" % (('"%s"' % _notice_text) if _notice_live else "none"))
+	return out
 
 
 ## One phrase for the boot banner: how this server counts.

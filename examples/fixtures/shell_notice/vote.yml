@@ -1,0 +1,25 @@
+# A fixture for examples/shell_notice.tscn, which drives the game vote's countdown onto
+# a real shell's HUD over a real socket.
+#
+# The suite opens every ballot itself, so the clock is long enough never to, and the
+# countdown is short enough that a suite waiting for it is not slow.
+enabled: true
+vote_exclude: [lobby]
+
+trigger: time_limit
+duration_sec: 3600
+vote_lead_sec: 30
+vote_warning_sec: 3
+vote_duration_sec: 30
+vote_cooldown_sec: 0
+min_players_to_vote: 0
+cooldown: 0
+
+# The shipped template's ids, so the cues this suite hears played are the ones a
+# deployment would ask for. The selftest asserts the template's ids are the shell's.
+cue_vote_start: "tmc_vote_start"
+cue_vote_end: "tmc_vote_end"
+cue_warning: "tmc_vote_warning"
+cue_runoff_warning: "tmc_vote_warning"
+cue_countdown: "tmc_vote_count"
+cue_countdown_at: "3,2,1"

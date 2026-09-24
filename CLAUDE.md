@@ -173,7 +173,18 @@ Three decisions in that file are this deployment's rather than dot-vote's:
   change has to reset the clock and everybody's rock-the-vote just the same.
   `examples/multigame.tscn` fails if that setting is flipped.
 
-**The game vote is heard in chat and nowhere else, and that is a decision rather than a gap.** Its ballot, its countdown and its result reach the shell through `announce_fn`, which is dot-server's chat. Its `cue` signal is connected to nothing, and its `cue_*` settings ship empty in `vote.yml`. The shell talks to a server over exactly two RPC sets, `DotClientLink`'s and `DotClientChat`'s, and neither can carry a sound id; carrying one means an `@rpc` pair added to dot-server's `DotServer` and `DotClientLink`, which changes the signon revision — every shell in the field then connects, goes quiet and is timed out until it is rebuilt, which is what `signon_revision` exists to catch. A loaded game's own wire is no help either: it is the game's, this host does not name a game's classes, and a change of game replaces it. A game's MAP vote is the one that plays cues, over that game's own wire (arena, g2gfast and playground send a `VOTE` event), because a game's client is a thing its server can talk to. When dot-server grows a general "server says something to the shell" message for another reason, the game vote's cues are one more payload for it.
+**The game vote is on every player's HUD, and until 2026-09-24 it was chat only.** Its ballot, its countdown and its result still reach chat through `announce_fn`. The countdown to a ballot, the ballot's own time and every `cue` now also go out as dot-server `DotNotice`s, and the shell's `TmcNoticeOverlay` (`client/notice_overlay.gd`) draws the line and plays the cue. It was chat only because the shell talks to a server over exactly two RPC sets, `DotClientLink`'s and `DotClientChat`'s, neither could carry anything but a chat line, and a loaded game's own wire is the game's — this host names no game's classes, and the change the vote causes replaces that wire. The fix was a generic notice pair in dot-server (`broadcast_notice`/`send_notice` → `notice_received`), which moved the signon revision from `c5c1f679edb5` to `b202b914834e`: **every web and native shell built before it is refused by a server built after it**, with "This server needs a different build of the game client" rather than a timeout, until it is re-exported. See dot-server's CLAUDE.md for the pair and why its payload is a dictionary.
+
+Four things about the wiring in `TmcVote`:
+
+- **One HUD line, `NOTICE_TOPIC`, and TmcVote owns it.** Each countdown second replaces it, the ballot replaces it with `!game_vote 1-N` and its time, and the notice's seconds are counted by the client between messages, so it moves smoothly rather than once a second.
+- **It is taken down by a poll, not a signal.** `_sync_notice()` runs after every `advance` and clears the line the moment the director is neither counting down nor voting. `DotVoteDirector.cancel_countdown` emits nothing, so a HUD driven only by signals kept counting to a ballot an admin had called off. `shell_notice` gives the take-down one second against a line with thirty left, because the overlay expires a spent countdown on its own and a longer window passed with the clear removed — which is how the first arming of it failed.
+- **A late joiner is sent the line that is still true.** Notices go to playing sessions only, so `client_spawned` resends the current line with what is left on it; otherwise a player arriving mid-ballot saw nothing for its whole duration.
+- **The cue ids are written twice, by necessity, and checked against each other.** `cfg.example/vote.yml` names them (`tmc_vote_start`, `tmc_vote_end`, `tmc_vote_warning`, `tmc_vote_count`) because the server decides what plays; `TmcNoticeOverlay.sound_catalogue()` has them because the client plays them, and `host/` is not in the client build. `selftest` fails if the template names a cue the overlay has no def for — dot-audio treats an unknown id as silence on purpose, so the drift would be a silent vote for every player — or a def with no synthesised stand-in, since no audio file ships. Real sounds go in `client/sounds/<id>.ogg` and win over the synthesiser one id at a time.
+
+**The template turns it on and existing deployments do not get it by themselves.** `cfg.example/vote.yml` now ships `vote_warning_sec: 10` and `runoff_warning_sec: 5` — at 0 there is no countdown to show, only the ballot's time — and the four cue ids. `cfg/` is never overwritten and setup counts a commented-out key as answered, so a deployment whose `cfg/vote.yml` predates this has the ballot line and no countdown or sound until those keys are uncommented there.
+
+**The overlay does not register its audio manager and does not touch the buses.** A delivered game registers its own `dot_audio` and sets its own bus volumes; a shell that did either would displace the one or reset the other the moment it started. It plays on `Master` because this project declares no bus layout. A game's MAP vote still plays its own cues over its own wire (arena, g2gfast and playground send a `VOTE` event), which is right: that vote is the game's.
 
 **A game that stops its map clock has to stop its vote's clock too.** `content/playground/game.yml` set `pg_map_seconds: "0"` — "runs until somebody votes it out" — and left the vote's own thirty-minute clock running, so the deployed sandbox was put to a ballot at twenty-eight minutes. It sets `metadata: map_vote: {trigger: rtv_only, duration_sec: 0}` now, and `selftest` layers every shipped game's `map_vote` block over dot-vote's defaults and fails for any whose `*_map_seconds` is 0 while its vote still has a clock. Armed by putting the playground back on a 1800-second `time_limit`.
 
@@ -576,8 +587,8 @@ tools/package_check.sh      # the same thing in the shape an operator unpacks
 ```
 
 `examples/selftest.tscn` covers the YAML reader, the config translation, the permission
-translation, the content index, the sink layer and the guard against fixtures in
-`examples/fixtures/` — 162 checks across 11 sections. Those fixtures
+translation, the content index, the game vote's HUD cues, the sink layer and the guard against fixtures in
+`examples/fixtures/` — 179 checks across 12 sections. `examples/shell_notice.tscn` (24 checks) is the game vote on a real shell's HUD over a real socket; `multigame` (67) hears the same notices at the server with nobody connected. Those fixtures
 are asserted on value by value, so changing one changes a check — which is the point: they
 are the exact keys an operator writes, checked against the exact settings they are supposed
 to reach.
@@ -796,10 +807,7 @@ dot-party, dot-matchmaking and dot-locale arrived with suites and READMEs and no
   attaches one; nothing here asks. `sv_query_app` in `cfg/server.yml` sets the app
   slug a listing shows — display only, and the backbone is what a launch actually
   resolves an app against.
-- **A vote a player can see.** The vote runs and announces itself in chat, which is how
-  every server in this genre did it for fifteen years, and it is enough to play with.
-  A ballot drawn on screen needs a wire message and a screen, which are dot-net's and
-  dot-ui's, and belong in the client shell rather than in the host.
+- **A ballot a player can click.** The vote announces itself in chat and puts its countdown, its time and the command that votes on the shell's HUD, with a sound. A ballot drawn as a menu of options needs the options on the wire and a screen that takes input, which is more than a `DotNotice` line carries; it belongs in the client shell rather than in the host.
 - **Windows beyond `setup.ps1`.** It makes junctions rather than symlinks, and neither it
   nor `server.ps1` has ever been run on Windows from here. There is no PowerShell on the
   machine this was written on, so both are reviewed rather than tested — which is a

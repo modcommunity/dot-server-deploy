@@ -14,7 +14,7 @@ extends Node
 
 const CFG := "res://examples/fixtures"
 
-const CHECKS := 165
+const CHECKS := 179
 
 var _passed := 0
 var _failed := 0
@@ -41,6 +41,7 @@ func _run() -> void:
 	_test_admins()
 	_test_content()
 	_test_vote()
+	_test_vote_notices()
 	_test_auth()
 	_test_logging()
 	_test_security()
@@ -864,6 +865,124 @@ func _test_vote() -> void:
 		"a key ignored AND not reported is the worst of both: the operator believes "
 		+ "it took effect"
 	)
+
+	_done()
+
+
+## The game vote's HUD: what the template asks the shell to play, and what the shell does
+## with a notice.
+##
+## [b]Two copies of one list, checked against each other, because they cannot be one.[/b]
+## The cue ids are named by the SERVER's configuration and played out of the CLIENT's
+## catalogue, and the client is a different build — host/ is not in it. So the ids are
+## written twice by necessity, and this is the check that the two agree: a template
+## naming a cue the shell has no def for is a vote that is silent for every player, with
+## nothing erroring anywhere, because dot-audio treats an unknown id as silence on purpose.
+func _test_vote_notices() -> void:
+	_section("the game vote on the shell's HUD")
+
+	var parsed := TmcYaml.parse_file("res://cfg.example/vote.yml")
+
+	if not _check(parsed.ok, "the shipped vote.yml template parses", str(parsed.error)):
+		_done()
+		return
+
+	var tree: Dictionary = parsed.value
+	var catalogue := TmcNoticeOverlay.sound_catalogue()
+	var named := PackedStringArray()
+	var missing := PackedStringArray()
+
+	for key in ["cue_vote_start", "cue_vote_end", "cue_warning", "cue_runoff_warning", "cue_countdown"]:
+		var id := str(tree.get(key, ""))
+		if id == "":
+			continue
+		# The countdown cue may carry the second in it; every second it could name must
+		# then be in the catalogue, which for a %d id is a question about the template.
+		var ids := PackedStringArray()
+		if id.contains("%d"):
+			for at in str(tree.get("cue_countdown_at", "")).split(",", false):
+				ids.append(id % int(at))
+		else:
+			ids.append(id)
+		for one in ids:
+			named.append(one)
+			if not catalogue.has(StringName(one)):
+				missing.append(one)
+
+	_check(
+		named.size() >= 4,
+		"the template names the vote's cues (%s)" % ", ".join(named),
+		"cue_* shipped empty or commented out: the shell has sounds and is never asked"
+	)
+	_check(
+		missing.is_empty(),
+		"and every one is in the shell's catalogue",
+		"the shell has no def for %s, so those are silent for every player" % ", ".join(missing)
+	)
+
+	# No file ships for any of them, so each must have a synthesised stand-in or it is
+	# silent on a real sound card too -- the same failure one layer down.
+	var unvoiced := PackedStringArray()
+	var recipes := TmcNoticeOverlay.sound_recipes()
+	for id in catalogue.ids():
+		if not recipes.has(id):
+			unvoiced.append(String(id))
+	_check(
+		unvoiced.is_empty(),
+		"every cue the shell can play has a stand-in sound (%d)" % recipes.size(),
+		"no stand-in for %s" % ", ".join(unvoiced)
+	)
+	_check(catalogue.validate().ok, "and the catalogue validates", str(catalogue.validate().error))
+
+	# A countdown needs a warning to count. At 0 the ballot opens at once and the HUD shows
+	# the ballot's time only, which is legitimate -- but it is not what this template means.
+	_check(
+		float(tree.get("vote_warning_sec", 0)) > 0.0,
+		"the template counts down to a ballot (%ss)" % str(tree.get("vote_warning_sec", 0))
+	)
+
+	# The overlay itself, with no server. The socket half is `shell_notice`.
+	var overlay := TmcNoticeOverlay.new()
+	add_child(overlay)
+
+	var sink := overlay.audio.sink as DotAudioSinkNull
+	_check(sink != null, "headless, the overlay's sounds go to the null sink")
+
+	overlay.show_notice(DotNotice.make(&"", "A vote starts in", 10.0, &"game_vote"))
+	_check(
+		overlay.line_text(&"game_vote").begins_with("A vote starts in"),
+		"a notice with a topic puts up a line (%s)" % overlay.line_text(&"game_vote")
+	)
+	overlay.show_notice(DotNotice.make(&"", "A vote starts in", 9.0, &"game_vote"))
+	_check(
+		overlay.describe()["lines"].size() == 1 and overlay.line_text(&"game_vote").ends_with("9s"),
+		"and the next one for that topic replaces it rather than stacking (%s)"
+			% overlay.line_text(&"game_vote")
+	)
+	overlay.show_notice(DotNotice.make(TmcNoticeOverlay.CUE_VOTE_COUNT))
+	_check(
+		overlay.describe()["lines"].size() == 1,
+		"a bare cue draws nothing"
+	)
+	_check(
+		sink != null and sink.count_of(TmcNoticeOverlay.CUE_VOTE_COUNT) == 1,
+		"and is played through the catalogue"
+	)
+	overlay.show_notice(DotNotice.make(&"tmc_no_such_cue"))
+	_check(
+		sink != null and sink.count_of(&"tmc_no_such_cue") == 0,
+		"an id the shell does not have is silence, not an error"
+	)
+	overlay.show_notice(DotNotice.clear(&"game_vote"))
+	_check(not overlay.has_line(&"game_vote"), "and a clear takes the line down")
+	_check(
+		TmcNoticeOverlay.format_seconds(75.2) == "1:16"
+			and TmcNoticeOverlay.format_seconds(9.1) == "10s",
+		"a countdown reads as seconds under a minute and m:ss above, rounded up"
+	)
+
+	remove_child(overlay)
+	overlay.free()
 
 	_done()
 

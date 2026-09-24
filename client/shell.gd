@@ -65,6 +65,10 @@ var _party_line: Label = null
 ## Every sentence this shell shows a player goes through here. See [method _build_locale].
 var _locale: DotLocale = null
 
+## What the server puts on the HUD over whatever game is showing: the game vote's
+## countdown and its cues. See [TmcNoticeOverlay] for why the shell draws it.
+var notices: TmcNoticeOverlay = null
+
 
 func _ready() -> void:
 	# Scoped to this subtree, for the reason the host scopes its own: Godot addresses an
@@ -87,6 +91,10 @@ func _ready() -> void:
 
 	_build_locale()
 	_build_menu()
+
+	notices = TmcNoticeOverlay.new()
+	notices.name = "Notices"
+	add_child(notices)
 
 	# Who is playing, before anything is dialled.
 	#
@@ -900,6 +908,9 @@ func _connect_to(address: String) -> void:
 	link.game_changed.connect(_on_game_changed)
 	link.spawned.connect(_on_spawned)
 	link.disconnected.connect(_on_disconnected)
+	# The server's HUD lines. Connected per link rather than once, because the link is
+	# rebuilt on every connection -- see [method _drop_link].
+	link.notice_received.connect(notices.show_notice)
 
 	var connecting: DotResult = await link.connect_to_server(target)
 
@@ -1099,6 +1110,8 @@ func _on_disconnected(reason: String) -> void:
 	_drop_link()
 	_set_busy(false)
 	_menu.visible = true
+	# A countdown from a server this player has left is a promise nobody is keeping.
+	notices.clear_all()
 
 	# [b]The one disconnection a player can actually act on, and it needs a different
 	# sentence from every other one.[/b] This build's `@rpc` surface does not match the

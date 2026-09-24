@@ -376,6 +376,15 @@ echo
 echo "reconnecting after the server restarts"
 "$GODOT" --headless --path . res://examples/reconnect.tscn || fails=$((fails + 1))
 
+# The game vote on the real shell's HUD. The director counts, dot-server carries a
+# DotNotice, the overlay draws and plays -- each tested on its own elsewhere, and this is
+# the only place a countdown the SERVER counts becomes a line and a sound on a client it
+# admitted. Armed: with TmcVote's cue wiring or its clear removed, checks fail here and in
+# multigame.
+echo
+echo "the game vote on the shell's HUD"
+"$GODOT" --headless --path . res://examples/shell_notice.tscn < /dev/null || fails=$((fails + 1))
+
 # Parties on a real server. The booking chains onto dot_ban_source, and a game's module
 # puts dot-moderation there when it loads -- so the first `changelevel` after boot took
 # every booking off the seam, in silence, until the host started putting it back. Armed:

@@ -1,0 +1,8 @@
+# A fixture for examples/shell_notice.tscn. Its own port, so it never races another suite.
+sv_name: "Shell Notice Fixture"
+sv_maxplayers: 8
+sv_game: "lobby"
+
+# Off, for the reason fixtures/reconnect gives: a thread blocked in a read of this
+# terminal's stdin is a suite that passes and then never exits.
+sv_stdin_console: false
