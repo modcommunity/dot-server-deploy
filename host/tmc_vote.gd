@@ -37,6 +37,14 @@ extends Node
 ## wiring: who counts as a player, who counts as an admin, where the announcements go,
 ## and which games are not on the ballot.
 ##
+## [b]Heard in chat, and only in chat.[/b] [method DotVoteDirector.announce_fn] is chat,
+## which the shell already draws. [signal DotVoteDirector.cue] is connected to nothing and
+## the cues ship empty in `vote.yml`: the shell's only channels are [DotClientLink]'s and
+## [DotClientChat]'s RPC sets, carrying a sound id would mean a new `@rpc` pair in
+## dot-server and a new signon revision — every shell in the field timed out until rebuilt
+## — and a loaded game's own wire is the game's, which this file does not name. See this
+## project's CLAUDE.md.
+##
 ## [b]The lobby is excluded by default and that is a real decision.[/b] It is this
 ## server's home screen rather than a game, and "vote to go back to the menu" is not a
 ## thing anybody votes for. An operator who disagrees empties `vote_exclude`.

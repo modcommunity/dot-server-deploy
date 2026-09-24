@@ -173,6 +173,10 @@ Three decisions in that file are this deployment's rather than dot-vote's:
   change has to reset the clock and everybody's rock-the-vote just the same.
   `examples/multigame.tscn` fails if that setting is flipped.
 
+**The game vote is heard in chat and nowhere else, and that is a decision rather than a gap.** Its ballot, its countdown and its result reach the shell through `announce_fn`, which is dot-server's chat. Its `cue` signal is connected to nothing, and its `cue_*` settings ship empty in `vote.yml`. The shell talks to a server over exactly two RPC sets, `DotClientLink`'s and `DotClientChat`'s, and neither can carry a sound id; carrying one means an `@rpc` pair added to dot-server's `DotServer` and `DotClientLink`, which changes the signon revision — every shell in the field then connects, goes quiet and is timed out until it is rebuilt, which is what `signon_revision` exists to catch. A loaded game's own wire is no help either: it is the game's, this host does not name a game's classes, and a change of game replaces it. A game's MAP vote is the one that plays cues, over that game's own wire (arena, g2gfast and playground send a `VOTE` event), because a game's client is a thing its server can talk to. When dot-server grows a general "server says something to the shell" message for another reason, the game vote's cues are one more payload for it.
+
+**A game that stops its map clock has to stop its vote's clock too.** `content/playground/game.yml` set `pg_map_seconds: "0"` — "runs until somebody votes it out" — and left the vote's own thirty-minute clock running, so the deployed sandbox was put to a ballot at twenty-eight minutes. It sets `metadata: map_vote: {trigger: rtv_only, duration_sec: 0}` now, and `selftest` layers every shipped game's `map_vote` block over dot-vote's defaults and fails for any whose `*_map_seconds` is 0 while its vote still has a clock. Armed by putting the playground back on a 1800-second `time_limit`.
+
 ## Roles in, flags out
 
 dot-server's permission model is **flags, not roles**, deliberately: operators do not agree
