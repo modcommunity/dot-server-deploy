@@ -430,7 +430,7 @@ Those two failing requests were also what made the wrong domain visible at all.
 
 ### A real client in a delivered game
 
-`examples/smash_client.tscn`, 27 checks, in `tools/check.sh`. Everything else here that opens a socket connects to `a_room` — a 2D lobby small enough that a mount which half worked would still look right. This one connects to a 3D game whose map is rebuilt every round out of a pack, and asserts the whole delivery path from the operator's end: the pack mounts at the prefix the game computes, the module's script is the mounted copy rather than a built-in one, the world describes itself with platforms and its own gravity, a round starts and the cannon puts something in the air, the client rebuilds a field of its own, and the game's own console command still answers afterwards.
+`examples/smash_client.tscn`, 28 checks, in `tools/check.sh`. Everything else here that opens a socket connects to `a_room` — a 2D lobby small enough that a mount which half worked would still look right. This one connects to a 3D game whose map is rebuilt every round out of a pack, and asserts the whole delivery path from the operator's end: the pack mounts at the prefix the game computes, the module's script is the mounted copy rather than a built-in one, the world describes itself with platforms and its own gravity, a round starts and the cannon puts something in the air, the client rebuilds a field of its own, and the game's own console command still answers afterwards.
 
 **It is written entirely by duck typing, because this build cannot name a type the pack declares.** The world is `module.get("game")` and everything asked of it goes through `describe()`. That is not a workaround: it is the same bargain every module in the family makes with dot-game, and the reason a game exposes `describe()` at all.
 
@@ -588,7 +588,7 @@ tools/package_check.sh      # the same thing in the shape an operator unpacks
 
 `examples/selftest.tscn` covers the YAML reader, the config translation, the permission
 translation, the content index, the game vote's HUD cues, the sink layer and the guard against fixtures in
-`examples/fixtures/` — 179 checks across 12 sections. `examples/shell_notice.tscn` (24 checks) is the game vote on a real shell's HUD over a real socket; `multigame` (67) hears the same notices at the server with nobody connected. Those fixtures
+`examples/fixtures/` — 179 checks across 12 sections. `examples/shell_notice.tscn` (24 checks) is the game vote on a real shell's HUD over a real socket; `multigame` (68) hears the same notices at the server with nobody connected. Those fixtures
 are asserted on value by value, so changing one changes a check — which is the point: they
 are the exact keys an operator writes, checked against the exact settings they are supposed
 to reach.
