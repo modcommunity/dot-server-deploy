@@ -43,7 +43,7 @@ const DATA := "user://tmc_multigame"
 ## Every check this suite runs, including the one that compares against it. The section
 ## counter cannot see a section that aborted after announcing itself — its remaining checks
 ## simply never run — and a total can. See docs/testing.md.
-const CHECKS := 68
+const CHECKS := 69
 
 var _passed := 0
 var _failed := 0
@@ -559,6 +559,14 @@ func _test_vote_changes_the_game() -> void:
 	_check(
 		director.ballot.option_ids().has(&"hungry_frenzy"),
 		"with the nomination on it"
+	)
+	# `[mce-1]`: the fixture's vote.yml has said `include_extend: false` since it was
+	# written and nothing looked at a ballot to see whether it took. This is the running
+	# ballot, not the parsed value.
+	_check(
+		not director.ballot.has_extend(),
+		"and no Extend on it, because vote.yml says include_extend: false",
+		str(director.ballot.option_ids())
 	)
 
 	var line := _notice_for(notices, TmcVote.NOTICE_TOPIC)
