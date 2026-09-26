@@ -72,6 +72,12 @@ const BOOT_KEYS := {
 	# process: [DotStdinConsole] is a thread blocked in a read the engine cannot cancel,
 	# so the second one keeps the process alive after everything else has stopped.
 	"sv_stdin_console": "stdin_console_enabled",
+	# And whether a PIPE counts (dot-server 5f46687): off by default there, because a reader
+	# blocked on a pipe whose writer never closes keeps the process from exiting. A box that
+	# is driven by a supervisor writing commands down a pipe turns it on. TMC's own panel
+	# talks RCON, and neither the Docker image (no `stdin_open`) nor the systemd unit
+	# (StandardInput defaults to null) gives the server a stdin at all, so the default stands.
+	"sv_stdin_console_pipes": "stdin_console_pipes",
 	# log.yml. The level is the one an operator changes most often and the one they most
 	# often cannot find: it is not a cvar, because it has to apply before the console
 	# exists in order to cover the boot it is being raised to diagnose.

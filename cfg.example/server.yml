@@ -31,6 +31,15 @@ sv_background_grace: 300
 # Empty means anyone may join.
 sv_password: ""
 
+# Whether the server reads commands from its own stdin when stdin is a PIPE.
+#
+# A terminal is always read, and a file too. A pipe is not, by default, because a
+# reader waiting on a pipe whose writer never closes stops the process from exiting.
+# Turn this on only if something (a supervisor, `docker run -i` without `-t`) feeds
+# console commands down a pipe, and have it close the pipe to stop the server.
+# RCON (rcon.yml) is the usual way in, and needs none of this.
+# sv_stdin_console_pipes: false
+
 # Simulation rate. Higher is more responsive and costs CPU and bandwidth on every
 # client as well as here. Fixed at boot.
 sv_tickrate: 60
