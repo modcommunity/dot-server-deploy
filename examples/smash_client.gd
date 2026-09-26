@@ -43,7 +43,7 @@ const MODULE := "smash"
 ## Every check this suite runs, including the one that compares against it. The section
 ## counter cannot see a section that aborted after announcing itself — its remaining checks
 ## simply never run — and a total can. See docs/testing.md.
-const CHECKS := 28
+const CHECKS := 40
 
 var _passed := 0
 var _failed := 0
@@ -82,7 +82,9 @@ func _run() -> void:
 			await _test_the_world_is_there()
 			await _test_a_round_runs()
 			await _test_the_client_sees_the_field()
+			await _test_two_builds_on_one_socket()
 			await _test_still_serving()
+			await _test_a_client_the_game_cannot_play_with()
 
 	await _teardown()
 	DotPaths.remove_tree(DATA)
@@ -268,6 +270,12 @@ func _test_connect() -> bool:
 	_link.player_name = "Faller"
 	_client_side.add_child(_link)
 
+	# [b]Two builds, not one.[/b] Each end knows a kind the other has never heard of -- a
+	# server one release ahead, a client one release ahead -- and everything after this
+	# joins, plays a round and is served over that. See `_test_two_builds_on_one_socket`.
+	_link.envelope.register(&"skew.client_news")
+	_server().envelope.register(&"skew.server_news")
+
 	_link.spawned.connect(func() -> void: _spawned[0] = true)
 	_link.disconnected.connect(func(reason: String) -> void: _refused[0] = reason)
 	_link.game_changed.connect(
@@ -449,6 +457,124 @@ func _count_nodes(from: Node) -> int:
 		total += _count_nodes(child)
 
 	return total
+
+
+## [b]Two builds on one socket, in a delivered game.[/b]
+##
+## The client and the server each know a kind the other lacks (registered before the join,
+## in `_test_connect`), and the game's own netcode each registers one message type the
+## other lacks here. Neither is sent to the end that does not know it; forced onto the
+## wire anyway, each is dropped on arrival; and the round above ran over all of it.
+func _test_two_builds_on_one_socket() -> void:
+	_section("a client and a server that know different kinds share the socket")
+
+	var peer := _peer()
+	_check(
+		_server().envelope.knows_peer(peer) and _link.envelope.knows_peer(1),
+		"each end has the other's kinds from the handshake"
+	)
+
+	_check(
+		not _server().send_kind(peer, &"skew.server_news", {"x": 1}, DotEnvelope.Lane.EVENT),
+		"the server does not send the client a kind it lacks"
+	)
+	_check(
+		not _link.send_kind(&"skew.client_news", {"x": 1}),
+		"nor the client the server"
+	)
+
+	var client_dropped := _link.envelope.dropped_arrivals
+	var server_dropped := _server().envelope.dropped_arrivals
+	_server()._dot_down_event.rpc_id(peer, "skew.server_news", {"x": 1})
+	_link._dot_up.rpc_id(1, "skew.client_news", {"x": 1})
+
+	var both := await _until(
+		func() -> bool:
+			return _link.envelope.dropped_arrivals > client_dropped \
+				and _server().envelope.dropped_arrivals > server_dropped,
+		5.0
+	)
+	_check(both, "forced onto the wire anyway, each is dropped on arrival")
+	_check(
+		_link.is_playing() and _server().playing_sessions().size() == 1,
+		"and the client is still playing"
+	)
+
+	# The game's own netcode, which the pack built on both ends. Both managers are found
+	# the way the game registers them, by service name, because this build cannot name
+	# anything the pack declares.
+	var net := _server_net()
+	_check(net != null, "the delivered game's server netcode is found")
+	if net == null:
+		_done()
+		return
+
+	_check(
+		net.messages.knows_peer(peer) and not net.messages.is_refused(peer),
+		"and it has the client's message schema and did not refuse it"
+	)
+	_done()
+
+
+## [b]The one refusal a delivered game makes by itself.[/b] A client whose message schema
+## lacks the types this game requires is told so and disconnected, by dot-game's wiring --
+## over the real socket, with dot-net's sentence as the reason, as CODE_VERSION. Driven by
+## handing the server's netcode the schema such a client would send; everything from the
+## refusal on is the real path. Last, because it ends the session.
+func _test_a_client_the_game_cannot_play_with() -> void:
+	_section("a client that cannot play this game's messages is disconnected in words")
+
+	var net := _server_net()
+	if not _check(net != null, "the game's netcode is there"):
+		_done()
+		return
+
+	var strict := DotNetMessageRegistry.new()
+	strict.register(&"skew.vital", SkewVital)
+	strict.seal()
+
+	_refused[0] = ""
+	var refused := net.receive(strict.schema_payload(), _peer())
+	_check(not refused.ok and refused.code() == DotError.CODE_VERSION, "the netcode refuses it")
+
+	var told := await _until(func() -> bool: return _refused[0] != "", 5.0)
+	_check(
+		told and _refused[0] == "This server's game needs a newer game client.",
+		"and the client is disconnected with the sentence",
+		_refused[0]
+	)
+	_check(
+		_link.last_error != null and _link.last_error.code == DotError.CODE_VERSION,
+		"as a version problem, which a shell answers differently from a kick",
+		str(_link.last_error)
+	)
+	_check(_server().sessions().is_empty(), "and the server holds no slot for it")
+	_done()
+
+
+func _peer() -> int:
+	var sessions := _server().sessions()
+	return sessions[0].peer_id if not sessions.is_empty() else 0
+
+
+func _server_net() -> DotNetManager:
+	var module: DotModule = _server().modules.get_module(MODULE)
+	if module == null:
+		return null
+	var net: Variant = module.get("net")
+	return net as DotNetManager
+
+
+## A type the client in the last section REQUIRES and no server has.
+class SkewVital extends DotNetMessage:
+	func _type_name() -> StringName:
+		return &"skew.vital"
+
+	func _write(_w: DotNetWriter) -> void:
+		pass
+
+	func _read(_r: DotNetReader) -> void:
+		pass
 
 
 ## Whatever the round did to the server, it can still be asked.

@@ -833,6 +833,9 @@ func _build_auth() -> bool:
 func _build_cloud() -> void:
 	var cloud := DotCloudClient.new()
 	cloud.name = "Cloud"
+	# Who a pack's requires.json refusal names: "This game needs dot-net API level 3 or
+	# newer; this SERVER has level 2" -- the operator's to fix, not the player's.
+	cloud.host_role = "server"
 	cloud.config = DotCloudConfig.new()
 	cloud.config.cache_dir = "%s/content_cache" % _data_dir
 	# [b]Falls back to the tracked defaults when the deployment has no answer of its

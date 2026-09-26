@@ -797,6 +797,9 @@ func _ensure_cloud() -> void:
 
 	_cloud = DotCloudClient.new()
 	_cloud.name = "Cloud"
+	# Who a pack's requires.json refusal names: "...; this CLIENT has level 2" -- the
+	# player's cue that this shell, not the server, is the one to update.
+	_cloud.host_role = "client"
 	_cloud.config = DotCloudConfig.new()
 
 	if ResourceLoader.exists(CONTENT_CONFIG) or FileAccess.file_exists(CONTENT_CONFIG):
@@ -1295,8 +1298,23 @@ func _on_disconnected(reason: String) -> void:
 	# sentence from every other one.[/b] This build's `@rpc` surface does not match the
 	# server's, so no amount of retrying will work -- and "Disconnected: ..." beside a
 	# Connect button invites exactly that. See [DotSignon].
-	if err != null and err.code == DotError.CODE_UNSUPPORTED and wanted != "":
+	if err != null and err.code == DotError.CODE_UNSUPPORTED and wanted != "" \
+			and wanted != DotSignon.revision([DotClientLink]):
 		_report_build_mismatch(wanted)
+		return
+
+	# [b]The same revision and still refused: the kinds or the message types differ.[/b]
+	# Since the RPC surface froze (DotEnvelope) two builds share a revision and settle what
+	# they can do between them by advertising it, and a server that finds a kind or a
+	# message type it REQUIRES missing refuses with CODE_VERSION and a sentence that says
+	# who has to update. That sentence is the whole message; "a different build (it wants
+	# X, this is X)" would name the same revision twice and help nobody.
+	if err != null and err.code == DotError.CODE_VERSION and reason != "":
+		DotLog.error(CHANNEL, "refused: this build and the server cannot play together", {
+			"why": reason, "detail": err.detail,
+		})
+		_claimed_party = ""
+		_say(reason)
 		return
 
 	# The error's key, when the server refused with one the catalogue can say in the
@@ -1324,7 +1342,7 @@ func _on_disconnected(reason: String) -> void:
 ## a script naming it directly does not resolve on desktop, which is the trap
 ## [DotWeb] exists to close.
 func _report_build_mismatch(wanted: String) -> void:
-	var ours := DotSignon.revision([DotClientLink, DotClientChat])
+	var ours := DotSignon.revision([DotClientLink])
 
 	_say(
 		"This server needs a different build of the game (it wants %s, this is %s)."
