@@ -14,7 +14,7 @@ extends Node
 
 const CFG := "res://examples/fixtures"
 
-const CHECKS := 225
+const CHECKS := 226
 
 var _passed := 0
 var _failed := 0
@@ -273,6 +273,11 @@ func _test_config() -> void:
 	_check(config.server.log_basename == "fixture", "log_name reaches the basename")
 	_check(config.server.log_max_files == 3, "log_keep reaches the retention count")
 	_check(config.server.log_json, "log_json reaches the format")
+	_check(
+		config.server.stdin_console_pipes,
+		"sv_stdin_console_pipes reaches dot-server's pipe switch",
+		"a supervisor feeding commands down a pipe had no way to turn it on"
+	)
 	# Not `unknown.any(...)`: `unknown` is a PackedStringArray, which is its own Variant
 	# type and has none of Array's higher-order methods. It is a parse error, and a parse
 	# error in a suite scene makes the process HANG rather than fail.
