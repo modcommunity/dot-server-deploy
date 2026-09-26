@@ -172,10 +172,12 @@ func _build_reservations(backbone: Object) -> void:
 	add_child(reservations)
 
 
-## `GET party/reservation` is a route the site does not serve yet (dot-party's
-## docs/backbone-contract.md). Every sync is then a refusal, every 30 seconds, forever --
-## so the first one is said once at INFO, with what it means, and the rest are left to
-## the transport's own log.
+## `GET party/reservation` is served by the site since its game-backbone routes merged
+## (dot-party's docs/backbone-contract.md). A refusal now means something is wrong with
+## THIS box -- the credential is not bound to a game, or the site it points at is older --
+## and a server that cannot learn it is booked admits a party's strangers. So the first
+## one is said once at WARN, with what it means, and the rest (every 30 seconds) are left
+## to the transport's own log. It was INFO while the route did not exist anywhere.
 func _quiet_first_fetch_failure() -> void:
 	var fetch := reservations.fetch_fn
 
@@ -184,7 +186,7 @@ func _quiet_first_fetch_failure() -> void:
 
 		if not res.ok and not _warned_fetch:
 			_warned_fetch = true
-			DotLog.info(CHANNEL, "the backbone would not say whether this server is booked", {
+			DotLog.warn(CHANNEL, "the backbone would not say whether this server is booked", {
 				"why": str(res.error),
 				"meaning": "bookings come from party_reserve at the console until it does",
 			})
