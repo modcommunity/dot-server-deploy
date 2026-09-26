@@ -372,6 +372,13 @@ echo "changing games under a live client"
 echo
 echo "a real client in a delivered game"
 "$GODOT" --headless --path . res://examples/smash_client.tscn || fails=$((fails + 1))
+echo
+# The template a third-party developer starts from, packaged by dot-ci's package.sh the way its
+# release packages it, signed the way the site signs a -pack.zip, and joined by a real client
+# that collects a coin. It packages the template's git HEAD, and says "skipped" when the
+# template or dot-ci is not beside this project. Capped: it drives package.sh and a server.
+echo "a game made from dot-game-template, delivered and joined"
+timeout 300 "$GODOT" --headless --path . res://examples/template_client.tscn || fails=$((fails + 1))
 
 # And the REAL shell, connected twice. Everything above connects at most once, and a
 # second connection in one session put the game on screen with an empty world -- the

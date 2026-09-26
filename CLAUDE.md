@@ -503,6 +503,12 @@ Where there is no sibling to compare against — a release tarball, the containe
 stage — it says so and does not fail, and `setup.sh` keeps whatever is in `dist/` rather
 than trying to republish, because a deployment should not be holding the signing key.
 
+### A stranger's game, the way a stranger ships it
+
+`examples/template_client.tscn`, 21 checks, in `tools/check.sh` after smash_client. smash_client publishes with this project's own `./server pack` from a checkout; a third-party developer ships something else — the `-pack.zip` their release workflow attaches, which the site signs under `<site username>/<repo>` — and that artifact had never been mounted by anything here. So this one takes `dot-game-template` (the repository a developer copies to start a game), packages its git HEAD with `../dot-ci/scripts/package.sh --pack --name dot-game-template` exactly as its release does, unpacks the zip and publishes it with `DotCloudPublisher` under `someone/dot-game-template@0.0.1` with a key made for the run and trusted by that run's `content.json` alone, stamps the pack's own `game.yml` with `install_games.gd`'s `stamp_identity`, boots a real host on it, joins a real client, and steers the template's client scene at a coin until the server scores it and the client shows the score. It says "skipped" and exits 0 when the template or dot-ci is not beside this project.
+
+**It packages HEAD, so commit the template before believing it.** Armed with a scratch clone whose bridge was reached by `class_name` rather than by `preload`: the mount fails with `Identifier "TplBridge" not declared`, the section aborts, and the two counters fail the run. Its first armed run also found that the artifact is named after the checkout's directory unless `--name` is passed — the reason the release workflow passes the repository's name — so the suite passes it too.
+
 ### It went stale, and so did the guard
 
 **Both halves of that arrangement had gone stale at once, and each hid the other.**

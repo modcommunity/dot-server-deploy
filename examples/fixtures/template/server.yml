@@ -1,0 +1,11 @@
+# A fixture for examples/template_client.tscn: a game made from dot-game-template, packaged by
+# dot-ci's package.sh and published the way the site publishes a release. Loopback, a port
+# nothing else here uses, and the game booted directly -- the suite writes the content
+# directory and the trusted key itself, beside a copy of these files.
+sv_name: "Template Fixture"
+sv_maxplayers: 8
+sv_game: "dot-game-template"
+
+# Off, because nobody is typing: a stdin reader left open at shutdown is one unjoined-thread
+# warning at the end of a run that passed. See smash/server.yml.
+sv_stdin_console: false
