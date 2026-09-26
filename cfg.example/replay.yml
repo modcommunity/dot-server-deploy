@@ -1,0 +1,67 @@
+# Replays: the last minute of this server, kept in memory, so "save that" is possible and
+# a kick or a ban carries a record of what happened before it.
+#
+# What is recorded is the server's EVENT BUS -- connects, spawns, chat (lines a filter
+# blocked included), commands, kicks, game changes, votes, admin actions -- plus a roster
+# of who is connected every few seconds. Not the netcode: which player's view to record
+# is a game's decision, and a server tool that guessed would record the wrong one.
+#
+# Built for every game this server runs. It costs one clock read and three comparisons a
+# tick, a small compression once a second when something happened, and a walk of the
+# player list every keyframe; memory is capped below and is kilobytes in practice.
+#
+# Console (staff, and from chat as !replay):
+#   replay                       what is held, what was saved, what was pruned
+#   replay save [seconds] [why]  write the ring (or its last N seconds) to replays/clips/
+#   replay list                  the newest files in each directory
+#
+# A clip is an ordinary replay: complete, hash-chained, and readable by dot-replay's
+# DotReplayFile. Its FINAL HASH is what makes it evidence -- stored somewhere the file's
+# holder cannot rewrite, it proves nobody edited the file since.
+replay_enabled: true
+
+# How much recent match the ring keeps, in seconds, and its hard ceiling in MiB. The
+# window is kept back to a roster keyframe, so a clip may be up to one keyframe interval
+# longer than asked -- never shorter.
+replay_ring_seconds: 60
+replay_ring_max_mib: 32
+
+# --- Evidence ------------------------------------------------------------------
+#
+# A kick or a ban issued on this server saves a clip to replays/evidence/ and files it:
+#   - dot-server's own bans (`ban`, `banid`, `banip`): on the ban record in data/bans.json
+#     under "evidence", and as a `replay_evidence` line in data/audit.jsonl.
+#   - an admin's `kick` / `kickid`: a `replay_evidence` audit line naming the same player
+#     (a kick is not a record anywhere else).
+#   - a game's dot-moderation bans and kicks, the guard's included once it is out of dry
+#     run: merged into the punishment's own `evidence` field and stored again.
+# Punishments this many seconds apart share one clip: a ban is followed by its own kick,
+# and a wave of bots removed at once is one incident.
+replay_clip_on_punish: true
+replay_evidence_cooldown_sec: 10
+# How much of the ring an evidence clip keeps. 0 is everything it holds.
+replay_clip_seconds: 0
+
+# --- Every match to a file -----------------------------------------------------
+#
+# OFF. The ring is the evidence a moderator needs; a file of every match is disk nobody
+# asked for. On, one file per game under replays/matches/, finished cleanly when the game
+# changes or the server stops, and cut off cleanly at replay_max_file_mib.
+replay_record: false
+replay_max_file_mib: 256
+
+# --- Disk ------------------------------------------------------------------------
+#
+# Where the three directories go. Empty is data/replays, beside everything else the
+# server writes -- the one directory a container mounts writable.
+replay_directory: ""
+# Each of matches/, clips/ and evidence/ keeps at most this many files and MiB; the
+# oldest go first. An evidence clip going is logged at WARN, because a punishment names it.
+replay_keep_files: 50
+replay_keep_mib: 512
+
+# Every other setting of the addon's DotReplayConfig is accepted with a `replay_` prefix
+# (replay_chunk_seconds, replay_keyframe_seconds, replay_compression, replay_chunk_kib,
+# replay_max_record_kib), and DOT_REPLAY_* / --replay-* override them: `./server --
+# --replay-ring-seconds 300` for one tournament without editing this file.
+replay_keyframe_seconds: 10

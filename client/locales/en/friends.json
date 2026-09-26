@@ -1,0 +1,10 @@
+{
+	"join": {
+		"deny": {
+			"notFriend": "That person is not on your friends list.",
+			"offline": "{name} is offline.",
+			"notJoinable": "{name} cannot be joined right now.",
+			"unsupported": "This game cannot follow {name} there."
+		}
+	}
+}

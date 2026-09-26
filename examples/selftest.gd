@@ -14,7 +14,7 @@ extends Node
 
 const CFG := "res://examples/fixtures"
 
-const CHECKS := 179
+const CHECKS := 218
 
 var _passed := 0
 var _failed := 0
@@ -46,6 +46,8 @@ func _run() -> void:
 	_test_logging()
 	_test_security()
 	_test_party()
+	await _test_replay()
+	await _test_friends()
 
 	print("")
 	_check(
@@ -481,6 +483,340 @@ func _test_party() -> void:
 		"shipped: parties on, bookings by parties off, matchmaking off"
 	)
 
+	_done()
+
+
+## Where the replay section writes. Emptied at the start of every run, so a clip left by the
+## last one cannot satisfy a check about this one (docs/testing.md, "a suite that writes to
+## user://").
+const REPLAY_DIR := "user://tmc_selftest_replay"
+
+
+static func _rm_tree(dir: String) -> void:
+	var da := DirAccess.open(dir)
+	if da == null:
+		return
+	for sub in da.get_directories():
+		_rm_tree(dir.path_join(sub))
+	for f in da.get_files():
+		DirAccess.remove_absolute(dir.path_join(f))
+	DirAccess.remove_absolute(dir)
+
+
+static func _count_replays(dir: String) -> int:
+	var da := DirAccess.open(dir)
+	var n := 0
+	if da != null:
+		for f in da.get_files():
+			if f.ends_with(".dreplay"):
+				n += 1
+	return n
+
+
+## dot-replay was linked here and built nowhere. What this asserts: the ring is built by
+## default and bounded, `replay save` writes a file dot-replay's own reader calls complete,
+## and a ban or a kick carries the hash of a clip that is really on disk.
+##
+## Driven with no server: [TmcReplay] keeps everything a server is needed for in
+## `install()`, and `./server check` asserts that half on a server that booted.
+func _test_replay() -> void:
+	_section("the replay ring")
+
+	var loaded := TmcConfig.load_dir(CFG)
+	var config := loaded.value as TmcConfig
+
+	_check(config.files_read.has("replay.yml"), "replay.yml is read")
+	_check(config.replay_record and config.replay_keep_files == 3, "the deployment's switches reach the host")
+	# By prefix, onto the addon's own config -- the table this file does not keep.
+	_check(
+		config.replay.ring_seconds == 30.0 and config.replay.ring_max_mib == 4
+			and config.replay.keyframe_seconds == 5.0,
+		"replay_ring_seconds, _ring_max_mib and _keyframe_seconds reach DotReplayConfig"
+	)
+
+	var replay_unknown := PackedStringArray()
+	for entry in config.unknown:
+		if String(entry).contains("replay"):
+			replay_unknown.append(String(entry))
+	_check(replay_unknown.is_empty(), "and not one of them fell through as unknown", " / ".join(Array(replay_unknown)))
+
+	# The shipped defaults are the decision: on for every server, bounded, the ring only.
+	var shipped := TmcConfig.new()
+	_check(
+		shipped.replay_enabled and not shipped.replay_record and shipped.replay_clip_on_punish
+			and shipped.replay.ring_seconds > 0.0 and shipped.replay.ring_max_mib <= 32
+			and shipped.replay.directory == "",
+		"shipped: a bounded ring on every server, evidence on, no match files, under data/"
+	)
+
+	# A setting the addon refuses refuses the file, rather than a ring quietly not built.
+	var bad := TmcConfig.new()
+	_check(
+		not bad._apply_replay({"replay_compression": "zip"}).ok,
+		"a compression the addon does not have refuses replay.yml"
+	)
+
+	_rm_tree(REPLAY_DIR)
+
+	# A clock the suite moves. 30 ticks a second, the fixture's own sv_tickrate.
+	var now: Array = [1000]
+	var replay := TmcReplay.new()
+	replay.now_ms_fn = func() -> int: return int(now[0])
+	replay.game_fn = func() -> String: return "fixture_game"
+	replay.roster_fn = func() -> Array: return [{"userid": 1, "name": "Ann"}]
+	var built := replay.configure(config, REPLAY_DIR, 30)
+
+	if not _check(built.ok, "a replay ring is built from the fixture", str(built.error)):
+		replay.free()
+		_done()
+		return
+
+	_check(
+		replay.recorder.ring != null and replay.recorder.ring.max_bytes == 4 << 20
+			and replay.recorder.ring.window_ticks == 30 * 30,
+		"and bounded: the ring holds 30 s and at most 4 MiB"
+	)
+	_check(replay.directory == REPLAY_DIR.path_join("replays"), "an empty directory means <data>/replays (%s)" % replay.directory)
+
+	var bus := DotEventBus.new()
+	_check(replay.attach_bus(bus).ok, "the tap attaches to a dot-server event bus")
+	_check(replay.begin().ok and replay.recorder.is_recording_to_file(), "recording, to the ring and to a match file")
+
+	# Ninety seconds of a server: a chat line every second and one a filter blocked.
+	for second in range(90):
+		now[0] = 1000 + second * 1000
+		replay._physics_process(0.0)
+		bus.fire("player_chat", {"userid": 1, "text": "line %d" % second})
+		if second == 88:
+			bus.hook_pre("player_chat", func(e: DotEvent) -> void: e.cancel("filtered"))
+			bus.fire("player_chat", {"userid": 1, "text": "a blocked line"})
+			bus.unhook_all(self)
+
+	var ring := replay.recorder.ring
+	_check(
+		ring.first_tick() > 0 and ring.last_tick() - ring.first_tick() <= (30 + 5 + 1) * 30,
+		"the ring drops what fell out of its window (ticks %d-%d)" % [ring.first_tick(), ring.last_tick()]
+	)
+
+	var saved := replay.save_clip(0.0, "selftest")
+	if not _check(saved.ok, "replay save writes a clip", str(saved.error)):
+		replay.free()
+		bus.free()
+		_done()
+		return
+
+	var ev := saved.value as Dictionary
+	var path := str(ev.get("replay", ""))
+	_check(path.begins_with(replay.directory.path_join("clips")), "under clips/ (%s)" % path.get_file())
+
+	var file := DotReplayFile.new()
+	var opened := file.open(path)
+	_check(opened.ok and file.complete and not file.truncated, "and dot-replay's own reader calls it complete", str(opened.error))
+	_check(file.final_hash != "" and file.final_hash == str(ev.get("final_hash")), "whose final hash is the one the evidence names")
+	_check(file.header != null and file.header.game == "fixture_game" and file.header.tick_rate == 30, "and whose header names the game and the clock")
+
+	var all := file.read_all()
+	var records: Array = all.value if all.ok else []
+	var chats := 0
+	var blocked := false
+	var keyframe_first := false
+	for i in range(records.size()):
+		var r := records[i] as DotReplayRecord
+		if i == 0:
+			keyframe_first = r.is_keyframe()
+		if r.channel == &"events":
+			var v: Variant = r.value()
+			if v is Dictionary and str((v as Dictionary).get("name")) == "player_chat":
+				chats += 1
+				if (v as Dictionary).get("cancelled", false):
+					blocked = true
+	_check(keyframe_first, "the clip begins with a roster keyframe")
+	_check(chats >= 25 and chats <= 45, "and holds the last ~30 s of chat, not all 90 (%d lines)" % chats)
+	_check(blocked, "including the line a filter blocked")
+
+	# Evidence: one clip per incident, not one per punishment.
+	var first := replay.evidence_clip("ban cheater")
+	var second := replay.evidence_clip("kick cheater")
+	# The PATH and the file count, not the hash: two clips of the same ring are the same
+	# bytes and hash alike, so a hash comparison passes with the cooldown taken out.
+	_check(
+		first.ok and second.ok and str((first.value as Dictionary).get("replay")) == str((second.value as Dictionary).get("replay"))
+			and _count_replays(replay.directory.path_join("evidence")) == 1,
+		"a ban and its own kick share one evidence clip, one file"
+	)
+	_check(str((first.value as Dictionary).get("replay", "")).contains("/evidence/"), "and it goes under evidence/, apart from manual clips")
+
+	var ban := {"target": "backbone:9", "reason": "cheating"}
+	replay._on_ban_added(ban)
+	_check(
+		ban.get("evidence") is Dictionary and str((ban["evidence"] as Dictionary).get("final_hash", "")) != "",
+		"a dot-server ban record carries the clip's final hash"
+	)
+
+	var attached_before := int(replay.describe()["evidence_attached"])
+	replay._on_audit({"action": "ban", "target": "x"})
+	replay._on_audit({"action": "kick", "target": "Ann"})
+	_check(
+		int(replay.describe()["evidence_attached"]) == attached_before + 1,
+		"an admin's kick is answered with an audit line; other audit actions are not"
+	)
+
+	# dot-moderation's path: through the registry service's own signal, and stored again.
+	# Loaded by path, because this project does not link it for its own scripts.
+	var mod_script: Variant = load("res://addons/dot_moderation/runtime/dot_moderation_manager.gd") \
+		if ResourceLoader.exists("res://addons/dot_moderation/runtime/dot_moderation_manager.gd") else null
+	var store_script: Variant = load("res://addons/dot_moderation/store/dot_punishment_store_file.gd") \
+		if mod_script != null else null
+	if mod_script == null or store_script == null:
+		_check(true, "dot-moderation is not linked in this build; its evidence path is skipped")
+		_check(true, "(skipped)")
+	else:
+		now[0] += 20000   # past the cooldown, so this is a new clip
+		replay._physics_process(0.0)
+		var manager: Object = (mod_script as GDScript).new()
+		var store_path := REPLAY_DIR.path_join("moderation.json")
+		manager.set("store", (store_script as GDScript).new(store_path))
+		replay.watch_moderation(manager)
+		var issued: DotResult = await manager.call("issue", 0, "uid:backbone:9", "aimbot", "console", 0)
+		# The re-put is awaited inside the handler; one frame lets it land.
+		await get_tree().process_frame
+		var p: Object = issued.value if issued.ok else null
+		var pev: Dictionary = p.get("evidence") if p != null else {}
+		_check(str(pev.get("final_hash", "")) != "", "a dot-moderation ban carries the clip's final hash")
+		var stored := FileAccess.get_file_as_string(store_path)
+		_check(
+			stored.contains(str(pev.get("final_hash", "-"))),
+			"and the punishment store on disk has it, written again after the ban"
+		)
+		replay.watch_moderation(null)
+		manager.free()
+
+	# Bounded on disk: three files a directory, the oldest going first.
+	for i in range(5):
+		replay.save_clip(0.0, "burst %d" % i)
+	_check(
+		_count_replays(replay.directory.path_join("clips")) <= 3,
+		"clips/ keeps replay_keep_files and no more (%d)" % _count_replays(replay.directory.path_join("clips"))
+	)
+
+	# A game change finishes the match file and starts the next.
+	var match_path := replay.recorder.writer.path if replay.recorder.writer != null else ""
+	replay._on_game_loaded("next")
+	var finished := DotReplayFile.new()
+	_check(
+		match_path != "" and finished.open(match_path).ok and finished.complete,
+		"a game change finishes the match file, complete"
+	)
+
+	replay.tap.detach()
+	replay.recorder.stop()
+	replay.free()
+	bus.free()
+	_done()
+
+
+## dot-friends was linked here and built nowhere. What this asserts: a site with no friends
+## routes turns the client off, once, and a presence says where the player is as the
+## connection comes and goes -- read back from the site's rules, not from what was posted.
+func _test_friends() -> void:
+	_section("the friends client")
+
+	# The site as it is today: every route a bare 404.
+	var calls: Array = []
+	var gone := DotFriendsBackendApp.new()
+	# Answered a frame later, like a network, so the presence post and both polls are all
+	# in flight when the first 404 lands -- which is what "once" has to survive.
+	gone.request_fn = func(method: String, path: String, _body: Dictionary) -> DotResult:
+		calls.append("%s %s" % [method, path])
+		await get_tree().process_frame
+		return DotResult.failure(DotError.from_http(404, ""))
+	var offs: Array = []
+	var f404 := TmcFriends.build(gone)
+	f404.switched_off.connect(func(why: String) -> void: offs.append(why))
+	f404.client.set_process(false)
+	add_child(f404)
+	f404.client.advance(1.0)
+	for i in range(3):
+		await get_tree().process_frame
+	_check(f404.off and f404.client.backend == null, "a 404 from the site turns friends off")
+	_check(
+		offs.size() == 1 and calls.size() >= 2,
+		"once, with %d requests in flight (%d)" % [calls.size(), offs.size()]
+	)
+	var before := calls.size()
+	f404.client.advance(120.0)
+	await get_tree().process_frame
+	_check(calls.size() == before, "and nothing is asked again (%d then %d)" % [before, calls.size()])
+	_check(f404.describe_lines()[0].begins_with("friends: off"), "describe says so")
+	f404.queue_free()
+
+	# A 404 the site EXPLAINED is a refusal, not missing routes.
+	var keyed := DotFriendsBackendApp.new()
+	keyed.request_fn = func(_m: String, _p: String, _b: Dictionary) -> DotResult:
+		return DotResult.failure(DotError.from_http(404, '{"ok":false,"code":"friends.request.deny.notFound","message":"Member not found."}'))
+	var fkeyed := TmcFriends.build(keyed)
+	fkeyed.client.set_process(false)
+	add_child(fkeyed)
+	fkeyed.client.advance(1.0)
+	for i in range(3):
+		await get_tree().process_frame
+	_check(not fkeyed.off, "a keyed 404 does not switch friends off")
+	fkeyed.queue_free()
+
+	# Two friends on the site's own rules, in process.
+	var hub := DotFriendsLocalHub.new()
+	# Members first: the hub, like the site, refuses a request to nobody it knows.
+	var alice_backend := hub.as_user("alice", "Alice")
+	var bob_backend := hub.as_user("bob", "Bob")
+	hub.send_request("alice", "bob")
+	hub.send_request("bob", "alice")   # asking somebody who asked you accepts them
+	var cfg := DotFriendsConfig.new()
+	cfg.presence_debounce_sec = 0.1
+	var alice := TmcFriends.build(alice_backend, cfg)
+	alice.client.set_process(false)
+	add_child(alice)
+
+	alice.on_playing("203.0.113.7:27015", "12", "Arena", "Fixture Server")
+	alice.client.advance(0.5)
+	await get_tree().process_frame
+	var seen := hub.presence_seen_by("bob", "alice")
+	_check(seen.status == DotPresence.Status.IN_GAME and seen.server_id == 12, "presence reflects a connect: in game, on server 12")
+	_check(seen.joinable and seen.detail == "Playing Arena on Fixture Server", "joinable, with where (%s)" % seen.detail)
+
+	alice.on_disconnected()
+	alice.client.advance(0.5)
+	await get_tree().process_frame
+	seen = hub.presence_seen_by("bob", "alice")
+	_check(
+		seen.status == DotPresence.Status.ONLINE and seen.server_id == 0 and not seen.joinable,
+		"and a disconnect: back on the menu, not followable"
+	)
+
+	# Following: the party when there is one, a server only where this shell has been.
+	alice.on_playing("203.0.113.7:27015", "12", "Arena", "Fixture Server")
+	alice.client.advance(0.5)
+	await get_tree().process_frame
+	var dialled: Array = []
+	var bob := TmcFriends.build(bob_backend, cfg)
+	bob.client.set_process(false)
+	bob.connect_address_fn = func(address: String) -> void: dialled.append(address)
+	add_child(bob)
+	await bob.client.refresh()
+	var refused: DotResult = await bob.join("alice")
+	_check(
+		not refused.ok and refused.error.detail == "friends.join.deny.unsupported",
+		"a server this shell has never been on is refused honestly, with the site's key"
+	)
+	bob.on_playing("203.0.113.7:27015", "12", "Arena", "Fixture Server")
+	var followed: DotResult = await bob.join("alice")
+	_check(followed.ok and dialled == ["203.0.113.7:27015"], "one it has is dialled at the address it knows (%s)" % [dialled])
+
+	var gone_now: DotResult = await alice.go_offline()
+	seen = hub.presence_seen_by("bob", "alice")
+	_check(gone_now.ok and not seen.is_online(), "go_offline() on quit: offline to friends at once")
+
+	alice.queue_free()
+	bob.queue_free()
 	_done()
 
 

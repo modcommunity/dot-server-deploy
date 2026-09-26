@@ -1332,7 +1332,8 @@ ADDONS_ALL=(dot_core dot_log dot_net dot_game dot_entity dot_server dot_server_q
         dot_settings dot_console dot_audio dot_fx dot_lighting
         dot_procedural_generation dot_inventory dot_peer_to_peer dot_weapon
         dot_physics dot_spawn dot_team dot_player dot_player_class
-        dot_player_char zee_weapons dot_party dot_matchmaking dot_locale)
+        dot_player_char zee_weapons dot_party dot_matchmaking dot_locale
+        dot_replay dot_friends)
 
 # What THIS project's own scripts name, whatever games it carries.
 #
@@ -1353,9 +1354,13 @@ ADDONS_ALL=(dot_core dot_log dot_net dot_game dot_entity dot_server dot_server_q
 # dot_log: named by host/tmc_party.gd and client/shell.gd and by no game, so a list
 # derived from the games would be short by all three. dot_chat is here for the same
 # reason -- every game declares it, but the host names DotChatChannel itself now.
+#
+# dot_replay and dot_friends joined on 2026-09-25, the same case again: host/tmc_replay.gd
+# builds the replay ring for every game and client/tmc_friends.gd the friends client, and
+# no game names either.
 ADDONS_SHELL=(dot_core dot_log dot_net dot_server dot_server_query dot_server_security
               dot_auth dot_cloud dot_map dot_ui dot_vote dot_chat
-              dot_party dot_matchmaking dot_locale)
+              dot_party dot_matchmaking dot_locale dot_replay dot_friends)
 
 ## The addons one game declares, out of the game's OWN .gitignore.
 ##

@@ -63,6 +63,31 @@ func _init() -> void:
 			shell.call("_on_cloud_phase", 6, "Mounting surf_mesa 1.0.0…")
 		"verifying":
 			shell.call("_on_cloud_phase", 5, "Checking downloaded content…")
+		"friends":
+			# The menu a signed-in player sees: a party line, then the friends list. The
+			# friends node is a stand-in over an in-process hub; only the drawing is real.
+			var party_line: Label = shell.get("_party_line")
+			party_line.text = "Party: Tuesday crew (3 members)"
+			party_line.visible = true
+			var stand_in := TmcFriends.build(DotFriendsLocalHub.new().as_user("me", "Me"))
+			shell.add_child(stand_in)   # in the tree, so it is freed with it
+			shell.set("_friends", stand_in)
+			var list: Array = []
+			var rows := [
+				["Ann", "in_game", "Playing Arena on TMC Deathmatch #1 (EU, 64 tick, long hostname)", 12, "", true],
+				["Bo", "in_game", "Playing Smash Copter", 0, "5123", true],
+				["Cy", "online", "", 0, "", false],
+				["Dee", "in_game", "Playing Surf on g2gfast", 7, "", false],
+				["Eve", "in_game", "Playing Lobby", 3, "", true],
+				["Fin", "offline", "", 0, "", false],
+			]
+			for r in rows:
+				var p := DotPresence.from_dict({
+					"status": r[1], "detail": r[2], "serverId": r[3] if r[3] > 0 else null,
+					"partyId": r[4] if r[4] != "" else null, "joinable": r[5],
+				})
+				list.append(DotFriend.of(str(r[0]).to_lower(), r[0], p))
+			shell.call("_render_friends", list)
 
 	await process_frame
 	await process_frame

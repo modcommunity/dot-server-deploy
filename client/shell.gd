@@ -62,6 +62,14 @@ var _party: DotPartyClient = null
 var _claimed_party: String = ""
 var _party_line: Label = null
 
+## The player's friends, when they are signed in. See [method _build_friends].
+var _friends: TmcFriends = null
+var _friends_box: VBoxContainer = null
+
+## How many online friends the menu lists before it says "and N more". The panel is 392
+## wide and the Connect button has to stay on screen in a short browser frame.
+const FRIENDS_SHOWN := 4
+
 ## Every sentence this shell shows a player goes through here. See [method _build_locale].
 var _locale: DotLocale = null
 
@@ -220,6 +228,7 @@ func _sign_in() -> void:
 	_identity.visible = true
 
 	_build_party(identity)
+	_build_friends()
 
 
 ## The shell's translator, from the shipped messages and the player's language.
@@ -297,6 +306,149 @@ func _build_party(identity: DotAuthIdentity) -> void:
 	_party.refresh()
 
 
+## The player's friends list and their own presence. See [TmcFriends].
+##
+## Built at the same moment as the party client and for the same reason -- only a signed-in
+## player has friends -- over the same dot-auth client, so one token and one refresh serve
+## both. Its party route is the party client's own join, and its server route is this
+## shell's Connect, so following a friend is what the player would have done by hand.
+##
+## [b]Quitting waits for "offline".[/b] A presence lives two minutes after its last post;
+## a player who closes the game would otherwise be shown playing, and joinable, to every
+## friend for that long. So the window's close request is taken over while this exists --
+## see [method _notification] -- and given two seconds to say so. A browser tab that is
+## closed never asks, and there the presence simply expires.
+func _build_friends() -> void:
+	if _auth == null:
+		return
+
+	var backend := DotFriendsBackendApp.new()
+	backend.client = _auth
+
+	_friends = TmcFriends.build(backend)
+	_friends.join_party_fn = func(party_id: String, _friend: DotFriend) -> DotResult:
+		if _party == null:
+			return DotResult.fail(DotError.CODE_UNSUPPORTED, "No party client.", "friends.join.deny.unsupported")
+		return await _party.join(party_id)
+	_friends.connect_address_fn = func(address: String) -> void:
+		_address.text = address
+		await _connect_to(address)
+	add_child(_friends)
+
+	_friends.list_changed.connect(_render_friends)
+	_friends.switched_off.connect(func(_why: String) -> void: _render_friends([]))
+
+	if _party != null and _party.party != null:
+		_friends.on_party(_party.party.id)
+
+	get_tree().auto_accept_quit = false
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_CLOSE_REQUEST and _friends != null:
+		_quit_after_offline()
+
+
+## Posts "offline", waits at most two seconds for it, and quits either way: a site that is
+## down must not be able to hold a player's window open.
+func _quit_after_offline() -> void:
+	var done: Array = []
+	var post := func() -> void:
+		await _friends.go_offline()
+		done.append(true)
+	post.call()
+
+	var deadline := Time.get_ticks_msec() + 2000
+	while done.is_empty() and Time.get_ticks_msec() < deadline:
+		await get_tree().process_frame
+
+	get_tree().quit()
+
+
+## The online half of the list, under the party line. Hidden until there is a list, and for
+## good once friends have switched themselves off.
+func _render_friends(list: Array) -> void:
+	if _friends_box == null:
+		return
+
+	for child in _friends_box.get_children():
+		_friends_box.remove_child(child)
+		child.queue_free()
+
+	var online: Array = []
+	for f in list:
+		if f is DotFriend and (f as DotFriend).is_online():
+			online.append(f)
+
+	_friends_box.visible = _friends != null and not _friends.off and not list.is_empty()
+
+	if not _friends_box.visible:
+		return
+
+	var head := Label.new()
+	head.text = _text("shell.friends.line", {"online": online.size(), "count": list.size()},
+		"Friends: %d of %d online" % [online.size(), list.size()])
+	head.theme_type_variation = &"DotDim"
+	head.add_theme_font_size_override("font_size", 13)
+	_friends_box.add_child(head)
+
+	for i in range(mini(online.size(), FRIENDS_SHOWN)):
+		_friends_box.add_child(_friend_row(online[i] as DotFriend))
+
+	if online.size() > FRIENDS_SHOWN:
+		var more := Label.new()
+		more.text = _text("shell.friends.more", {"count": online.size() - FRIENDS_SHOWN},
+			"and %d more" % (online.size() - FRIENDS_SHOWN))
+		more.theme_type_variation = &"DotDim"
+		more.add_theme_font_size_override("font_size", 12)
+		_friends_box.add_child(more)
+
+
+func _friend_row(f: DotFriend) -> Control:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	# The height a Join button needs, on every row: rendered, rows with a button and rows
+	# without alternated between two heights and the list read as ragged.
+	row.custom_minimum_size = Vector2(0.0, 26.0)
+
+	var who := Label.new()
+	who.text = f.display_name
+	who.add_theme_color_override("font_color", ACCENT)
+	who.add_theme_font_size_override("font_size", 13)
+	who.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	row.add_child(who)
+
+	# Elided rather than wrapped: a hostname is the operator's to choose and can be long,
+	# and a row that wraps pushes Connect down in a frame the page sized.
+	var where := Label.new()
+	where.text = f.presence.detail if f.presence.detail != "" else DotPresence.status_name(f.presence.status)
+	where.theme_type_variation = &"DotDim"
+	where.add_theme_font_size_override("font_size", 12)
+	where.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	where.clip_text = true
+	where.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	where.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	row.add_child(where)
+
+	if f.presence.joinable and f.presence.has_destination():
+		var join := Button.new()
+		join.text = _text("shell.friends.join", {}, "Join")
+		join.add_theme_font_size_override("font_size", 12)
+		join.pressed.connect(_join_friend.bind(f.user_id, f.display_name))
+		row.add_child(join)
+
+	return row
+
+
+func _join_friend(user_id: String, display_name: String) -> void:
+	if _friends == null:
+		return
+	_say(_text("shell.friends.joining", {"name": display_name}, "Joining %s…" % display_name))
+	var res: DotResult = await _friends.join(user_id)
+	if not res.ok:
+		_say(_locale.explain(res.error, {"name": display_name}) if _locale != null else res.error.message)
+
+
 func _follow_party(url: String, info: Dictionary) -> DotResult:
 	# Already there: a poll in the middle of a ready round must not reconnect a player who
 	# is on the right server, which would drop them and put them back.
@@ -320,6 +472,9 @@ func _on_party_changed(p: DotParty) -> void:
 
 	_party_line.visible = p != null
 
+	if _friends != null:
+		_friends.on_party(p.id if p != null else "")
+
 	if p != null:
 		_party_line.text = _text("shell.party.line", {"name": p.name, "count": p.size()},
 			"Party: %s (%d)" % [p.name, p.size()])
@@ -329,6 +484,8 @@ func _on_party_changed(p: DotParty) -> void:
 
 func _on_left_party(_party_id: String, reason: String) -> void:
 	_claimed_party = ""
+	if _friends != null:
+		_friends.on_party("")
 	_say(_text("shell.party.left.%s" % reason, {}, "You are no longer in your party."))
 
 
@@ -339,6 +496,8 @@ func _on_party_request_failed(what: String, error: DotError) -> void:
 		})
 		_party.queue_free()
 		_party = null
+		if _friends != null:
+			_friends.on_party("")
 		return
 
 	DotLog.debug(CHANNEL, "a party request failed", {"what": what, "why": _explain(error)})
@@ -461,6 +620,13 @@ func _build_menu() -> void:
 	_party_line.theme_type_variation = &"DotDim"
 	_party_line.add_theme_font_size_override("font_size", 13)
 	box.add_child(_party_line)
+
+	# Friends who are online, and a Join beside the ones that can be followed. Filled by
+	# [method _render_friends]; hidden for a guest, who has no friends list to show.
+	_friends_box = VBoxContainer.new()
+	_friends_box.visible = false
+	_friends_box.add_theme_constant_override("separation", 2)
+	box.add_child(_friends_box)
 
 	box.add_child(_gap(4))
 
@@ -962,6 +1128,8 @@ const BUILTIN_CLIENTS := {}
 ## last, each with its own netcode manager ticking the same tree.
 func _on_game_changed(game_id: String, _content_id: String, display_name: String) -> void:
 	_clear_game()
+	if _friends != null:
+		_friends.on_game_changed(display_name if display_name != "" else game_id, link.server_hostname if link != null else "")
 	_say("Loading %s…" % (display_name if display_name != "" else game_id))
 
 
@@ -973,6 +1141,13 @@ func _on_spawned() -> void:
 	# one's claim.
 	_claimed_party = ""
 	_claim_party.call_deferred()
+
+	if _friends != null and link != null:
+		_friends.on_playing(
+			_address.text.strip_edges(), link.server_id,
+			link.server_game_name if link.server_game_name != "" else link.server_game_id,
+			link.server_hostname
+		)
 
 	if _game_root.get_child_count() > 0:
 		# The server named a scene and the link built it out of downloaded content.
@@ -1110,6 +1285,9 @@ func _on_disconnected(reason: String) -> void:
 	_drop_link()
 	_set_busy(false)
 	_menu.visible = true
+
+	if _friends != null:
+		_friends.on_disconnected()
 	# A countdown from a server this player has left is a promise nobody is keeping.
 	notices.clear_all()
 

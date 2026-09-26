@@ -33,6 +33,7 @@ const CHANNEL := "tmc.config"
 const FILES := [
 	"server.yml", "net.yml", "log.yml", "rcon.yml", "auth.yml", "groups.yml",
 	"permissions.yml", "vote.yml", "security.yml", "party.yml", "matchmaking.yml",
+	"replay.yml",
 ]
 
 ## Operator-facing name -> boot config property.
@@ -251,6 +252,40 @@ var mm_playlists: Array[DotMmPlaylist] = []
 ## allocation and the players are told who they are playing with and nothing about where.
 var mm_servers: Dictionary = {}
 
+## `replay.yml`: the ring, the chunking and the caps of one file, as every
+## [DotReplayConfig] property written with a `replay_` prefix (`replay_ring_seconds: 120`).
+## See [method _apply_replay] and [TmcReplay].
+##
+## [b]`directory` starts empty here, and empty means `<data>/replays`.[/b] The addon's own
+## default is `user://replays`, which on a server is a directory under the home of whoever
+## runs it -- outside `data/`, so outside the one directory a container mounts writable and
+## a unit file names in `ReadWritePaths`. A clip written there is evidence nobody can find.
+var replay: DotReplayConfig = _replay_defaults()
+
+## Whether the replay ring is built at all. On: see [TmcReplay] for what it costs.
+var replay_enabled: bool = true
+
+## Whether every match is also written to a file under `replays/matches/`. Off: the ring is
+## the evidence a moderator needs, and a demo of every match is disk nobody asked for.
+var replay_record: bool = false
+
+## A kick or a ban issued on this server saves a clip and files its final hash with the
+## punishment. See [method TmcReplay.evidence_clip].
+var replay_clip_on_punish: bool = true
+
+## How much of the ring an evidence clip keeps, in seconds. 0 is everything it holds.
+var replay_clip_seconds: float = 0.0
+
+## Punishments this close together share one clip. A ban is followed by its own kick, and
+## a guard that removes ten bots in a second is one incident, not ten files.
+var replay_evidence_cooldown_sec: float = 10.0
+
+## Each of `matches/`, `clips/` and `evidence/` keeps at most this many files ...
+var replay_keep_files: int = 50
+
+## ... and at most this many MiB. The oldest go first.
+var replay_keep_mib: int = 512
+
 ## Console commands to run once the console exists, in file order.
 var console_lines: PackedStringArray = PackedStringArray()
 
@@ -391,6 +426,7 @@ static func load_dir(directory: String) -> DotResult:
 
 	config._layer_vote_overrides()
 	config._layer_party_overrides()
+	config._layer_replay_overrides()
 
 	var valid := config.server.validate()
 
@@ -436,8 +472,35 @@ func _layer_party_overrides() -> void:
 			unknown.append("%s: %s" % [cfg.cli_prefix(), cfg.unknown_keys[i]])
 
 
+## The environment and the command line over `replay.yml`: dot-replay's own `DOT_REPLAY_*`
+## and `--replay-*`, for the reason the party's are its own -- there is one recorder in the
+## process and no game runs a second one. `--replay-ring-seconds 300` for one tournament
+## without editing a file is the case the addon's prefix exists for.
+##
+## A layered value the addon refuses is caught when [TmcReplay] configures its recorder,
+## which validates again: the ring is then not built, and that is said at ERROR.
+func _layer_replay_overrides() -> void:
+	var before := replay.unknown_keys.size()
+	replay.apply_env()
+	replay.apply_cli()
+	for i in range(before, replay.unknown_keys.size()):
+		unknown.append("%s: %s" % [replay.cli_prefix(), replay.unknown_keys[i]])
+
+
+static func _replay_defaults() -> DotReplayConfig:
+	var cfg := DotReplayConfig.new()
+	cfg.directory = ""
+	# Half the addon's 512. A match file is the event stream and a roster, kilobytes a
+	# minute; a file that reaches this is a loop somewhere, and 512 MiB of it on a small
+	# VPS disk is the incident rather than the record of one.
+	cfg.max_file_mib = 256
+	return cfg
+
+
 func _apply(file: String, tree: Dictionary) -> DotResult:
 	match file:
+		"replay.yml":
+			return _apply_replay(tree)
 		"party.yml":
 			return _apply_party(tree)
 		"matchmaking.yml":
@@ -525,6 +588,58 @@ func _apply_party(tree: Dictionary) -> DotResult:
 		# backbone's staleness limit drops every member from their own party, which is
 		# the feature failing while looking configured.
 		return valid.wrap("party.yml")
+
+	return DotResult.success(null)
+
+
+## `replay.yml`: six switches of this deployment's, then every [DotReplayConfig] property
+## by its `replay_` name -- by prefix and not by table, for the reason [method _apply_party]
+## gives: a table would be a second copy of the addon's property list.
+##
+## [b]A setting the addon refuses refuses the boot.[/b] `replay_compression: zip` or
+## keyframes faster than chunks would otherwise be a recorder that is quietly not built,
+## and the first person to find out is a moderator typing `replay save` during an incident.
+func _apply_replay(tree: Dictionary) -> DotResult:
+	for key in tree.keys():
+		var name := String(key)
+		var value: Variant = tree[key]
+
+		match name:
+			"replay_enabled":
+				replay_enabled = _truthy(value)
+				continue
+			"replay_record":
+				replay_record = _truthy(value)
+				continue
+			"replay_clip_on_punish":
+				replay_clip_on_punish = _truthy(value)
+				continue
+			"replay_clip_seconds":
+				replay_clip_seconds = maxf(float(value), 0.0)
+				continue
+			"replay_evidence_cooldown_sec":
+				replay_evidence_cooldown_sec = maxf(float(value), 0.0)
+				continue
+			"replay_keep_files":
+				# At least one: a cap of zero would delete the clip it was asked to keep.
+				replay_keep_files = maxi(int(value), 1)
+				continue
+			"replay_keep_mib":
+				replay_keep_mib = maxi(int(value), 1)
+				continue
+
+		if name.begins_with("replay_"):
+			var applied := _set_on(replay, name.trim_prefix("replay_"), value)
+			if not applied.ok:
+				unknown.append("replay.yml: %s" % name)
+			continue
+
+		unknown.append("replay.yml: %s" % name)
+
+	var valid := replay.validate()
+
+	if not valid.ok:
+		return valid.wrap("replay.yml")
 
 	return DotResult.success(null)
 
@@ -1055,6 +1170,13 @@ func describe_lines() -> PackedStringArray:
 	out.append("matchmk  : %s" % (
 		"off" if not mm_enabled else "on, %d playlist(s), region %s, %d server(s)" % [
 			mm_playlists.size(), mm_region, mm_servers.size()
+		]))
+	out.append("replay   : %s" % (
+		"off" if not replay_enabled else "ring %ss (%d MiB max)%s, clips %s, keep %d files / %d MiB each" % [
+			replay.ring_seconds, replay.ring_max_mib,
+			", every match to a file" if replay_record else "",
+			"on punishment" if replay_clip_on_punish else "on request only",
+			replay_keep_files, replay_keep_mib,
 		]))
 	out.append("cvars    : %d queued" % console_lines.size())
 

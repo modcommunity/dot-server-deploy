@@ -1,0 +1,13 @@
+# The fixture: every switch of this deployment's, and addon settings by prefix.
+replay_enabled: true
+replay_record: true
+replay_clip_on_punish: true
+replay_clip_seconds: 0
+replay_evidence_cooldown_sec: 10
+replay_keep_files: 3
+replay_keep_mib: 64
+replay_directory: ""
+replay_ring_seconds: 30
+replay_ring_max_mib: 4
+replay_chunk_seconds: 0.5
+replay_keyframe_seconds: 5

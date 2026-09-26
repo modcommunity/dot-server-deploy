@@ -13,5 +13,11 @@
 			"ended": "Your party has ended.",
 			"left": "You left your party."
 		}
+	},
+	"friends": {
+		"line": "Friends: {online} of {count} online",
+		"more": "and {count} more",
+		"join": "Join",
+		"joining": "Joining {name}…"
 	}
 }

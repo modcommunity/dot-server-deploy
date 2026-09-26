@@ -70,6 +70,11 @@ var listing: TmcReport = null
 ## every game, like the guard. See [TmcParty].
 var parties: TmcParty = null
 
+## The last minute of the server, for `replay save` and for the evidence a kick or a ban
+## files. Built for every game, like the guard; null when `replay.yml` turns it off. See
+## [TmcReplay].
+var replay: TmcReplay = null
+
 var _config_dir := "cfg"
 var _content_dir := "content"
 
@@ -230,6 +235,9 @@ func _selftest_operator_surface() -> bool:
 	if log_router != null:
 		expected.append("log")
 
+	if config.replay_enabled:
+		expected.append("replay")
+
 	var missing := PackedStringArray()
 
 	for name in expected:
@@ -268,6 +276,17 @@ func _selftest_operator_surface() -> bool:
 
 	for line in answered:
 		print("party_status: %s" % line)
+
+	# [b]The ring, recording on the server that booted.[/b] dot-replay was the other addon
+	# linked here and built nowhere; an absent `replay` command is caught above, and a ring
+	# that was built and never started is the same failure one layer down.
+	if config.replay_enabled and (replay == null or not replay.recorder.is_recording()):
+		printerr("selftest FAILED: cfg/replay.yml asked for the replay ring and it is not recording")
+		return false
+
+	if replay != null:
+		for line in replay.describe_lines():
+			print("replay: %s" % line)
 
 	return true
 
@@ -645,6 +664,12 @@ func _boot() -> bool:
 		listing.backbone if listing != null else null,
 		_data_dir
 	)
+
+	# After the first game, so the first header names a game and the first keyframe has a
+	# roster to hold; before any player can be kicked, which is what it is for. It watches
+	# the registry for each game's dot-moderation itself, so it does not have to be built
+	# before the module that registers one.
+	replay = TmcReplay.install(self, server, config, _data_dir)
 
 	return true
 
