@@ -5,4 +5,6 @@ sv_game: "lobby"
 
 # Off, for the reason fixtures/reconnect gives: a thread blocked in a read of this
 # terminal's stdin is a suite that passes and then never exits.
+# Still off after dot-server 5f46687 (a pipe is not read by default any more): a
+# terminal would still be, and a suite takes no commands.
 sv_stdin_console: false

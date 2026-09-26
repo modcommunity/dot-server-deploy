@@ -11,4 +11,6 @@ sv_game: "smash"
 # backtrace, at the end of a run that passed. That trade is the right one for a real server,
 # where the alternative is a ctrl-c that hangs until somebody presses enter; in a suite it is
 # a warning about nothing, and a warning about nothing is how a reader learns to skim them.
+# Still off after dot-server 5f46687 (a pipe is not read by default any more): a
+# terminal would still be, and a suite takes no commands.
 sv_stdin_console: false

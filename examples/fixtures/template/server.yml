@@ -8,4 +8,6 @@ sv_game: "dot-game-template"
 
 # Off, because nobody is typing: a stdin reader left open at shutdown is one unjoined-thread
 # warning at the end of a run that passed. See smash/server.yml.
+# Still off after dot-server 5f46687 (a pipe is not read by default any more): a
+# terminal would still be, and a suite takes no commands.
 sv_stdin_console: false
