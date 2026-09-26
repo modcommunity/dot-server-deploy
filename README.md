@@ -648,6 +648,7 @@ tools/package_check.sh  # vendor the addons, move the tree away from its sibling
 | --- | --- |
 | `examples/selftest.tscn` | the YAML reader, the config translation, the permission translation, the content index, the replay ring (a saved clip read back as complete, a ban carrying its hash) and the friends client (off on a 404, presence following a connect) |
 | `examples/multigame.tscn` | changing games on a running server, and the module swap that goes with it |
+| `examples/install_descriptor.tscn` | a game installed from a pack its own repository published: the pack's `game.yml` is stamped with the id and version the installer verified, and each game repository's descriptor agrees with the one under `content/` |
 | `examples/live_switch.tscn` | **the same, with a real client on a real socket** |
 | `examples/reconnect.tscn` | **the real shell, connected twice**, across a server that went down and came back |
 | `examples/party_live.tscn` | parties on a real server: the booking on the ban seam, before and after a game change; party chat in the game's own chat; a claim checked against a roster |

@@ -340,6 +340,11 @@ echo
 echo "the selftest"
 "$GODOT" --headless --path . res://examples/selftest.tscn || fails=$((fails + 1))
 
+echo "a game published from its own repository"
+# The installer stamps a pack's own game.yml with the id and version it verified, and
+# every game repository's descriptor must agree with the one under content/ here.
+"$GODOT" --headless --path . res://examples/install_descriptor.tscn || fails=$((fails + 1))
+
 # The other suite: a real DotServer, and an admin changing the game under it. It is the
 # only place the module swap runs -- dot-server changes the scene and tells the modules
 # already loaded, it does not load one, so a multi-game server that got this wrong would

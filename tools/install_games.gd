@@ -673,7 +673,14 @@ func _install_from_pack(
 			"expected %s, got %s" % [descriptor.sha256, digest]
 		)
 
-	var written := _write_descriptor(content_dir, dir_name, bytes)
+	var stamped := stamp_identity(bytes.get_string_from_utf8(), content_id, version)
+
+	if not stamped.ok:
+		return stamped.wrap("%s out of %s@%s" % [DESCRIPTOR, content_id, version])
+
+	var written := _write_descriptor(
+		content_dir, dir_name, str(stamped.value).to_utf8_buffer()
+	)
 
 	if not written.ok:
 		return written
@@ -683,6 +690,57 @@ func _install_from_pack(
 	})
 
 	return DotResult.success({"content_id": content_id, "version": version})
+
+
+## A pack's own descriptor, told which pack it is.
+##
+## [b]The descriptor in a pack cannot know its own address, so this writes it.[/b] A game
+## repository commits one `game.yml` and is published by whoever owns it on the site:
+## the content id is `<their username>/<repo>`, and a re-sync publishes `1.2.0+r2`. None
+## of that is knowable when the file is written, and a descriptor that names a different
+## id or version from the pack it came in makes the server mount a path that is not there
+## -- every script "not found", from a game that installed without an error. The one
+## party that DOES know is this installer, which has just verified that exact id and
+## version against a trusted signature. So `content_id`, `version` and `kind` are set to
+## what was installed, whatever the file said, and the result is parsed back to prove it.
+##
+## Text, not a re-serialised tree: TmcYaml reads and does not write, and the file is the
+## one an operator edits afterwards -- its comments and order are worth keeping.
+static func stamp_identity(text: String, content_id: String, version: String) -> DotResult:
+	var want := {"content_id": content_id, "version": version, "kind": "pack"}
+	var seen := {}
+	var lines := text.split("\n")
+
+	for i in range(lines.size()):
+		var line := lines[i]
+
+		for key in want:
+			# Top level only: an indented `version:` belongs to some nested block.
+			if line.begins_with("%s:" % key):
+				lines[i] = "%s: %s" % [key, want[key]]
+				seen[key] = true
+
+	var head := PackedStringArray()
+
+	for key in ["content_id", "version", "kind"]:
+		if not seen.has(key):
+			head.append("%s: %s" % [key, want[key]])
+
+	var out := "\n".join(head) + ("\n" if not head.is_empty() else "") + "\n".join(lines)
+	var parsed := TmcYaml.parse(out, DESCRIPTOR)
+
+	if not parsed.ok:
+		return parsed
+
+	for key in want:
+		if str(TmcYaml.at(parsed.value as Dictionary, key, "")) != want[key]:
+			return DotResult.fail(
+				DotError.CODE_INVALID,
+				"could not set %s in the descriptor" % key,
+				"it may be written in a form this reader does not recognise"
+			)
+
+	return DotResult.success(out)
 
 
 ## The newest published version of a pack, from the pointer beside its versions.
