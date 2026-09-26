@@ -4,7 +4,7 @@
         "version": "PTDL_v2",
         "update_url": null
     },
-    "exported_at": "2026-09-16T00:00:00+00:00",
+    "exported_at": "2026-09-26T00:00:00+00:00",
     "name": "dot-server",
     "author": "contact@moddingcommunity.com",
     "description": "A dot-server that installs the games it is told to run. GAMES is a comma-separated list, fetched from the content origin at startup -- descriptors and signed packs alike -- so this ships no game and a new one needs no new build. TMC_GAME picks which of them boots, and it can be changed live over RCON without a restart.",
@@ -49,6 +49,16 @@
             "field_type": "text"
         },
         {
+            "name": "Map",
+            "description": "The map GAME starts on, instead of its own default. Empty is the game's default, which is what most servers want. A game that has no maps, or has not got this one, says so at startup and boots on its default anyway rather than refusing to start. It applies each time the server starts; while it runs, a vote or `changelevel` moves it on.",
+            "env_variable": "TMC_MAP",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string|max:64",
+            "field_type": "text"
+        },
+        {
             "name": "Content origin",
             "description": "Where games are installed from, comma-separated for mirrors, tried in order. The default is the public origin. A LAN or an air-gapped deployment points this at its own copy; the clients that connect are told the same address, so they download the game from wherever this says rather than from somewhere a second setting mentions.",
             "env_variable": "TMC_CONTENT_URL",
@@ -66,6 +76,16 @@
             "user_viewable": true,
             "user_editable": true,
             "rules": "required|string|in:hide,remove,keep",
+            "field_type": "text"
+        },
+        {
+            "name": "Skip install at startup",
+            "description": "Set to 1 to start WITHOUT asking the content origin for anything: GAMES is not fetched or updated, and the server runs on whatever this volume already holds. It is the switch for getting a server back up when the origin is the thing that is down, and for a box that is deliberately offline. Empty (the default) checks the origin on every start, which is how a new id in GAMES gets installed. Any value turns it on, including 0.",
+            "env_variable": "TMC_NO_INSTALL",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string|max:8",
             "field_type": "text"
         },
         {
@@ -170,7 +190,7 @@
         },
         {
             "name": "Verbose logging",
-            "description": "Set to 1 for debug logging. Empty for normal.",
+            "description": "Set to 1 for debug logging. Empty for normal. Any value turns it on, including 0.",
             "env_variable": "TMC_VERBOSE",
             "default_value": "",
             "user_viewable": true,
