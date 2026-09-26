@@ -14,7 +14,7 @@ extends Node
 
 const CFG := "res://examples/fixtures"
 
-const CHECKS := 218
+const CHECKS := 225
 
 var _passed := 0
 var _failed := 0
@@ -41,6 +41,7 @@ func _run() -> void:
 	_test_admins()
 	_test_content()
 	_test_vote()
+	_test_vote_layers_reach_a_ballot()
 	_test_vote_notices()
 	_test_auth()
 	_test_logging()
@@ -1110,6 +1111,76 @@ func _test_deployed_map_clocks() -> void:
 		"and every game that stops its map clock stops its vote's clock too: rtv_only, no duration",
 		", ".join(disagree)
 	)
+
+
+## `end_vote`, `include_extend` and `extend_seconds` through `DOT_GAME_VOTE_*` and
+## `--game-vote-*`, each in a child process, change what the server vote's ballot does.
+##
+## `_test_vote` checks one of the six as a parsed value; this asks the ballot. `vote.yml`'s
+## own layer is `multigame`'s, on the real running server. `[mce-1]`.
+func _test_vote_layers_reach_a_ballot() -> void:
+	_section("the server vote's own layers reach a running ballot")
+
+	var project := ProjectSettings.globalize_path("res://")
+
+	var probe := func(extra: PackedStringArray, env: Dictionary) -> Dictionary:
+		for key: String in env:
+			OS.set_environment(key, env[key])
+		var args := PackedStringArray([
+			"--headless", "--path", project, "--script", "res://examples/vote_layer_probe.gd", "--",
+		])
+		args.append_array(extra)
+		var out := []
+		var _code := OS.execute(OS.get_executable_path(), args, out, true)
+		for key: String in env:
+			OS.unset_environment(key)
+		var found := {}
+		for line: String in "\n".join(PackedStringArray(out)).split("\n"):
+			var trimmed := line.strip_edges()
+			if trimmed.begins_with("{"):
+				var parsed: Variant = JSON.parse_string(trimmed)
+				if parsed is Dictionary:
+					found = parsed
+		return found
+
+	var control: Dictionary = probe.call(PackedStringArray(), {})
+	_check(
+		control.get("opened") == true and control.get("extend_offered") == true
+			and is_equal_approx(float(control.get("extended_by", -1.0)), 600.0),
+		"with neither layer, the fixture's ballot opens, offers Extend, and adds 600 s",
+		str(control)
+	)
+
+	var cases := [
+		["end_vote", "false", "opened", false],
+		["include_extend", "false", "extend_offered", false],
+		["extend_seconds", "90", "extended_by", 90.0],
+	]
+
+	for case: Array in cases:
+		var key: String = case[0]
+
+		for layer in ["DOT_GAME_VOTE_*", "--game-vote-*"]:
+			var extra := PackedStringArray()
+			var env := {}
+
+			if layer == "DOT_GAME_VOTE_*":
+				env["DOT_GAME_VOTE_" + key.to_upper()] = case[1]
+			else:
+				extra.append("--game-vote-%s=%s" % [key, case[1]])
+
+			var got: Dictionary = probe.call(extra, env)
+			var seen: Variant = got.get(case[2])
+			var want: Variant = case[3]
+			var same: bool = is_equal_approx(float(seen), float(want)) \
+				if want is float else seen == want
+			_check(
+				got.get("layered") == true and same,
+				"%s from %s: the ballot's %s is %s" % [key, layer, case[2], str(want)],
+				str(got)
+			)
+
+	_done()
 
 
 func _test_vote() -> void:
