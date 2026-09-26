@@ -1,0 +1,24 @@
+# Hungario: Reef. A wall across the world with four channels through it, and a lagoon
+# behind it with one door.
+#
+#     changelevel hungry_reef
+#
+# Shares a module with hungry_classic — see that directory's game.yml.
+#
+# WHY THIS DIRECTORY EXISTS, for the fifth mode and the third time: `HungryModule`
+# registers every mode it knows when it loads, and a mode with no `game.yml` here is one
+# this deployment registers and then cannot describe. hungry_warrens' game.yml tells the
+# first two; this one arrived the same way again — the game gained `reef` in its own
+# repository, and `examples/live_switch.tscn` stayed green for as long as dist/ held a
+# pack from before it. Republishing is what made the eleventh registration visible, so a
+# stale pack was hiding this as well as being stale.
+
+name: "Hungario: Reef"
+content_id: tmc/hungry       # shared with hungry_classic: one client, five modes
+version: 0.1.0
+kind: pack
+max_players: 32
+
+scene: game/modes/reef.tscn
+client_scene: game/client/hungry_client.tscn
+module: game/hungry_module.gd

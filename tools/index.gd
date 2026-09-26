@@ -31,10 +31,10 @@ extends SceneTree
 ## publishing the index is not a second deployment step with a second set of credentials.
 ##
 ## [b]Keyed by the directory id, not by the content id, and that is not arbitrary.[/b]
-## Four of the ids here — `hungry_classic`, `hungry_frenzy`, `hungry_gauntlet`,
-## `hungry_warrens` — are four descriptors over ONE pack, `tmc/hungry`: same code, four
-## sets of cvars. Keying descriptors by content id would give those four one file, so the
-## last one written would win and three modes would quietly become the fourth. The id is
+## Five of the ids here — `hungry_classic`, `hungry_frenzy`, `hungry_gauntlet`,
+## `hungry_warrens`, `hungry_reef` — are five descriptors over ONE pack, `tmc/hungry`: same
+## code, five sets of cvars. Keying descriptors by content id would give those five one
+## file, so the last one written would win and four modes would quietly become the fifth. The id is
 ## what an operator types and is unique by construction, because it is a directory name.
 ##
 ## [b]It goes stale silently, which is the failure worth designing against.[/b] An index

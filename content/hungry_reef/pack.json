@@ -1,0 +1,3 @@
+{
+    "exclude_dirs": ["addons", "examples", "tools", "screenshots", "web"]
+}

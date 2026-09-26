@@ -2084,9 +2084,9 @@ done < <(find cfg.example -type f \( -name '*.yml' -o -name '*.md' \) | sort)
 # to lose and every reason to be right on the first boot.
 #
 # [b]Every content directory of the pack, not the one the GAMES entry names.[/b] hungario
-# is four game ids over one `content_id: hungry`, so excluding `hungry_classic` and
-# leaving `hungry_frenzy`, `hungry_gauntlet` and `hungry_warrens` offered is three
-# quarters of the bug still there. The descriptor is the thing that knows.
+# is five game ids over one `content_id: hungry`, so excluding `hungry_classic` and
+# leaving `hungry_frenzy`, `hungry_gauntlet`, `hungry_warrens` and `hungry_reef` offered
+# is four fifths of the bug still there. The descriptor is the thing that knows.
 if [ ${#DROPPED_DIRS[@]} -gt 0 ]; then
     # content_id of each dropped directory, then every directory sharing it.
     pack_of() {

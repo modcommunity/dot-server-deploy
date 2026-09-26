@@ -236,7 +236,7 @@ dist/descriptors/<id>/game.yml       one copy of each descriptor
 
 Both land in `dist/`, which is already what gets uploaded, so there is no second deployment step and no second set of credentials. **Run it after `./server pack --all`** — an index naming a version the origin no longer serves sends every installing server to a manifest that is not there.
 
-**Keyed by the directory id, not the content id.** `hungry_classic`, `hungry_frenzy`, `hungry_gauntlet` and `hungry_warrens` are four descriptors over one pack; keying by content id would give those four one file and three of the modes would quietly become the fourth.
+**Keyed by the directory id, not the content id.** `hungry_classic`, `hungry_frenzy`, `hungry_gauntlet`, `hungry_warrens` and `hungry_reef` are five descriptors over one pack; keying by content id would give those five one file and four of the modes would quietly become the fifth.
 
 **The packs are fetched at startup, not at first join.** Without that, the download happens the first time somebody switches to that game, with players connected and waiting — and on a panel that reads as a hang. A box whose games are already installed touches the network for nothing and starts as fast as it ever did.
 
