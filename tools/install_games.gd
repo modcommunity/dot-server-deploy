@@ -898,6 +898,9 @@ func _build_cloud(
 	cloud.name = "Cloud"
 	cloud.config = DotCloudConfig.new()
 	cloud.config.cache_dir = "%s/content_cache" % data_dir
+	# Says "this server" in a refusal: a pack needing a newer addon API than this box has
+	# is an operator's problem to fix, and the sentence should say whose build it is.
+	cloud.host_role = "server"
 	cloud.config_file = "%s/content.json" % config_dir
 
 	if not FileAccess.file_exists(cloud.config_file):
