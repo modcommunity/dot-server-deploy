@@ -35,7 +35,7 @@ const SHELL := "res://client/shell.tscn"
 ## Every check this suite runs, including the one that compares against it. The section
 ## counter cannot see a section that aborted after announcing itself — its remaining checks
 ## simply never run — and a total can. See docs/testing.md.
-const CHECKS := 16
+const CHECKS := 18
 
 var _passed := 0
 var _failed := 0
@@ -126,6 +126,42 @@ func _playing() -> bool:
 	return _shell != null and is_instance_valid(_shell) \
 		and _shell.link != null and is_instance_valid(_shell.link) \
 		and _shell.link.phase == DotClientLink.Phase.PLAYING
+
+
+## The server's half of "admitted": a session that reached SPAWNED.
+##
+## [b]The client's PLAYING is not it.[/b] [DotClientLink] enters PLAYING on its own, right
+## after SENDING `loaded` -- nothing comes back to confirm the server heard it -- so a
+## client can be in PLAYING while the server still has it in LOADING and will time it out
+## for being idle. Only the server's session can say it was spawned.
+##
+## A probe of this exact shape on 2026-09-14 (TmcHost and the real shell in one process)
+## saw precisely that: PLAYING on the client, LOADING on the server for ever, while two
+## processes joined fine. Its RPC -- `report_loaded` -- went with dot-server 52fe6bd's
+## envelope lanes, and on those this check passes on both connects. Armed by dropping the
+## client's `loaded` send, which reproduces the probe's states and fails only these two.
+func _spawned() -> bool:
+	var srv := _server()
+
+	if srv == null:
+		return false
+
+	for session in srv.sessions():
+		if session.state == DotClientSession.State.SPAWNED:
+			return true
+
+	return false
+
+
+func _session_states() -> String:
+	var srv := _server()
+	var states := PackedStringArray()
+
+	if srv != null:
+		for session in srv.sessions():
+			states.append(DotClientSession.State.keys()[session.state])
+
+	return str(states)
 
 
 func _sessions() -> int:
@@ -283,6 +319,12 @@ func _test_first_connection() -> bool:
 		_done()
 		return false
 
+	_check(
+		await _until(_spawned, 10.0),
+		"and the SERVER spawned them, not only the client (%s)" % _session_states(),
+		"the client enters PLAYING on sending `loaded`; the server's session is the proof"
+	)
+
 	_check(_links().size() == 1, "the shell holds one link (%s)" % _link_names())
 	_check(
 		_shell.get_node_or_null("Server") == _shell.link,
@@ -343,6 +385,12 @@ func _test_reconnect() -> void:
 	):
 		_done()
 		return
+
+	_check(
+		await _until(_spawned, 10.0),
+		"and the restarted SERVER spawned them (%s)" % _session_states(),
+		"the client enters PLAYING on sending `loaded`; the server's session is the proof"
+	)
 
 	var links := _links()
 
