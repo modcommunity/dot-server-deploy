@@ -79,6 +79,10 @@ cvars:
   # can read. An id here that nobody published is one warning in the log and no other
   # harm; the alternative, which is what this server shipped with, is a surf server that
   # never plays a surf map.
+  # Maps are fetched as <owner>/<map id> (gamemann/surf_mesa); the id a player types is
+  # unchanged. Publish them with game-g2gfast's tools/publish_maps.sh BEFORE a server
+  # runs with this line, or every configured map is a 404.
+  sv_map_content_owner: "gamemann"
   sv_content_maps:
     - surf_mesa
     - surf_beginner2
