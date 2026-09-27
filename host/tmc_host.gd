@@ -89,6 +89,10 @@ var _data_dir := "data"
 
 var _selftest := false
 
+## Every script error the engine logs during a selftest; null on a normal run. See
+## [TmcScriptWatch] for why the check cannot trust its own exit path without it.
+var _script_watch: TmcScriptWatch = null
+
 ## The module currently loaded on behalf of the running game, and where it came from.
 ##
 ## The path is what is compared, not the id: two game ids can share one module — hungry's
@@ -143,6 +147,12 @@ func _run() -> void:
 	_content_dir = _value(args, "--content", "content")
 	_data_dir = _value(args, "--data", "data")
 	_selftest = "--selftest" in args
+
+	if _selftest:
+		# First, before anything that could load a script: a parse error logged before
+		# the watch exists is a parse error the check never hears about.
+		_script_watch = TmcScriptWatch.new()
+		OS.add_logger(_script_watch)
 
 	var made := DirAccess.make_dir_recursive_absolute(_absolute(_data_dir))
 
@@ -213,9 +223,45 @@ func _run() -> void:
 			return
 
 		server.shutdown("selftest complete")
+
+		# After the shutdown, because tearing a game down runs its scripts too.
+		if not _selftest_scripts_loaded():
+			get_tree().quit(EXIT_CONTENT)
+			return
+
 		print("")
 		print("selftest ok")
 		get_tree().quit(EXIT_OK)
+
+
+## Whether every script this boot touched compiled and loaded.
+##
+## [b]`selftest ok` used to be printed over a module that never compiled.[/b] A script
+## that fails to parse is logged and handed back uninstantiable, and every step after it
+## can still succeed: the scene loads with the node's script missing, the host's module
+## load throws inside a coroutine and returns nothing, and the boot carries on to the end.
+## The only record is the engine's log, so that is what is read.
+func _selftest_scripts_loaded() -> bool:
+	if _script_watch == null or _script_watch.count() == 0:
+		return true
+
+	printerr("")
+	printerr(
+		"selftest FAILED: %d script error(s) while booting; the first:"
+		% _script_watch.count()
+	)
+
+	for line in _script_watch.lines():
+		printerr("  %s" % line)
+
+	printerr("  A missing base class is usually an addon setup.sh did not link or vendor.")
+	return false
+
+
+func _exit_tree() -> void:
+	if _script_watch != null:
+		OS.remove_logger(_script_watch)
+		_script_watch = null
 
 
 ## The operator's console, asserted on a REAL server rather than on a fixture.

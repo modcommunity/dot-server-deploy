@@ -98,3 +98,4 @@ node_modules/
 
 # Rendered by tools/progress_shot.gd. Regenerable, and a picture is not a source.
 /screenshots/
+/.boot_check/

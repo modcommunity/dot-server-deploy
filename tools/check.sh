@@ -41,7 +41,7 @@ done < <(find host client examples -name '*.gd' 2>/dev/null | sort)
 
 echo
 echo "shell scripts"
-for f in setup.sh tools/server.in docker-entrypoint.sh docker-healthcheck.sh tools/check.sh; do
+for f in setup.sh tools/server.in docker-entrypoint.sh docker-healthcheck.sh tools/check.sh tools/check_boot_failures.sh; do
     [ -f "$f" ] || continue
     if bash -n "$f" 2>/dev/null; then
         printf '  %sok%s   %s\n' "$GRN" "$OFF" "$f"
@@ -415,6 +415,17 @@ if [ -x ./server ]; then
         || { printf '  %sFAIL%s ./server check\n' "$RED" "$OFF"; fails=$((fails + 1)); }
 else
     printf '  %s--%s   ./server is not built; run ./setup.sh\n' "$RED" "$OFF"
+fi
+
+# And the boots that must NOT pass. `./server check` printed "selftest ok" over a game
+# module that never compiled, because a parse failure takes no exit path; this builds two
+# such boots and requires both to be refused. Armed: with the host's script watch off the
+# scene case fails, and with dot-server's can_instantiate guard off as well so does the
+# module case.
+if [ -x ./server ]; then
+    echo
+    echo "boots that must fail"
+    tools/check_boot_failures.sh || fails=$((fails + 1))
 fi
 
 echo

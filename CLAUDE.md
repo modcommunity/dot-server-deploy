@@ -395,6 +395,8 @@ There was also **no way to change a MAP at all**, on any of them. dot-server gav
 
 **The Windows launcher was a nine-line batch file, and the README described the Bash one.** `server.cmd` understood `check`, `config` and `games` and handed everything else to Godot unread, so `--port`, `--bind`, `--name`, `--max-players`, `--game`, the directory flags, `--godot`, `--dry-run`, the `--` passthrough, the runtime version check and the refusal of a secret on the command line existed on Linux and macOS and not on Windows. Nothing could report it: every one of those options was correct, tested and reachable — from the other script. `server.ps1` is the launcher now and `server.cmd` forwards to it. Reviewed rather than run: there is no PowerShell on the machine this was written on, which is a weaker claim than anything else in this repository makes.
 
+**`./server check` printed `selftest ok` over a game module that never compiled.** On a fresh clone `./setup.sh --only-games lobby` left `addons/dot_game` unlinked; the lobby's module logged `Could not find base class "DotGameModule"`, and the check passed. A script that fails to parse takes no exit path: Godot logs it and hands back a script nothing can instantiate, dot-server's `load_module` called `.new()` on it and aborted its coroutine, the host awaited null, read `.ok` off it and aborted too, and the boot carried on to the end. Two fixes, each armed on its own. dot-server's `load_module` checks `can_instantiate()` and returns a failed result (dot-server 004e8f2), so the host's existing "module did not load" exit fires. And the host installs `TmcScriptWatch` — a `Logger` on the engine's own log — for the length of a selftest and fails it with exit 7 on any script error or any `Parse Error` / `Could not find base class` / `Failed to load script`, which also catches a broken script that is NOT the module (a server scene's, which loads with its script silently missing). `tools/check_boot_failures.sh`, run by `check.sh`, boots both shapes through the real launcher and requires both refused. It cannot catch a parse failure in `host/tmc_host.gd` itself: the scene then runs no script and never quits, which is why the cases are capped with `timeout`.
+
 ## What the web player signs in against, and why it is a file
 
 `client/auth.json`, shipped inside the export, read by `_sign_in()` and gitignored
@@ -592,6 +594,7 @@ tools/check.sh              # parse, shell syntax, every suite, then a real boot
 #                             `log`, `sec_status`, `sec_why`, `party_status`,
 #                             `mm_status` and `replay` on a server that booted, RUNS
 #                             party_status, and fails if the replay ring is not recording.
+tools/check_boot_failures.sh  # two boots whose game cannot compile; ./server check must refuse both
 tools/package_check.sh      # the same thing in the shape an operator unpacks
 ```
 
