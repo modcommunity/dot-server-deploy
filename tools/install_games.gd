@@ -568,6 +568,20 @@ func _prefetch(
 
 		targets[content_id] = version
 
+		# And every pack the game depends on, already pinned by the install, so the first
+		# boot mounts them from the store rather than waiting on the network.
+		var on_disk := TmcYaml.parse_file(_descriptor_path(content_dir, id))
+
+		if on_disk.ok:
+			var listed: Variant = TmcYaml.at(on_disk.value as Dictionary, "dependencies", [])
+
+			if listed is Array:
+				for entry in listed:
+					var ref := TmcGameRef.parse(str(entry))
+
+					if ref["from_origin"] and str(ref["version"]) != "":
+						targets[str(ref["id"])] = str(ref["version"])
+
 	if targets.is_empty() or cloud == null:
 		return
 
@@ -795,6 +809,20 @@ func _install_from_pack(
 	if not stamped.ok:
 		return stamped.wrap("%s out of %s@%s" % [DESCRIPTOR, content_id, version])
 
+	# The game's other packs, each pinned to a version NOW. The server never resolves
+	# `@latest` itself -- it would hand two players two different packs under one game --
+	# so this is the one moment it can happen, and the answer is written into the file
+	# the server reads.
+	var deps := await _resolve_dependencies(str(stamped.value), bases)
+
+	if not deps.ok:
+		return deps.wrap("%s@%s" % [content_id, version])
+
+	stamped = stamp_dependencies(str(stamped.value), deps.value as PackedStringArray)
+
+	if not stamped.ok:
+		return stamped.wrap("%s out of %s@%s" % [DESCRIPTOR, content_id, version])
+
 	var written := _write_descriptor(
 		content_dir, dir_name, str(stamped.value).to_utf8_buffer()
 	)
@@ -858,6 +886,115 @@ static func stamp_identity(text: String, content_id: String, version: String) ->
 			)
 
 	return DotResult.success(out)
+
+
+## The `dependencies:` of a descriptor, each as a concrete `<id>@<version>`.
+##
+## An entry is written the way a games-list entry is -- `gamemann/surf_mesa`,
+## `gamemann/surf_mesa@latest`, `gamemann/surf_mesa@v1.0.0` -- and read through the same
+## [TmcGameRef], so the two lists cannot disagree about what `@v1.0.0` means. A bare name
+## with no owner is refused: a dependency is always a published pack.
+func _resolve_dependencies(text: String, bases: PackedStringArray) -> DotResult:
+	var parsed := TmcYaml.parse(text, DESCRIPTOR)
+
+	if not parsed.ok:
+		return parsed
+
+	var listed: Variant = TmcYaml.at(parsed.value as Dictionary, "dependencies", [])
+	var out := PackedStringArray()
+
+	if not (listed is Array):
+		return DotResult.fail(
+			DotError.CODE_INVALID, "dependencies: must be a list of <owner>/<name>@<version>"
+		)
+
+	for entry in listed:
+		var ref := TmcGameRef.parse(str(entry))
+
+		if not ref["from_origin"]:
+			return DotResult.fail(
+				DotError.CODE_INVALID,
+				"the dependency '%s' is not <owner>/<name>" % str(entry),
+				"a dependency is a published pack, never a directory on this box"
+			)
+
+		var version := str(ref["version"])
+
+		if version == "":
+			var latest := await _resolve_latest(str(ref["id"]), bases)
+
+			if not latest.ok:
+				return latest.wrap("could not resolve the dependency %s" % ref["id"])
+
+			version = str(latest.value)
+
+		out.append("%s@%s" % [ref["id"], version])
+
+	return DotResult.success(out)
+
+
+## Rewrites a descriptor's top-level `dependencies:` list to exactly [param keys].
+##
+## Text, like [method stamp_identity], for the same reason: the file is one an operator
+## reads and edits, and its comments and order are worth keeping. The old list's items are
+## replaced in place; a descriptor with no `dependencies:` and no keys is left alone.
+static func stamp_dependencies(text: String, keys: PackedStringArray) -> DotResult:
+	var lines := text.split("\n")
+	var out := PackedStringArray()
+	var i := 0
+	var found := false
+
+	while i < lines.size():
+		var line := lines[i]
+
+		if not found and line.begins_with("dependencies:"):
+			found = true
+			i += 1
+
+			# Skip the old items: indented lines, and `- ` items at the left margin,
+			# until the next top-level key.
+			while i < lines.size():
+				var next := lines[i]
+				var bare := next.strip_edges()
+
+				if bare == "" or bare.begins_with("#"):
+					break
+				if not (next.begins_with(" ") or next.begins_with("-")):
+					break
+				i += 1
+
+			if keys.is_empty():
+				out.append("dependencies: []")
+			else:
+				out.append("dependencies:")
+				for key in keys:
+					out.append("  - %s" % key)
+			continue
+
+		out.append(line)
+		i += 1
+
+	if not found and not keys.is_empty():
+		out.append("dependencies:")
+		for key in keys:
+			out.append("  - %s" % key)
+
+	var result := "\n".join(out)
+	var parsed := TmcYaml.parse(result, DESCRIPTOR)
+
+	if not parsed.ok:
+		return parsed
+
+	var back: Variant = TmcYaml.at(parsed.value as Dictionary, "dependencies", [])
+
+	if not keys.is_empty() and (not (back is Array) or PackedStringArray(back) != keys):
+		return DotResult.fail(
+			DotError.CODE_INVALID,
+			"could not write the resolved dependencies into the descriptor",
+			"it may be written in a form this reader does not recognise"
+		)
+
+	return DotResult.success(result)
 
 
 ## The newest published version of a pack, from the pointer beside its versions.

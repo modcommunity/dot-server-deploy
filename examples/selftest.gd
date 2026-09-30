@@ -14,7 +14,7 @@ extends Node
 
 const CFG := "res://examples/fixtures"
 
-const CHECKS := 234
+const CHECKS := 239
 
 var _passed := 0
 var _failed := 0
@@ -1008,6 +1008,33 @@ func _test_game_refs() -> void:
 		"the same game listed twice is not a collision")
 	_check(TmcGameRef.collisions("gamemann/game-arena,gamemann/game-g2gfast,lobby").is_empty(),
 		"different names never collide")
+
+	# Dependencies: pinned by the installer, read by the host, never resolved per join.
+	var installer := preload("res://tools/install_games.gd")
+	var yml := "name: X\ndependencies:\n  - gamemann/surf_mesa@latest\n# kept\nscene: s.tscn\n"
+	var stamped: DotResult = installer.stamp_dependencies(yml, PackedStringArray(["gamemann/surf_mesa@1.2.0"]))
+	_check(stamped.ok and str(stamped.value).contains("  - gamemann/surf_mesa@1.2.0\n# kept\nscene: s.tscn"),
+		"the installer pins a dependency in place and keeps what follows it", str(stamped))
+	var added: DotResult = installer.stamp_dependencies("name: X\n", PackedStringArray(["a/b@1.0.0"]))
+	_check(added.ok and str(added.value).ends_with("dependencies:\n  - a/b@1.0.0"),
+		"and adds the list to a descriptor that had none", str(added))
+
+	var base := {"kind": "pack", "scene": "scenes/server.tscn", "content_id": "gamemann/demo", "version": "1.0.0"}
+	var pinned := base.duplicate()
+	pinned["dependencies"] = ["gamemann/surf_mesa@1.2.0", "modcommunity/dot-ui@v0.1.2"]
+	var built: DotResult = TmcContent.new()._build("demo", pinned)
+	_check(built.ok and PackedStringArray((built.value as DotGameDescriptor).dependencies)
+			== PackedStringArray(["gamemann/surf_mesa@1.2.0", "modcommunity/dot-ui@0.1.2"]),
+		"a pinned dependency reaches the descriptor, @v spelling and all",
+		str(built.value.dependencies) if built.ok else str(built))
+	var loose := base.duplicate()
+	loose["dependencies"] = ["gamemann/surf_mesa@latest"]
+	_check(not TmcContent.new()._build("demo", loose).ok,
+		"an unresolved @latest is refused, not resolved per join")
+	var bare := base.duplicate()
+	bare["dependencies"] = ["surf_mesa"]
+	_check(not TmcContent.new()._build("demo", bare).ok,
+		"a dependency with no owner is refused")
 	_done()
 
 

@@ -237,6 +237,25 @@ func _build(name: String, tree: Dictionary) -> DotResult:
 					"set scene: to the server scene inside the pack, relative to its root"
 				)
 
+			# The packs the game needs beside its own. Written by an author as
+			# `owner/name@latest` if they like; install-games pins each one when it
+			# installs the game, so what reaches the server is always a version -- and an
+			# entry that still is not one is refused here rather than resolved per join.
+			var listed: Variant = TmcYaml.at(tree, "dependencies", [])
+
+			if listed is Array:
+				for entry in listed:
+					var ref := TmcGameRef.parse(str(entry))
+
+					if not ref["from_origin"] or str(ref["version"]) == "":
+						return DotResult.fail(
+							DotError.CODE_INVALID,
+							"The dependency '%s' has no version." % str(entry),
+							"./server install-games pins each dependency when it installs the game"
+						)
+
+					descriptor.dependencies.append("%s@%s" % [ref["id"], ref["version"]])
+
 			if scene.contains("://") and descriptor.manifest_url == "":
 				# An absolute scene in a pack game is the builtin spelling in the wrong
 				# file: nothing would ever be fetched, and the game would silently run
