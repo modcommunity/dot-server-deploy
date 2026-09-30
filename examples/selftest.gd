@@ -14,7 +14,7 @@ extends Node
 
 const CFG := "res://examples/fixtures"
 
-const CHECKS := 239
+const CHECKS := 240
 
 var _passed := 0
 var _failed := 0
@@ -996,18 +996,34 @@ func _test_game_refs() -> void:
 		"@latest is the newest version")
 	_check(TmcGameRef.parse("alice/demo@vnext")["version"] == "vnext",
 		"a v that is not followed by a digit is part of the version")
-	_check(TmcGameRef.parse("asher/game-testing@v1.0.0")["dir"] == "game-testing",
-		"the directory is the name half, with no owner and no version")
+	_check(TmcGameRef.parse("asher/game-testing@v1.0.0")["dir"] == "asher/game-testing",
+		"a published game's id is owner/name, with no version")
+	_check(TmcGameRef.dirs_in("asher/game-testing@v1.0.0, bob/game-testing, lobby")
+			== PackedStringArray(["asher/game-testing", "bob/game-testing", "lobby"]),
+		"a fork and its original are two games in one list")
 
-	var clash := TmcGameRef.collisions("asher/game-testing@v1.0.0, bob/game-testing")
-	_check(clash.size() == 1 and clash[0]["raw"] == "bob/game-testing"
-			and clash[0]["taken_by"] == "asher/game-testing",
-		"a second owner's same-named game is reported, and the first keeps the directory",
-		str(clash))
-	_check(TmcGameRef.collisions("gamemann/x@0.1.0,gamemann/x@0.1.2").is_empty(),
-		"the same game listed twice is not a collision")
-	_check(TmcGameRef.collisions("gamemann/game-arena,gamemann/game-g2gfast,lobby").is_empty(),
-		"different names never collide")
+	# Two owners' same-named games, installed side by side, both scan.
+	var root := "user://selftest_forks"
+	DotPaths.remove_tree(root)
+	var fork_yml := "kind: pack\nscene: scenes/server.tscn\ncontent_id: %s\nversion: 1.0.0\n"
+	DotPaths.write_text(root + "/asher/game-testing/game.yml", fork_yml % "asher/game-testing")
+	DotPaths.write_text(root + "/bob/game-testing/game.yml", fork_yml % "bob/game-testing")
+	DotPaths.write_text(root + "/gamemann/game-g2gfast/game.yml", fork_yml % "gamemann/game-g2gfast")
+	DotPaths.write_text(root + "/lobby/game.yml", "kind: pack\nscene: s.tscn\ncontent_id: a_room\n")
+	DirAccess.make_dir_recursive_absolute(root + "/emptyowner")
+	var forks := TmcContent.scan(root)
+	var index: TmcContent = forks.value if forks.ok else null
+	_check(index != null and index.ids() == PackedStringArray(
+			["asher/game-testing", "bob/game-testing", "gamemann/game-g2gfast", "lobby"]),
+		"content/<owner>/<name>/ scans as owner/name beside a built-in's content/<name>/",
+		str(index.ids()) if index != null else str(forks))
+	_check(index != null and index.find("game-testing") == null
+			and index.find("bob/game-testing") != null,
+		"a name two owners share needs the owner; the full id always works")
+	_check(index != null and index.find("game-g2gfast") != null
+			and index.find("game-g2gfast").game_id == "gamemann/game-g2gfast",
+		"a name only one owner has still works on its own (TMC_GAME=game-g2gfast)")
+	DotPaths.remove_tree(root)
 
 	# Dependencies: pinned by the installer, read by the host, never resolved per join.
 	var installer := preload("res://tools/install_games.gd")

@@ -132,31 +132,17 @@ func _init() -> void:
 	var wants: Array[Dictionary] = []
 	var refused := PackedStringArray()
 
-	# [b]Two owners, one name, one directory.[/b] The directory is the name half alone,
-	# so `asher/game-testing` and `bob/game-testing` both want `content/game-testing/`.
-	# The first entry keeps it and each later one is refused with both names in the
-	# sentence -- rather than overwriting the first, or being de-duplicated away by the
-	# host's filter so the server quietly offers a game somebody else asked for.
-	var clashes := {}
-
-	for clash in TmcGameRef.collisions(",".join(wanted)):
-		clashes[str(clash["raw"])] = clash
-
 	for raw in wanted:
 		var one := TmcGameRef.parse(raw)
-
-		if clashes.has(str(one["raw"])):
-			var clash: Dictionary = clashes[str(one["raw"])]
-			DotLog.error(CHANNEL, "two games in the list want the same directory", {
-				"game": str(one["id"]),
-				"directory": "content/%s" % clash["dir"],
-				"taken_by": str(clash["taken_by"]),
-				"hint": "two owners published the same name; list only one of them",
-			})
-			refused.append(str(one["raw"]))
-			continue
-
 		wants.append(one)
+
+		# [b]A game installed before ids carried the owner is moved, not re-downloaded.[/b]
+		# It lived at `content/<name>/`; its id is `<owner>/<name>` now and so is its
+		# directory. Only when that flat directory holds THIS pack -- its descriptor names
+		# the same content id -- so a built-in or somebody else's game that happens to share
+		# the name is never taken.
+		if one["from_origin"]:
+			_adopt_flat_install(one, content_dir, installed)
 
 	# Built once and shared. A published pack needs it to fetch and VERIFY a manifest
 	# before its descriptor is trusted, and the prefetch below needs the same store, the
@@ -609,6 +595,43 @@ func _prefetch(
 		})
 
 		await _cache_manifest(str(content_id), version, data_dir, bases)
+
+
+## Moves `content/<name>/` to `content/<owner>/<name>/` when it holds this exact pack.
+func _adopt_flat_install(want: Dictionary, content_dir: String, installed: Dictionary) -> void:
+	var id := str(want["id"])
+	var flat := id.get_file()
+	var old_dir := content_dir.path_join(flat)
+	var new_dir := content_dir.path_join(id)
+
+	if flat == id or DirAccess.dir_exists_absolute(new_dir):
+		return
+
+	var old_descriptor := old_dir.path_join(DESCRIPTOR)
+
+	if not FileAccess.file_exists(old_descriptor):
+		return
+
+	var parsed := TmcYaml.parse_file(old_descriptor)
+
+	if not parsed.ok or str(TmcYaml.at(parsed.value as Dictionary, "content_id", "")) != id:
+		return
+
+	DirAccess.make_dir_recursive_absolute(new_dir.get_base_dir())
+
+	if DirAccess.rename_absolute(old_dir, new_dir) != OK:
+		DotLog.warn(CHANNEL, "could not move a game to its owner's directory", {
+			"from": old_dir, "to": new_dir,
+		})
+		return
+
+	if installed.has(flat):
+		installed[id] = installed[flat]
+		installed.erase(flat)
+
+	DotLog.info(CHANNEL, "moved a game to its owner's directory", {
+		"game": id, "from": "content/%s" % flat,
+	})
 
 
 ## Whether an installed pack game has to move to another version, and to which.

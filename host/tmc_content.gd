@@ -97,12 +97,45 @@ static func scan(
 			"a server with no content is legitimate; a missing directory is a typo"
 		)
 
-	var names := dir.get_directories()
-	names.sort()
+	# [b]Two layouts, one list of ids.[/b] A game this build carries is
+	# `content/<name>/game.yml` and its id is `<name>`; a published game is
+	# `content/<owner>/<name>/game.yml` and its id is `<owner>/<name>`, so forks and
+	# same-named games from two publishers sit side by side. A top-level directory with
+	# its own descriptor is a game; one without is an owner, and each directory under it
+	# that has one is that owner's game.
+	var names := PackedStringArray()
+	var tops := dir.get_directories()
+	tops.sort()
+
+	for top in tops:
+		if top in NOT_GAMES or top.begins_with("."):
+			continue
+
+		if FileAccess.file_exists("%s/%s/%s" % [index.root, top, DESCRIPTOR]):
+			names.append(top)
+			continue
+
+		var owned := DirAccess.get_directories_at("%s/%s" % [index.root, top])
+		owned.sort()
+
+		# An owner whose last game was pruned leaves an empty directory, which is
+		# nothing to report.
+		if owned.is_empty() and DirAccess.get_files_at("%s/%s" % [index.root, top]).is_empty():
+			continue
+		var any := false
+
+		for sub in owned:
+			if sub.begins_with("."):
+				continue
+			if FileAccess.file_exists("%s/%s/%s/%s" % [index.root, top, sub, DESCRIPTOR]):
+				names.append("%s/%s" % [top, sub])
+				any = true
+
+		# Neither a game nor an owner of one: reported as the flat layout always was.
+		if not any:
+			names.append(top)
 
 	for name in names:
-		if name in NOT_GAMES or name.begins_with("."):
-			continue
 
 		# [b]The allow list is applied HERE and nowhere else.[/b] Four things read the
 		# scanned set -- the `games` listing, `changelevel`, the vote menu and the boot
@@ -369,12 +402,26 @@ func _flatten_cvars(cvars: Dictionary) -> Dictionary:
 	return out
 
 
+## The game an id names: exactly, or by its NAME half while only one owner has it --
+## the same rule as DotGameManager.find_game, so `TMC_GAME=game-g2gfast` keeps booting
+## `gamemann/game-g2gfast` until somebody installs a second `game-g2gfast`.
 func find(game_id: String) -> DotGameDescriptor:
 	for descriptor in games:
 		if descriptor.game_id == game_id:
 			return descriptor
 
-	return null
+	if game_id.contains("/"):
+		return null
+
+	var found: DotGameDescriptor = null
+
+	for descriptor in games:
+		if descriptor.game_id.ends_with("/" + game_id):
+			if found != null:
+				return null
+			found = descriptor
+
+	return found
 
 
 func ids() -> PackedStringArray:

@@ -61,11 +61,12 @@ static func parse(raw: String) -> Dictionary:
 	return {
 		"raw": raw.strip_edges(),
 		"id": name,
-		# The directory a descriptor lands in, and the id an operator types at the
-		# console. The NAME half of a content id, not the whole thing: `changelevel
-		# gamemann/game-g2gfast01` is not something anybody should have to type, and a
-		# directory cannot hold a slash anyway.
-		"dir": name.get_file() if is_pack else name,
+		# The game's id, and where its descriptor lands: `content/<owner>/<name>/`. The
+		# WHOLE content id, owner included, so a fork and its original -- or two people's
+		# games that share a name -- are two games on one server rather than one
+		# overwriting the other. The console still takes the bare name while it is
+		# unambiguous (DotGameManager.find_game), so nobody has to type the owner.
+		"dir": name,
 		"version": version,
 		"from_origin": is_pack,
 	}
@@ -76,34 +77,6 @@ static func parse(raw: String) -> Dictionary:
 ## owner are all somebody else's business by then.
 static func dir_of(raw: String) -> String:
 	return str(parse(raw)["dir"])
-
-
-## The entries of a list that name a directory an EARLIER entry already claimed for a
-## different content id, as `{raw, dir, taken_by}`.
-##
-## [b]Two owners may publish the same name[/b] -- `asher/game-testing` and
-## `bob/game-testing` -- and the directory is the name half alone, because it is what an
-## operator types at the console. So the two would share `content/game-testing/`, and the
-## second would either overwrite the first or be silently dropped by [method dirs_in]'s
-## de-duplication. The first entry keeps the directory; each later one is reported by
-## this, and refused by the installer with both names in the sentence.
-static func collisions(raw: String) -> Array[Dictionary]:
-	var owner_of := {}
-	var out: Array[Dictionary] = []
-
-	for entry in raw.split(",", false):
-		var one := parse(entry)
-		var dir := str(one["dir"])
-
-		if dir == "":
-			continue
-
-		if not owner_of.has(dir):
-			owner_of[dir] = str(one["id"])
-		elif owner_of[dir] != str(one["id"]):
-			out.append({"raw": str(one["raw"]), "dir": dir, "taken_by": owner_of[dir]})
-
-	return out
 
 
 ## Every directory a comma-separated list names, in order, without duplicates.
