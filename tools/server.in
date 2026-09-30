@@ -800,7 +800,12 @@ check_excluded_maps() {
             carried=$((carried + 1))
         fi
 
-        if [ ! -f "$PROJECT/dist/$id/manifest.json" ]; then
+        # Published flat (`dist/<id>/`, the old unowned layout) or under an owner
+        # (`dist/maps/gamemann/<id>/`, what g2gfast's tools/publish_maps.sh writes and
+        # what a server asks for as `<owner>/<id>`). Only looking for the first made
+        # every owned map read as unpublished and stopped the export.
+        if [ ! -f "$PROJECT/dist/$id/manifest.json" ] \
+            && [ -z "$(find "$PROJECT/dist" -path "*/$id/manifest.json" -print -quit 2>/dev/null)" ]; then
             printf '  %s%s is not in the build and is not published%s\n' \
                 "$RED" "$id" "$OFF" >&2
             unpublished=$((unpublished + 1))
