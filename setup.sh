@@ -857,6 +857,32 @@ repo_url() {
 ## with local changes or a diverged branch is reported and skipped, because on the one
 ## machine where somebody HAS edited an addon in place, quietly discarding it would be
 ## the worse failure.
+# --- The addon lock -----------------------------------------------------------
+#
+# [b]A server installs the addon commits the published client shell was built from,
+# not whatever `main` is on the day.[/b] Every install used to clone each addon at the
+# tip of its default branch, while the web and desktop shells players connect with are
+# exported once and published. The two drifted by however long it had been since the
+# last export, and a server a few commits ahead of the shell is refused at join --
+# "This server needs a different build of the game client" -- the moment dot-server's
+# RPC surface moves, or a game's messages disagree with an addon's.
+#
+# `addons.lock` names a ref per repository (a release tag, normally), and it is only
+# ever applied to what THIS script owns: a fresh clone anywhere, and an existing clone
+# under addons/.repos/ on --update. A developer's own sibling checkout or a shared
+# --addons-dir is never detached onto a tag, because that is somebody's working tree.
+# `tools/addons-lock.sh write` regenerates it from the newest release of each repository
+# and `check` compares a tree against it before a shell is exported. TMC_ADDONS_LOCK=off
+# ignores it, which is the old behaviour.
+ADDONS_LOCK="$ROOT/addons.lock"
+
+lock_ref() {
+    [ "${TMC_ADDONS_LOCK:-on}" != "off" ] || return 1
+    [ -f "$ADDONS_LOCK" ] || return 1
+    awk -v r="$1" '$1 == r && $2 != "" { print $2; found = 1; exit } END { exit !found }' \
+        "$ADDONS_LOCK"
+}
+
 update_repos() {
     command -v git >/dev/null 2>&1 || die "--update needs git, and this machine has none." 4
 
@@ -869,6 +895,22 @@ update_repos() {
 
         if [ -n "$(git -C "$dir" status --porcelain 2>/dev/null)" ]; then
             printf '    %s..%s   %s (local changes; left alone)\n' "$YLW" "$OFF" "$repo"
+            continue
+        fi
+
+        # A clone this script made, and a lock that names it: moved to exactly that ref
+        # rather than pulled, so a reinstall lands where the published shell is. Fetched
+        # by name at depth 1 because these clones are shallow and a tag cut after the
+        # clone is not in them.
+        local ref
+        if [ -n "${ADDONS_REPOS:-}" ] && [ "${dir#"$ADDONS_REPOS"/}" != "$dir" ] \
+            && ref="$(lock_ref "$repo")"; then
+            if git -C "$dir" fetch --quiet --depth 1 origin "$ref" 2>/dev/null \
+                && git -C "$dir" checkout --quiet --detach FETCH_HEAD 2>/dev/null; then
+                behind+=("$repo")
+            else
+                failed+=("$repo@$ref")
+            fi
             continue
         fi
 
@@ -938,8 +980,16 @@ clone_repos() {
     [ "${TMC_GIT_DEPTH:-1}" = "0" ] || depth=(--depth "${TMC_GIT_DEPTH:-1}")
 
     for repo in "${missing[@]}"; do
-        if git clone --quiet "${depth[@]}" "$(repo_url "$repo")" "$dest/$repo" 2>/dev/null; then
-            printf '    %s+%s    %s\n' "$GRN" "$OFF" "$repo"
+        # At the locked ref when there is one; `--branch` takes a tag as well as a
+        # branch and still clones shallow, and a clone of a ref that does not exist
+        # fails here rather than quietly landing on main.
+        local at=() ref
+        if ref="$(lock_ref "$repo")"; then
+            at=(--branch "$ref")
+        fi
+
+        if git clone --quiet "${depth[@]}" "${at[@]}" "$(repo_url "$repo")" "$dest/$repo" 2>/dev/null; then
+            printf '    %s+%s    %s%s\n' "$GRN" "$OFF" "$repo" "${ref:+ @ $ref}"
         else
             # Collected rather than fatal. One repository that is not published yet --
             # which happens, because this list is edited when an addon is written and
