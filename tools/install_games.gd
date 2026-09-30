@@ -130,9 +130,33 @@ func _init() -> void:
 	# `g2gfast` and a `gamemann/game-g2gfast01@1.2.0` differ in where the descriptor comes
 	# from and in nothing else afterwards -- both end up as a directory under content/.
 	var wants: Array[Dictionary] = []
+	var refused := PackedStringArray()
+
+	# [b]Two owners, one name, one directory.[/b] The directory is the name half alone,
+	# so `asher/game-testing` and `bob/game-testing` both want `content/game-testing/`.
+	# The first entry keeps it and each later one is refused with both names in the
+	# sentence -- rather than overwriting the first, or being de-duplicated away by the
+	# host's filter so the server quietly offers a game somebody else asked for.
+	var clashes := {}
+
+	for clash in TmcGameRef.collisions(",".join(wanted)):
+		clashes[str(clash["raw"])] = clash
 
 	for raw in wanted:
-		wants.append(TmcGameRef.parse(raw))
+		var one := TmcGameRef.parse(raw)
+
+		if clashes.has(str(one["raw"])):
+			var clash: Dictionary = clashes[str(one["raw"])]
+			DotLog.error(CHANNEL, "two games in the list want the same directory", {
+				"game": str(one["id"]),
+				"directory": "content/%s" % clash["dir"],
+				"taken_by": str(clash["taken_by"]),
+				"hint": "two owners published the same name; list only one of them",
+			})
+			refused.append(str(one["raw"]))
+			continue
+
+		wants.append(one)
 
 	# Built once and shared. A published pack needs it to fetch and VERIFY a manifest
 	# before its descriptor is trusted, and the prefetch below needs the same store, the
@@ -199,7 +223,51 @@ func _init() -> void:
 		var have := FileAccess.file_exists(path)
 
 		if have and not refresh:
-			continue
+			if not want["from_origin"]:
+				continue
+
+			# [b]A pack game on the disk is not necessarily the one the list asks for.[/b]
+			# This used to `continue` here for every game already installed, so the
+			# version was decided ONCE, at first install: `@latest` meant "latest on the
+			# day this box was set up", and changing `@0.1.2` to `@0.1.3` in the panel did
+			# nothing at all without `--refresh`. A server whose list says one version and
+			# runs another is exactly the "which build is this" question an operator
+			# should never have to ask.
+			var due := await _pack_update_due(want, path, bases, cloud)
+
+			if not due.ok:
+				if due.error.code == DotError.CODE_STATE:
+					# Another owner's game is in that directory. Refused, not replaced.
+					DotLog.error(CHANNEL, "could not install a game", {
+						"game": str(want["id"]),
+						"why": str(due.error),
+					})
+					refused.append(str(want["raw"]))
+				else:
+					# The origin could not say what is newest. What is installed still
+					# runs; a restart during an outage must not take a working game away.
+					DotLog.warn(CHANNEL, "kept the installed version; could not check for a newer one", {
+						"game": str(want["id"]),
+						"why": str(due.error),
+					})
+				continue
+
+			var target := str(due.value)
+
+			if target == "":
+				continue
+
+			# The descriptor is the file an operator edits, so the one being replaced is
+			# kept beside it rather than thrown away on a restart nobody watched.
+			DirAccess.copy_absolute(path, path + ".prev")
+			DotLog.info(CHANNEL, "updating a game to the version the list asks for", {
+				"game": str(want["dir"]),
+				"content": str(want["id"]),
+				"to": target,
+				"kept": path.get_file() + ".prev",
+			})
+			want = want.duplicate()
+			want["version"] = target
 
 		# --- A published pack carries its own descriptor ----------------------
 		if want["from_origin"]:
@@ -291,11 +359,15 @@ func _init() -> void:
 		print("  MISSING  : %s" % ", ".join(missing))
 		print("             not in the index at %s" % ", ".join(bases))
 
+	if not refused.is_empty():
+		print("  REFUSED  : %s" % ", ".join(refused))
+		print("             its directory belongs to another game; see the log")
+
 	if present.is_empty():
 		quit(EXIT_FAILED)
 		return
 
-	quit(EXIT_PARTIAL if not missing.is_empty() else EXIT_OK)
+	quit(EXIT_PARTIAL if not (missing.is_empty() and refused.is_empty()) else EXIT_OK)
 
 
 # --- The catalogue ----------------------------------------------------------
@@ -523,6 +595,51 @@ func _prefetch(
 		})
 
 		await _cache_manifest(str(content_id), version, data_dir, bases)
+
+
+## Whether an installed pack game has to move to another version, and to which.
+##
+## Success with `""` is "up to date", success with a version is "install that one", a
+## failure with [constant DotError.CODE_STATE] is another content id in the directory,
+## and any other failure is "could not tell" -- which the caller treats as keep what is
+## there. `@latest` costs one small `latest.json` read per start; `TMC_NO_INSTALL` is how
+## a box that must not touch the network skips it.
+func _pack_update_due(
+	want: Dictionary,
+	path: String,
+	bases: PackedStringArray,
+	cloud: DotCloudClient
+) -> DotResult:
+	var parsed := TmcYaml.parse_file(path)
+
+	if not parsed.ok:
+		return parsed.wrap("could not read %s" % path)
+
+	var tree := parsed.value as Dictionary
+	var have_id := str(TmcYaml.at(tree, "content_id", ""))
+	var have_version := str(TmcYaml.at(tree, "version", ""))
+
+	if have_id != "" and have_id != str(want["id"]):
+		return DotResult.fail(
+			DotError.CODE_STATE,
+			"content/%s is already %s." % [want["dir"], have_id],
+			"%s wants the same directory; list only one of them" % want["id"]
+		)
+
+	var target := str(want["version"])
+
+	if target == "":
+		if cloud == null:
+			return DotResult.fail(DotError.CODE_INVALID, "no content origin to ask")
+
+		var latest := await _resolve_latest(str(want["id"]), bases)
+
+		if not latest.ok:
+			return latest
+
+		target = str(latest.value)
+
+	return DotResult.success("" if target == have_version else target)
 
 
 ## Installs a game from a PUBLISHED pack, descriptor and all.

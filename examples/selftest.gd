@@ -14,7 +14,7 @@ extends Node
 
 const CFG := "res://examples/fixtures"
 
-const CHECKS := 226
+const CHECKS := 234
 
 var _passed := 0
 var _failed := 0
@@ -40,6 +40,7 @@ func _run() -> void:
 	_test_config()
 	_test_admins()
 	_test_content()
+	_test_game_refs()
 	_test_vote()
 	_test_vote_layers_reach_a_ballot()
 	_test_vote_notices()
@@ -981,6 +982,33 @@ func _identity(name: String) -> Object:
 	identity.username = name
 	identity.display_name = name
 	return identity
+
+
+## `TMC_GAMES` entries: the release-tag spelling, and two owners with one name.
+func _test_game_refs() -> void:
+	_section("games list entries")
+
+	_check(TmcGameRef.parse("gamemann/mg-buses@v0.1.2")["version"] == "0.1.2",
+		"@v0.1.2 asks for the pack version 0.1.2, not a v0.1.2/ directory")
+	_check(TmcGameRef.parse("gamemann/mg-buses@0.1.2")["version"] == "0.1.2",
+		"@0.1.2 is unchanged")
+	_check(TmcGameRef.parse("gamemann/game-g2gfast@latest")["version"] == "",
+		"@latest is the newest version")
+	_check(TmcGameRef.parse("alice/demo@vnext")["version"] == "vnext",
+		"a v that is not followed by a digit is part of the version")
+	_check(TmcGameRef.parse("asher/game-testing@v1.0.0")["dir"] == "game-testing",
+		"the directory is the name half, with no owner and no version")
+
+	var clash := TmcGameRef.collisions("asher/game-testing@v1.0.0, bob/game-testing")
+	_check(clash.size() == 1 and clash[0]["raw"] == "bob/game-testing"
+			and clash[0]["taken_by"] == "asher/game-testing",
+		"a second owner's same-named game is reported, and the first keeps the directory",
+		str(clash))
+	_check(TmcGameRef.collisions("gamemann/x@0.1.0,gamemann/x@0.1.2").is_empty(),
+		"the same game listed twice is not a collision")
+	_check(TmcGameRef.collisions("gamemann/game-arena,gamemann/game-g2gfast,lobby").is_empty(),
+		"different names never collide")
+	_done()
 
 
 func _test_content() -> void:

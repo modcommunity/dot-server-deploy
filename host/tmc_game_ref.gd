@@ -47,6 +47,15 @@ static func parse(raw: String) -> Dictionary:
 	if version == "latest":
 		version = ""
 
+	# `@v1.2.0` is the RELEASE TAG and `1.2.0` is the pack's version: the site publishes
+	# a tag's pack under the version with the `v` taken off, so a list written from the
+	# releases page asked the origin for a `v1.2.0/` directory nothing had written, and
+	# got S3's 403 for a key that is not there. Only a `v` followed by a digit, so a
+	# version that genuinely begins with a letter is left as it was written.
+	if version.length() > 1 and (version[0] == "v" or version[0] == "V") \
+			and version[1].is_valid_int():
+		version = version.substr(1)
+
 	var is_pack := name.contains("/")
 
 	return {
@@ -67,6 +76,34 @@ static func parse(raw: String) -> Dictionary:
 ## owner are all somebody else's business by then.
 static func dir_of(raw: String) -> String:
 	return str(parse(raw)["dir"])
+
+
+## The entries of a list that name a directory an EARLIER entry already claimed for a
+## different content id, as `{raw, dir, taken_by}`.
+##
+## [b]Two owners may publish the same name[/b] -- `asher/game-testing` and
+## `bob/game-testing` -- and the directory is the name half alone, because it is what an
+## operator types at the console. So the two would share `content/game-testing/`, and the
+## second would either overwrite the first or be silently dropped by [method dirs_in]'s
+## de-duplication. The first entry keeps the directory; each later one is reported by
+## this, and refused by the installer with both names in the sentence.
+static func collisions(raw: String) -> Array[Dictionary]:
+	var owner_of := {}
+	var out: Array[Dictionary] = []
+
+	for entry in raw.split(",", false):
+		var one := parse(entry)
+		var dir := str(one["dir"])
+
+		if dir == "":
+			continue
+
+		if not owner_of.has(dir):
+			owner_of[dir] = str(one["id"])
+		elif owner_of[dir] != str(one["id"]):
+			out.append({"raw": str(one["raw"]), "dir": dir, "taken_by": owner_of[dir]})
+
+	return out
 
 
 ## Every directory a comma-separated list names, in order, without duplicates.
