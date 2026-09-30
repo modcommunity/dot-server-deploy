@@ -169,6 +169,36 @@
             "field_type": "text"
         },
         {
+            "name": "Allow browser players",
+            "description": "1 admits players in a web browser, 0 refuses them with a sentence that says to use the desktop app. Cross-play is on by default; empty leaves cfg/server.yml (sv_allow_web) in charge. The site hides its browser Play button for this server once a scan sees 0.",
+            "env_variable": "TMC_ALLOW_WEB",
+            "default_value": "1",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string|in:0,1",
+            "field_type": "text"
+        },
+        {
+            "name": "Allow desktop players",
+            "description": "1 admits players on the TMC desktop client (Windows, macOS, Linux), 0 refuses them. Empty leaves cfg/server.yml (sv_allow_desktop) in charge. The site hides its \"Play in the TMC app\" button for this server once a scan sees 0.",
+            "env_variable": "TMC_ALLOW_DESKTOP",
+            "default_value": "1",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string|in:0,1",
+            "field_type": "text"
+        },
+        {
+            "name": "Allow mobile players",
+            "description": "1 admits players on a phone or tablet, 0 refuses them. Empty leaves cfg/server.yml (sv_allow_mobile) in charge.",
+            "env_variable": "TMC_ALLOW_MOBILE",
+            "default_value": "1",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string|in:0,1",
+            "field_type": "text"
+        },
+        {
             "name": "Deploy repository",
             "description": "Where the server is cloned from at install.",
             "env_variable": "DEPLOY_REPO",

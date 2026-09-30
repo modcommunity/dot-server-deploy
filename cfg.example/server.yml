@@ -31,6 +31,15 @@ sv_background_grace: 300
 # Empty means anyone may join.
 sv_password: ""
 
+# Which kinds of client may join. Cross-play is the default: browsers, the desktop
+# client and phones all speak the same protocol to this server. 0 refuses that kind at
+# the door with a sentence saying where to join from instead, and the site stops
+# offering that Play button once its next scan sees it. A client too old to say what it
+# is gets in either way. TMC_ALLOW_WEB / _DESKTOP / _MOBILE override these from a panel.
+sv_allow_web: 1
+sv_allow_desktop: 1
+sv_allow_mobile: 1
+
 # Whether the server reads commands from its own stdin when stdin is a PIPE.
 #
 # A terminal is always read, and a file too. A pipe is not, by default, because a

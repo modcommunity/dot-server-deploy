@@ -286,6 +286,8 @@ usage() {
     TMC_CONTENT_URL     --content-url         TMC_NO_INSTALL    --no-install
     TMC_NATIVE_PLATFORM --platform            TMC_BUILD_VERSION --build-version
     TMC_VERBOSE         --verbose (set to anything)
+    TMC_ALLOW_WEB       +sv_allow_web         TMC_ALLOW_DESKTOP +sv_allow_desktop
+    TMC_ALLOW_MOBILE    +sv_allow_mobile      (1 admits, 0 refuses; empty = the YAML)
 
   Which means a TMC_PORT left set in an environment file makes cfg/net.yml look
   broken: the port is edited, the server restarts, and it binds the old one with
@@ -361,6 +363,18 @@ while [ $# -gt 0 ]; do
         *) die "unknown option: $1  (./server --help)" ;;
     esac
 done
+
+# [b]Which platforms may join, from a panel.[/b] sv_allow_web / sv_allow_desktop /
+# sv_allow_mobile are console cvars and live in cfg/server.yml like any other -- but a
+# panel's owner works in variables, not files, so TMC_ALLOW_* reach the same cvars as
+# `+sv_allow_* <v>`. Put BEFORE anything typed after `--`, so a hand-written `+sv_allow_web`
+# on the command line still has the last word. Empty leaves the YAML in charge.
+PLATFORM_ARGS=()
+for pair in "web:${TMC_ALLOW_WEB:-}" "desktop:${TMC_ALLOW_DESKTOP:-}" "mobile:${TMC_ALLOW_MOBILE:-}"; do
+    value="${pair#*:}"
+    [ -n "$value" ] && PLATFORM_ARGS+=("+sv_allow_${pair%%:*}" "$value")
+done
+PASSTHROUGH=(${PLATFORM_ARGS[@]+"${PLATFORM_ARGS[@]}"} ${PASSTHROUGH[@]+"${PASSTHROUGH[@]}"})
 
 # Built here rather than during parsing: see OPT_* above. An empty value is absent
 # rather than a flag with nothing after it, which is how "the environment did not set
