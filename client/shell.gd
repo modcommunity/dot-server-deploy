@@ -345,8 +345,38 @@ func _build_friends() -> void:
 
 
 func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_CLOSE_REQUEST and content_cache_off():
+		# Best effort: a pack still mounted may hold its file open on some platforms,
+		# which is why the next launch empties the folder first as well.
+		DotPaths.remove_tree(SESSION_CACHE)
+
 	if what == NOTIFICATION_WM_CLOSE_REQUEST and _friends != null:
 		_quit_after_offline()
+
+
+## Where downloads go when the player keeps none. Separate from the normal cache so a
+## player switching the setting off does not have their kept games deleted, and back on
+## finds them still there.
+const SESSION_CACHE := "user://dot_cloud_session"
+
+
+## Whether `--content-cache off` (or `=off`, `0`, `false`, `no`) was passed after `--`.
+static func content_cache_off() -> bool:
+	var args := OS.get_cmdline_user_args()
+
+	for i in args.size():
+		var value := ""
+
+		if args[i].begins_with("--content-cache="):
+			value = args[i].substr("--content-cache=".length())
+		elif args[i] == "--content-cache" and i + 1 < args.size():
+			value = args[i + 1]
+		else:
+			continue
+
+		return value.strip_edges().to_lower() in ["off", "0", "false", "no"]
+
+	return false
 
 
 ## Posts "offline", waits at most two seconds for it, and quits either way: a site that is
@@ -801,6 +831,19 @@ func _ensure_cloud() -> void:
 	# player's cue that this shell, not the server, is the one to update.
 	_cloud.host_role = "client"
 	_cloud.config = DotCloudConfig.new()
+
+	# [b]A player may keep nothing.[/b] Downloads are kept between sessions by default --
+	# content-addressed, so a file two games or two versions share is stored once, and a
+	# game played yesterday starts without a download today. `--content-cache off` (the
+	# TMC app's "keep downloaded games" switch) points the store at a session folder
+	# that is emptied now, for whatever the last session left, and again on quit. Where
+	# the cache lives and how big it may grow need nothing here: DotCloudConfig already
+	# reads `--cloud-cache-dir=` and `--cloud-cache-bytes=` off the command line, and an
+	# explicit `--cloud-cache-dir` wins over this.
+	if content_cache_off():
+		_cloud.config.cache_dir = SESSION_CACHE
+		DotPaths.remove_tree(SESSION_CACHE)
+		DotLog.info(CHANNEL, "downloads are kept for this session only", {"dir": SESSION_CACHE})
 
 	if ResourceLoader.exists(CONTENT_CONFIG) or FileAccess.file_exists(CONTENT_CONFIG):
 		_cloud.config_file = CONTENT_CONFIG
