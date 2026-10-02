@@ -13,7 +13,7 @@
         "Debian 12": "ghcr.io/parkervcp/yolks:debian"
     },
     "file_denylist": [],
-    "startup": "./server --port {{server.build.default.port}}",
+    "startup": "./server --port {{SERVER_PORT}}",
     "config": {
         "files": "{}",
         "startup": "{\"done\": \"server   ready\"}",
