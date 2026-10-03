@@ -15,7 +15,7 @@ dot-effects	v0.1.2
 dot-entity	v0.1.2
 dot-friends	v0.1.2
 dot-fx	v0.1.2
-dot-game	v0.1.2
+dot-game	v0.1.3
 dot-inventory	v0.1.2
 dot-leaderboard	v0.1.2
 dot-lighting	v0.1.2
@@ -34,7 +34,7 @@ dot-objective	v0.1.2
 dot-party	v0.1.2
 dot-peer-to-peer	v0.1.2
 dot-physics	v0.1.2
-dot-platform	v0.1.2
+dot-platform	v0.1.3
 dot-player	v0.1.2
 dot-player-char	v0.1.2
 dot-player-class	v0.1.2
@@ -53,9 +53,9 @@ dot-team	v0.1.2
 dot-timer	v0.1.2
 dot-ui	v0.1.2
 dot-user	v0.1.2
-dot-user-avatar	v0.1.2
+dot-user-avatar	v0.1.3
 dot-vehicle	v0.1.2
 dot-voice	v0.1.2
 dot-vote	v0.1.2
 dot-weapon	v0.1.2
-zee-dot-weapons	v0.1.2
+zee-dot-weapons	v0.1.3
