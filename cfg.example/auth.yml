@@ -10,7 +10,11 @@
 # local console is the only administrator. That is correct, and it looks exactly
 # like the file being ignored.
 
-enabled: false
+# On for a new install, introspecting, with guests allowed: a member who is signed into
+# the site arrives as themselves -- their name, their avatar, permissions.yml applying
+# to them -- and anybody else still plays as a guest. With no integration token in
+# data/listing.json it behaves exactly like `enabled: false`, plus one WARN at boot.
+enabled: true
 
 # ticket | introspect | local | anonymous
 #
@@ -20,15 +24,22 @@ enabled: false
 #                never reaches the server. THE RIGHT CHOICE FOR A PUBLIC SERVER, and
 #                the only one that is safe to hand to an operator you do not employ.
 #
-#   introspect   The client sends its backbone access token and this server calls the
-#                backbone to resolve it. FIRST-PARTY ONLY: it hands the operator a live
-#                credential for the player's entire site account, and adds a round trip
-#                to every join. Reasonable when you run the box; never for community
-#                servers.
+#   introspect   The client sends its site access token and this server asks the site,
+#                AS THIS SERVER (the integration token in data/listing.json, which needs
+#                the USER_LOOKUP scope), who it belongs to. The answer is the player's
+#                key in this server's scope -- never their account id -- which is the
+#                key the site's avatar and profile routes resolve. A round trip per
+#                join, and the token does pass through this server, so prefer `ticket`
+#                for servers run by operators you do not know.
 #
 #   local        Accounts in a file on this server. No backbone involved.
 #   anonymous    Nobody is authenticated. The same as leaving this file disabled.
-strategy: ticket
+strategy: introspect
+
+# Introspect as this server (above), and refuse a signed-in join until the integration
+# client is up rather than resolving it through /me, which answers with the account id.
+# false is the old first-party behaviour.
+# introspect_scoped: true
 
 # What tickets must name as their audience, and how this server is known.
 #
@@ -53,7 +64,7 @@ backbone_url: "https://moddingcommunity.com"
 # Sensible for a casual server that would rather have players than identities. Off
 # where bans need to mean something, because a guest can always come back as a
 # different guest.
-allow_guests: false
+allow_guests: true
 
 # Accounts file for `local`, relative to this directory.
 # local_accounts_file: "accounts.json"

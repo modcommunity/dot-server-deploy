@@ -66,6 +66,9 @@ var votes: TmcVote = null
 ## when there is no token, which is every LAN deployment and every test.
 var listing: TmcReport = null
 
+## The auth server cfg/auth.yml asked for, or null.
+var auth: DotAuthServer = null
+
 ## Parties, the booking this server keeps, party chat and the optional queue. Built for
 ## every game, like the guard. See [TmcParty].
 var parties: TmcParty = null
@@ -714,6 +717,8 @@ func _boot() -> bool:
 		self, server, content, "%s/listing.json" % _data_dir
 	)
 
+	_hand_backbone_to_auth()
+
 	# [b]After the listing, because the listing is where the backbone client is.[/b] A
 	# party is reported over the same integration credential the listing uses, and a
 	# second client for the same token would be two rate limiters for one budget. With no
@@ -793,6 +798,29 @@ func _build_logging() -> void:
 	add_child(log_router)
 
 	DotLog.debug(CHANNEL, "the sink layer is up", log_router.describe())
+
+
+## Gives scoped introspection the listing's integration client. See [TmcAuth].
+##
+## The same client and so the same token and rate limiter: the site resolves the scope
+## from that credential, so a second client on another token would mint keys in another
+## scope. Without one, an introspecting server can admit nobody signed in, and says so.
+func _hand_backbone_to_auth() -> void:
+	if auth == null or auth.config == null \
+			or auth.config.strategy != DotAuthConfig.Strategy.INTROSPECT:
+		return
+
+	var client: DotBackboneClient = listing.backbone if listing != null else null
+
+	if client == null:
+		if auth.scoped_only:
+			DotLog.warn(CHANNEL, "introspection has no integration credential; signed-in players will be refused", {
+				"fix": "put an integration token with the USER_LOOKUP scope in data/listing.json",
+			})
+		return
+
+	auth.backbone = client
+	DotLog.info(CHANNEL, "sign-ins are verified by the site, as this server")
 
 
 ## The tracked file naming the web client shell built from this checkout's addons.lock.
@@ -930,6 +958,7 @@ func _build_auth() -> bool:
 
 	if node != null:
 		server.add_child(node)
+		auth = node as DotAuthServer
 
 	return true
 

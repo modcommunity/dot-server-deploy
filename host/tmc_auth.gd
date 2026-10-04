@@ -87,7 +87,11 @@ static func build(auth: Dictionary, config_dir: String) -> DotResult:
 	# itself, and a multi-line PEM inside a YAML value is the kind of thing that survives
 	# one edit and not two. The file also keeps the key out of anything that prints the
 	# configuration.
-	var key_file := str(auth.get("issuer_public_key_file", ""))
+	#
+	# Read for `ticket` only. The template names a key file whatever the strategy, so an
+	# introspecting server that read it anyway refused to boot over a file it never uses.
+	var key_file := str(auth.get("issuer_public_key_file", "")) \
+		if cfg.strategy == DotAuthConfig.Strategy.TICKET else ""
 
 	if key_file != "":
 		var path := key_file if key_file.is_absolute_path() else config_dir.path_join(key_file)
@@ -131,6 +135,15 @@ static func build(auth: Dictionary, config_dir: String) -> DotResult:
 	# tool writes, in a directory they would not think to look in, silently outranking the
 	# YAML that is the documented surface.
 	node.config_file = ""
+	# [b]Introspection is SCOPED here, or it is refused.[/b] The site answers a server
+	# that asks with its integration credential with the player's key in that server's
+	# scope — the key the site's avatar and profile routes resolve — and TmcHost hands
+	# the auth server that credential's client once the listing has built it. Until then
+	# a join is refused rather than introspected through `/me`, which would key the same
+	# player by their account id for one boot window and by their scoped key after it.
+	# `introspect_scoped: false` is the old first-party behaviour, by name.
+	if cfg.strategy == DotAuthConfig.Strategy.INTROSPECT:
+		node.scoped_only = bool(auth.get("introspect_scoped", true))
 
 	DotLog.info(CHANNEL, "authentication is on", {
 		"strategy": named,

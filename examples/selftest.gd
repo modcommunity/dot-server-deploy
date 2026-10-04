@@ -14,7 +14,7 @@ extends Node
 
 const CFG := "res://examples/fixtures"
 
-const CHECKS := 240
+const CHECKS := 242
 
 var _passed := 0
 var _failed := 0
@@ -1559,6 +1559,36 @@ func _test_auth() -> void:
 			"and no user:// config file that would outrank the YAML"
 		)
 		node.free()
+
+	# [b]Introspection here is scoped or refused.[/b] The site's avatar and profile
+	# routes resolve only the key it mints for this server's credential; a join let in
+	# through `/me` would be keyed by the account id instead, and the same player would be
+	# two people depending on whether they joined before the listing came up.
+	var scoped := TmcAuth.build({
+		"enabled": true, "strategy": "introspect",
+		"backbone_url": "https://site.example", "allow_guests": true,
+		# The template names one whatever the strategy; introspection must not need it.
+		"issuer_public_key_file": "not-here.pem",
+	}, work)
+	var scoped_node: DotAuthServer = scoped.value if scoped.ok else null
+	_check(
+		scoped_node != null and scoped_node.scoped_only,
+		"introspection refuses joins until it can ask the site as this server",
+		str(scoped.error)
+	)
+	if scoped_node != null:
+		scoped_node.free()
+
+	var legacy_introspect := TmcAuth.build({
+		"enabled": true, "strategy": "introspect", "introspect_scoped": false,
+		"backbone_url": "https://site.example",
+	}, work)
+	_check(
+		legacy_introspect.ok and not (legacy_introspect.value as DotAuthServer).scoped_only,
+		"and introspect_scoped: false is the old first-party behaviour, by name"
+	)
+	if legacy_introspect.ok:
+		(legacy_introspect.value as Node).free()
 
 	DotPaths.remove_tree(work)
 	_done()
