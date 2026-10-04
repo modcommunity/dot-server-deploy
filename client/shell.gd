@@ -54,6 +54,12 @@ var _identity: Label = null
 var _join: Button = null
 var _progress: ProgressBar = null
 var _detail: Label = null
+var _clear: Button = null
+var _clear_confirm: ConfirmationDialog = null
+
+## What restarting looks like, for a suite: called instead of reloading the page or
+## re-executing the process. Unset in a real client.
+var restart_fn: Callable = Callable()
 
 ## The player's party, when they are signed in. See [method _build_party].
 var _party: DotPartyClient = null
@@ -99,6 +105,11 @@ func _ready() -> void:
 
 	_build_locale()
 	_build_menu()
+
+	# Before anything can be mounted: once a pack is mounted its files cannot be released
+	# in this process, and on Windows cannot even be deleted. See [method request_clear].
+	if FileAccess.file_exists(CLEAR_PENDING):
+		await clear_pending()
 
 	notices = TmcNoticeOverlay.new()
 	notices.name = "Notices"
@@ -709,6 +720,20 @@ func _build_menu() -> void:
 	_detail.visible = false
 	box.add_child(_detail)
 
+	# [b]The way out of a client that holds the wrong thing.[/b] A mounted pack cannot be
+	# unmounted on any platform, so a game or map that will not load -- a cached object
+	# that fails its check, a mount that fails, an old copy of something republished --
+	# is fixed by deleting the downloads and starting again. Always here, under the status
+	# line that says what went wrong: this shell has no settings screen, and the moment a
+	# player needs it is the moment that line has just told them something failed.
+	_clear = Button.new()
+	_clear.text = "Clear downloaded content\u2026"
+	_clear.flat = true
+	_clear.focus_mode = Control.FOCUS_ALL
+	_clear.add_theme_font_size_override("font_size", 12)
+	_clear.pressed.connect(_ask_clear)
+	box.add_child(_clear)
+
 	# No Host button: a browser tab cannot listen, and offering a control that fails on
 	# the platform this shell exists for is worse than not offering it.
 	if DotPlatform.is_web():
@@ -1313,6 +1338,129 @@ func _drop_link() -> void:
 func _say(text: String) -> void:
 	if _status != null:
 		_status.text = text
+
+
+## Where a "clear downloaded content" waits for the next start. See [method request_clear].
+const CLEAR_PENDING := "user://dot_cloud_clear_pending"
+
+## dot-cloud's default cache. Cleared as well as whichever one this session uses, so a
+## player who switched "keep downloaded games" off is not left with the kept ones.
+const DEFAULT_CACHE := "user://dot_cloud"
+
+
+## Bytes of downloaded content on disk: the cache this session uses, the default one and
+## the session-only one, each counted once.
+func downloaded_bytes() -> int:
+	var total := 0
+	for dir in _cache_dirs():
+		for rel in DotPaths.list_files_recursive(dir):
+			total += maxi(DotPaths.file_size(dir.path_join(rel)), 0)
+	return total
+
+
+func _cache_dirs() -> PackedStringArray:
+	var dirs := PackedStringArray([DEFAULT_CACHE, SESSION_CACHE])
+	if _cloud != null and _cloud.config != null and not _cloud.config.cache_dir in dirs:
+		dirs.append(_cloud.config.cache_dir)
+	return dirs
+
+
+func _ask_clear() -> void:
+	if _clear_confirm == null:
+		_clear_confirm = ConfirmationDialog.new()
+		_clear_confirm.title = "Clear downloaded content"
+		_clear_confirm.ok_button_text = "Clear and restart" if DotPlatform.can_self_restart() \
+			else "Clear on next start"
+		_clear_confirm.confirmed.connect(request_clear)
+		_menu.add_child(_clear_confirm)
+
+	# Under 4 KiB is an empty store's index, not anything a player downloaded.
+	var bytes := downloaded_bytes()
+	_clear_confirm.dialog_text = (
+		("Delete %s of downloaded games and maps?\n\n" % DotPaths.format_bytes(bytes)
+			if bytes >= 4096 else "Nothing is downloaded yet.\n\n")
+		+ ("The game restarts, and anything you play downloads again."
+			if DotPlatform.can_self_restart()
+			else "They are deleted the next time the game starts.")
+	)
+	_clear_confirm.popup_centered(Vector2i(420, 0))
+
+
+## Deletes every download, by restarting into a start that deletes them first.
+##
+## [b]Not now, because now is the one time it cannot be done.[/b] A pack this session
+## mounted stays merged into `res://` until the process ends -- there is no unmount on
+## any platform -- so deleting its files under it leaves paths that resolve to nothing,
+## and on Windows the open `.pck` refuses to be deleted at all. So this writes a marker
+## and restarts, and [method clear_pending] empties the cache on the way back up, before
+## anything is mounted.
+##
+## [b]In a browser the marker has to reach IndexedDB before the reload.[/b] `user://` is
+## an in-memory mirror there, flushed by an asynchronous `FS.syncfs` that reports nothing
+## back to GDScript, so the reload waits a second after asking for the flush: one small
+## file. A marker that did not land costs nothing but a second press -- the old content
+## is still there, and still correct to delete.
+func request_clear() -> void:
+	DotPaths.write_text(CLEAR_PENDING, Time.get_datetime_string_from_system(true))
+	DotWeb.sync_filesystem()
+	DotLog.info(CHANNEL, "downloaded content will be cleared on restart",
+		{"bytes": downloaded_bytes()})
+
+	if restart_fn.is_valid():
+		restart_fn.call()
+		return
+
+	if not DotPlatform.can_self_restart():
+		_say("Downloaded content will be cleared the next time the game starts.")
+		return
+
+	_say("Restarting to clear downloaded content\u2026")
+	# Not `_set_busy`, which says "Connecting".
+	_join.disabled = true
+
+	if DotPlatform.is_web():
+		await get_tree().create_timer(1.0).timeout
+		# Through the location object rather than `eval`, which a page with a strict
+		# Content-Security-Policy refuses; see `DotWeb.get_global`.
+		#
+		# Called as a method, not through `Object.call("reload")`: on a JavaScriptObject
+		# that asks JavaScript for a method named `call`, and the page says
+		# "obj[method] is not a function" and stays where it is.
+		var location: Variant = DotWeb.get_global("location")
+		if location != null:
+			location.reload()
+			return
+		_join.disabled = false
+		_say("Reload the page to finish clearing downloaded content.")
+		return
+
+	OS.set_restart_on_exit(true, OS.get_cmdline_args())
+	get_tree().quit()
+
+
+## Empties every download cache if [method request_clear] asked for it. Returns the bytes
+## freed. Called from `_ready`, before this session has mounted anything.
+func clear_pending() -> int:
+	var freed := downloaded_bytes()
+
+	# The store first, through dot-cloud, so its index agrees with the empty disk; then
+	# the directories whole, for the caches this session is not using.
+	_ensure_cloud()
+	var started: DotResult = await _cloud.start()
+	if started.ok and _cloud.store != null:
+		_cloud.store.clear_all()
+	for dir in _cache_dirs():
+		if dir != _cloud.config.cache_dir:
+			DotPaths.remove_tree(dir)
+
+	# No flush of its own: `remove_tree` flushes, and two `FS.syncfs` in flight at once is
+	# what once lost downloads in a browser (see DotHttp). A marker that survives costs a
+	# second, empty clear on the next start.
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(CLEAR_PENDING))
+
+	DotLog.info(CHANNEL, "cleared downloaded content", {"bytes": freed})
+	_say("Cleared %s of downloaded content." % DotPaths.format_bytes(freed))
+	return freed
 
 
 ## Reports something that stopped the game from starting, and puts the menu back.

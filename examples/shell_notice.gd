@@ -28,7 +28,7 @@ const SHELL := "res://client/shell.tscn"
 
 ## How many checks a clean run makes. See docs/testing.md: a section that aborts after it
 ## announced itself satisfies the section counter, and only a total can see it.
-const CHECKS := 31
+const CHECKS := 37
 
 var _passed := 0
 var _failed := 0
@@ -61,6 +61,7 @@ func _run() -> void:
 			await _test_a_cancelled_countdown()
 			await _test_a_line_runs_out()
 			await _test_leaving_takes_it_down()
+			await _test_clearing_downloads()
 
 	await _teardown()
 	DotPaths.remove_tree(DATA)
@@ -200,6 +201,52 @@ func _boot() -> bool:
 
 	_done()
 	return true
+
+
+## "Clear downloaded content": the button asks with the size, confirming leaves a marker
+## and restarts without deleting anything mounted, and the next start deletes it all
+## before it mounts anything (`[client-clear-cache-1]`). The restart is the suite's
+## `restart_fn`; the next start is a second shell booted in this process, which runs
+## the same `_ready` a relaunched client does.
+func _test_clearing_downloads() -> void:
+	_section("clearing downloaded content")
+
+	var held: int = _shell.downloaded_bytes()
+	_check(held > 0, "the shell has downloaded content to clear (%s)" % DotPaths.format_bytes(held))
+
+	var restarted: Array[bool] = [false]
+	_shell.restart_fn = func() -> void: restarted[0] = true
+	_shell.call("_ask_clear")
+	var dialog: ConfirmationDialog = _shell.get("_clear_confirm")
+	_check(dialog != null and dialog.visible
+			and dialog.dialog_text.contains(DotPaths.format_bytes(held)),
+		"the button asks first, and says how much it frees",
+		dialog.dialog_text if dialog != null else "no dialog")
+	if dialog == null:
+		return
+	dialog.confirmed.emit()
+	dialog.hide()
+	_check(restarted[0] and FileAccess.file_exists(_shell.CLEAR_PENDING),
+		"confirming leaves a marker for the next start and restarts")
+	_check(_shell.downloaded_bytes() == held,
+		"and deletes nothing under a session that has it mounted")
+
+	var next: Node = (load(SHELL) as PackedScene).instantiate()
+	next.name = "NextStart"
+	add_child(next)
+	var cleared := await _until(
+		func() -> bool: return not FileAccess.file_exists(_shell.CLEAR_PENDING), 10.0)
+	# An empty store still writes its index (26 bytes), which is not a download.
+	_check(cleared and next.downloaded_bytes() < 4096,
+		"the next start deletes every download before it mounts anything",
+		"%s left" % DotPaths.format_bytes(next.downloaded_bytes()))
+	var store: DotCloudStore = next.get("_cloud").store if next.get("_cloud") != null else null
+	_check(store != null and store.object_count() == 0 and store.total_bytes() == 0,
+		"and the store's own index agrees")
+	remove_child(next)
+	next.queue_free()
+	await get_tree().process_frame
+	_done()
 
 
 func _teardown() -> void:
