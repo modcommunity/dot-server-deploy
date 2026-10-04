@@ -56,6 +56,9 @@ var _progress: ProgressBar = null
 var _detail: Label = null
 var _clear: Button = null
 var _clear_confirm: ConfirmationDialog = null
+var _content_failed: PanelContainer = null
+var _content_failed_text: Label = null
+var _mouse_before_prompt: Input.MouseMode = Input.MOUSE_MODE_VISIBLE
 
 ## What restarting looks like, for a suite: called instead of reloading the page or
 ## re-executing the process. Unset in a real client.
@@ -952,6 +955,13 @@ func _on_cloud_phase(phase: int, text: String) -> void:
 	if _status != null and text != "":
 		_status.text = text
 
+	# [b]In a game, a failed download or mount has nowhere to be said.[/b] The status line
+	# is on the menu, and the menu is hidden while a game runs -- so a map the server
+	# changed to that would not fetch or mount left a player on the old one with no
+	# reason and no way out. Those are exactly the failures clearing the downloads fixes.
+	if phase == DotCloudClient.Phase.FAILED and _menu != null and not _menu.visible:
+		show_content_failed(text)
+
 	# The detail line belongs to the download. Anything else and it is stale.
 	if _detail != null and phase != DotCloudClient.Phase.DOWNLOADING:
 		_detail.visible = false
@@ -1340,6 +1350,70 @@ func _say(text: String) -> void:
 		_status.text = text
 
 
+## A small panel over a running game: what failed, "Clear downloaded content…" and
+## Dismiss. Frees the mouse while it is up (the game is likely captured it) and gives it
+## back the way it found it.
+func show_content_failed(reason: String) -> void:
+	if _content_failed == null:
+		var layer := CanvasLayer.new()
+		layer.name = "ContentFailed"
+		layer.layer = 90
+		add_child(layer)
+		var centre := CenterContainer.new()
+		centre.set_anchors_preset(Control.PRESET_TOP_WIDE)
+		centre.offset_top = 24.0
+		centre.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		layer.add_child(centre)
+		_content_failed = PanelContainer.new()
+		_content_failed.theme = DotUiTheme.space().build()
+		_content_failed.custom_minimum_size = Vector2(420.0, 0.0)
+		centre.add_child(_content_failed)
+		var pad := MarginContainer.new()
+		for side in ["left", "right", "top", "bottom"]:
+			pad.add_theme_constant_override("margin_" + side, 14)
+		_content_failed.add_child(pad)
+		var box := VBoxContainer.new()
+		box.add_theme_constant_override("separation", 8)
+		pad.add_child(box)
+		_content_failed_text = Label.new()
+		_content_failed_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_content_failed_text.custom_minimum_size = Vector2(392.0, 0.0)
+		box.add_child(_content_failed_text)
+		var row := HBoxContainer.new()
+		row.alignment = BoxContainer.ALIGNMENT_END
+		row.add_theme_constant_override("separation", 8)
+		box.add_child(row)
+		var dismiss := Button.new()
+		dismiss.text = "Dismiss"
+		dismiss.pressed.connect(_hide_content_failed)
+		row.add_child(dismiss)
+		var clear := Button.new()
+		clear.name = "Clear"
+		clear.text = "Clear downloaded content\u2026"
+		clear.pressed.connect(func() -> void:
+			_hide_content_failed()
+			_ask_clear())
+		_primary(clear)
+		row.add_child(clear)
+
+	_content_failed_text.text = "Could not load the content this server needs.\n%s" % reason
+	if not _content_failed.visible:
+		_mouse_before_prompt = Input.mouse_mode
+	_content_failed.visible = true
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+
+
+func content_failed_visible() -> bool:
+	return _content_failed != null and _content_failed.visible
+
+
+func _hide_content_failed() -> void:
+	if _content_failed == null or not _content_failed.visible:
+		return
+	_content_failed.visible = false
+	Input.mouse_mode = _mouse_before_prompt
+
+
 ## Where a "clear downloaded content" waits for the next start. See [method request_clear].
 const CLEAR_PENDING := "user://dot_cloud_clear_pending"
 
@@ -1372,7 +1446,9 @@ func _ask_clear() -> void:
 		_clear_confirm.ok_button_text = "Clear and restart" if DotPlatform.can_self_restart() \
 			else "Clear on next start"
 		_clear_confirm.confirmed.connect(request_clear)
-		_menu.add_child(_clear_confirm)
+		# The shell's own child, not the menu's: it is also asked for in a game, with the
+		# menu hidden, and a dialog under a hidden Control is hidden with it.
+		add_child(_clear_confirm)
 
 	# Under 4 KiB is an empty store's index, not anything a player downloaded.
 	var bytes := downloaded_bytes()

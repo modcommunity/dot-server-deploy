@@ -28,7 +28,7 @@ const SHELL := "res://client/shell.tscn"
 
 ## How many checks a clean run makes. See docs/testing.md: a section that aborts after it
 ## announced itself satisfies the section counter, and only a total can see it.
-const CHECKS := 37
+const CHECKS := 40
 
 var _passed := 0
 var _failed := 0
@@ -56,6 +56,7 @@ func _run() -> void:
 
 	if await _boot():
 		if await _test_connect():
+			await _test_a_failed_download_in_game()
 			await _test_the_countdown()
 			await _test_the_ballot()
 			await _test_a_cancelled_countdown()
@@ -201,6 +202,28 @@ func _boot() -> bool:
 
 	_done()
 	return true
+
+
+## A download or mount that fails while a game is running reaches the player, with the
+## way out (`[client-offer-clear-1]`): the menu that would say it is hidden in a game.
+func _test_a_failed_download_in_game() -> void:
+	_section("a download that fails in a game")
+	_check(not _shell._menu.visible, "the menu is hidden while the game runs")
+	_shell._cloud.phase_changed.emit(DotCloudClient.Phase.FAILED, "surf_mesa: a file failed its check.")
+	await get_tree().process_frame
+	_check(_shell.content_failed_visible()
+			and str(_shell.get("_content_failed_text").text).contains("failed its check"),
+		"a failed fetch in a game puts its reason on screen")
+	var clear: Button = _shell.get("_content_failed").find_child("Clear", true, false)
+	if clear != null:
+		clear.pressed.emit()
+	var dialog: ConfirmationDialog = _shell.get("_clear_confirm")
+	_check(clear != null and not _shell.content_failed_visible()
+			and dialog != null and dialog.visible,
+		"with the clear button, which asks first")
+	if dialog != null:
+		dialog.hide()
+	_done()
 
 
 ## "Clear downloaded content": the button asks with the size, confirming leaves a marker

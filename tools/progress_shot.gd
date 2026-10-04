@@ -63,6 +63,10 @@ func _init() -> void:
 			shell.call("_on_cloud_phase", 6, "Mounting surf_mesa 1.0.0…")
 		"verifying":
 			shell.call("_on_cloud_phase", 5, "Checking downloaded content…")
+		"ingame":
+			# A map the server changed to that would not mount, in a running game.
+			shell.get("_menu").visible = false
+			shell.call("show_content_failed", "bhop_aztec 0.0.0-1f2f144e0c4c: a downloaded file does not match its manifest.")
 		"failed", "clear":
 			# A join that failed on the content, which is when the clear button is the
 			# answer; "clear" then presses it, to show the question it asks.
