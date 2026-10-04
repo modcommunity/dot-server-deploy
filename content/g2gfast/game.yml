@@ -83,6 +83,12 @@ cvars:
   # unchanged. Publish them with game-g2gfast's tools/publish_maps.sh BEFORE a server
   # runs with this line, or every configured map is a 404.
   sv_map_content_owner: "gamemann"
+  # Every COURSE in g2gfast-maps' maps.json (the repository the packs are published
+  # from). bhop_eazy, bhop_lego2 and buses_from_hell_fixed are published too and left out
+  # on purpose: none has a finish line (game-g2gfast's NOT_COURSES), and a map nobody can
+  # finish has no place in a timer server's rotation. Until 2026-10-04 this listed the
+  # eight surf maps only, so surf_greensway and all fourteen bhop courses were published
+  # and never played.
   sv_content_maps:
     - surf_mesa
     - surf_beginner2
@@ -92,6 +98,21 @@ cvars:
     - surf_interference
     - surf_summit
     - surf_year3000
+    - surf_greensway
+    - bhop_arcane_v2
+    - bhop_aztec
+    - bhop_badges
+    - bhop_badges_mini
+    - bhop_evolve
+    - bhop_fur
+    - bhop_grove
+    - bhop_interloper
+    - bhop_mario_fxd
+    - bhop_monster_jam
+    - bhop_pandora2_fix
+    - bhop_pit
+    - bhop_supernova
+    - bhop_tesquo_v2
 
   sv_airaccelerate: "1000"
   sv_autobunnyhopping: "1"
