@@ -14,7 +14,7 @@ extends Node
 
 const CFG := "res://examples/fixtures"
 
-const CHECKS := 242
+const CHECKS := 244
 
 var _passed := 0
 var _failed := 0
@@ -306,6 +306,14 @@ func _test_config() -> void:
 	_check(
 		not config.console_lines.has("sv_map fixture_map"),
 		"and is not queued for a console that has no `map` to give it to"
+	)
+	# Same shape as `sv_map`: the host registers `sv_web_loader` after the boot that runs
+	# the console lines, so a key passed through would be reported unknown and dropped.
+	_check(config.web_loader == "fixture-loader", "sv_web_loader names the loader version (%s)"
+		% config.web_loader)
+	_check(
+		not config.console_lines.has("sv_web_loader fixture-loader"),
+		"and is not queued for a console that does not have the cvar yet"
 	)
 	_check(
 		Array(config.server.tags) == ["fixture", "test"],

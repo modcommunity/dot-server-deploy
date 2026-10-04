@@ -6,6 +6,7 @@ sv_maxplayers: 12
 sv_tickrate: 30
 sv_game: "lobby"
 sv_map: "fixture_map"
+sv_web_loader: "fixture-loader"
 sv_tags: [fixture, test]
 
 # Not a setting this layer knows. Handed to the console, because a module registers

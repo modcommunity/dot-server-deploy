@@ -86,6 +86,7 @@ OPT_NAME="${TMC_NAME:-}"
 OPT_MAX_PLAYERS="${TMC_MAX_PLAYERS:-}"
 OPT_GAME="${TMC_GAME:-}"
 OPT_MAP="${TMC_MAP:-}"
+OPT_WEB_LOADER="${TMC_WEB_LOADER:-}"
 
 # --- What this box installs, and where from ---------------------------------
 #
@@ -206,6 +207,11 @@ usage() {
                         spelling every other dedicated server uses. A game that
                         has no maps, or has not got this one, says so and boots
                         on its default anyway.
+    --web-loader LABEL  Ask the site for this version of the web game loader
+                        for this server's players (reported as sv_web_loader).
+                        For a server on older addons than the site's default.
+                        A version the site has disabled is ignored and players
+                        get the default.
 
     --config DIR        Where the YAML lives.            (cfg)
     --content DIR       Where the games live.            (content)
@@ -288,6 +294,7 @@ usage() {
     TMC_VERBOSE         --verbose (set to anything)
     TMC_ALLOW_WEB       +sv_allow_web         TMC_ALLOW_DESKTOP +sv_allow_desktop
     TMC_ALLOW_MOBILE    +sv_allow_mobile      (1 admits, 0 refuses; empty = the YAML)
+    TMC_WEB_LOADER      --web-loader
 
   Which means a TMC_PORT left set in an environment file makes cfg/net.yml look
   broken: the port is edited, the server restarts, and it binds the old one with
@@ -342,6 +349,7 @@ while [ $# -gt 0 ]; do
         --no-install)  NO_INSTALL=1;     shift ;;
         --refresh)     REFRESH=1;        shift ;;
         --map)         [ $# -ge 2 ] || die "$1 needs a value"; OPT_MAP="$2";         shift 2 ;;
+        --web-loader)  [ $# -ge 2 ] || die "$1 needs a value"; OPT_WEB_LOADER="$2";  shift 2 ;;
         --base)    ENGINE_BASE="${2:-}"; shift 2 ;;
         --platform) [ $# -ge 2 ] || die "$1 needs a value"; NATIVE_PLATFORM="$2"; shift 2 ;;
         --build-version) [ $# -ge 2 ] || die "$1 needs a value"; BUILD_VERSION="$2"; shift 2 ;;
@@ -389,6 +397,7 @@ PASSTHROUGH=(${PLATFORM_ARGS[@]+"${PLATFORM_ARGS[@]}"} ${PASSTHROUGH[@]+"${PASST
 [ -n "$OPT_MAX_PLAYERS" ] && OVERRIDES+=(--max-players "$OPT_MAX_PLAYERS")
 [ -n "$OPT_GAME" ]        && OVERRIDES+=(--game "$OPT_GAME")
 [ -n "$OPT_MAP" ]         && OVERRIDES+=(--map "$OPT_MAP")
+[ -n "$OPT_WEB_LOADER" ]  && OVERRIDES+=(--web-loader "$OPT_WEB_LOADER")
 [ -n "$OPT_CONTENT_URL" ] && OVERRIDES+=(--content-url "$OPT_CONTENT_URL")
 
 # [b]The list reaches the SERVER too, and not only the installer.[/b] Installing the two

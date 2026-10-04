@@ -40,6 +40,14 @@ sv_allow_web: 1
 sv_allow_desktop: 1
 sv_allow_mobile: 1
 
+# Which version of the site's web game loader this server's browser players get. Empty
+# is the site's default, which is right for almost every server. Set it to a version from
+# the site's admin panel when this server runs older addons than the default loader
+# expects. A version the site has disabled is ignored and players get the default, so this
+# can hold a server back but never stop a launch. TMC_WEB_LOADER overrides it from a panel,
+# and `sv_web_loader <version>` over rcon changes it while running.
+# sv_web_loader: ""
+
 # Whether the server reads commands from its own stdin when stdin is a PIPE.
 #
 # A terminal is always read, and a file too. A pipe is not, by default, because a

@@ -323,6 +323,18 @@ var vote_exclude: PackedStringArray = PackedStringArray()
 ## The game to load at boot, or "" for whatever the content directory says is first.
 var initial_game: String = ""
 
+## The site's web loader version this server's browser players should get, or "" for the
+## site's default. Reported as the NOTIFY cvar `sv_web_loader` (see
+## `TmcHost._register_web_loader`).
+##
+## [b]A host field and not a console line,[/b] for the reason `sv_game` is one: the cvar is
+## registered by this host after dot-server boots, and the YAML's console lines run during
+## that boot, so `sv_web_loader: x` passed through would meet "names nothing this server
+## has" and be dropped. Unlike `sv_web_build`, which is read from a tracked file because it
+## is a fact about the checkout, this one is the operator's: it exists for a server that is
+## deliberately behind the site's default and knows which version it still needs.
+var web_loader: String = ""
+
 ## The map to start that game on, or "" for the game's own default.
 ##
 ## `sv_map` in the YAML, `--map` on the command line, and `+map` after a `--` for the
@@ -809,6 +821,10 @@ func _apply_settings(file: String, tree: Dictionary) -> DotResult:
 			initial_game = String(value)
 			continue
 
+		if name == "sv_web_loader":
+			web_loader = str(value).strip_edges()
+			continue
+
 		if name == "sv_map":
 			# Not passed through as a console line for the same reason `sv_query_app`
 			# is not: there is no `map` cvar or command at this level to receive it.
@@ -1157,6 +1173,8 @@ func describe_lines() -> PackedStringArray:
 	# a setting worth having is worth being able to read back without booting.
 	out.append("map      : %s" % (
 		initial_map if initial_map != "" else "(the game's default)"))
+	out.append("loader   : %s" % (
+		web_loader if web_loader != "" else "(the site's default)"))
 	# Same argument a third time. A server offering three of the ten games on its disk
 	# is a deliberate choice somewhere, and "somewhere" is this line -- without it the
 	# only way to tell a filtered server from an empty content directory is to boot one

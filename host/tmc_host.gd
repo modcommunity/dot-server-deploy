@@ -321,6 +321,23 @@ func _selftest_operator_surface() -> bool:
 
 		print("sv_web_build: %s" % named)
 
+	# Registered ALWAYS, empty or not, so an operator can move a running server with rcon.
+	# A cvar that only exists when the config named a version is one `sv_web_loader x`
+	# answers "unknown command" to on every server that has not needed it yet.
+	var loader := server.console.find_cvar("sv_web_loader")
+
+	if loader == null or not loader.has_flag(DotConVar.FLAG_NOTIFY):
+		printerr("selftest FAILED: sv_web_loader is not a NOTIFY cvar the query reports")
+		return false
+
+	if loader.get_string() != _web_loader_value():
+		printerr("selftest FAILED: sv_web_loader reports %s, the configuration says %s" % [
+			loader.get_string(), _web_loader_value(),
+		])
+		return false
+
+	print("sv_web_loader: %s" % (loader.get_string() if loader.get_string() != "" else "(site default)"))
+
 	# [b]Asked, not only looked up.[/b] A command that is registered and answers nothing
 	# is the same absent command one layer down. `party_status` prints what was built,
 	# and a booking with nobody behind it is the one thing it must always be able to say.
@@ -542,6 +559,13 @@ func _apply_overrides(args: PackedStringArray) -> void:
 	if map_id != "":
 		config.initial_map = map_id
 
+	# Same two spellings as `--map`, for the same reason: `+sv_web_loader` would otherwise go
+	# to the console, which runs it before this host has registered the cvar.
+	var web_loader := _value(args, "--web-loader", _value(args, "+sv_web_loader", ""))
+
+	if web_loader != "":
+		config.web_loader = web_loader
+
 	for flag in ["--rcon-password", "--password"]:
 		if flag in args:
 			DotLog.warn(CHANNEL, "a secret on the command line is refused", {
@@ -661,6 +685,7 @@ func _boot() -> bool:
 	# and one whose log command failed to register still logs.
 	_register_log_commands()
 	_register_web_build()
+	_register_web_loader()
 	_build_security()
 
 	for descriptor in content.games:
@@ -861,6 +886,63 @@ func _register_web_build() -> void:
 		DotConVar.FLAG_NOTIFY
 	)
 	DotLog.info(CHANNEL, "the web shell build this server needs", {"build": build})
+
+
+## One path segment, as the site checks it (website-city `IsReleaseId`): it becomes part of
+## a URL the site hands a browser, so anything else is ignored there anyway.
+const _WEB_LOADER_PATTERN := "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
+
+
+## The configured loader version if it is one the site could honour, else "".
+func _web_loader_value() -> String:
+	var wanted := config.web_loader.strip_edges()
+
+	if wanted == "":
+		return ""
+
+	var re := RegEx.create_from_string(_WEB_LOADER_PATTERN)
+
+	if re.search(wanted) == null or wanted.contains(".."):
+		return ""
+
+	return wanted
+
+
+## Reports `sv_web_loader`: the version of the site's web game loader this server's browser
+## players should get.
+##
+## [b]The loader is the site's, not ours, and it moves on the site's schedule.[/b] The site
+## keeps every loader version it has published and serves the newest active one by default;
+## a server on addons older than that default names the version it still needs, and the site
+## serves that one while it is not disabled. A disabled or unknown version is ignored there
+## and the player gets the default — so this can never turn a launch into an error, only
+## fail to hold a server back.
+##
+## [b]From the operator's configuration[/b] (`sv_web_loader` in cfg/server.yml,
+## `--web-loader`, TMC_WEB_LOADER), unlike `sv_web_build` next door, because holding a server
+## on an older loader is a decision rather than a property of the checkout. Always
+## registered, empty by default, so rcon can set it on a running server; the site picks the
+## change up at its next scan.
+func _register_web_loader() -> void:
+	if server == null or server.console == null:
+		return
+
+	var wanted := _web_loader_value()
+
+	if wanted == "" and config.web_loader.strip_edges() != "":
+		DotLog.warn(CHANNEL, "sv_web_loader is not a version label; players get the site's default", {
+			"value": config.web_loader,
+			"expected": "one path segment: letters, digits, dot, dash, underscore",
+		})
+
+	server.console.cvar(
+		"sv_web_loader", wanted,
+		"The site web game loader version this server's players get. Empty is the site's default.",
+		DotConVar.FLAG_NOTIFY
+	)
+
+	if wanted != "":
+		DotLog.info(CHANNEL, "this server asks the site for a web loader version", {"version": wanted})
 
 
 ## Puts `log` on the console.

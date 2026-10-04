@@ -199,6 +199,16 @@
             "field_type": "text"
         },
         {
+            "name": "Web loader version",
+            "description": "The version of the site's web game loader this server's browser players get, as listed in the site's admin panel. Empty is the site's default, which is what almost every server wants. Set it when this server runs older addons than the default loader expects. A version the site has disabled is ignored and players get the default. Reported as sv_web_loader; rcon `sv_web_loader <version>` changes it while running.",
+            "env_variable": "TMC_WEB_LOADER",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string|max:64|regex:/^[A-Za-z0-9][A-Za-z0-9._-]*$/",
+            "field_type": "text"
+        },
+        {
             "name": "Deploy repository",
             "description": "Where the server is cloned from at install.",
             "env_variable": "DEPLOY_REPO",
