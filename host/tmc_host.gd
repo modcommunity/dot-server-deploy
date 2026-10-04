@@ -716,6 +716,19 @@ func _boot() -> bool:
 	# that a path only one shape reaches is a path nothing has run.
 	server.games.game_loaded.connect(_on_game_loaded)
 
+	# [b]Before the first game, because the game's identity layer needs the credential.[/b]
+	# `DotPlatformIdentity` finds the integration client as `dot_backbone_client` while
+	# the game's module loads, and reads players' avatars from the site through it; built
+	# after, every game this server booted into kept avatars in a local file the site
+	# never sees. The auth server gets it here too, which closes the window in which a
+	# signed-in join is refused. Nothing is reported early: reports are on the client's
+	# timer, whose first tick is an interval away, by which time the game is loaded.
+	listing = TmcReport.install(
+		self, server, content, "%s/listing.json" % _data_dir
+	)
+
+	_hand_backbone_to_auth()
+
 	var loaded: DotResult = await server.games.change_game(wanted, "boot")
 
 	if not loaded.ok:
@@ -734,15 +747,6 @@ func _boot() -> bool:
 	# running — a vote system that starts on no game at all has no clock, nothing on
 	# cooldown, and offers the game everybody is playing on its own first ballot.
 	votes = TmcVote.install(self, server, config.vote, config.vote_exclude)
-
-	# Last, and after the first game is loaded, because the first report goes out
-	# immediately and a server reporting "no game" before it has one is a listing that
-	# blinks on every restart.
-	listing = TmcReport.install(
-		self, server, content, "%s/listing.json" % _data_dir
-	)
-
-	_hand_backbone_to_auth()
 
 	# [b]After the listing, because the listing is where the backbone client is.[/b] A
 	# party is reported over the same integration credential the listing uses, and a

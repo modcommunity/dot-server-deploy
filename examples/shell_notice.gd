@@ -28,7 +28,7 @@ const SHELL := "res://client/shell.tscn"
 
 ## How many checks a clean run makes. See docs/testing.md: a section that aborts after it
 ## announced itself satisfies the section counter, and only a total can see it.
-const CHECKS := 24
+const CHECKS := 31
 
 var _passed := 0
 var _failed := 0
@@ -301,8 +301,44 @@ func _test_the_ballot() -> void:
 		"with the ballot's opening cue"
 	)
 
-	# Nobody votes, so nothing changes -- and the line has to come off anyway, which is
-	# the poll in TmcVote rather than any signal.
+	# The drawn ballot: a notice's data, under its own topic, turned into a panel.
+	var drawn := await _until(func() -> bool:
+		var p := _overlay().ballot(TmcVote.BALLOT_TOPIC)
+		return p != null and p.is_open(), 5.0)
+	var panel := _overlay().ballot(TmcVote.BALLOT_TOPIC)
+	var session: DotClientSession = _server().playing_sessions()[0]
+	var me := "u%d" % session.userid
+
+	if _check(drawn, "and the ballot is drawn as a menu on their screen"):
+		_check(
+			panel.option_count() == _director().ballot.option_ids().size(),
+			"with every option on it (%d of %d)" % [panel.option_count(), _director().ballot.option_ids().size()]
+		)
+		_check(panel.local_voter == me, "knowing which voter is this player (%s)" % panel.local_voter)
+
+		# "Extend", so the vote changes nothing and the sections after this one still have
+		# a server on the lobby with a running clock.
+		var extend_at := -1
+		for i in panel.option_count():
+			if panel._options[i]["id"] == String(DotVoteBallot.EXTEND):
+				extend_at = i
+
+		if _check(extend_at >= 0, "extend is on it"):
+			_director().rules.close_when_all_voted = false
+			panel.choose(extend_at)
+			_check(
+				await _until(func() -> bool: return _director().ballot.has_voted(StringName(me)), 5.0),
+				"a choice on the menu is a vote at the server",
+				"the click became nothing: vote_fn unset, or the command name is wrong"
+			)
+			_check(
+				await _until(func() -> bool: return panel.state.get("voters", {}).get(me, -1) == extend_at, 5.0),
+				"and the server's next ballot puts their avatar on it (%s)" % str(panel.state.get("voters"))
+			)
+			_director().rules.close_when_all_voted = true
+
+	# Nobody else votes, so nothing changes -- and the line has to come off anyway, which
+	# is the poll in TmcVote rather than any signal.
 	_director().close_vote()
 
 	# [b]One second, against a ballot line with thirty on it.[/b] The overlay takes a line
@@ -316,6 +352,10 @@ func _test_the_ballot() -> void:
 	_check(
 		await _until(func() -> bool: return _played(&"tmc_vote_end") >= 1, 5.0),
 		"with its closing cue"
+	)
+	_check(
+		await _until(func() -> bool: return panel != null and not panel.is_open(), 5.0),
+		"and the menu closes with it"
 	)
 	_done()
 

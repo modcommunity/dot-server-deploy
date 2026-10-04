@@ -53,6 +53,22 @@ extends Node
 ## nothing, and a countdown an admin called off would otherwise run to zero on every
 ## screen for a ballot that never opens.
 ##
+## [b]One game is nothing to vote about.[/b] A server whose content offers one game —
+## after `vote_exclude`, and counting a game's several modes as one ([method votable_count])
+## — installs no game vote at all: no `!game_*` commands, no clock, no
+## ballot asking the players to choose between that game and extending it. The game's own
+## MAP vote is then the only vote on the server, and it is unaffected either way: it runs
+## inside the game, on its own rules, with or without this one beside it. Where there are
+## two games or more, both run at once — the game vote on its clock and the map vote on its
+## own — which is why every command here is prefixed and the two ballots carry different
+## topics to the shell.
+##
+## [b]The ballot is drawn, not only typed.[/b] [DotVoteBallotFeed] sends the open ballot as
+## a notice's [code]data[/code] under [constant BALLOT_TOPIC] whenever it changes, to each
+## playing session with that session's own voter id, and the shell's [TmcNoticeOverlay]
+## draws it as a [DotBallotPanel]: number keys, a click, and every voter's avatar on what
+## they chose. A shell built before the field ignores it and still has the HUD line.
+##
 ## [b]The lobby is excluded by default and that is a real decision.[/b] It is this
 ## server's home screen rather than a game, and "vote to go back to the menu" is not a
 ## thing anybody votes for. An operator who disagrees empties `vote_exclude`.
@@ -76,9 +92,20 @@ const COMMAND_NAMES := {"nextmap": "next", "vote": "vote"}
 ## The HUD line this vote owns on every client. See the class notes.
 const NOTICE_TOPIC := &"game_vote"
 
+## The drawn ballot's topic. Not [constant NOTICE_TOPIC]: a client clearing the line must
+## not take the menu with it, and a game's map ballot uses a topic of its own beside it.
+const BALLOT_TOPIC := &"game_ballot"
+
+## The heading over the drawn ballot.
+const BALLOT_TITLE := "Vote for the next game"
+
+## Fewest games on offer for a game vote to exist. See the class notes.
+const MIN_GAMES := 2
+
 var director: DotVoteDirector = null
 var source: DotVoteGameSource = null
 var commands: DotVoteCommands = null
+var feed: DotVoteBallotFeed = null
 
 var server: DotServer = null
 
@@ -92,8 +119,9 @@ var _notice_text := ""
 
 ## Builds the whole thing and attaches it to [param p_server].
 ##
-## Returns null when voting is turned off, which is a legitimate configuration and not
-## an error: a single-game server has nothing to vote about.
+## Returns null when voting is turned off, or when fewer than [constant MIN_GAMES] games are
+## on offer — both legitimate configurations, not errors: a single-game server has nothing
+## to vote about, and its game's own map vote carries on regardless.
 static func install(
 	host: Node,
 	p_server: DotServer,
@@ -118,14 +146,23 @@ static func install(
 		})
 		return null
 
+	var source := DotVoteGameSource.of(p_server.games)
+
+	for id in excluded:
+		source.excluded.append(StringName(id))
+
+	var offered := votable_count(source, p_server.games)
+
+	if offered < MIN_GAMES:
+		DotLog.info(CHANNEL, "one game on offer; there is no game vote, and its own map vote decides", {
+			"games": offered, "excluded": excluded.size(),
+		})
+		return null
+
 	var votes := TmcVote.new()
 	votes.name = "Votes"
 	votes.server = p_server
-
-	votes.source = DotVoteGameSource.of(p_server.games)
-
-	for id in excluded:
-		votes.source.excluded.append(StringName(id))
+	votes.source = source
 
 	votes.director = DotVoteDirector.new()
 	votes.director.name = "Director"
@@ -163,6 +200,11 @@ static func install(
 			"why": bound.error.message,
 		})
 
+	votes.feed = DotVoteBallotFeed.of(votes.director, votes._send_ballot)
+	votes.feed.title = BALLOT_TITLE
+	votes.feed.command = COMMAND_PREFIX + COMMAND_NAMES["vote"]
+	votes.feed.people_fn = votes._person
+
 	p_server.games.game_loaded.connect(votes._on_game_loaded)
 	p_server.client_disconnected.connect(votes._on_client_left)
 	p_server.client_spawned.connect(votes._on_client_spawned)
@@ -182,6 +224,31 @@ static func install(
 	})
 
 	return votes
+
+
+## Distinct GAMES a ballot could offer: enabled, not excluded, and counted by content id.
+##
+## [b]By content id, not by game id[/b], because one game can register several: hungario's
+## five modes are five game ids over one `tmc/hungry`, and its own map vote is already a
+## vote over exactly those five. A server running only hungario counted as five games would
+## put two ballots over the same choice on every screen. A descriptor with no content id is
+## a game of its own.
+static func votable_count(p_source: DotVoteGameSource, manager: DotGameManager) -> int:
+	var games := {}
+
+	for choice in p_source.choices():
+		if not choice.enabled:
+			continue
+
+		var descriptor := manager.find_game(String(choice.id)) if manager != null else null
+		var key := String(choice.id)
+
+		if descriptor != null and descriptor.content_id != "":
+			key = descriptor.content_id
+
+		games[key] = true
+
+	return games.size()
 
 
 func _wire() -> void:
@@ -262,10 +329,47 @@ func _show_line(text: String, seconds: float) -> void:
 	server.broadcast_notice(DotNotice.make(&"", text, seconds, NOTICE_TOPIC))
 
 
+## The drawn ballot, to every playing session, each told which voter is theirs so their own
+## choice is marked. Per session rather than one broadcast for exactly that field.
+func _send_ballot(state: Dictionary) -> void:
+	for session in server.playing_sessions():
+		_send_ballot_to(session, state)
+
+
+func _send_ballot_to(session: DotClientSession, state: Dictionary) -> void:
+	var data := state.duplicate()
+	data["you"] = String(_voter_id(session))
+	server.send_notice(session, DotNotice.make(
+		&"", "", float(state.get("seconds", -1.0)), BALLOT_TOPIC, data
+	))
+
+
+## Who a voter is, for the avatars on the drawn ballot.
+func _person(voter: StringName) -> Dictionary:
+	var session := _session_for(voter)
+
+	if session == null:
+		return {}
+
+	var avatar := ""
+
+	if session.identity != null:
+		var url: Variant = session.identity.get("avatar_url")
+		if url is String:
+			avatar = url
+
+	return {"name": session.display_name, "avatar": avatar}
+
+
 ## Somebody finished joining while the line is up. The server sends notices to playing
 ## sessions only, so without this a player who arrives mid-ballot sees nothing for its
 ## whole thirty seconds.
 func _on_client_spawned(session: DotClientSession) -> void:
+	var ballot := feed.snapshot() if feed != null else {}
+
+	if not ballot.is_empty():
+		_send_ballot_to(session, ballot)
+
 	if not _notice_live:
 		return
 
@@ -324,6 +428,9 @@ func _physics_process(delta: float) -> void:
 	if director != null:
 		director.advance(delta)
 		_sync_notice()
+
+		if feed != null:
+			feed.poll()
 
 
 func _on_game_loaded(_content_key: String) -> void:

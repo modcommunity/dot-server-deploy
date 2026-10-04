@@ -102,6 +102,11 @@ func _ready() -> void:
 
 	notices = TmcNoticeOverlay.new()
 	notices.name = "Notices"
+	# A drawn ballot's choice, sent as the command a player could type. Read through
+	# `link` at the moment of the click, because the link is rebuilt on every connection.
+	notices.vote_fn = func(line: String) -> void:
+		if link != null:
+			link.send_chat(line)
 	add_child(notices)
 
 	# Who is playing, before anything is dialled.

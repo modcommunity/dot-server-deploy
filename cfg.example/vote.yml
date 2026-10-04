@@ -20,8 +20,11 @@
 # file full of enum indices is one nobody can read or diff, and renumbering an enum
 # would silently change what a server does.
 #
-# TURN IT OFF with `enabled: false`. A server running one game has nothing to vote
-# about and this is not an error.
+# TURN IT OFF with `enabled: false`. A server with ONE game on offer (after
+# vote_exclude below) turns it off by itself: there is nothing to choose between, so
+# there are no !game_* commands and no game clock, and the game's own MAP vote is the
+# only vote on the server. With two or more games both votes run at once, each on its
+# own clock and its own ballot.
 #
 # THE ENVIRONMENT AND THE COMMAND LINE use DOT_GAME_VOTE_* and --game-vote-*, not
 # dot-vote's own DOT_VOTE_* and --vote-*. Those belong to the MAP vote inside a game,
@@ -53,16 +56,23 @@ trigger: time_limit
 # content/ order.
 end_vote: true
 
-# How long a game runs before the players are asked again.
+# How long a game runs before the players are asked again — the game's time limit,
+# across every map and round it plays. Ninety minutes: a game is the long clock, and
+# each map inside it has a clock of its own.
+#
+# 0 is AROUND THE CLOCK: the game never ends on time, and only a !game_rtv (or an
+# admin) changes it. Valid as long as rtv_enabled is on.
 #
 # A GAME can override this in its own game.yml, under `metadata: vote:
 # time_limit_sec:`, which is where it belongs: forty minutes of surf and ten
 # minutes of a lobby-sized deathmatch are not the same number and never will be.
-duration_sec: 2400
+# `time_limit_sec: 0` there is that one game around the clock.
+duration_sec: 5400
 
 # The ballot opens this long BEFORE the time is up, so the change happens on time
-# rather than starting a two-minute vote when the game is already over.
-vote_lead_sec: 180
+# rather than starting a two-minute vote when the game is already over. Two and a
+# half minutes fits the countdown, the ballot, a runoff and the result.
+vote_lead_sec: 150
 
 warn_at_sec: "600,300,60,30"
 
@@ -81,6 +91,18 @@ runoff_warning_sec: 5
 # Nothing may open another ballot for this long after one closes. Without it a vote
 # that fails for want of a quorum is followed immediately by another one.
 vote_cooldown_sec: 60
+
+# --- When the time is up -------------------------------------------------
+#
+# change_now     the change happens the moment the time limit runs out.
+# finish_round   a game that has rounds plays the one in progress out, and changes
+#                when it ends — at most finish_round_max_sec later (0: however long
+#                it takes). A game with no rounds has none to finish and changes on
+#                time either way.
+#
+# A !game_rtv and an admin's command never wait: those are somebody asking for now.
+# time_up: change_now
+# finish_round_max_sec: 300
 
 # --- Rock the vote --------------------------------------------------------
 
@@ -155,6 +177,18 @@ include_keep: false
 
 vote_duration_sec: 30
 close_when_all_voted: true
+
+# How a player chooses on the ballot drawn on their screen:
+#   numbers   the number keys, as a numbered menu always has. Nothing takes the mouse.
+#   pointer   F3 frees the mouse and they click an option; the number keys stay the
+#             game's (for a game that switches weapon on them).
+#   both      either. The default.
+# Typing !game_vote 2 works whatever this says.
+# ballot_input: both
+
+# Each voter's avatar sits on the option they chose and moves when they change their
+# mind. Off sends the counts and no names, for a secret ballot.
+# ballot_show_voters: true
 
 # --- Counting -------------------------------------------------------------
 #

@@ -43,7 +43,7 @@ const DATA := "user://tmc_multigame"
 ## Every check this suite runs, including the one that compares against it. The section
 ## counter cannot see a section that aborted after announcing itself — its remaining checks
 ## simply never run — and a total can. See docs/testing.md.
-const CHECKS := 69
+const CHECKS := 72
 
 var _passed := 0
 var _failed := 0
@@ -489,6 +489,42 @@ func _test_vote_changes_the_game() -> void:
 
 	var director := votes.director
 	var here := _at_game("lobby")
+
+	# One game on offer is nothing to vote about: the server gets no game vote at all, and
+	# that game's own map vote is the only one. Every game but one excluded here.
+	var all_but_one := PackedStringArray(["lobby"])
+	var kept := ""
+	for descriptor: DotGameDescriptor in _host.server.games.games:
+		if descriptor.game_id == "lobby":
+			continue
+		if kept == "":
+			kept = descriptor.game_id
+		else:
+			all_but_one.append(descriptor.game_id)
+	var single := TmcVote.install(self, _host.server, director.rules, all_but_one)
+	_check(
+		single == null,
+		"a server with one game on offer installs no game vote (%s)" % kept,
+		"it would ask the players to choose between that game and extending it"
+	)
+	_check(
+		TmcVote.votable_count(votes.source, _host.server.games) >= TmcVote.MIN_GAMES,
+		"and this one, with %d, does" % TmcVote.votable_count(votes.source, _host.server.games)
+	)
+
+	# hungario alone: five modes, one game, and its own map vote is already over the five.
+	var only_hungry := PackedStringArray(["lobby"])
+	var modes := 0
+	for descriptor: DotGameDescriptor in _host.server.games.games:
+		if descriptor.content_id == "tmc/hungry":
+			modes += 1
+		elif descriptor.game_id != "lobby":
+			only_hungry.append(descriptor.game_id)
+	_check(
+		modes >= 2 and TmcVote.install(self, _host.server, director.rules, only_hungry) == null,
+		"one game with %d modes is one game, not %d" % [modes, modes],
+		"the game vote and hungario's own mode vote would be two ballots over the same five"
+	)
 
 	_check(here, "the server is back on the lobby after the switches above")
 

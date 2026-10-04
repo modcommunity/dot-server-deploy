@@ -28,6 +28,15 @@ extends CanvasLayer
 ## this build does not have is silence — dot-audio's rule, and the right one: a newer
 ## server naming a cue an older shell lacks should cost a sound, not an error.
 
+## [b]A notice can also carry a ballot[/b] — the game vote's, and a game's map vote — in its
+## [code]data[/code], and that is drawn as a [DotBallotPanel] per topic down the right-hand
+## side, beside rather than over the line. A player chooses with a number key or a click,
+## and the choice goes back as the same command they could type, through [member vote_fn].
+## With two ballots open the number keys belong to the one that opened last; the other is
+## still clickable. Each voter's avatar is fetched from its URL once and kept, and a voter
+## whose picture cannot be fetched — no URL, a host that refuses a browser, a format this
+## build cannot read — is drawn as an initial, never as a gap.
+
 const CHANNEL := "tmc.notice"
 
 ## Where real cue sounds go when somebody makes them. Nothing is there yet, and the
@@ -52,6 +61,26 @@ const CUE_VOTE_COUNT := &"tmc_vote_count"
 const LAYER := 20
 
 var audio: DotAudioManager = null
+
+## [code]func(line: String)[/code] that sends a chat line as this player. The shell points it
+## at the link; a ballot choice is sent as [code]/<command> <n>[/code], the silent prefix,
+## because a vote is not something to say to the room.
+var vote_fn: Callable = Callable()
+
+## topic -> DotBallotPanel.
+var _ballots: Dictionary = {}
+var _ballot_box: VBoxContainer = null
+
+## url -> Texture2D, or null while it is being fetched or after it failed.
+var _avatars: Dictionary = {}
+var _fetching := 0
+
+## Most avatar downloads at once. A ballot of thirty people is thirty requests, and a browser
+## allows six per host before it queues the rest behind the game's own traffic.
+const MAX_FETCHES := 4
+
+## Largest avatar accepted, in bytes. A profile picture, not a wallpaper.
+const MAX_AVATAR_BYTES := 512 * 1024
 
 var _root: Control = null
 var _box: VBoxContainer = null
@@ -81,6 +110,10 @@ func show_notice(notice: DotNotice) -> void:
 		_remove(notice.topic)
 		return
 
+	if notice.topic != &"" and (notice.data.has("options") or notice.data.has("open")):
+		show_ballot(notice.topic, notice.data)
+		return
+
 	if notice.text == "" and not notice.has_countdown():
 		# A cue and nothing else. Heard, not drawn.
 		return
@@ -107,6 +140,104 @@ func show_notice(notice: DotNotice) -> void:
 func clear_all() -> void:
 	for key in _lines.keys():
 		_remove(key)
+
+	for key in _ballots.keys():
+		(_ballots[key] as DotBallotPanel).dismiss()
+
+
+# --- Ballots --------------------------------------------------------------------
+
+## Draws, updates or takes down the ballot for [param topic]. See the class notes.
+func show_ballot(topic: StringName, data: Dictionary) -> void:
+	var panel: DotBallotPanel = _ballots.get(topic, null)
+	var open := bool(data.get("open", false))
+
+	if panel == null:
+		if not open:
+			return
+		panel = _make_ballot(topic)
+
+	var opening := open and not panel.is_open()
+	panel.local_voter = str(data.get("you", panel.local_voter))
+	panel.show_state(data)
+
+	if opening:
+		# Arrived mid-ballot or not, what was already cast is not news.
+		panel.snap_avatars()
+		_give_numbers_to(panel)
+
+
+func ballot(topic: StringName) -> DotBallotPanel:
+	return _ballots.get(topic, null)
+
+
+func _make_ballot(topic: StringName) -> DotBallotPanel:
+	var panel := DotBallotPanel.new()
+	panel.name = "Ballot_%s" % String(topic)
+	panel.ui_theme = DotUiTheme.space()
+	panel.avatar_fn = _avatar_texture
+	panel.chosen.connect(func(index: int, _id: String, command: String) -> void:
+		if vote_fn.is_valid() and command != "":
+			vote_fn.call("/%s %d" % [command, index + 1])
+	)
+	panel.dismissed.connect(func() -> void:
+		# The keys go back to whichever ballot is still open.
+		for other: DotBallotPanel in _ballots.values():
+			if other.is_open():
+				_give_numbers_to(other)
+	)
+	_ballot_box.add_child(panel)
+	_ballots[topic] = panel
+	return panel
+
+
+func _give_numbers_to(owner: DotBallotPanel) -> void:
+	for panel: DotBallotPanel in _ballots.values():
+		panel.take_numbers = panel == owner
+
+
+## A voter's picture, or null until it has arrived. Fetched once per URL.
+func _avatar_texture(_voter: String, url: String) -> Texture2D:
+	if _avatars.has(url):
+		return _avatars[url]
+
+	if not (url.begins_with("https://") or url.begins_with("http://")) or _fetching >= MAX_FETCHES:
+		return null
+
+	_avatars[url] = null
+	_fetching += 1
+
+	var request := HTTPRequest.new()
+	request.body_size_limit = MAX_AVATAR_BYTES
+	request.timeout = 10.0
+	add_child(request)
+	request.request_completed.connect(func(result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
+		_fetching -= 1
+		request.queue_free()
+
+		if result != HTTPRequest.RESULT_SUCCESS or code != 200:
+			return
+
+		var image := Image.new()
+		var loaded := ERR_FILE_UNRECOGNIZED
+
+		# By content, not by extension: an avatar URL is often a route with no extension.
+		if body.size() > 8 and body[0] == 0x89 and body[1] == 0x50:
+			loaded = image.load_png_from_buffer(body)
+		elif body.size() > 3 and body[0] == 0xFF and body[1] == 0xD8:
+			loaded = image.load_jpg_from_buffer(body)
+		elif body.size() > 12 and body.slice(8, 12).get_string_from_ascii() == "WEBP":
+			loaded = image.load_webp_from_buffer(body)
+
+		if loaded == OK and not image.is_empty():
+			_avatars[url] = ImageTexture.create_from_image(image)
+	)
+
+	if request.request(url) != OK:
+		_fetching -= 1
+		request.queue_free()
+
+	return null
 
 
 ## What the line for [param topic] says right now, or empty. For a suite, and for a bug
@@ -222,6 +353,23 @@ func _build_view() -> void:
 	_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	centre.add_child(_box)
 
+	# Ballots down the right-hand side, under the line: the left is where games put chat and
+	# health, and the middle is where the player is aiming. Offsets set after the anchors,
+	# every one, for the reason dot-ui's CLAUDE.md gives.
+	_ballot_box = VBoxContainer.new()
+	_ballot_box.name = "Ballots"
+	_ballot_box.add_theme_constant_override("separation", 10)
+	_ballot_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_ballot_box.anchor_left = 1.0
+	_ballot_box.anchor_right = 1.0
+	_ballot_box.anchor_top = 0.0
+	_ballot_box.anchor_bottom = 1.0
+	_ballot_box.offset_left = -376.0
+	_ballot_box.offset_right = -16.0
+	_ballot_box.offset_top = 110.0
+	_ballot_box.offset_bottom = -16.0
+	_root.add_child(_ballot_box)
+
 
 func _make_line() -> Dictionary:
 	var panel := PanelContainer.new()
@@ -312,7 +460,11 @@ func describe() -> Dictionary:
 	var lines := {}
 	for key in _lines.keys():
 		lines[String(key)] = line_text(key)
+	var ballots := {}
+	for key in _ballots.keys():
+		ballots[String(key)] = (_ballots[key] as DotBallotPanel).describe()
 	return {
 		"lines": lines,
+		"ballots": ballots,
 		"audio": audio.describe() if audio != null else {},
 	}
