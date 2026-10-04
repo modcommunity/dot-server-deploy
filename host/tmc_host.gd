@@ -301,6 +301,23 @@ func _selftest_operator_surface() -> bool:
 		printerr("selftest FAILED: the log router was built and never started")
 		return false
 
+	# [b]The build the site frames for this server, as the query will report it.[/b] A
+	# cvar without NOTIFY is not in the rules, and the site would then frame the shared
+	# shell for a server running other addons — a game that will not load, and nothing on
+	# this side that could see why.
+	var named := FileAccess.get_file_as_string(WEB_BUILD_FILE).strip_edges() \
+		if FileAccess.file_exists(WEB_BUILD_FILE) else ""
+
+	if named != "":
+		var reported := server.console.find_cvar("sv_web_build")
+
+		if reported == null or reported.get_string() != named \
+				or not reported.has_flag(DotConVar.FLAG_NOTIFY):
+			printerr("selftest FAILED: sv_web_build does not report %s to the query" % named)
+			return false
+
+		print("sv_web_build: %s" % named)
+
 	# [b]Asked, not only looked up.[/b] A command that is registered and answers nothing
 	# is the same absent command one layer down. `party_status` prints what was built,
 	# and a booking with nobody behind it is the one thing it must always be able to say.
@@ -640,6 +657,7 @@ func _boot() -> bool:
 	# a running server to attach to. Neither is fatal: a server with no guard is a server,
 	# and one whose log command failed to register still logs.
 	_register_log_commands()
+	_register_web_build()
 	_build_security()
 
 	for descriptor in content.games:
@@ -775,6 +793,46 @@ func _build_logging() -> void:
 	add_child(log_router)
 
 	DotLog.debug(CHANNEL, "the sink layer is up", log_router.describe())
+
+
+## The tracked file naming the web client shell built from this checkout's addons.lock.
+const WEB_BUILD_FILE := "res://web/shell-build"
+
+
+## Reports `sv_web_build`: the client shell build this server's players need.
+##
+## [b]A server and the shell are built from one lock, and moved on different days.[/b] The
+## site frames ONE shared shell by default, and a server is reinstalled onto new addons on
+## its owner's schedule. A pack built against the new addons will not compile on the old
+## shell, and the old pack will not run on a server whose addons have moved on, so a single
+## shared shell broke one side or the other on every release. The site reads this from the
+## query rules (NOTIFY is what puts a cvar there) and frames this build for a launch into
+## this server; a server that reports nothing gets the shared one.
+##
+## [b]From a tracked file, not from the operator's config.[/b] The fact is "which shell was
+## exported from the addons this server installed", which is a property of the checkout,
+## and the release that bumps addons.lock is the one that publishes the shell and writes
+## this file. An operator-set value would be a second copy of that fact that nothing keeps
+## in step. Absent or empty registers nothing, which is the shared build.
+func _register_web_build() -> void:
+	if server == null or server.console == null:
+		return
+
+	var build := FileAccess.get_file_as_string(WEB_BUILD_FILE).strip_edges() \
+		if FileAccess.file_exists(WEB_BUILD_FILE) else ""
+
+	if build == "":
+		DotLog.info(CHANNEL, "no web shell build is named; players get the shared one", {
+			"file": WEB_BUILD_FILE,
+		})
+		return
+
+	server.console.cvar(
+		"sv_web_build", build,
+		"The web client build this server's players load. Read from %s." % WEB_BUILD_FILE,
+		DotConVar.FLAG_NOTIFY
+	)
+	DotLog.info(CHANNEL, "the web shell build this server needs", {"build": build})
 
 
 ## Puts `log` on the console.

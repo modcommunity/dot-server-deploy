@@ -664,6 +664,16 @@ Three consequences elsewhere, all of them the same mistake avoided:
 
 **A tag can move under you, and the check has to compare commits.** dot-server's `v0.1.1` was re-pointed at the same commit as `v0.1.2` after it was cut, which made the first test of `--update` look like a no-op. And an annotated tag lists twice in `ls-remote` — the tag object, then `^{}` for the commit — so `check` peels to the commit; its first version compared a HEAD against a tag object and reported every clone as wrong.
 
+## A server names the shell build its players load
+
+`web/shell-build` is one line, the build id of the web shell exported from this checkout's `addons.lock`, and `TmcHost._register_web_build` reports it as the NOTIFY cvar `sv_web_build`. The site reads it from the query rules into the server's vars and frames that build for any launch into this server (website-city `~/types/play/web-build.ts`, branch `feat/server-web-build` as of 2026-10-04); a server that reports nothing gets the shared `App.webGameBuild`.
+
+**Why: one shared shell broke one side of every addon release.** A pack built against new addons does not compile on an old shell, and servers are reinstalled on their owners' schedule while the shared build is switched on ours. With the server naming its own build, a release publishes a new shell under a new prefix and nothing that has not moved yet notices. Builds are never deleted, so an old one stays framable.
+
+**The release order is therefore: lock, export, upload, write `web/shell-build`, tag.** The file must name a build that is already uploaded — a server installed from a tag whose file names a missing prefix sends its players to a 403. It is a tracked file rather than an operator setting because the fact is "which shell matches the addons this checkout installs", and an operator-entered copy is the copy nothing keeps in step. `./server check` fails if the cvar is missing or not NOTIFY (armed).
+
+**The desktop client has no equivalent yet.** It installs one build per platform, so a server ahead of or behind it is refused at signon with "This server needs a different build of the game client".
+
 ## The games came inside too, into `games/`
 
 They stayed in the parent directory for one pass after the addons moved, and the reason given was that they are content published into `dist/` rather than code this project compiles. That is true of `addons/` and is not an argument for the parent: every bullet above applies to a game repository exactly as it applies to an addon — `git clone` of this project into `~/` putting five more repositories in `~/`, several servers on one box sharing one set of checkouts with nothing saying so, and `./setup.sh` in one server's directory republishing packs out of a tree another server's operator is halfway through editing. The last of those is worse here than for the addons, because what comes out of it is a *signed pack* that every client mounts and runs.
