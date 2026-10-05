@@ -23,7 +23,7 @@ const MEDIA_PORT := 27109
 
 const TARGET_GAME := "hungry_classic"
 
-const CHECKS := 22
+const CHECKS := 27
 
 var _passed := 0
 var _failed := 0
@@ -201,6 +201,8 @@ func _boot() -> bool:
 	await get_tree().process_frame
 
 	# res://dist, for the reason reconnect gives: there is no web server here.
+	# The picture is served from 127.0.0.1, which a real client refuses to fetch.
+	_shell.loading.allow_private_hosts = true
 	_shell._ensure_cloud()
 	_shell._cloud.http_base_urls = PackedStringArray([ProjectSettings.globalize_path("res://dist")])
 	_done()
@@ -274,6 +276,9 @@ func _test_menu() -> void:
 		"an admin's /admin opens the menu on their screen")
 	_check(not _row("Player commands").is_empty() and not _row("Server commands").is_empty() and not _row("Other").is_empty(),
 		"listing the categories, and the owner's own item under Other", _labels())
+	# What a game can do is asked of the game. The lobby's live tools do noclip and not slay,
+	# and so the menu says, which is checked by walking into its categories below.
+	var lobby_can_slay := _game_supports(&"slay")
 
 	_panel().choose(_row("Player commands"))
 	await _until(func() -> bool: return _panel().title_text() == "Player commands", 10.0)
@@ -291,6 +296,15 @@ func _test_menu() -> void:
 
 	_panel().press(0)
 	_check(not _panel().is_open(), "0 closes it")
+
+	_shell.link.send_chat("/admin")
+	await _until(func() -> bool: return _panel().is_open(), 10.0)
+	if not _row("Fun commands").is_empty():
+		_panel().choose(_row("Fun commands"))
+		await _until(func() -> bool: return _panel().title_text() == "Fun commands", 10.0)
+	_check(_row("Slay").is_empty() != lobby_can_slay,
+		"Slay is on the lobby's menu exactly when the lobby's own tools say they can slay (%s)" % lobby_can_slay, _labels())
+	_panel().press(0)
 	_done()
 
 
@@ -346,4 +360,31 @@ func _test_change_under_the_player() -> void:
 	_check(pictured[0], "with the server's picture on it")
 	_check(tipped[0], "and the new game's own tip over the default's")
 	_check(not _screen().is_showing(), "and it is gone once the game is on screen")
+
+	# The same menu in a game whose module installed dot-moderation's live tools: what it
+	# supports is asked of its real DotModTools, through the command's own handler.
+	_shell.link.send_chat("/admin")
+	await _until(func() -> bool: return _panel().is_open() and not _row("Fun commands").is_empty(), 10.0)
+	_check(not _row("Fun commands").is_empty() and not _row("Powers").is_empty(),
+		"in %s the menu has fun commands and powers" % TARGET_GAME, _labels())
+	_panel().choose(_row("Fun commands"))
+	await _until(func() -> bool: return _panel().title_text() == "Fun commands", 10.0)
+	# Measured: this game's tools slay and do not slap or burn. The menu must agree with the
+	# game rather than with the command list, which registers all of them regardless.
+	_check(_game_supports(&"slay") and not _game_supports(&"slap"),
+		"(%s's own tools: slay yes, slap no)" % TARGET_GAME)
+	_check(not _row("Slay").is_empty() and _row("Slap").is_empty() and _row("Set on fire").is_empty(),
+		"so Slay is offered and Slap and fire are not, though all three commands exist", _labels())
+	_panel().choose(_row("Slay"))
+	_check(await _until(func() -> bool: return not _row("Everyone").is_empty(), 10.0),
+		"and Slay offers everybody at once", _labels())
+	_panel().press(0)
 	_done()
+
+
+
+## Whether the loaded game's live tools say they can do [param ability], asked the way the
+## menu asks: through the console command's own handler.
+func _game_supports(ability: StringName) -> bool:
+	var tools := TmcAdminMenu._tools_of(_server().console.find_command(String(ability)))
+	return tools != null and bool(tools.call("supports", ability))

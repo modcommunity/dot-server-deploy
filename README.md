@@ -102,7 +102,7 @@ Anything it does can be done on its own afterwards: the three scripts above take
 - **Configuration in YAML**, in files split by subject: `server.yml`, `net.yml`, `rcon.yml`, `auth.yml`, `groups.yml` and `permissions.yml`. Anything dot-server exposes as a console variable can go in them under its own name.
 - **Roles, not flags.** dot-server's permission model is flags, deliberately; `groups.yml` is the translation, so an operator writes `admin: [kick, ban, mute]` and a player gets the flags.
 - **Moderation.** Bans, kicks, mutes, votes and an audit log, all dot-server's, all reachable from the console or over RCON.
-- **An admin menu.** `/admin` in chat opens a menu on the admin's screen: kick, ban, warn, mute, gag, the live tools a game has (slay, freeze, bring…), player info with their record, change game, change map, announce. Pick with 1–7 or the mouse; 8 is back, 9 is more, 0 closes. Each admin sees exactly the part they have the flags for, and every item ends as the console command they could have typed, so immunity, the audit log and the replies are the console's own. What is on it, in what order, with which reasons and durations, plus items of your own, is `cfg/admin_menu.yml`. See [The admin menu](#the-admin-menu).
+- **An admin menu.** `/admin` in chat opens a menu on the admin's screen: kick, ban, warn, mute, gag, player info with their record, the fun commands and powers the loaded game can actually do (slay, slap, set on fire, freeze, blind, beacon, rename, noclip, god, health, speed, gravity, give, strip), teleports, change game, change map, announce. Games add their own entries. Pick with 1–7 or the mouse; 8 is back, 9 is more, 0 closes. Each admin sees exactly the part they have the flags for, and every item ends as the console command they could have typed, so immunity, the audit log and the replies are the console's own. What is on it, in what order, with which reasons and durations, plus items of your own, is `cfg/admin_menu.yml`. See [The admin menu](#the-admin-menu).
 - **Loading screens.** While the server changes game or map under its players, they see your picture and hear your music instead of a frozen frame: images, music, tips and a title, per game and per map, as URLs in `cfg/loading.yml`. See [Loading screens](#loading-screens).
 - **Games loaded at runtime, and delivered at runtime.** A directory under `content/` with a `game.yml` in it is a game; `changelevel` switches between them with players still connected. **This build ships no game code at all** — every one of them is a signed dot-cloud pack that the server and each client download and mount, so adding a game to your server is publishing a pack and writing a YAML file. No new client build, no upload, nothing in an admin panel, and every player already connected to something else gets it on the way in.
 - **The game, and the map it starts on.** `sv_game` and `sv_map` in `cfg/server.yml`, `--game` and `--map` on the command line, `TMC_GAME` and `TMC_MAP` in a unit file, and `-- +map <id>` for the fingers of anybody who has run a dedicated server before. A game decides whether it has maps at all, so a game with none, and an id its catalogue has never heard of, are both a line in the log rather than a refusal to boot.
@@ -473,9 +473,49 @@ Player commands                     Kick
 
 **Every item is a console line**, run as you. "Ban → Bob → 1 day → Spamming → Yes" runs `ban #12 1d Spamming` exactly as if you had typed it, so the reply, the audit log entry and the immunity check are the same ones. Ban, change game and change map ask "Yes, do it" first. **Player info** shows the ids, the address (to anyone with `kick`, as `whois` does), time on the server, ping, whether they are silenced, and their record of warnings, kicks and bans. It also links straight to every action you could take on them.
 
+**Fun commands and powers depend on the game.** Each game says which of these it can do, and only those are shown. In arena, Slap shoves and hurts by the amount you pick ("Just a shove", 5, 10, 25, 50); a game without the ability simply has no Slap row. Most of these can target "Everyone" or "Everyone else", and anybody you cannot outrank is skipped and counted. Give lists what the game itself can hand out.
+
 **`warn <player> <reason>`** is added when the server has no `warn` of its own. The player sees it on screen and in chat (never with your name), and it goes on their record when the game keeps one.
 
 `cfg/admin_menu.yml` sets the rest: which items are in which category, labels, your own items (`command: "say Read the rules"`), the reason and duration lists, which flag opens the menu at all, and whether it closes or returns to the player list after a command. The file shipped in `cfg.example/` is commented throughout. A client built before this ignores the menu; `/admin` then does nothing visible for that player.
+
+### Adding to the menu from a game
+
+A game can add entries two ways, and both go when the game changes. The server owner's `cfg/admin_menu.yml` is applied last, so an owner can rename or remove anything a game adds, or turn all of it off with `admin_menu_game_items: false`.
+
+**In `game.yml`**, as data. This is how arena adds its two:
+
+```yaml
+metadata:
+  admin_menu:
+    title: "Arena"                 # the category its items go under
+    items:
+      arena_restart:
+        label: "Restart the match"
+        command: "arena_restart"
+        confirm: true
+      arena_vote:
+        label: "Start a map vote now"
+        command: "arena_vote"
+```
+
+The shape is exactly `admin_menu.yml`'s: `items`, `lists`, `categories`, and per item `steps`, `category`, `ability`, `groups`, `confirm`, `flag`. As always, an entry is shown only to an admin who could type its command.
+
+**In code**, from the game's module, for anything computed while it runs (the teams there are, the rounds a mode has). The menu is in `DotRegistry` as `admin_menu`, and is found by duck type, so a game on a host without it carries on:
+
+```gdscript
+var menu := DotRegistry.get_service(&"admin_menu")
+if menu != null and menu.has_method("set_layer"):
+    # Gone by itself when `self` leaves the tree, which a module unload does.
+    menu.set_layer("mygame", {
+        "title": "My Game",
+        "items": {"swap": {"label": "Move to a team", "command": "mg_team {player} {team}", "steps": ["player", "team"]}},
+    }, self)
+    menu.add_list("mygame", "team", func() -> Array:
+        return [["red", "Red team"], ["blue", "Blue team"]], "Which team")
+```
+
+A computed list's values must be single words (no spaces, quotes or semicolons), and a chosen value is checked against what the list offers at the moment it is chosen.
 
 ## Loading screens
 

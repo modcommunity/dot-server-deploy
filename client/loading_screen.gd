@@ -48,8 +48,16 @@ const MAX_IMAGE_BYTES := 4 * 1024 * 1024
 const MAX_AUDIO_BYTES := 12 * 1024 * 1024
 const MAX_URL := 512
 
+## Pictures refused for the size they declared, this process. For [method describe] and
+## the suite: a refusal and a file the decoder could not read both come back null.
+static var refused_oversized := 0
+
 ## Longest side a picture is kept at, in pixels.
 const MAX_IMAGE_SIDE := 2560
+
+## Most pixels a picture may DECLARE before it is decoded at all: 8K by 4K, 128 MB as RGBA.
+## See [method decode].
+const MAX_DECODE_PIXELS := 8192 * 4096
 
 ## Most URLs fetched per document. Eight images, four songs and a sound for each of a
 ## handful of games is already more than anybody needs on one evening.
@@ -102,8 +110,15 @@ var _tip_at := 0.0
 ## url -> Texture2D / AudioStream once fetched, null while queued or in flight, false when
 ## it failed.
 var _media: Dictionary = {}
-var _queue: Array[String] = []
+
+## [url, is_audio], in order. Whether a URL is a song is decided when it is QUEUED: decided
+## when its turn came, a map hint's song could be reached after the hint had expired, be
+## fetched under the image limit, fail, and be marked failed for the session.
+var _queue: Array = []
 var _fetching := false
+
+## Test seam: a suite serves its pictures from 127.0.0.1. See [method is_private_host].
+var allow_private_hosts := false
 
 var _root: Control = null
 var _backdrop: ColorRect = null
@@ -176,6 +191,14 @@ func reset() -> void:
 	_next = {}
 	_reasons.clear()
 	_pending_content_at = -1.0
+	_game_id = ""
+	_game_name = ""
+	# The next server's media is the next server's budget. Kept: what has ARRIVED, which
+	# costs nothing to keep and is the same picture if the next server names it too.
+	_queue.clear()
+	for url in _media.keys():
+		if not (_media[url] is Object):
+			_media.erase(url)
 	_hide(false)
 
 
@@ -196,10 +219,14 @@ func begin(reason: StringName, game_id: String = "", game_name: String = "") -> 
 		_game_name = game_name
 	_last_activity = _now()
 
-	if reason == REASON_CONTENT and not _reasons.has(REASON_CONTENT):
-		# Delayed: see [member show_delay_sec].
+	if reason == REASON_CONTENT:
+		# Delayed: see [member show_delay_sec]. EVERY content call, not only the first: the
+		# shell calls this on each phase of one fetch, and dot-cloud goes from fetching the
+		# manifest to verifying its signature in the same frame -- so a check of "first time
+		# only" let the second phase show the screen at once, and a map already on the disk
+		# flashed a full-screen picture. Found by the review, by running it.
 		_reasons[REASON_CONTENT] = true
-		if not _visible:
+		if not _visible and _pending_content_at < 0.0:
 			_pending_content_at = _now()
 		return
 
@@ -475,6 +502,35 @@ static func is_safe_url(url: String) -> bool:
 	return host != "" and not host.begins_with("/")
 
 
+## Whether [param url] names this machine or a private network by address or by
+## `localhost`. Such a URL is not fetched: a server must not be able to make every player's
+## client send requests into that player's own network. A hostname that RESOLVES to a
+## private address is not caught here -- that would need a lookup per URL -- so this is the
+## cheap half of the rule, and the half a hostile server would reach for first.
+static func is_private_host(url: String) -> bool:
+	var rest := url.substr(url.find("//") + 2)
+	var host := rest.get_slice("/", 0).get_slice("?", 0).get_slice("#", 0)
+	if host.contains("@"):
+		host = host.get_slice("@", 1)
+	if host.begins_with("["):
+		var inner := host.substr(1, host.find("]") - 1).to_lower()
+		return inner == "::1" or inner == "::" or inner.begins_with("fc") or inner.begins_with("fd") or inner.begins_with("fe80")
+	host = host.get_slice(":", 0).to_lower()
+	if host == "localhost" or host.ends_with(".localhost") or host.ends_with(".local"):
+		return true
+	var parts := host.split(".")
+	if parts.size() != 4:
+		return false
+	for part in parts:
+		if not part.is_valid_int():
+			return false
+	var a := parts[0].to_int()
+	var b := parts[1].to_int()
+	return a == 127 or a == 10 or a == 0 or (a == 169 and b == 254) \
+		or (a == 172 and b >= 16 and b <= 31) or (a == 192 and b == 168) \
+		or (a == 100 and b >= 64 and b <= 127)
+
+
 func _clean_entry(raw: Variant) -> Dictionary:
 	var out := {}
 	if not (raw is Dictionary):
@@ -506,26 +562,43 @@ func _clean_entry(raw: Variant) -> Dictionary:
 
 func _prefetch_entry(entry: Dictionary) -> void:
 	var urls: Array = []
-	urls.append_array(entry.get("images", []))
-	urls.append_array(entry.get("music", []))
+	for url in entry.get("images", []):
+		urls.append([url, false])
+	for url in entry.get("music", []):
+		urls.append([url, true])
 	if entry.has("done"):
-		urls.append(entry["done"])
-	for url in urls:
-		if _media.has(url) or _media.size() >= MAX_PREFETCH:
+		urls.append([entry["done"], true])
+	for pair in urls:
+		var url: String = pair[0]
+		if _media.has(url) or _live_media() >= MAX_PREFETCH:
+			continue
+		if not allow_private_hosts and is_private_host(url):
+			_media[url] = false
 			continue
 		_media[url] = null
-		_queue.append(url)
+		_queue.append(pair)
 	_pump()
+
+
+## Fetched or on the way. A failure does not use up the budget: a server whose host is down
+## for an evening must not spend the session's allowance on the URLs that failed.
+func _live_media() -> int:
+	var n := 0
+	for v in _media.values():
+		if not (v is bool):
+			n += 1
+	return n
 
 
 func _pump() -> void:
 	if _fetching or _queue.is_empty() or not is_inside_tree():
 		return
-	var url: String = _queue.pop_front()
+	var next: Array = _queue.pop_front()
+	var url: String = next[0]
+	var audio: bool = next[1]
 	_fetching = true
 
 	var request := HTTPRequest.new()
-	var audio := _is_audio_url(url)
 	request.body_size_limit = MAX_AUDIO_BYTES if audio else MAX_IMAGE_BYTES
 	request.timeout = 30.0
 	add_child(request)
@@ -551,21 +624,6 @@ func _pump() -> void:
 		_pump()
 
 
-func _is_audio_url(url: String) -> bool:
-	for entry in _all_entries():
-		if (entry.get("music", []) as Array).has(url) or str(entry.get("done", "")) == url:
-			return true
-	return false
-
-
-func _all_entries() -> Array:
-	var out: Array = [_doc.get("default", {})]
-	out.append_array((_doc.get("games", {}) as Dictionary).values())
-	if not _next.is_empty():
-		out.append(_next["entry"])
-	return out
-
-
 ## A texture or a stream out of bytes, by what the bytes are. Null for anything else.
 static func decode(body: PackedByteArray) -> Variant:
 	if body.size() < 12:
@@ -574,11 +632,25 @@ static func decode(body: PackedByteArray) -> Variant:
 	var image := Image.new()
 	var loaded := ERR_FILE_UNRECOGNIZED
 
-	if body[0] == 0x89 and body[1] == 0x50 and body[2] == 0x4E and body[3] == 0x47:
+	var is_png := body[0] == 0x89 and body[1] == 0x50 and body[2] == 0x4E and body[3] == 0x47
+	var is_jpg := body[0] == 0xFF and body[1] == 0xD8
+	var is_webp := body.slice(0, 4).get_string_from_ascii() == "RIFF" and body.slice(8, 12).get_string_from_ascii() == "WEBP"
+
+	# [b]Read the size the file DECLARES before letting a decoder allocate it.[/b] The byte
+	# limit bounds what is downloaded, not what it decodes to: a 1 MB PNG can declare
+	# 16384 x 16384 and the decoder allocates a gigabyte before the resize below runs.
+	# Anything whose header cannot be read is refused rather than decoded to find out.
+	if is_png or is_jpg or is_webp:
+		var size := declared_size(body)
+		if size.x <= 0 or size.y <= 0 or size.x * size.y > MAX_DECODE_PIXELS:
+			refused_oversized += 1
+			return null
+
+	if is_png:
 		loaded = image.load_png_from_buffer(body)
-	elif body[0] == 0xFF and body[1] == 0xD8:
+	elif is_jpg:
 		loaded = image.load_jpg_from_buffer(body)
-	elif body.slice(0, 4).get_string_from_ascii() == "RIFF" and body.slice(8, 12).get_string_from_ascii() == "WEBP":
+	elif is_webp:
 		loaded = image.load_webp_from_buffer(body)
 	elif body.slice(0, 4).get_string_from_ascii() == "OggS":
 		return AudioStreamOggVorbis.load_from_buffer(body)
@@ -599,6 +671,50 @@ static func decode(body: PackedByteArray) -> Variant:
 		var scale := float(MAX_IMAGE_SIDE) / maxf(image.get_width(), image.get_height())
 		image.resize(maxi(int(image.get_width() * scale), 1), maxi(int(image.get_height() * scale), 1))
 	return ImageTexture.create_from_image(image)
+
+
+## The width and height a PNG, JPEG or WebP header declares, or (0, 0) when it cannot be
+## read. Header bytes only: nothing is decoded.
+static func declared_size(body: PackedByteArray) -> Vector2i:
+	var n := body.size()
+	# PNG: IHDR is the first chunk, width and height big-endian at 16 and 20.
+	if n >= 24 and body[0] == 0x89 and body[1] == 0x50:
+		return Vector2i(_be32(body, 16), _be32(body, 20))
+	# WebP: the first chunk after "WEBP" decides where the size is.
+	if n >= 30 and body.slice(8, 12).get_string_from_ascii() == "WEBP":
+		var chunk := body.slice(12, 16).get_string_from_ascii()
+		if chunk == "VP8X":
+			return Vector2i(1 + (body[24] | body[25] << 8 | body[26] << 16), 1 + (body[27] | body[28] << 8 | body[29] << 16))
+		if chunk == "VP8 ":
+			return Vector2i((body[26] | body[27] << 8) & 0x3FFF, (body[28] | body[29] << 8) & 0x3FFF)
+		if chunk == "VP8L" and body[20] == 0x2F:
+			var bits := body[21] | body[22] << 8 | body[23] << 16 | body[24] << 24
+			return Vector2i(1 + (bits & 0x3FFF), 1 + ((bits >> 14) & 0x3FFF))
+		return Vector2i.ZERO
+	# JPEG: walk the markers to the first start-of-frame.
+	if n >= 4 and body[0] == 0xFF and body[1] == 0xD8:
+		var i := 2
+		while i + 9 < n:
+			if body[i] != 0xFF:
+				return Vector2i.ZERO
+			var marker := body[i + 1]
+			if marker == 0xFF:
+				i += 1
+				continue
+			if marker == 0xD8 or marker == 0x01 or (marker >= 0xD0 and marker <= 0xD7):
+				i += 2
+				continue
+			var length := body[i + 2] << 8 | body[i + 3]
+			if marker >= 0xC0 and marker <= 0xCF and marker != 0xC4 and marker != 0xC8 and marker != 0xCC:
+				return Vector2i(body[i + 7] << 8 | body[i + 8], body[i + 5] << 8 | body[i + 6])
+			if length < 2:
+				return Vector2i.ZERO
+			i += 2 + length
+	return Vector2i.ZERO
+
+
+static func _be32(b: PackedByteArray, at: int) -> int:
+	return b[at] << 24 | b[at + 1] << 16 | b[at + 2] << 8 | b[at + 3]
 
 
 # --- The view ----------------------------------------------------------------------
@@ -744,5 +860,6 @@ func describe() -> Dictionary:
 		"next": _next.duplicate(),
 		"media": {"known": _media.size(), "ready": fetched, "failed": failed, "queued": _queue.size()},
 		"muted": music_muted,
+		"refused_oversized": refused_oversized,
 		"image": _image.texture != null if _image != null else false,
 	}

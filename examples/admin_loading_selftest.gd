@@ -12,7 +12,7 @@ extends Node
 ## a socket this suite serves itself, because the fetch is the half most likely to be
 ## wrong and least likely to be noticed.
 
-const CHECKS := 103
+const CHECKS := 146
 
 var _passed := 0
 var _failed := 0
@@ -49,6 +49,9 @@ func _run() -> void:
 	_test_menu_flow()
 	await _test_menu_info_and_warn()
 	_test_menu_bounds()
+	_test_menu_fun()
+	_test_menu_layers()
+	_test_review_fixes()
 	_test_panel()
 	_test_loading_server()
 	_test_loading_client()
@@ -175,7 +178,7 @@ func _test_menu_config() -> void:
 	_check(parsed.ok, "the shipped admin_menu.yml parses", str(parsed.error) if not parsed.ok else "")
 	var shipped := TmcAdminMenu.new().configure(parsed.value if parsed.ok else {})
 	_check(shipped.problems.is_empty(), "and configures with nothing to report", ", ".join(shipped.problems))
-	_check(shipped.categories.keys() == ["players", "server"] and shipped.items.has("warn"),
+	_check(shipped.categories.keys() == ["players", "fun", "powers", "teleport", "server"] and shipped.items.has("warn"),
 		"the default layout is the built-in one, warn included", str(shipped.categories.keys()))
 	shipped.free()
 
@@ -260,15 +263,15 @@ func _test_menu_visibility() -> void:
 	sent.clear()
 	menu._cmd_open(_ctx(owner))
 	page = _last_page()
-	_check(_labels(page) == PackedStringArray(["Player commands", "Server commands"]) and str(page["path"]) == "root",
-		"root sees both categories on a page with a path of its own", str(page))
+	_check(_labels(page) == PackedStringArray(["Player commands", "Fun commands", "Server commands"]) and str(page["path"]) == "root",
+		"root sees every category it can use, on a page with a path of its own", str(page))
 	_nav(menu, owner, "c:server")
 	labels = _labels(_last_page())
 	_check(labels.has("Announce") and labels.has("Change game"),
 		"the server category lists what exists", ", ".join(labels))
 	_check(not labels.has("Change map"),
 		"a map command that refuses chat is not offered, even to root", ", ".join(labels))
-	_nav(menu, owner, "c:players")
+	_nav(menu, owner, "c:fun")
 	labels = _labels(_last_page())
 	_check(not labels.has("Freeze") and labels.has("Slay"),
 		"a game's live tool shows only when the game registered it", ", ".join(labels))
@@ -470,6 +473,294 @@ func _test_menu_bounds() -> void:
 	_check(str(page["rows"].back()["label"]).begins_with("…and"), "and the page says how many it left off")
 	_check(DotNotice.make(&"", "", -1.0, TmcAdminMenu.TOPIC, {"menu": page}).data.has("menu"),
 		"the notice keeps it rather than dropping the tree")
+	menu.free()
+	_done()
+
+
+## A live-tool command's handler object, as dot-moderation's DotModToolCommands is one:
+## something with `tools` that answer `supports`, and `items_fn` for give.
+class ToolHolder:
+	extends RefCounted
+	var tools: ToolsStandIn = null
+	var items_fn: Callable = Callable()
+	var calls: Array = []
+
+	func run(ctx: DotCmdContext) -> void:
+		calls.append([ctx.command, Array(ctx.args)])
+
+
+class ToolsStandIn:
+	extends RefCounted
+	var supported: Array = []
+	var teleport_fn: Callable = Callable()
+
+	func supports(action: StringName) -> bool:
+		return supported.has(String(action))
+
+
+var _holder: ToolHolder = null
+
+
+func _test_menu_fun() -> void:
+	_section("fun commands, as far as the game goes")
+
+	_holder = ToolHolder.new()
+	_holder.calls = calls
+	_holder.tools = ToolsStandIn.new()
+	_holder.tools.supported = ["slap", "noclip", "give"]
+	_holder.items_fn = func() -> PackedStringArray: return PackedStringArray(["rocket_launcher", "bat", "two words"])
+	for spec in [["slap", "slay"], ["noclip", "cheats"], ["give", "cheats"], ["burn", "slay"], ["goto", "teleport"], ["bring", "teleport"]]:
+		console.command(spec[0], _holder.run, "", spec[1]).with_chat()
+
+	var admin := _session(1, "Admin", ["root"], 50)
+	var bob := _session(2, "Bob", [], 0)
+	var carol := _session(3, "Carol", [], 99)
+	var menu := _menu({}, [admin, bob, carol])
+
+	sent.clear()
+	_nav(menu, admin, "c:fun")
+	var labels := _labels(_last_page())
+	_check(labels.has("Slap") and not labels.has("Set on fire"),
+		"a fun command shows when the game supports it, and not when it only registered the command",
+		", ".join(labels))
+	_nav(menu, admin, "root")
+	_check(not _labels(_last_page()).has("Teleport"),
+		"teleport is hidden while the game gives no way to move a player", ", ".join(_labels(_last_page())))
+	_holder.tools.teleport_fn = func(_id: StringName, _to: Variant) -> void: pass
+	_nav(menu, admin, "c:teleport")
+	_check(_labels(_last_page()).has("Go to") and _labels(_last_page()).has("Bring to me"),
+		"and shown once it does", ", ".join(_labels(_last_page())))
+
+	_nav(menu, admin, "i:slap")
+	labels = _labels(_last_page())
+	_check(labels.size() >= 3 and labels[0] == "Everyone" and labels[1] == "Everyone else",
+		"slap offers everybody at once, first", ", ".join(labels))
+	_nav(menu, admin, "i:slap @others")
+	_check(_labels(_last_page())[0] == "Just a shove", "then how hard", ", ".join(_labels(_last_page())))
+	calls.clear()
+	_nav(menu, admin, "i:slap @others 3")
+	_check(calls.size() == 1 and calls[0] == ["slap", ["@others", "10"]],
+		"and runs `slap @others 10`, the command's own immunity rule doing the skipping", str(calls))
+	calls.clear()
+	replies.clear()
+	_nav(menu, admin, "i:kick @all 1")
+	_check(calls.is_empty() and replies.size() == 1 and replies[0].contains("everybody at once"),
+		"a group is refused where the item does not take one: nobody kicks the server", str(replies))
+
+	_nav(menu, admin, "i:goto")
+	_check(_labels(_last_page()).has("Carol (#3)"),
+		"goto lists people the admin does not outrank: going to them acts on nobody", ", ".join(_labels(_last_page())))
+
+	_nav(menu, admin, "i:give #2")
+	var page := _last_page()
+	_check(_labels(page).has("Rocket Launcher") and _go_of(page, "Rocket Launcher") == "i:give #2 =rocket_launcher"
+			and not _labels(page).has("Two words"),
+		"give lists what the game's own give can hand out, by value, and drops what is not one word",
+		str(page["rows"]))
+	calls.clear()
+	_nav(menu, admin, "i:give #2 =rocket_launcher")
+	_check(calls.size() == 1 and calls[0] == ["give", ["#2", "rocket_launcher"]], "and gives it", str(calls))
+	calls.clear()
+	_nav(menu, admin, "i:give #2 =nuke")
+	_check(calls.is_empty(), "something the game does not offer is refused")
+
+	_nav(menu, admin, "i:noclip")
+	_check(_labels(_last_page()).has("Admin (#1) — you"), "a power lists the admin themselves")
+	calls.clear()
+	_nav(menu, admin, "i:noclip #1 1")
+	_check(calls.size() == 1 and calls[0] == ["noclip", ["#1", "on"]], "and noclip on yourself is `noclip #1 on`", str(calls))
+
+	for name in ["slap", "noclip", "give", "burn", "goto", "bring"]:
+		console.unregister_command(name)
+	menu.free()
+	_done()
+
+
+class GameStandIn:
+	extends RefCounted
+	var metadata: Dictionary = {}
+
+	func display_name_or_id() -> String:
+		return "Arena"
+
+
+func _test_menu_layers() -> void:
+	_section("games extend the menu, and the owner has the last word")
+
+	var admin := _session(1, "Admin", ["root"], 50)
+	var menu := _menu({}, [admin])
+
+	var game := GameStandIn.new()
+	game.metadata = {"admin_menu": {
+		"items": {
+			"restart": {"label": "Restart the match", "command": "say restarting"},
+			"vote": {"label": "Start a map vote", "command": "say voting", "category": "server"},
+		},
+	}}
+	menu.adopt_game(game)
+	sent.clear()
+	_nav(menu, admin, "root")
+	_check(_labels(_last_page()).has("Arena"), "a game's game.yml items get a category named after the game",
+		", ".join(_labels(_last_page())))
+	_nav(menu, admin, "c:game")
+	_check(_labels(_last_page()) == PackedStringArray(["Restart the match"]), "holding its unplaced item",
+		", ".join(_labels(_last_page())))
+	_nav(menu, admin, "c:server")
+	_check(_labels(_last_page()).has("Start a map vote"), "and an item can name an existing category")
+	calls.clear()
+	_nav(menu, admin, "i:restart")
+	_check(calls.size() == 1 and calls[0] == ["say", ["restarting"]], "a game's item runs its line", str(calls))
+
+	menu.configure({"items": {"restart": {"enabled": false}}})
+	_check(not menu.items.has("restart") and menu.items.has("vote"),
+		"the owner's admin_menu.yml takes a game's item off")
+	menu.configure({"admin_menu_game_items": false})
+	_check(not menu.items.has("vote"), "or all of them")
+	menu.configure({})
+	_check(menu.items.has("vote") and menu.game_items, "and a file without the switch puts them back")
+
+	menu.adopt_game(null)
+	_check(not menu.items.has("restart") and not menu.categories.has("game"),
+		"a game change takes the last game's items with it")
+
+	# The code half: a module registering through the registry, and leaving.
+	var module := Node.new()
+	add_child(module)
+	menu.set_layer("arena", {"title": "Arena", "items": {"round": {"label": "End the round", "command": "say {team}", "steps": ["team"]}}}, module)
+	menu.add_list("arena", "team", func() -> Array: return [["red", "Red team"], ["blue", "Blue team"], ["bad value", "x"]], "Which team")
+	sent.clear()
+	_nav(menu, admin, "i:round")
+	var page := _last_page()
+	_check(_labels(page) == PackedStringArray(["Red team", "Blue team"]) and _go_of(page, "Blue team") == "i:round =blue",
+		"a list a game computes is offered by value, and an unusable value dropped", str(page.get("rows")))
+	calls.clear()
+	_nav(menu, admin, "i:round =blue")
+	_check(calls.size() == 1 and calls[0] == ["say", ["blue"]], "and the chosen value reaches the command", str(calls))
+	_nav(menu, admin, "i:round =green")
+	_check(calls.size() == 1, "a value the game no longer offers is refused")
+	_check(DotRegistry.get_service(TmcAdminMenu.SERVICE) == null,
+		"(the suite's menus are not installed, so the registry is the host's alone)")
+
+	remove_child(module)
+	module.free()
+	_check(not menu.items.has("round"), "a module leaving the tree takes its layer with it")
+
+	menu.free()
+	_done()
+
+
+## One check per finding of the review of 9d78565, each of which failed on that commit.
+func _test_review_fixes() -> void:
+	_section("what the review found")
+
+	# 1. Bytes, not characters.
+	var admin := _session(1, "Admin", ["root"], 99)
+	var people: Array = [admin]
+	for i in 61:
+		people.append(_session(10 + i, "这是一位名字非常非常长的玩家他来自很远的地方第%d号" % i, [], 0))
+	var menu := _menu({}, people)
+	sent.clear()
+	_nav(menu, admin, "i:kick")
+	var page := _last_page()
+	_check(TmcAdminMenu.encoded_size(page) <= TmcAdminMenu.MAX_PAGE_BYTES
+			and DotNotice.make(&"", "", -1.0, TmcAdminMenu.TOPIC, {"menu": page}).data.has("menu"),
+		"sixty players with CJK names still make a page the notice keeps (%d bytes)" % TmcAdminMenu.encoded_size(page))
+
+	var big := {"images": [], "tips": []}
+	for i in 8:
+		(big["images"] as Array).append("https://cdn.example.com/%s/%d.jpg" % ["x".repeat(400), i])
+	for i in 12:
+		(big["tips"] as Array).append("ヒント".repeat(50))
+	var loading := TmcLoading.new().configure({"loading_games": {"arena": big}})
+	var hint := loading._hint({"game": "arena"}, loading.games["arena"], true)
+	_check(TmcLoading.encoded_size(hint) <= TmcLoading.MAX_DOC_BYTES and hint.get("show", false),
+		"an oversized game screen is cut to fit, and keeps the show that matters (%d bytes)" % TmcLoading.encoded_size(hint))
+	_check(Array(loading.problems).any(func(p: String) -> bool: return p.contains("too big to send whole")),
+		"and the owner is told at boot")
+	loading.free()
+
+	# 2. The content delay holds across phases.
+	var in_game := [true]
+	var screen := TmcLoadingScreen.new()
+	screen.in_game_fn = func() -> bool: return in_game[0]
+	add_child(screen)
+	screen.show_delay_sec = 5.0
+	screen.begin(TmcLoadingScreen.REASON_CONTENT)
+	screen.begin(TmcLoadingScreen.REASON_CONTENT)
+	screen.begin(TmcLoadingScreen.REASON_CONTENT)
+	_check(not screen.is_showing(), "fetching, verifying and mounting one map do not show the screen before the delay")
+
+	# 3. A decode bomb is refused from its header.
+	var small := Image.create(4, 4, false, Image.FORMAT_RGBA8)
+	var png := small.save_png_to_buffer()
+	_check(TmcLoadingScreen.declared_size(png) == Vector2i(4, 4), "a PNG's declared size is read from its header")
+	var bomb := png.duplicate()
+	for i in 4:
+		bomb[16 + i] = [0, 0, 0x40, 0][i]
+		bomb[20 + i] = [0, 0, 0x40, 0][i]
+	var refused_before := TmcLoadingScreen.refused_oversized
+	_check(TmcLoadingScreen.declared_size(bomb) == Vector2i(16384, 16384) and TmcLoadingScreen.decode(bomb) == null
+			and TmcLoadingScreen.refused_oversized == refused_before + 1,
+		"one that declares 16384 x 16384 is refused for its size, before a decoder sees it")
+	var jpg := Image.create(37, 21, false, Image.FORMAT_RGB8).save_jpg_to_buffer()
+	_check(TmcLoadingScreen.declared_size(jpg) == Vector2i(37, 21), "and a JPEG's, from its frame header",
+		str(TmcLoadingScreen.declared_size(jpg)))
+	var webp := Image.create(33, 17, false, Image.FORMAT_RGBA8).save_webp_to_buffer(true)
+	_check(TmcLoadingScreen.declared_size(webp) == Vector2i(33, 17), "and a WebP's", str(TmcLoadingScreen.declared_size(webp)))
+
+	# 3b. Nobody's own network.
+	var private := ["http://127.0.0.1/x.png", "http://localhost:8080/x.png", "https://192.168.1.1/a", "http://10.0.0.5/a",
+		"http://[::1]/a", "http://172.20.0.1/a", "http://user@169.254.169.254/latest", "http://printer.local/a"]
+	var leaked := private.filter(func(u: String) -> bool: return not TmcLoadingScreen.is_private_host(u))
+	_check(leaked.is_empty() and not TmcLoadingScreen.is_private_host("https://cdn.example.com/a.png")
+			and not TmcLoadingScreen.is_private_host("http://172.32.0.1/a"),
+		"loopback, LAN and link-local addresses are recognised, public ones are not", str(leaked))
+	screen.adopt({"default": {"images": ["http://192.168.1.1/bg.png"]}})
+	_check(screen.describe()["media"]["failed"] == 1 and screen.describe()["media"]["queued"] == 0,
+		"and a server naming one gets nothing fetched", str(screen.describe()["media"]))
+
+	# 4. The budget is per server, and a song stays a song.
+	for i in 30:
+		screen._media["http://203.0.113.1/failed_%d.png" % i] = false
+	screen.adopt({"default": {"images": ["http://203.0.113.9/next.png"]}})
+	_check(screen._media.has("http://203.0.113.9/next.png") and screen._media["http://203.0.113.9/next.png"] == null,
+		"failures do not use up the prefetch budget")
+	screen.adopt({"next": {"map": "m", "entry": {"music": ["http://203.0.113.9/song.ogg"]}}})
+	var queued_song := screen._queue.filter(func(q: Array) -> bool: return q[0] == "http://203.0.113.9/song.ogg")
+	_check(queued_song.size() == 1 and queued_song[0][1] == true, "a hint's song is queued as a song, whenever its turn comes")
+
+	# 8. Nothing of the last server survives a reset.
+	screen.begin(TmcLoadingScreen.REASON_GAME, "arena", "Arena")
+	screen.reset()
+	_check(screen.describe()["game"] == "" and screen._queue.is_empty(), "a reset forgets the last server's game and its queue")
+	screen.free()
+
+	# 5. Back history.
+	var lines := PackedStringArray()
+	var panel := TmcAdminMenuPanel.new()
+	panel.send_fn = func(line: String) -> void: lines.append(line)
+	add_child(panel)
+	for path in ["root", "c:players", "i:ban", "i:ban #2", "i:ban #2 4"]:
+		panel.show_page({"title": path, "path": path, "rows": [{"label": "x", "go": "y"}]})
+	panel.show_page({"title": "root", "path": "root", "rows": [{"label": "x", "go": "y"}]})
+	_check(panel.describe()["history"] == 0, "a page already in the history is a return to it, and what followed goes",
+		str(panel.describe()))
+	panel.press(8)
+	_check(not panel.is_open(), "so Back from a root sent after a command closes, rather than walking into the ban")
+	panel.free()
+
+	# 7. A category's flag holds for a typed path.
+	var owner_tree := {"categories": {"staff": {"title": "Staff", "flag": "ban", "items": ["kick", "info"]}}}
+	var gated := _menu(owner_tree, [_session(1, "Mod", ["kick"], 50), _session(2, "Bob", [], 0)])
+	var mod: DotClientSession = gated.sessions_fn.call()[0]
+	sent.clear()
+	replies.clear()
+	_nav(gated, mod, "i:info #2")
+	_check(_last_page().get("title", "") != "Bob" and replies.size() == 1,
+		"a typed path cannot reach an item under a category the admin cannot see", str(replies))
+	_nav(gated, mod, "i:ban")
+	_check(not str(_last_page().get("title", "")).begins_with("Ban"), "nor one the owner left off the menu")
+	gated.free()
 	menu.free()
 	_done()
 
@@ -743,6 +1034,8 @@ func _test_loading_fetch() -> void:
 	var in_game := [true]
 	var screen := TmcLoadingScreen.new()
 	screen.in_game_fn = func() -> bool: return in_game[0]
+	# A private address is refused by default (see is_private_host); this suite serves itself.
+	screen.allow_private_hosts = true
 	add_child(screen)
 	var url := "http://127.0.0.1:%d/bg.png" % port
 	screen.adopt({"default": {"images": [url, "http://127.0.0.1:%d/missing.png" % port]}})

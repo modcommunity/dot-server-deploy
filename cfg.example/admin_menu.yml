@@ -11,6 +11,18 @@
 # Every item ends as one console line, run as if the admin had typed it, so the audit log,
 # immunity and the reply are exactly what typing it would give.
 #
+# The fun commands and powers (slay, slap, fire, freeze, blind, beacon, rename, noclip,
+# god, health, speed, gravity, give...) also ask the GAME: each game says which of them it
+# can actually do, and only those are shown. Slap shoves, and hurts by the amount chosen
+# (0 is just the shove) in a game with health. Most of them can be aimed at "Everyone" or
+# "Everyone else", and the players you cannot outrank are skipped and counted.
+#
+# GAMES ADD THEIR OWN. A game's game.yml can carry `metadata: admin_menu:` in the same
+# shape as this file (see content/arena/game.yml), and a game's code can add items and
+# lists while it is loaded. They appear under a category named after the game, and go
+# when the game changes. Everything in THIS file is applied last, so you can rename or
+# remove a game's items here too.
+#
 # Console: `admin` (the menu itself, players only), `warn <player> <reason>` (added when
 # nothing else on this server has a `warn`).
 
@@ -28,6 +40,10 @@ admin_menu_flag: ""
 # What happens after an item runs: close, back (to the item's first page, e.g. a fresh
 # player list, for kicking several people in a row) or root.
 admin_menu_after_run: close
+
+# Whether the loaded game's own items are on the menu. Off hides all of them; to hide one,
+# use `items: <name>: enabled: false` below.
+admin_menu_game_items: true
 
 # Who may use `warn`. A warning is told to the player on screen and in chat, and kept on
 # their record when the game keeps one (dot-moderation).
@@ -48,7 +64,16 @@ admin_menu_address_flag: kick
 # categories:
 #   players:
 #     title: "Player commands"
-#     items: [info, kick, ban, warn, mute, gag, unmute, slay, slap, freeze, unfreeze, respawn, bring, goto]
+#     items: [info, kick, ban, warn, mute, gag, unmute]
+#   fun:
+#     title: "Fun commands"
+#     items: [slay, slap, burn, freeze, unfreeze, blind, beacon, rename, respawn]
+#   powers:
+#     title: "Powers"
+#     items: [noclip, god, buddha, hp, speed, gravity, give, strip]
+#   teleport:
+#     title: "Teleport"
+#     items: [bring, goto, send, return]
 #   server:
 #     title: "Server commands"
 #     items: [changelevel, map, say]
@@ -59,17 +84,23 @@ admin_menu_address_flag: kick
 #
 #   label    what the row says
 #   command  the console line, with {name} for each step's answer
-#   steps    what to ask, in order: player, game, map, text, or the name of a list below.
+#   steps    what to ask, in order: player (somebody you outrank), anyone (any player:
+#            somewhere to go, not somebody acted on), game, map, item (what the game's
+#            `give` can hand out), text, or the name of a list below.
 #            `name:kind` asks a `kind` and fills {name}, for two of one kind:
-#            `steps: [player, "dest:player"]` with `command: "send {player} {dest}"`
+#            `steps: [player, "to:anyone"]` with `command: "send {player} {to}"`
+#   category which category it goes in, made if it does not exist
+#   ability  what the GAME must be able to do for it to be shown (slap, noclip, teleport...)
+#   groups   offer "Everyone" and "Everyone else" as the player
 #   flag     a flag needed for this item on top of the command's own. Never a grant.
 #   confirm  ask "Yes, do it" before running it
 #   self     whether you appear on its player list (default: no)
 #   info     a Player info page rather than a command
 #   enabled  false takes a built-in item off the menu
 #
-# The built-in items: info, kick, ban, warn, mute, gag, unmute, slay, slap, freeze,
-# unfreeze, respawn, bring, goto, changelevel, map, say.
+# The built-in items: info, kick, ban, warn, mute, gag, unmute; slay, slap, burn, freeze,
+# unfreeze, blind, beacon, rename, respawn; noclip, god, buddha, hp, speed, gravity, give,
+# strip; bring, goto, send, return; changelevel, map, say.
 #
 # items:
 #   kick:
@@ -82,6 +113,9 @@ admin_menu_address_flag: kick
 #     label: "Slap for 50"
 #     command: "slap {player} 50"
 #     steps: [player]
+#     ability: slap
+#     groups: true
+#     category: fun
 #   rules:
 #     label: "Remind everybody of the rules"
 #     command: "say Read the rules: no spawn camping, no mic spam."
@@ -93,7 +127,8 @@ admin_menu_address_flag: kick
 # lets the admin type their own (only on the last step). `format: duration` labels 1d as
 # "1 day" and 0 as "Permanent"; `format: seconds` labels 30 as "30 seconds".
 #
-# The built-in lists: reason, duration, seconds.
+# The built-in lists: reason, duration, seconds, toggle (on/off), damage (a shove, 5, 10,
+# 25, 50), burn, blind, health, speed, gravity.
 #
 # lists:
 #   reason:

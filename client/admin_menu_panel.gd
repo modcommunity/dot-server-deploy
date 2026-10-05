@@ -97,8 +97,14 @@ func show_page(page: Dictionary) -> void:
 
 	var path := str(page.get("path", ""))
 	# A page reached by choosing is pushed; the same path again (a refresh after an error,
-	# a fresh player list after a command) replaces rather than stacking.
-	if _open and _path != "" and path != _path and not _history.has(path):
+	# a fresh player list after a command) replaces rather than stacking. A page already IN
+	# the history is a return to it, so everything after it goes: otherwise Back from a
+	# root the server sent after a command walks into the confirmation of the ban just
+	# carried out, and two quick Backs left a page in the history twice.
+	var at := _history.find(path)
+	if at >= 0:
+		_history.resize(at)
+	elif _open and _path != "" and path != _path:
 		_history.append(_path)
 		if _history.size() > MAX_HISTORY:
 			_history.pop_front()

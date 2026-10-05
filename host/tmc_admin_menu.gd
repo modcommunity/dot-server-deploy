@@ -89,12 +89,23 @@ const MAX_LABEL := 64
 ## Longest custom text an admin may type into a command.
 const MAX_TEXT := 120
 
-## Bytes of JSON a page may encode to before rows are cut. Under [constant DotNotice.MAX_DATA_BYTES],
-## which drops a tree that is too big WHOLE — a menu that silently never opens.
-const MAX_PAGE_BYTES := 6000
+## Bytes a page's notice data may encode to before rows are cut, measured the way
+## [DotNotice] measures it — [method @GlobalScope.var_to_bytes] of the whole `data` — and a
+## margin under its [constant DotNotice.MAX_DATA_BYTES], past which it drops the tree WHOLE:
+## a menu that silently never opens.
+##
+## [b]Bytes, not characters, and the review that found it measured both.[/b] The first
+## version cut at 6000 characters of JSON: sixty players with ASCII names came to 7.6 KB
+## encoded, Cyrillic names to 10.7 KB and CJK to 13.9 KB, all past the notice limit while
+## under the character cut. Players choose their own names.
+const MAX_PAGE_BYTES := 7900
 
 ## Step kinds this file fills itself. Any other kind is the name of a list.
-const BUILTIN_KINDS := ["player", "game", "map", "text"]
+##
+## `player` is somebody the admin outranks; `anyone` is any player at all, for a step that
+## names a place rather than a victim (`goto`, `send`'s destination), which is
+## dot-moderation's own rule for those; `item` is what the loaded game's `give` can hand out.
+const BUILTIN_KINDS := ["player", "anyone", "game", "map", "item", "text"]
 
 ## `DotPunishment.Kind.WARN`, as a number: this host has dot-moderation in its build, but
 ## the manager is found in the registry and spoken to by duck type, for the reason
@@ -102,7 +113,12 @@ const BUILTIN_KINDS := ["player", "game", "map", "text"]
 const PUNISHMENT_WARN := 4
 const MODERATION_SERVICE := &"dot_moderation"
 
-## The lists a step may name. `admin_menu.yml`'s `lists:` merges over these by key.
+## The lists a step may name. A layer's `lists:` merges over these by key.
+##
+## A list either has `options:` (chosen by position, so the server's own text reaches the
+## command) or a `source:`, the name of a list a game registered in code with
+## [method add_list] — chosen by value, because what a game offers can change between two
+## key presses, and the value is checked against what it offers NOW.
 const DEFAULT_LISTS := {
 	"reason": {
 		"title": "Reason",
@@ -126,10 +142,64 @@ const DEFAULT_LISTS := {
 		"format": "seconds",
 		"options": ["10", "30", "60", "300"],
 	},
+	"toggle": {
+		"title": "On or off",
+		"options": [{"label": "On", "value": "on"}, {"label": "Off", "value": "off"}],
+	},
+	"damage": {
+		"title": "How hard",
+		"options": [
+			{"label": "Just a shove", "value": "0"},
+			{"label": "5 damage", "value": "5"},
+			{"label": "10 damage", "value": "10"},
+			{"label": "25 damage", "value": "25"},
+			{"label": "50 damage", "value": "50"},
+		],
+	},
+	"burn": {
+		"title": "For how long",
+		"format": "seconds",
+		"options": ["5", "10", "30"],
+	},
+	"blind": {
+		"title": "For how long",
+		"options": [
+			{"label": "10 seconds", "value": "10"},
+			{"label": "30 seconds", "value": "30"},
+			{"label": "Until lifted", "value": "on"},
+			{"label": "Lift it", "value": "off"},
+		],
+	},
+	"health": {
+		"title": "Health",
+		"options": ["1", "25", "100", "200", "500"],
+	},
+	"speed": {
+		"title": "Speed",
+		"options": [
+			{"label": "Half speed", "value": "0.5"},
+			{"label": "Normal", "value": "1"},
+			{"label": "One and a half", "value": "1.5"},
+			{"label": "Double", "value": "2"},
+			{"label": "Triple", "value": "3"},
+		],
+	},
+	"gravity": {
+		"title": "Gravity",
+		"options": [
+			{"label": "Moon (a quarter)", "value": "0.25"},
+			{"label": "Half", "value": "0.5"},
+			{"label": "Normal", "value": "1"},
+			{"label": "Heavy (double)", "value": "2"},
+		],
+	},
 }
 
 ## Every item a server gets without writing one. An item whose command this server does
-## not have is simply not drawn — see the class notes.
+## not have is simply not drawn — see the class notes — and one with an `ability` is drawn
+## only when the loaded game says it can do that (see [method supports]). So the fun ones
+## below appear in the 3D games, which implement them, and not in a 2D lobby, which has no
+## body to slap.
 const DEFAULT_ITEMS := {
 	"kick": {"label": "Kick", "command": "kick {player} {reason}", "steps": ["player", "reason"]},
 	"ban": {"label": "Ban", "command": "ban {player} {duration} {reason}", "steps": ["player", "duration", "reason"], "confirm": true},
@@ -138,13 +208,31 @@ const DEFAULT_ITEMS := {
 	"gag": {"label": "Gag (chat only)", "command": "gag {player} {duration} {reason}", "steps": ["player", "duration", "reason"]},
 	"unmute": {"label": "Unmute", "command": "unmute {player}", "steps": ["player"]},
 	"info": {"label": "Player info", "info": true, "steps": ["player"], "self": true, "flag": "kick"},
-	"slay": {"label": "Slay", "command": "slay {player}", "steps": ["player"]},
-	"slap": {"label": "Slap", "command": "slap {player}", "steps": ["player"]},
-	"freeze": {"label": "Freeze", "command": "freeze {player} {seconds}", "steps": ["player", "seconds"]},
-	"unfreeze": {"label": "Unfreeze", "command": "unfreeze {player}", "steps": ["player"]},
-	"respawn": {"label": "Respawn", "command": "respawn {player}", "steps": ["player"]},
-	"bring": {"label": "Bring to me", "command": "bring {player}", "steps": ["player"]},
-	"goto": {"label": "Go to", "command": "goto {player}", "steps": ["player"]},
+
+	"slay": {"label": "Slay", "command": "slay {player}", "steps": ["player"], "ability": "slay", "groups": true},
+	"slap": {"label": "Slap", "command": "slap {player} {damage}", "steps": ["player", "damage"], "ability": "slap", "groups": true},
+	"burn": {"label": "Set on fire", "command": "burn {player} {burn}", "steps": ["player", "burn"], "ability": "burn", "groups": true},
+	"freeze": {"label": "Freeze", "command": "freeze {player} {seconds}", "steps": ["player", "seconds"], "ability": "freeze", "groups": true},
+	"unfreeze": {"label": "Unfreeze", "command": "unfreeze {player}", "steps": ["player"], "ability": "freeze", "groups": true},
+	"blind": {"label": "Blind", "command": "blind {player} {blind}", "steps": ["player", "blind"], "ability": "blind", "groups": true},
+	"beacon": {"label": "Beacon", "command": "beacon {player} {toggle}", "steps": ["player", "toggle"], "ability": "beacon", "groups": true},
+	"rename": {"label": "Rename", "command": "rename {player} {text}", "steps": ["player", "text"], "ability": "rename"},
+	"respawn": {"label": "Respawn", "command": "respawn {player}", "steps": ["player"], "ability": "respawn", "self": true, "groups": true},
+
+	"noclip": {"label": "Noclip", "command": "noclip {player} {toggle}", "steps": ["player", "toggle"], "ability": "noclip", "self": true},
+	"god": {"label": "God mode", "command": "god {player} {toggle}", "steps": ["player", "toggle"], "ability": "god", "self": true},
+	"buddha": {"label": "Buddha (hurt, never die)", "command": "buddha {player} {toggle}", "steps": ["player", "toggle"], "ability": "buddha", "self": true},
+	"hp": {"label": "Set health", "command": "hp {player} {health}", "steps": ["player", "health"], "ability": "health", "self": true, "groups": true},
+	"speed": {"label": "Speed", "command": "speed {player} {speed}", "steps": ["player", "speed"], "ability": "speed", "self": true, "groups": true},
+	"gravity": {"label": "Gravity", "command": "gravity {player} {gravity}", "steps": ["player", "gravity"], "ability": "gravity", "self": true, "groups": true},
+	"give": {"label": "Give", "command": "give {player} {item}", "steps": ["player", "item"], "ability": "give", "self": true},
+	"strip": {"label": "Take their weapons", "command": "strip {player}", "steps": ["player"], "ability": "strip", "groups": true},
+
+	"bring": {"label": "Bring to me", "command": "bring {player}", "steps": ["player"], "ability": "teleport", "groups": true},
+	"goto": {"label": "Go to", "command": "goto {player}", "steps": ["player:anyone"], "ability": "teleport"},
+	"send": {"label": "Send to somebody", "command": "send {player} {to}", "steps": ["player", "to:anyone"], "ability": "teleport"},
+	"return": {"label": "Send back", "command": "return {player}", "steps": ["player"], "ability": "teleport", "self": true},
+
 	"changelevel": {"label": "Change game", "command": "changelevel {game}", "steps": ["game"], "confirm": true},
 	"map": {"label": "Change map", "command": "map {map}", "steps": ["map"], "confirm": true},
 	"say": {"label": "Announce", "command": "say {text}", "steps": ["text"]},
@@ -154,13 +242,38 @@ const DEFAULT_ITEMS := {
 const DEFAULT_CATEGORIES := {
 	"players": {
 		"title": "Player commands",
-		"items": ["info", "kick", "ban", "warn", "mute", "gag", "unmute", "slay", "slap", "freeze", "unfreeze", "respawn", "bring", "goto"],
+		"items": ["info", "kick", "ban", "warn", "mute", "gag", "unmute"],
+	},
+	"fun": {
+		"title": "Fun commands",
+		"items": ["slay", "slap", "burn", "freeze", "unfreeze", "blind", "beacon", "rename", "respawn"],
+	},
+	"powers": {
+		"title": "Powers",
+		"items": ["noclip", "god", "buddha", "hp", "speed", "gravity", "give", "strip"],
+	},
+	"teleport": {
+		"title": "Teleport",
+		"items": ["bring", "goto", "send", "return"],
 	},
 	"server": {
 		"title": "Server commands",
 		"items": ["changelevel", "map", "say"],
 	},
 }
+
+## Where a game's own items go when it names no category: one per game, after the built-in
+## ones, titled with the game's name.
+const GAME_CATEGORY := "game"
+
+## The registry name a game finds the menu under. Duck-typed on purpose: a game is a
+## delivered pack and may not name this host's classes, and a game on a server that is not
+## this one finds nothing and carries on. See [method set_layer] and [method add_list].
+const SERVICE := &"admin_menu"
+
+## The group targets a player step with `groups: true` offers, as dot-moderation's live
+## tool commands spell them. Their own immunity rule skips anybody the admin cannot outrank.
+const GROUPS := [["@all", "Everyone"], ["@others", "Everyone else"]]
 
 ## Where an item the file adds but places in no category is put, rather than nowhere.
 const OTHER_CATEGORY := "other"
@@ -191,6 +304,10 @@ var address_flag := "kick"
 ## What the menu does after a command runs: `close`, `back` (the item's first page, a
 ## fresh player list) or `root`.
 var after_run := "close"
+
+## Whether a game's own items (its `game.yml` and what it registers in code) are on the
+## menu. The owner's file wins either way; this is the switch for "none of them".
+var game_items := true
 
 ## id -> normalised item. See [method _normalise_item].
 var items: Dictionary = {}
@@ -223,6 +340,14 @@ var maps_fn: Callable = Callable()
 
 ## `func() -> Object`: dot-moderation's manager, or null.
 var moderation_fn: Callable = Callable()
+
+## The owner's `admin_menu.yml`, kept so a game's layer can be merged UNDER it on every
+## change. See [method _rebuild].
+var _owner_tree: Dictionary = {}
+
+## key -> {"tree": Dictionary, "owner": Object or null, "lists": {name: Callable}}, in the
+## order they were set. "game" is the loaded game's `game.yml`; anything else is code.
+var _layers: Dictionary = {}
 
 ## The commands this registered, so they go when it does.
 var _registered := PackedStringArray()
@@ -274,6 +399,13 @@ static func install(
 	host.add_child(menu)
 	menu.register_commands()
 	p_server.envelope.register(KIND, menu._on_kind)
+	DotRegistry.register(SERVICE, menu)
+
+	# The game's own `metadata: admin_menu:`, swapped on every change. Read now too, for
+	# the game the server booted into, which loaded before this existed.
+	if p_server.games != null:
+		p_server.games.game_loaded.connect(func(_key: String) -> void: menu.adopt_game(p_server.games.current()))
+		menu.adopt_game(p_server.games.current())
 
 	for problem in menu.problems:
 		DotLog.warn(CHANNEL, "admin_menu.yml: %s" % problem, {})
@@ -307,6 +439,7 @@ static func maps_of(session: Object) -> Array:
 
 
 func _exit_tree() -> void:
+	DotRegistry.unregister_instance(SERVICE, self)
 	if server != null and is_instance_valid(server):
 		server.envelope.unregister(KIND)
 	if console == null:
@@ -318,16 +451,43 @@ func _exit_tree() -> void:
 
 # --- Configuration ---------------------------------------------------------------
 
-## Reads `admin_menu.yml`'s tree over the defaults. Returns self.
+## Reads `admin_menu.yml`'s tree over the defaults and any game layers. Returns self.
 ##
-## [b]Items and lists merge by key; categories replace.[/b] `items: {kick: {label: Boot}}`
-## renames kick and keeps the rest of it, because an owner changing one word should not
-## have to restate a command line. A `categories:` block is the owner saying what is on
-## the menu, so it replaces the layout whole — an item they left out is out — and the one
-## exception is an item they ADDED and placed nowhere, which goes under "Other" rather than
-## being defined and unreachable.
+## [b]Four layers, the owner's last.[/b] The built-in defaults; the loaded game's
+## `metadata: admin_menu:` from its `game.yml`; anything a game registered in code
+## ([method set_layer]); and the owner's file. Each merges over the one before:
+##
+## - [b]items and lists merge by key[/b], so `items: {kick: {label: Boot}}` renames kick and
+##   keeps its command, and `items: {slap: {enabled: false}}` takes a game's or the
+##   built-in slap off;
+## - [b]an item may name its own `category:`[/b], which is created if it does not exist;
+## - [b]a game's `categories:` merge[/b]: their items are appended to a category of the
+##   same id, or a new one is added after the built-in ones;
+## - [b]the owner's `categories:` replace the built-in layout[/b], because that is the owner
+##   saying what is on the menu — and a game's items still follow it unless
+##   `admin_menu_game_items: false`, because a game that ships a "Restart the round" should
+##   not lose it on every server whose owner reordered the moderation commands.
+##
+## An item somebody added and placed nowhere goes under the game's category (a game's) or
+## "Other" (the owner's) rather than being defined and unreachable.
 func configure(tree: Dictionary) -> TmcAdminMenu:
-	problems.clear()
+	_owner_tree = tree
+	_rebuild()
+	return self
+
+
+func _read_settings(tree: Dictionary) -> void:
+	# From the defaults every time: a setting taken out of the file goes back to its default
+	# rather than keeping whatever the last read left behind.
+	enabled = true
+	commands = PackedStringArray(DEFAULT_COMMANDS)
+	title = "Admin menu"
+	open_flag = ""
+	warn_flag = "kick"
+	warn_announce = false
+	address_flag = "kick"
+	after_run = "close"
+	game_items = true
 
 	for key in tree.keys():
 		var name := String(key)
@@ -355,6 +515,8 @@ func configure(tree: Dictionary) -> TmcAdminMenu:
 				warn_announce = _truthy(value)
 			"admin_menu_address_flag":
 				address_flag = str(value).strip_edges()
+			"admin_menu_game_items":
+				game_items = _truthy(value)
 			"admin_menu_after_run":
 				var mode := str(value).strip_edges().to_lower()
 				if mode in ["close", "back", "root"]:
@@ -366,44 +528,59 @@ func configure(tree: Dictionary) -> TmcAdminMenu:
 			_:
 				problems.append("unknown key '%s'" % name)
 
+
+## Everything, from the four layers. Called on every change to any of them.
+func _rebuild() -> void:
+	problems.clear()
+	_prune()
+	_read_settings(_owner_tree)
+
+	var trees: Array = []
+	if game_items:
+		for key in _layers.keys():
+			trees.append([String(key), _layers[key]["tree"]])
+	trees.append(["admin_menu.yml", _owner_tree])
+
 	# Lists first: an item's steps are checked against them.
-	lists = {}
+	var raw_lists: Dictionary = {}
 	for id in DEFAULT_LISTS.keys():
-		lists[id] = _normalise_list(id, DEFAULT_LISTS[id])
+		raw_lists[id] = (DEFAULT_LISTS[id] as Dictionary).duplicate(true)
+	for pair in trees:
+		var given: Variant = (pair[1] as Dictionary).get("lists", {})
+		if given is Dictionary:
+			for key in (given as Dictionary).keys():
+				var id := _id(String(key))
+				if id == "" or not (given[key] is Dictionary):
+					problems.append("%s: lists.%s must be a mapping" % [pair[0], String(key)])
+					continue
+				var merged: Dictionary = raw_lists.get(id, {})
+				merged.merge(given[key], true)
+				raw_lists[id] = merged
+		elif given != null and str(given) != "":
+			problems.append("%s: lists must be a mapping" % pair[0])
+	lists = {}
+	for id in raw_lists.keys():
+		lists[id] = _normalise_list(id, raw_lists[id])
 
-	var file_lists: Variant = tree.get("lists", {})
-	if file_lists is Dictionary:
-		for key in (file_lists as Dictionary).keys():
-			var id := _id(String(key))
-			var raw: Variant = file_lists[key]
-			if id == "" or not (raw is Dictionary):
-				problems.append("lists.%s must be a mapping" % String(key))
-				continue
-			var merged: Dictionary = (DEFAULT_LISTS.get(id, {}) as Dictionary).duplicate(true)
-			merged.merge(raw, true)
-			lists[id] = _normalise_list(id, merged)
-	elif file_lists != null and str(file_lists) != "":
-		problems.append("lists must be a mapping")
-
+	# Items, remembering who added each one, for where an unplaced one goes.
 	var raw_items: Dictionary = {}
+	var added_by: Dictionary = {}
 	for id in DEFAULT_ITEMS.keys():
 		raw_items[id] = (DEFAULT_ITEMS[id] as Dictionary).duplicate(true)
-
-	var added := PackedStringArray()
-	var file_items: Variant = tree.get("items", {})
-	if file_items is Dictionary:
-		for key in (file_items as Dictionary).keys():
-			var id := _id(String(key))
-			var raw: Variant = file_items[key]
-			if id == "" or not (raw is Dictionary):
-				problems.append("items.%s must be a mapping" % String(key))
-				continue
-			if not raw_items.has(id):
-				added.append(id)
-				raw_items[id] = {}
-			(raw_items[id] as Dictionary).merge(raw, true)
-	elif file_items != null and str(file_items) != "":
-		problems.append("items must be a mapping")
+	for pair in trees:
+		var given: Variant = (pair[1] as Dictionary).get("items", {})
+		if given is Dictionary:
+			for key in (given as Dictionary).keys():
+				var id := _id(String(key))
+				if id == "" or not (given[key] is Dictionary):
+					problems.append("%s: items.%s must be a mapping" % [pair[0], String(key)])
+					continue
+				if not raw_items.has(id):
+					added_by[id] = pair[0]
+					raw_items[id] = {}
+				(raw_items[id] as Dictionary).merge(given[key], true)
+		elif given != null and str(given) != "":
+			problems.append("%s: items must be a mapping" % pair[0])
 
 	items = {}
 	for id in raw_items.keys():
@@ -411,50 +588,168 @@ func configure(tree: Dictionary) -> TmcAdminMenu:
 		if bool(item["enabled"]):
 			items[id] = item
 
+	# The layout: the owner's, or the built-in one; then each game's merged in.
 	categories = {}
-	var file_categories: Variant = tree.get("categories", null)
-	var layout: Dictionary = DEFAULT_CATEGORIES
-	if file_categories is Dictionary and not (file_categories as Dictionary).is_empty():
-		layout = file_categories
-	elif file_categories != null and not (file_categories is Dictionary) and str(file_categories) != "":
-		problems.append("categories must be a mapping")
+	var owner_layout: Variant = _owner_tree.get("categories", null)
+	if owner_layout is Dictionary and not (owner_layout as Dictionary).is_empty():
+		_merge_categories(owner_layout, "admin_menu.yml", raw_items, true)
+	else:
+		if owner_layout != null and not (owner_layout is Dictionary) and str(owner_layout) != "":
+			problems.append("admin_menu.yml: categories must be a mapping")
+		_merge_categories(DEFAULT_CATEGORIES, "built-in", raw_items, true)
+	if game_items:
+		for key in _layers.keys():
+			var layout: Variant = (_layers[key]["tree"] as Dictionary).get("categories", {})
+			if layout is Dictionary:
+				_merge_categories(layout, String(key), raw_items, false)
 
-	var placed := {}
+	# An item's own `category:` wins over where a layout put it; then the unplaced ones.
+	for id in items.keys():
+		var wanted := _id(str(raw_items[id].get("category", "")))
+		if wanted != "":
+			_place(id, wanted, wanted.capitalize())
+	for id in added_by.keys():
+		if items.has(id) and not _placed(id):
+			if added_by[id] == "admin_menu.yml":
+				_place(id, OTHER_CATEGORY, "Other")
+			else:
+				_place(id, GAME_CATEGORY, str(_layers.get(added_by[id], {}).get("title", "This game")))
+
+
+func _merge_categories(layout: Dictionary, where: String, raw_items: Dictionary, replace: bool) -> void:
 	for key in layout.keys():
 		var id := _id(String(key))
 		var raw: Variant = layout[key]
 		if id == "" or not (raw is Dictionary):
-			problems.append("categories.%s must be a mapping" % String(key))
+			problems.append("%s: categories.%s must be a mapping" % [where, String(key)])
 			continue
-		var members := PackedStringArray()
+		var existing: Dictionary = categories.get(id, {})
+		var members: PackedStringArray = existing.get("items", PackedStringArray()) if not replace else PackedStringArray()
 		var listed: Variant = (raw as Dictionary).get("items", [])
 		for one in (listed if listed is Array else []):
 			var item_id := _id(str(one))
 			if items.has(item_id):
-				members.append(item_id)
-				placed[item_id] = true
+				if not members.has(item_id):
+					members.append(item_id)
 			elif not raw_items.has(item_id):
-				problems.append("categories.%s names '%s', which is not an item" % [id, str(one)])
+				problems.append("%s: categories.%s names '%s', which is not an item" % [where, id, str(one)])
 		categories[id] = {
-			"title": _label(str((raw as Dictionary).get("title", id.capitalize()))),
-			"flag": str((raw as Dictionary).get("flag", "")).strip_edges(),
+			"title": _label(str((raw as Dictionary).get("title", existing.get("title", id.capitalize())))),
+			"flag": str((raw as Dictionary).get("flag", existing.get("flag", ""))).strip_edges(),
 			"items": members,
 		}
 
-	var orphans := PackedStringArray()
-	for id in added:
-		if items.has(id) and not placed.has(id):
-			orphans.append(id)
-	if not orphans.is_empty():
-		var other: Dictionary = categories.get(OTHER_CATEGORY, {"title": "Other", "flag": "", "items": PackedStringArray()})
-		# Taken out, appended and put back: a PackedStringArray is a value, and appending to
-		# the one a cast hands back appends to a copy nobody keeps.
-		var members: PackedStringArray = other["items"]
-		members.append_array(orphans)
-		other["items"] = members
-		categories[OTHER_CATEGORY] = other
 
-	return self
+## Puts [param id] in [param category] (and nowhere else), making the category if needed.
+func _place(id: String, category: String, p_title: String) -> void:
+	for key in categories.keys():
+		var members: PackedStringArray = categories[key]["items"]
+		if members.has(id):
+			members.remove_at(members.find(id))
+			categories[key]["items"] = members
+	var cat: Dictionary = categories.get(category, {"title": _label(p_title), "flag": "", "items": PackedStringArray()})
+	# Taken out, appended and put back: a PackedStringArray is a value, and appending to
+	# the one a cast hands back appends to a copy nobody keeps.
+	var members: PackedStringArray = cat["items"]
+	members.append(id)
+	cat["items"] = members
+	categories[category] = cat
+
+
+func _placed(id: String) -> bool:
+	for key in categories.keys():
+		if (categories[key]["items"] as PackedStringArray).has(id):
+			return true
+	return false
+
+
+# --- What a game adds ------------------------------------------------------------
+
+## Adds or replaces a layer of items, lists and categories, in the same shape as
+## `admin_menu.yml`. For a game, from its module:
+##
+## [codeblock]
+## var menu := DotRegistry.get_service(&"admin_menu")
+## if menu != null and menu.has_method("set_layer"):
+##     menu.set_layer("arena", {
+##         "title": "Arena",
+##         "items": {"restart": {"label": "Restart the match", "command": "arena_restart"}},
+##     }, self)
+## [/codeblock]
+##
+## With an [param owner], the layer goes when the owner leaves the tree or is freed — a
+## module unloaded by a game change takes its items with it and nothing has to remember to
+## call [method clear_layer]. `title` names the category its unplaced items go under.
+## The owner's own `admin_menu.yml` still wins over anything here.
+func set_layer(key: String, tree: Dictionary, owner: Object = null) -> void:
+	var layer: Dictionary = _layers.get(key, {"lists": {}})
+	layer["tree"] = tree.duplicate(true)
+	# Lists registered in code survive the tree being replaced.
+	var declared: Dictionary = (layer["tree"] as Dictionary).get("lists", {})
+	for name in (layer["lists"] as Dictionary).keys():
+		if not declared.has(name):
+			declared[name] = {"title": String(name).capitalize(), "source": name}
+	if not declared.is_empty():
+		layer["tree"]["lists"] = declared
+	layer["title"] = _label(str(tree.get("title", key.capitalize())))
+	layer["owner"] = weakref(owner) if owner != null else null
+	_layers[key] = layer
+	if owner is Node and not (owner as Node).tree_exiting.is_connected(clear_layer.bind(key)):
+		(owner as Node).tree_exiting.connect(clear_layer.bind(key), CONNECT_ONE_SHOT)
+	_rebuild()
+
+
+## Takes a layer off, and every list it registered.
+func clear_layer(key: String) -> void:
+	if _layers.erase(key):
+		_rebuild()
+
+
+## A list whose options a game computes when the page is drawn: what `give` can hand out,
+## the rounds a mode has, the teams there are. [param fn] returns an Array of
+## `[value, label]` pairs or of plain strings. A step names it by giving its list a
+## `source: <name>`, or by naming [param name] directly as the step's kind.
+##
+## Values are single words (no space, quote or semicolon), because the chosen value travels
+## back in the path; anything else is dropped from the list.
+func add_list(key: String, name: String, fn: Callable, list_title: String = "", owner: Object = null) -> void:
+	if not _layers.has(key):
+		set_layer(key, {}, owner)
+	var id := _id(name)
+	(_layers[key]["lists"] as Dictionary)[id] = fn
+	var tree: Dictionary = _layers[key]["tree"]
+	var given: Dictionary = tree.get("lists", {})
+	if not given.has(id):
+		given[id] = {"title": list_title if list_title != "" else id.capitalize(), "source": id}
+		tree["lists"] = given
+	_rebuild()
+
+
+## The loaded game's `metadata: admin_menu:`, or nothing. Called on every game change.
+func adopt_game(descriptor: Object) -> void:
+	var tree: Variant = null
+	var game_title := "This game"
+	if descriptor != null:
+		var meta: Variant = descriptor.get("metadata")
+		if meta is Dictionary:
+			tree = (meta as Dictionary).get("admin_menu", null)
+		if descriptor.has_method("display_name_or_id"):
+			game_title = str(descriptor.call("display_name_or_id"))
+	if tree is Dictionary and not (tree as Dictionary).is_empty():
+		var layer := (tree as Dictionary).duplicate(true)
+		if not layer.has("title"):
+			layer["title"] = game_title
+		set_layer("game", layer)
+	elif _layers.has("game"):
+		clear_layer("game")
+
+
+## Layers whose owner has gone.
+func _prune() -> void:
+	for key in _layers.keys():
+		var held: Variant = _layers[key].get("owner")
+		if held is WeakRef and (held as WeakRef).get_ref() == null:
+			_layers.erase(key)
 
 
 func _normalise_list(id: String, raw: Dictionary) -> Dictionary:
@@ -477,7 +772,8 @@ func _normalise_list(id: String, raw: Dictionary) -> Dictionary:
 			label = _option_label(format, value)
 		options.append({"label": label, "value": value})
 
-	if options.is_empty() and not _truthy(raw.get("custom", false)):
+	var source := _id(str(raw.get("source", "")))
+	if options.is_empty() and source == "" and not _truthy(raw.get("custom", false)):
 		problems.append("lists.%s offers nothing to choose" % id)
 
 	return {
@@ -485,6 +781,7 @@ func _normalise_list(id: String, raw: Dictionary) -> Dictionary:
 		"custom": _truthy(raw.get("custom", false)),
 		"format": format,
 		"options": options,
+		"source": source,
 	}
 
 
@@ -526,6 +823,8 @@ func _normalise_item(id: String, raw: Dictionary) -> Dictionary:
 		"info": _truthy(raw.get("info", false)),
 		"confirm": _truthy(raw.get("confirm", false)),
 		"self": _truthy(raw.get("self", false)),
+		"groups": _truthy(raw.get("groups", false)),
+		"ability": _id(str(raw.get("ability", ""))),
 		"enabled": _truthy(raw.get("enabled", true)),
 		"steps": [],
 	}
@@ -723,6 +1022,15 @@ func visible_items(ctx: DotCmdContext, category: String) -> PackedStringArray:
 	return out
 
 
+## Whether [param id] is on a category [param ctx] can see.
+func on_menu(ctx: DotCmdContext, id: String) -> bool:
+	for cat in categories.keys():
+		var flag := String(categories[cat]["flag"])
+		if (categories[cat]["items"] as PackedStringArray).has(id) and (flag == "" or ctx.has_permission(flag)):
+			return true
+	return false
+
+
 ## Whether [param ctx] may use [param item]. See the class notes: computed from the console.
 func may_use(ctx: DotCmdContext, item: Dictionary) -> bool:
 	if item.is_empty() or not bool(item.get("enabled", false)):
@@ -747,7 +1055,78 @@ func may_use(ctx: DotCmdContext, item: Dictionary) -> bool:
 	if ctx.source == DotCmdContext.Source.CHAT and not cmd.allows_chat(console.chat_commands_are_open()):
 		return false
 
+	if not supports(item):
+		return false
+
 	return ctx.has_permission(cmd.permission)
+
+
+## Whether the loaded game can do what [param item]'s `ability` names.
+##
+## [b]The command existing is not enough for these, and that is dot-moderation's own
+## design.[/b] Its live-tool commands are registered whether or not a game supports them,
+## so `!slap` in a lobby answers with the game's reason rather than "unknown command" —
+## right for somebody typing, wrong for a menu, where a Slap row that can only fail is a
+## row that should not be there. So an item with an ability asks the command's own handler
+## object for its `tools` and asks those `supports(ability)`; `teleport` asks whether the
+## game gave them a way to move a player. Duck-typed throughout: an item whose command is
+## somebody else's, with no `tools` to ask, is shown, and the command answers for itself.
+func supports(item: Dictionary) -> bool:
+	var ability := String(item.get("ability", ""))
+	if ability == "":
+		return true
+	var tools := _tools_of(command_of(item))
+	if tools == null:
+		return true
+	if ability == "teleport":
+		var mover: Variant = tools.get("teleport_fn")
+		return mover is Callable and (mover as Callable).is_valid()
+	if tools.has_method("supports"):
+		return bool(tools.call("supports", StringName(ability)))
+	return true
+
+
+## dot-moderation's `DotModTools` behind a command, or null: the handler's object's `tools`.
+static func _tools_of(cmd: DotConCommand) -> Object:
+	if cmd == null or not cmd.handler.is_valid():
+		return null
+	var holder := cmd.handler.get_object()
+	if holder == null:
+		return null
+	var tools: Variant = holder.get("tools")
+	return tools as Object if tools is Object else null
+
+
+## What the loaded game's `give` can hand out, as `[value, label]`: its command's own
+## `items_fn`, which every game that has `give` already fills for the command's completion.
+func _give_items() -> Array:
+	var cmd := console.find_command("give") if console != null else null
+	if cmd == null or not cmd.handler.is_valid() or cmd.handler.get_object() == null:
+		return []
+	var fn: Variant = cmd.handler.get_object().get("items_fn")
+	if not (fn is Callable) or not (fn as Callable).is_valid():
+		return []
+	return _pairs(func() -> Array:
+		var out := []
+		for id in (fn as Callable).call():
+			out.append([str(id), str(id).replace("_", " ").capitalize()])
+		return out)
+
+
+## A list's options as `{label, value}` rows: its own, or what its `source` returns now.
+func _options_of(list: Dictionary) -> Array:
+	var source := String(list.get("source", ""))
+	if source == "":
+		return list["options"]
+	var fn := Callable()
+	for key in _layers.keys():
+		var held: Dictionary = _layers[key].get("lists", {})
+		if held.has(source):
+			fn = held[source]
+	var out := []
+	for pair in _pairs(fn):
+		out.append({"label": _label(str(pair[1])), "value": str(pair[0])})
+	return out
 
 
 ## The console command [param item]'s line runs, or null when this server has none.
@@ -812,9 +1191,14 @@ func handle(ctx: DotCmdContext, tokens: PackedStringArray) -> void:
 		_send(ctx, root_page(ctx))
 		return
 
-	var item: Dictionary = items.get(_id(head.substr(2)), {})
+	var item_id := _id(head.substr(2))
+	var item: Dictionary = items.get(item_id, {})
 
-	if not may_use(ctx, item):
+	# On the menu for THIS admin, not only usable: a path can name an item the owner left
+	# out of every category, or put under a category whose flag this admin lacks, and the
+	# drawing check is not the one that counts. For a command item the console's own flag
+	# would still refuse; for an info item this is the only gate.
+	if not on_menu(ctx, item_id) or not may_use(ctx, item):
 		ctx.reply("That is not on your menu any more.")
 		_send(ctx, root_page(ctx))
 		return
@@ -890,23 +1274,37 @@ func step_page(
 	var input_now := false
 
 	match kind:
-		"player":
+		"player", "anyone":
+			var anyone := kind == "anyone"
 			heading = "Choose a player"
+			# Groups first, for the first step of an item that takes them: the command's own
+			# immunity rule skips whoever the admin cannot outrank, and says how many.
+			if index == 0 and bool(item["groups"]):
+				for group in GROUPS:
+					rows.append({"label": group[1], "go": "%s %s" % [prefix, group[0]]})
 			var people := _sessions()
 			people.sort_custom(func(a: DotClientSession, b: DotClientSession) -> bool:
 				return a.display_name.naturalnocasecmp_to(b.display_name) < 0)
+			var someone := false
 			for session in people:
 				var me := session == ctx.session
 				if me and not bool(item["self"]):
 					continue
-				if not me and not ctx.outranks(session.immunity):
+				if not me and not anyone and not ctx.outranks(session.immunity):
 					continue
+				someone = true
 				rows.append({
 					"label": _label("%s (#%d)%s" % [session.display_name, session.userid, " — you" if me else ""]),
 					"go": "%s #%d" % [prefix, session.userid],
 				})
-			if rows.is_empty():
+			if not someone:
 				rows.append({"label": "Nobody here you may act on."})
+		"item":
+			heading = "Choose what to give"
+			for pair in _give_items():
+				rows.append({"label": _label(str(pair[1])), "go": "%s =%s" % [prefix, pair[0]]})
+			if rows.is_empty():
+				rows.append({"label": "This game has nothing to give."})
 		"game":
 			heading = "Choose a game"
 			for pair in _games():
@@ -923,9 +1321,12 @@ func step_page(
 			var list: Dictionary = lists[kind]
 			heading = String(list["title"])
 			var n := 0
-			for option in list["options"]:
+			var dynamic := String(list["source"]) != ""
+			for option in _options_of(list):
 				n += 1
-				rows.append({"label": String(option["label"]), "go": "%s %d" % [prefix, n]})
+				# A computed list travels by value; see DEFAULT_LISTS.
+				rows.append({"label": String(option["label"]),
+					"go": "%s =%s" % [prefix, option["value"]] if dynamic else "%s %d" % [prefix, n]})
 			if bool(list["custom"]) and index == (item["steps"] as Array).size() - 1:
 				rows.append({"label": "Custom…", "input": prefix, "prompt": heading})
 
@@ -987,11 +1388,11 @@ func info_page(ctx: DotCmdContext, session: DotClientSession, path: String = "")
 	for cat in categories.keys():
 		for id in visible_items(ctx, cat):
 			var item: Dictionary = items[id]
-			if bool(item["info"]) or (item["steps"] as Array).is_empty() or item["steps"][0]["kind"] != "player":
+			if bool(item["info"]) or (item["steps"] as Array).is_empty() or not (item["steps"][0]["kind"] in ["player", "anyone"]):
 				continue
 			if session == ctx.session and not bool(item["self"]):
 				continue
-			if session != ctx.session and not ctx.outranks(session.immunity):
+			if session != ctx.session and item["steps"][0]["kind"] == "player" and not ctx.outranks(session.immunity):
 				continue
 			var go := "i:%s #%d" % [id, session.userid]
 			if actions.any(func(r: Dictionary) -> bool: return r["go"] == go):
@@ -1012,17 +1413,28 @@ func _resolve(ctx: DotCmdContext, item: Dictionary, step: Dictionary, token: Str
 	var kind := String(step["kind"])
 
 	match kind:
-		"player":
+		"player", "anyone":
+			for group in GROUPS:
+				if token == group[0]:
+					var first: Dictionary = (item["steps"] as Array)[0]
+					if not bool(item["groups"]) or first != step:
+						return DotResult.fail(DotError.CODE_INVALID, "Not for everybody at once.")
+					return DotResult.success([group[0], String(group[1]).to_lower()])
 			var session := _session_for(token)
 			if session == null:
 				return DotResult.fail(DotError.CODE_INVALID, "%s is not here any more." % token)
 			var me := session == ctx.session
 			if me and not bool(item["self"]):
 				return DotResult.fail(DotError.CODE_INVALID, "Not on yourself.")
-			if not me and not ctx.outranks(session.immunity):
+			if not me and kind == "player" and not ctx.outranks(session.immunity):
 				return DotResult.fail(DotError.CODE_FORBIDDEN,
 					"%s has equal or higher immunity than you." % session.display_name)
 			return DotResult.success(["#%d" % session.userid, session.display_name])
+		"item":
+			for pair in _give_items():
+				if "=%s" % pair[0] == token:
+					return DotResult.success([str(pair[0]), str(pair[1])])
+			return DotResult.fail(DotError.CODE_INVALID, "This game cannot give that.")
 		"game":
 			for pair in _games():
 				if str(pair[0]) == token:
@@ -1048,7 +1460,12 @@ func _resolve(ctx: DotCmdContext, item: Dictionary, step: Dictionary, token: Str
 			return DotResult.fail(DotError.CODE_INVALID, "Choose one from the list.")
 		return DotResult.success([custom, custom])
 
-	var options: Array = list["options"]
+	var options: Array = _options_of(list)
+	if String(list["source"]) != "":
+		for option in options:
+			if "=%s" % option["value"] == token:
+				return DotResult.success([String(option["value"]), String(option["label"])])
+		return DotResult.fail(DotError.CODE_INVALID, "That choice is not on the list any more.")
 	if not token.is_valid_int() or token.to_int() < 1 or token.to_int() > options.size():
 		return DotResult.fail(DotError.CODE_INVALID, "That choice is not on the list any more.")
 
@@ -1149,14 +1566,21 @@ func _page(p_title: String, subtitle: String, path: String, rows: Array) -> Dict
 		(page["rows"] as Array).append({"label": "…and %d more" % (rows.size() - MAX_ROWS)})
 
 	# Cut until it fits rather than have DotNotice drop the whole tree. See MAX_PAGE_BYTES.
+	# The "…and N more" row is counted in, so adding it cannot push the page back over.
 	var cut := 0
-	while JSON.stringify(page).length() > MAX_PAGE_BYTES and (page["rows"] as Array).size() > 1:
+	while encoded_size(page) > MAX_PAGE_BYTES and (page["rows"] as Array).size() > 1:
+		if cut > 0:
+			(page["rows"] as Array).pop_back()
 		(page["rows"] as Array).pop_back()
 		cut += 1
-	if cut > 0:
 		(page["rows"] as Array).append({"label": "…and %d more" % cut})
 
 	return page
+
+
+## What [param page] costs inside a notice, as [DotNotice] counts it.
+static func encoded_size(page: Dictionary) -> int:
+	return var_to_bytes({"menu": page}).size()
 
 
 func _send(ctx: DotCmdContext, page: Dictionary) -> void:

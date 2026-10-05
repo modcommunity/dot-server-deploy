@@ -48,8 +48,10 @@ const MAX_URL := 512
 const MAX_TIP := 160
 const MAX_TITLE := 64
 
-## Under [constant DotNotice.MAX_DATA_BYTES]: a document past it would be dropped whole.
-const MAX_DOC_BYTES := 6500
+## Under [constant DotNotice.MAX_DATA_BYTES], measured as it measures: `var_to_bytes` of the
+## whole data, BYTES. A document past it would be dropped whole; the first version counted
+## characters of JSON, and localised tips are two or three bytes a character.
+const MAX_DOC_BYTES := 7900
 
 var enabled := true
 
@@ -163,8 +165,16 @@ func configure(tree: Dictionary) -> TmcLoading:
 
 	if not games.is_empty() and not document().has("games"):
 		problems.append("the default and loading_games come to more than %d bytes; each game's screen is sent when it loads instead of ahead of time" % MAX_DOC_BYTES)
-	if JSON.stringify(document()).length() > MAX_DOC_BYTES:
+	if encoded_size(document()) > MAX_DOC_BYTES:
 		problems.append("the default screen alone is more than %d bytes and will not reach anybody; fewer tips?" % MAX_DOC_BYTES)
+	# Measured uncut: [method _hint] always fits, which is the point of it and why asking
+	# it would never report anything.
+	for id in maps.keys():
+		if encoded_size({"next": {"map": id, "entry": maps[id]}}) > MAX_DOC_BYTES:
+			problems.append("loading_maps.%s is too big to send whole; its tips and extra images are cut when it is" % id)
+	for id in games.keys():
+		if encoded_size({"next": {"game": id, "entry": games[id]}, "show": true}) > MAX_DOC_BYTES:
+			problems.append("loading_games.%s is too big to send whole; its tips and extra images are cut when it is" % id)
 
 	return self
 
@@ -250,9 +260,36 @@ func document() -> Dictionary:
 	with_games["games"] = games
 	# The games' entries ride along when they fit, so their media can be fetched ahead of
 	# time; when they do not, each goes out as a hint when its game is about to load.
-	if JSON.stringify(with_games).length() <= MAX_DOC_BYTES:
+	if encoded_size(with_games) <= MAX_DOC_BYTES:
 		return with_games
 	return doc
+
+
+## What [param data] costs inside a notice, as [DotNotice] counts it.
+static func encoded_size(data: Dictionary) -> int:
+	return var_to_bytes(data).size()
+
+
+## A `next` hint, cut until it fits: tips first, then all but one image, then all but one
+## song, then the entry itself — never `show`, which is the half that matters. An unbounded
+## hint was dropped whole by the notice, and `show: true` with it.
+func _hint(next: Dictionary, entry: Dictionary, show: bool = false) -> Dictionary:
+	var e := entry.duplicate(true)
+	var data := {"next": next.merged({"entry": e})}
+	if show:
+		data["show"] = true
+	for cut in ["tips", "images", "music", "all"]:
+		if encoded_size(data) <= MAX_DOC_BYTES:
+			break
+		match cut:
+			"tips":
+				e.erase("tips")
+			"images", "music":
+				if e.has(cut):
+					e[cut] = (e[cut] as Array).slice(0, 1)
+			"all":
+				e.clear()
+	return data
 
 
 func is_empty() -> bool:
@@ -276,7 +313,7 @@ func _on_game_changing(_from_key: String, _to_key: String) -> void:
 	var game_id := ""
 	if server != null and server.games != null and server.games.pending() != null:
 		game_id = server.games.pending().game_id
-	_broadcast({"next": {"game": game_id, "entry": games.get(game_id, {})}, "show": true})
+	_broadcast(_hint({"game": game_id}, games.get(game_id, {}), true))
 
 
 func _on_game_load_failed(_content_key: String, _error: DotError) -> void:
@@ -298,7 +335,7 @@ func _hint_map(map: Object) -> void:
 	var id := String(map.get("id"))
 	if not maps.has(id):
 		return
-	_broadcast({"next": {"map": id, "entry": maps[id]}})
+	_broadcast(_hint({"map": id}, maps[id]))
 
 
 func _watch_maps() -> void:
@@ -324,9 +361,28 @@ func _broadcast(data: Dictionary) -> void:
 
 # --- Console ---------------------------------------------------------------------
 
+## The commands this registered, so they go when it does.
+var _registered := PackedStringArray()
+
+
+func _exit_tree() -> void:
+	if server == null or not is_instance_valid(server) or server.console == null:
+		return
+	for name in _registered:
+		server.console.unregister_command(name)
+	_registered.clear()
+
+
 func _register_commands() -> void:
 	if server == null or server.console == null:
 		return
+	# Neither name may already be somebody else's: `register_command` would hand theirs back
+	# and this node's would be missing, or, after a second install, a lambda on a freed one.
+	for name in ["loading_screen", "loading_screen_reload"]:
+		if server.console.has_name(name):
+			DotLog.warn(CHANNEL, "a command called '%s' already exists; the loading screen did not take it" % name, {})
+			return
+	_registered = PackedStringArray(["loading_screen", "loading_screen_reload"])
 	server.console.command("loading_screen", func(ctx: DotCmdContext) -> void:
 		ctx.reply_lines(describe_lines()),
 		"What the loading screen shows, per game and per map.",
