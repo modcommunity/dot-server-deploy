@@ -51,6 +51,10 @@ const EXIT_OK := 0
 const EXIT_USAGE := 1
 const EXIT_FAILED := 2
 const EXIT_PARTIAL := 3
+## A game asked for a pack this server's addons are too old to run. The installed version
+## is kept, and the launcher reads this code as "update the addons and try again" when
+## TMC_AUTO_UPDATE allows it (see tools/server.in).
+const EXIT_ADDONS_BEHIND := 4
 
 const CHANNEL := "tmc.install"
 
@@ -168,6 +172,8 @@ func _init() -> void:
 
 	var missing := PackedStringArray()
 	var added := PackedStringArray()
+	# Games whose wanted version needs newer addons than this box has: "<raw>: <why>".
+	var behind := PackedStringArray()
 	var index := {}
 	# The origin the catalogue came from. Descriptor paths in it are relative and must
 	# resolve against THAT origin rather than against whichever base is first in the
@@ -260,6 +266,22 @@ func _init() -> void:
 			var got := await _install_from_pack(want, content_dir, bases, cloud)
 
 			if not got.ok:
+				# [b]Addons too old is not "could not install".[/b] Nothing is wrong with
+				# the pack or the origin; this box is one addon release behind it. The
+				# installed version (if any) stays, which is the point: before this check
+				# a restart moved the descriptor to a version the server then refused at
+				# boot, and a working server came up running nothing.
+				if got.error.code == DotError.CODE_VERSION:
+					DotLog.warn(CHANNEL, "a game needs newer addons than this server has", {
+						"game": str(want["id"]),
+						"version": str(want["version"]) if str(want["version"]) != "" else "latest",
+						"why": got.error.message,
+						"detail": got.error.detail,
+						"kept": "the installed version" if have else "nothing installed",
+					})
+					behind.append("%s: %s" % [str(want["raw"]), got.error.message])
+					continue
+
 				DotLog.error(CHANNEL, "could not install a game", {
 					"game": str(want["id"]),
 					"why": str(got.error),
@@ -348,6 +370,16 @@ func _init() -> void:
 	if not refused.is_empty():
 		print("  REFUSED  : %s" % ", ".join(refused))
 		print("             its directory belongs to another game; see the log")
+
+	if not behind.is_empty():
+		print("  BEHIND   : %s" % "; ".join(behind))
+		print("             this server's addons are older than those games need;")
+		print("             the installed versions were kept")
+
+	# Before the others: it is the one failure the launcher can fix by itself.
+	if not behind.is_empty():
+		quit(EXIT_ADDONS_BEHIND)
+		return
 
 	if present.is_empty():
 		quit(EXIT_FAILED)
@@ -787,6 +819,19 @@ func _install_from_pack(
 	# engine's own sharding -- two hex characters then the full digest -- so this asks for
 	# exactly what the publisher wrote rather than a second spelling of it.
 	var prefix := _version_prefix(content_id, version, manifest)
+
+	# [b]Can this server run it, asked before anything is written.[/b] The pack's
+	# requires.json names the addon API levels it was built against; the same rule the
+	# cloud client applies at mount (DotAddonApi.check) is applied here, so a version this
+	# box cannot run is never installed over one it can. A pack with no such file predates
+	# it and needs nothing that can be checked.
+	var able := await _check_requirements(manifest, prefix, bases)
+
+	# Not wrapped: the check's own sentence ("This game needs dot-platform API level 3 or
+	# newer; this server has level 2") is the whole report, and wrap() would push it down
+	# into the detail behind a content id the log already carries.
+	if not able.ok:
+		return able
 	var http := DotHttp.new()
 	http.name = "DescriptorHttp"
 	root.add_child(http)
@@ -1081,6 +1126,54 @@ static func _version_prefix(
 
 
 ## SHA-256 of a buffer, as lowercase hex.
+## Fetch the pack's requires.json, if it has one, and check it against this build's addons.
+## Fails with CODE_VERSION when the addons are too old -- the caller's signal to keep the
+## installed version -- and with the fetch's own error when the file cannot be read.
+func _check_requirements(
+	manifest: DotCloudManifest, prefix: String, bases: PackedStringArray
+) -> DotResult:
+	var wanted: DotCloudFile = null
+
+	for file in manifest.files:
+		if file.path == DotAddonApi.REQUIREMENTS_FILE:
+			wanted = file
+			break
+
+	if wanted == null:
+		return DotResult.success({})
+
+	var http := DotHttp.new()
+	http.name = "RequirementsHttp"
+	root.add_child(http)
+
+	var got: DotResult = null
+
+	for base in bases:
+		got = await http.get_bytes("%s/%s/objects/%s" % [
+			base.rstrip("/"), prefix, wanted.object_path()
+		])
+
+		if got.ok:
+			break
+
+	http.queue_free()
+
+	if got == null or not got.ok:
+		return (got if got != null else DotResult.fail(
+			DotError.CODE_IO, "nowhere to fetch the requirements from"
+		)).wrap("could not download %s" % DotAddonApi.REQUIREMENTS_FILE)
+
+	var bytes := got.value as PackedByteArray
+
+	if _sha256_hex(bytes) != wanted.sha256:
+		return DotResult.fail(
+			DotError.CODE_INVALID,
+			"the %s served is not the one the manifest names" % DotAddonApi.REQUIREMENTS_FILE
+		)
+
+	return DotAddonApi.new().check_text(bytes.get_string_from_utf8(), "server")
+
+
 static func _sha256_hex(bytes: PackedByteArray) -> String:
 	var ctx := HashingContext.new()
 	ctx.start(HashingContext.HASH_SHA256)

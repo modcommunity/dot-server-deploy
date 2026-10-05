@@ -22,6 +22,9 @@ while [ -L "$SELF" ]; do
     [[ $SELF != /* ]] && SELF="$DIR/$SELF"
 done
 PROJECT="$(cd -P "$(dirname "$SELF")" && pwd)"
+# Kept for TMC_AUTO_UPDATE, which re-runs this script with exactly what it was given once
+# the addons have been moved.
+ORIG_ARGS=("$@")
 
 # [b]Every option here is also an environment variable, because this runs on a box
 # nobody is typing at.[/b] A deployment is a machine with a unit file or a container on
@@ -87,6 +90,7 @@ OPT_MAX_PLAYERS="${TMC_MAX_PLAYERS:-}"
 OPT_GAME="${TMC_GAME:-}"
 OPT_MAP="${TMC_MAP:-}"
 OPT_WEB_LOADER="${TMC_WEB_LOADER:-}"
+AUTO_UPDATE="${TMC_AUTO_UPDATE:-when-needed}"
 
 # --- What this box installs, and where from ---------------------------------
 #
@@ -207,6 +211,11 @@ usage() {
                         spelling every other dedicated server uses. A game that
                         has no maps, or has not got this one, says so and boots
                         on its default anyway.
+    --auto-update MODE  when-needed (default): if a game this server installs needs
+                        newer addons than it has, pull this checkout and move the
+                        addons to its lock (what a reinstall does), then start.
+                        always: do that on every start. never: keep the installed
+                        game versions and say so.
     --web-loader LABEL  Ask the site for this version of the web game loader
                         for this server's players (reported as sv_web_loader).
                         For a server on older addons than the site's default.
@@ -294,7 +303,7 @@ usage() {
     TMC_VERBOSE         --verbose (set to anything)
     TMC_ALLOW_WEB       +sv_allow_web         TMC_ALLOW_DESKTOP +sv_allow_desktop
     TMC_ALLOW_MOBILE    +sv_allow_mobile      (1 admits, 0 refuses; empty = the YAML)
-    TMC_WEB_LOADER      --web-loader
+    TMC_WEB_LOADER      --web-loader          TMC_AUTO_UPDATE   --auto-update
 
   Which means a TMC_PORT left set in an environment file makes cfg/net.yml look
   broken: the port is edited, the server restarts, and it binds the old one with
@@ -350,6 +359,7 @@ while [ $# -gt 0 ]; do
         --refresh)     REFRESH=1;        shift ;;
         --map)         [ $# -ge 2 ] || die "$1 needs a value"; OPT_MAP="$2";         shift 2 ;;
         --web-loader)  [ $# -ge 2 ] || die "$1 needs a value"; OPT_WEB_LOADER="$2";  shift 2 ;;
+        --auto-update) [ $# -ge 2 ] || die "$1 needs a value"; AUTO_UPDATE="$2";     shift 2 ;;
         --base)    ENGINE_BASE="${2:-}"; shift 2 ;;
         --platform) [ $# -ge 2 ] || die "$1 needs a value"; NATIVE_PLATFORM="$2"; shift 2 ;;
         --build-version) [ $# -ge 2 ] || die "$1 needs a value"; BUILD_VERSION="$2"; shift 2 ;;
@@ -1108,6 +1118,71 @@ esac
 # all, and one that cannot reach the origin says so and comes up with what it has. An
 # operator can act on a warning at the top of a log; they cannot act on a server that
 # exits before it listens.
+# [b]A game that needs newer addons than this box has is the one install failure a
+# server can fix by itself.[/b] A box's addons come from addons.lock and move only when
+# this checkout is updated and setup.sh --update runs -- a reinstall, on a panel. A
+# restart never did it, so a game released against a new addon API was installed,
+# refused at boot ("This game needs dot-platform API level 3 or newer; this server has
+# level 2"), and the server came up running nothing until somebody reinstalled it
+# (2026-10-04). The installer now checks a pack's requires.json first, keeps the version
+# that runs, and exits 4; this does the reinstall's two steps and starts again.
+#
+# Only on a checkout that is a deployment: a shallow clone (what the egg and setup make),
+# or one whose HEAD is already contained in origin's branch. A developer's checkout with
+# commits of its own is never reset -- that is somebody's work -- and is told to pull.
+self_update() {
+    command -v git >/dev/null 2>&1 \
+        || { warn "TMC_AUTO_UPDATE: git is not installed here; reinstall the server to update its addons"; return 1; }
+    [ -d "$PROJECT/.git" ] \
+        || { warn "TMC_AUTO_UPDATE: $PROJECT is not a git checkout; reinstall to update its addons"; return 1; }
+
+    local branch
+    branch="$(git -C "$PROJECT" rev-parse --abbrev-ref HEAD 2>/dev/null)"
+    [ -n "$branch" ] && [ "$branch" != "HEAD" ] \
+        || { warn "TMC_AUTO_UPDATE: this checkout is not on a branch; not touching it"; return 1; }
+
+    note "updating this checkout (origin/$branch) and moving the addons to its lock"
+    GIT_TERMINAL_PROMPT=0 git -C "$PROJECT" fetch --quiet --depth 1 origin "$branch" \
+        || { warn "TMC_AUTO_UPDATE: could not fetch origin/$branch"; return 1; }
+
+    if [ "$(git -C "$PROJECT" rev-parse --is-shallow-repository)" != "true" ] \
+            && ! git -C "$PROJECT" merge-base --is-ancestor HEAD "origin/$branch" 2>/dev/null; then
+        warn "TMC_AUTO_UPDATE: this checkout has commits origin/$branch does not; pull it yourself"
+        return 1
+    fi
+
+    if [ -n "$(git -C "$PROJECT" status --porcelain --untracked-files=no)" ]; then
+        warn "TMC_AUTO_UPDATE: tracked files here have local changes; not resetting them"
+        return 1
+    fi
+
+    git -C "$PROJECT" reset --quiet --hard "origin/$branch" || return 1
+    (cd "$PROJECT" && ./setup.sh --no-games --update) || { warn "TMC_AUTO_UPDATE: setup.sh --update failed"; return 1; }
+    note "updated to $(git -C "$PROJECT" rev-parse --short HEAD)"
+}
+
+## Update, then run this script again from the top -- setup.sh regenerates it, and the new
+## lock means a new everything. Once: TMC_AUTO_UPDATED stops a second pass looping on a
+## game the newest lock still cannot run.
+update_and_restart() {
+    if self_update; then
+        export TMC_AUTO_UPDATED=1
+        exec "$PROJECT/server" "${ORIG_ARGS[@]}"
+    fi
+    return 1
+}
+
+case "$AUTO_UPDATE" in
+    when-needed|always|never) ;;
+    *) die "--auto-update / TMC_AUTO_UPDATE is when-needed, always or never, not '$AUTO_UPDATE'" ;;
+esac
+
+if [ "$AUTO_UPDATE" = "always" ] && [ -z "${TMC_AUTO_UPDATED:-}" ] \
+        && { [ "$COMMAND" = "run" ] || [ "$COMMAND" = "check" ]; }; then
+    printf '\n  %supdate%s\n' "$BLD" "$OFF"
+    update_and_restart || warn "starting on the addons this box already has"
+fi
+
 if [ -z "$NO_INSTALL" ] && [ -n "$OPT_GAMES" ] \
         && { [ "$COMMAND" = "run" ] || [ "$COMMAND" = "check" ]; }; then
     printf '\n  %sgames%s\n' "$BLD" "$OFF"
@@ -1117,6 +1192,19 @@ if [ -z "$NO_INSTALL" ] && [ -n "$OPT_GAMES" ] \
     case "$install_status" in
         0) ;;
         3) warn "some games could not be installed; starting with the rest" ;;
+        4)
+            if [ "$AUTO_UPDATE" != "never" ] && [ -z "${TMC_AUTO_UPDATED:-}" ]; then
+                note "a game needs newer addons than this server has; updating them"
+                update_and_restart
+            fi
+            if [ -n "${TMC_AUTO_UPDATED:-}" ]; then
+                warn "even the newest addons this checkout locks are too old for a game above;"
+                warn "it stays on the version that runs until a server release catches up"
+            else
+                warn "a game needs newer addons than this server has; it stays on the version"
+                warn "that runs. Reinstall, or set TMC_AUTO_UPDATE=when-needed, to update them"
+            fi
+            ;;
         *) warn "no games could be installed from the content origin" ;;
     esac
 fi

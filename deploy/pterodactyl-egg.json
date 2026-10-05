@@ -209,6 +209,16 @@
             "field_type": "text"
         },
         {
+            "name": "Update addons automatically",
+            "description": "when-needed (default): if a game this server installs needs newer dot-* addons than it has, the server updates this checkout and moves its addons to the matching release before starting -- what a reinstall does, without one. always: do that on every start. never: keep the game on the version that runs and say so in the log.",
+            "env_variable": "TMC_AUTO_UPDATE",
+            "default_value": "when-needed",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|string|in:when-needed,always,never",
+            "field_type": "text"
+        },
+        {
             "name": "Deploy repository",
             "description": "Where the server is cloned from at install.",
             "env_variable": "DEPLOY_REPO",
