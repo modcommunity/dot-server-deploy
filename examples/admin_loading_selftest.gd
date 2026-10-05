@@ -12,7 +12,7 @@ extends Node
 ## a socket this suite serves itself, because the fetch is the half most likely to be
 ## wrong and least likely to be noticed.
 
-const CHECKS := 146
+const CHECKS := 149
 
 var _passed := 0
 var _failed := 0
@@ -1041,9 +1041,11 @@ func _test_loading_fetch() -> void:
 	screen.adopt({"default": {"images": [url, "http://127.0.0.1:%d/missing.png" % port]}})
 
 	var served := 0
+	var on_worker := false
 	var deadline := Time.get_ticks_msec() + 8000
 	var peers: Array[StreamPeerTCP] = []
 	while Time.get_ticks_msec() < deadline:
+		on_worker = on_worker or screen._step.has("task")
 		if server.is_connection_available():
 			peers.append(server.take_connection())
 		for peer in peers.duplicate():
@@ -1066,8 +1068,39 @@ func _test_loading_fetch() -> void:
 	var media: Dictionary = screen.describe()["media"]
 	_check(media["ready"] == 1 and media["failed"] == 1,
 		"prefetched one at a time: the picture arrived and the 404 was given up on (%d served)" % served, str(media))
+	_check(on_worker == DotPlatform.has_threads(),
+		"decoded on a worker thread where there are threads (%s), so a picture is not a dropped frame" % DotPlatform.has_threads())
 	screen.begin(TmcLoadingScreen.REASON_GAME, "x", "X")
 	_check(screen.describe()["image"], "and the screen that goes up shows the picture that arrived")
+
+	# A NAME that leads somewhere private. `ip6-loopback` is ::1 in a stock /etc/hosts and is
+	# neither an address nor `localhost`, so only a lookup can tell; a box without the entry
+	# cannot run the check and says so.
+	var private_name := not IP.resolve_hostname_addresses("ip6-loopback").is_empty()
+	var strict := TmcLoadingScreen.new()
+	strict.in_game_fn = func() -> bool: return true
+	add_child(strict)
+	strict.adopt({"default": {"images": ["http://ip6-loopback:%d/bg.png" % port]}})
+	await _until_frames(func() -> bool: return strict.describe()["media"]["failed"] == 1, 240)
+	_check(not private_name or (strict.describe()["media"]["failed"] == 1 and strict.last_refusal.contains("private address")),
+		"a hostname that resolves to a private address is looked up and never fetched%s" % ("" if private_name else " (skipped: no ip6-loopback here)"),
+		str(strict.describe()["media"]))
+	var judged := {
+		"::1": true, "0:0:0:0:0:0:0:1": true, "::": true, "::ffff:192.168.0.4": true,
+		"0:0:0:0:0:ffff:c0a8:4": true, "fe80::1": true, "fd12:3456::1": true, "127.0.0.1": true,
+		"2606:4700::1111": false, "::ffff:8.8.8.8": false, "8.8.8.8": false, "2001:db8::1": false,
+	}
+	var wrong := judged.keys().filter(func(a: String) -> bool: return TmcLoadingScreen.is_private_address(a) != judged[a])
+	_check(wrong.is_empty(),
+		"addresses are judged in both families and every spelling, the engine's uncompressed IPv6 included", str(wrong))
+	strict.free()
 	server.stop()
 	screen.free()
 	_done()
+
+
+func _until_frames(condition: Callable, frames: int) -> void:
+	for i in frames:
+		if bool(condition.call()):
+			return
+		await get_tree().process_frame

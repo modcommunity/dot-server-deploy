@@ -120,6 +120,15 @@ var _fetching := false
 ## Test seam: a suite serves its pictures from 127.0.0.1. See [method is_private_host].
 var allow_private_hosts := false
 
+## The fetch in progress, between steps that cannot finish in the frame they start in:
+## `{"url", "audio", "resolve": id}` while its host is being looked up, then
+## `{"url", "task": id, "out": [result]}` while its bytes are being decoded on a worker.
+## Empty when nothing is. One at a time, like the requests.
+var _step: Dictionary = {}
+
+## Why the last file was not used, for [method describe] and a bug report.
+var last_refusal := ""
+
 var _root: Control = null
 var _backdrop: ColorRect = null
 var _image: TextureRect = null
@@ -269,6 +278,9 @@ func _in_game() -> bool:
 
 
 func _process(_delta: float) -> void:
+	if not _step.is_empty():
+		_advance_step()
+
 	var now := _now()
 
 	if _pending_content_at >= 0.0 and now - _pending_content_at >= show_delay_sec:
@@ -508,22 +520,79 @@ static func is_safe_url(url: String) -> bool:
 ## private address is not caught here -- that would need a lookup per URL -- so this is the
 ## cheap half of the rule, and the half a hostile server would reach for first.
 static func is_private_host(url: String) -> bool:
+	var host := host_of(url)
+	if host == "localhost" or host.ends_with(".localhost") or host.ends_with(".local"):
+		return true
+	return _is_address(host) and is_private_address(host)
+
+
+## The host part of [param url], lower-cased, without user, port or IPv6 brackets.
+static func host_of(url: String) -> String:
 	var rest := url.substr(url.find("//") + 2)
 	var host := rest.get_slice("/", 0).get_slice("?", 0).get_slice("#", 0)
 	if host.contains("@"):
 		host = host.get_slice("@", 1)
 	if host.begins_with("["):
-		var inner := host.substr(1, host.find("]") - 1).to_lower()
-		return inner == "::1" or inner == "::" or inner.begins_with("fc") or inner.begins_with("fd") or inner.begins_with("fe80")
-	host = host.get_slice(":", 0).to_lower()
-	if host == "localhost" or host.ends_with(".localhost") or host.ends_with(".local"):
-		return true
-	var parts := host.split(".")
+		return host.substr(1, host.find("]") - 1).to_lower()
+	return host.get_slice(":", 0).to_lower()
+
+
+## The eight 16-bit groups of an IPv6 address, `::` expanded and a trailing dotted IPv4
+## folded into the last two. Empty when it is not one.
+static func _ipv6_groups(address: String) -> PackedInt32Array:
+	var text := address.to_lower().get_slice("%", 0)
+	var tail := PackedInt32Array()
+	var last_colon := text.rfind(":")
+	if text.substr(last_colon + 1).contains("."):
+		var v4 := text.substr(last_colon + 1).split(".")
+		if v4.size() != 4:
+			return PackedInt32Array()
+		tail = PackedInt32Array([v4[0].to_int() << 8 | v4[1].to_int(), v4[2].to_int() << 8 | v4[3].to_int()])
+		text = text.substr(0, last_colon + 1) + "0:0"
+	var halves := text.split("::")
+	if halves.size() > 2:
+		return PackedInt32Array()
+	var head := halves[0].split(":", false)
+	var rest := halves[1].split(":", false) if halves.size() == 2 else PackedStringArray()
+	var missing := 8 - head.size() - rest.size()
+	if (halves.size() == 1 and missing != 0) or missing < 0:
+		return PackedInt32Array()
+	var out := PackedInt32Array()
+	for part in head:
+		out.append(part.hex_to_int())
+	for i in missing:
+		out.append(0)
+	for part in rest:
+		out.append(part.hex_to_int())
+	if not tail.is_empty():
+		out[6] = tail[0]
+		out[7] = tail[1]
+	return out
+
+
+static func _is_address(host: String) -> bool:
+	return host.is_valid_ip_address()
+
+
+## Whether [param address] is loopback, private, link-local, carrier-grade NAT or
+## unspecified, in IPv4 or IPv6 (an IPv4-mapped IPv6 address is judged as its IPv4).
+static func is_private_address(address: String) -> bool:
+	if address.contains(":"):
+		# Parsed into eight groups rather than matched as text: the engine's own resolver
+		# writes ::1 as `0:0:0:0:0:0:0:1`, and the first version of this matched `::1` and
+		# waved a name that resolves to it straight through. Found by the suite's lookup.
+		var g := _ipv6_groups(address)
+		if g.is_empty():
+			return true
+		if g[0] == 0 and g[1] == 0 and g[2] == 0 and g[3] == 0 and g[4] == 0:
+			if g[5] == 0xFFFF:
+				return is_private_address("%d.%d.%d.%d" % [g[6] >> 8, g[6] & 0xFF, g[7] >> 8, g[7] & 0xFF])
+			if g[5] == 0 and g[6] == 0 and g[7] <= 1:
+				return true
+		return (g[0] & 0xFE00) == 0xFC00 or (g[0] & 0xFFC0) == 0xFE80
+	var parts := address.split(".")
 	if parts.size() != 4:
 		return false
-	for part in parts:
-		if not part.is_valid_int():
-			return false
 	var a := parts[0].to_int()
 	var b := parts[1].to_int()
 	return a == 127 or a == 10 or a == 0 or (a == 169 and b == 254) \
@@ -598,34 +667,122 @@ func _pump() -> void:
 	var audio: bool = next[1]
 	_fetching = true
 
+	# [b]Where a name LEADS, not only what it says.[/b] [method is_private_host] catches a
+	# URL that names a private address or `localhost`; a public-looking name that resolves to
+	# one is the same request into the player's own network. So off-web the host is looked
+	# up first, without blocking a frame, and every address it has is checked. A browser
+	# offers no lookup to make -- and blocks a public page reaching a private address by
+	# itself -- so there the literal check is the whole of it.
+	var host := host_of(url)
+	if not allow_private_hosts and not DotPlatform.is_web() and not _is_address(host):
+		_step = {"url": url, "audio": audio, "resolve": IP.resolve_hostname_queue_item(host, IP.TYPE_ANY)}
+		return
+
+	_request(url, audio)
+
+
+## Starts the HTTP fetch for [param url]; [method _received] takes it from there.
+func _request(url: String, audio: bool) -> void:
 	var request := HTTPRequest.new()
 	request.body_size_limit = MAX_AUDIO_BYTES if audio else MAX_IMAGE_BYTES
 	request.timeout = 30.0
 	add_child(request)
 	request.request_completed.connect(func(result: int, code: int, _h: PackedStringArray, body: PackedByteArray) -> void:
 		request.queue_free()
-		_fetching = false
-		var media: Variant = null
-		if result == HTTPRequest.RESULT_SUCCESS and code == 200:
-			media = decode(body)
-		if media == null:
-			DotLog.info(CHANNEL, "a loading screen file could not be used", {
-				"url": url, "result": result, "status": code, "bytes": body.size(),
-			})
-			_media[url] = false
-		else:
-			_media[url] = media
-		_pump()
+		if result != HTTPRequest.RESULT_SUCCESS or code != 200:
+			_finish(url, null, "result %d, status %d" % [result, code])
+			return
+		_received(url, body)
 	)
 	if request.request(url) != OK:
 		request.queue_free()
-		_fetching = false
+		_finish(url, null, "the request could not start")
+
+
+## The bytes arrived: decode them, off the main thread when there are threads.
+##
+## [b]Decoding a 4 MB JPEG is tens of milliseconds, and this happens while the player is
+## PLAYING[/b] -- which is the point of fetching early, and would make each picture a
+## dropped frame or three mid-fight. So the decode runs on a [WorkerThreadPool] task and
+## only the texture is made back here, because a texture is a rendering-server object. A
+## browser build without threads has no worker to give it to, and decodes in the frame.
+func _received(url: String, body: PackedByteArray) -> void:
+	if not DotPlatform.has_threads():
+		_finish(url, to_media(decode_data(body)), "not a picture or a sound this client reads")
+		return
+	var out: Array = [null]
+	var task := WorkerThreadPool.add_task(func() -> void:
+		out[0] = TmcLoadingScreen.decode_data(body), false, "loading screen media")
+	_step = {"url": url, "task": task, "out": out}
+
+
+## Where one fetch ends, whichever way it ended.
+func _finish(url: String, media: Variant, why: String) -> void:
+	_step = {}
+	_fetching = false
+	if media == null:
+		last_refusal = why
+		DotLog.info(CHANNEL, "a loading screen file could not be used", {"url": url, "why": why})
 		_media[url] = false
-		_pump()
+	else:
+		_media[url] = media
+	_pump()
+
+
+## The step in progress, moved on if it can be. Called every frame.
+func _advance_step() -> void:
+	if _step.has("resolve"):
+		var id: int = _step["resolve"]
+		var status := IP.get_resolve_item_status(id)
+		if status == IP.RESOLVER_STATUS_WAITING:
+			return
+		var addresses := IP.get_resolve_item_addresses(id) if status == IP.RESOLVER_STATUS_DONE else []
+		IP.erase_resolve_item(id)
+		var url: String = _step["url"]
+		var audio: bool = _step["audio"]
+		_step = {}
+		if addresses.is_empty():
+			_finish(url, null, "its host did not resolve")
+			return
+		for address in addresses:
+			if is_private_address(str(address)):
+				_finish(url, null, "its host resolves to a private address (%s)" % address)
+				return
+		_request(url, audio)
+	elif _step.has("task"):
+		var task: int = _step["task"]
+		if not WorkerThreadPool.is_task_completed(task):
+			return
+		WorkerThreadPool.wait_for_task_completion(task)
+		_finish(_step["url"], to_media(_step["out"][0]), "not a picture or a sound this client reads")
+
+
+func _exit_tree() -> void:
+	# A worker still decoding holds a callable bound to this node: let it finish first.
+	if _step.has("task"):
+		WorkerThreadPool.wait_for_task_completion(int(_step["task"]))
+	elif _step.has("resolve"):
+		IP.erase_resolve_item(int(_step["resolve"]))
+	_step = {}
 
 
 ## A texture or a stream out of bytes, by what the bytes are. Null for anything else.
+## [method decode_data] then [method to_media], in one frame; the fetch splits them.
 static func decode(body: PackedByteArray) -> Variant:
+	return to_media(decode_data(body))
+
+
+## What [method decode_data] produced, made usable: an [Image] becomes a texture (on the
+## main thread, because a texture is a rendering-server object), a stream stays a stream.
+static func to_media(data: Variant) -> Variant:
+	if data is Image:
+		return ImageTexture.create_from_image(data)
+	return data if data is AudioStream else null
+
+
+## An [Image] or an [AudioStream] out of bytes, by what the bytes are; null for anything
+## else. Touches nothing but its argument, so it runs on a worker thread.
+static func decode_data(body: PackedByteArray) -> Variant:
 	if body.size() < 12:
 		return null
 
@@ -670,7 +827,7 @@ static func decode(body: PackedByteArray) -> Variant:
 	if image.get_width() > MAX_IMAGE_SIDE or image.get_height() > MAX_IMAGE_SIDE:
 		var scale := float(MAX_IMAGE_SIDE) / maxf(image.get_width(), image.get_height())
 		image.resize(maxi(int(image.get_width() * scale), 1), maxi(int(image.get_height() * scale), 1))
-	return ImageTexture.create_from_image(image)
+	return image
 
 
 ## The width and height a PNG, JPEG or WebP header declares, or (0, 0) when it cannot be
@@ -861,5 +1018,6 @@ func describe() -> Dictionary:
 		"media": {"known": _media.size(), "ready": fetched, "failed": failed, "queued": _queue.size()},
 		"muted": music_muted,
 		"refused_oversized": refused_oversized,
+		"last_refusal": last_refusal,
 		"image": _image.texture != null if _image != null else false,
 	}
