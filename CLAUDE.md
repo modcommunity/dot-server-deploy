@@ -668,6 +668,16 @@ Three consequences elsewhere, all of them the same mistake avoided:
 
 **A tag can move under you, and the check has to compare commits.** dot-server's `v0.1.1` was re-pointed at the same commit as `v0.1.2` after it was cut, which made the first test of `--update` look like a no-op. And an annotated tag lists twice in `ls-remote` — the tag object, then `^{}` for the commit — so `check` peels to the commit; its first version compared a HEAD against a tag object and reported every clone as wrong.
 
+## A game that needs newer addons updates the server's addons, by itself
+
+A box's addons move only when the checkout is updated and `setup.sh --update` runs; a restart never did it. So when game-g2gfast v0.1.5 was released needing dot-platform API level 3 (2026-10-04), a restart installed it, the server refused it at boot ("This game needs dot-platform API level 3 or newer; this server has level 2"), and came up running nothing until a reinstall.
+
+**`install-games` checks a pack's `requires.json` before switching to it** (`_check_requirements`, the same `DotAddonApi.check` dot-cloud applies at mount). A version the addons cannot run is not installed over one they can: the installed version is kept, the log says which addon is behind, and the tool exits **4** (`EXIT_ADDONS_BEHIND`) — ahead of 2 and 3, because it is the one failure the launcher can fix.
+
+**On 4 the launcher does a reinstall's two steps and runs itself again, once** (`self_update` / `update_and_restart` in `tools/server.in`): fetch this checkout's branch and reset to it, `setup.sh --no-games --update` to move the addons to the new lock, then `exec ./server` with the original arguments and `TMC_AUTO_UPDATED=1` so a lock that still cannot run the game does not loop. `TMC_AUTO_UPDATE` / `--auto-update` (and the egg's "Update addons automatically"): `when-needed` (default), `always` (every start), `never`. It resets only a deployment — a shallow clone, or a checkout whose HEAD origin already contains — with no local changes to tracked files, and needs `git` in the runtime; otherwise it says to reinstall and starts on what it has. setup.sh `--update` never detaches a developer's own sibling checkouts, only its clones under `addons/.repos/`.
+
+**The two release guards that go with it:** this repository's CI now parses every script against `addons.lock` at the locked refs (dot-ci v1.2.3 resolves a project that has a lock from the lock; it ran with Godot off before), and a game's release refuses a pack no released dot-server-deploy can run (dot-ci v1.2.4, `scripts/server-compat.sh`). So the order is still: tag the addon, lock it here, release this repository, then tag the game — and now each step that is skipped fails in CI instead of on a box.
+
 ## A server names the shell build its players load
 
 `web/shell-build` is one line, the build id of the web shell exported from this checkout's `addons.lock`, and `TmcHost._register_web_build` reports it as the NOTIFY cvar `sv_web_build`. The site reads it from the query rules into the server's vars and frames that build for any launch into this server (website-city `~/types/play/web-build.ts`, branch `feat/server-web-build` as of 2026-10-04); a server that reports nothing gets the shared `App.webGameBuild`.
