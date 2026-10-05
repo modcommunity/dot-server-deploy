@@ -23,7 +23,7 @@ const MEDIA_PORT := 27109
 
 const TARGET_GAME := "hungry_classic"
 
-const CHECKS := 27
+const CHECKS := 28
 
 var _passed := 0
 var _failed := 0
@@ -378,7 +378,11 @@ func _test_change_under_the_player() -> void:
 	_panel().choose(_row("Slay"))
 	_check(await _until(func() -> bool: return not _row("Everyone").is_empty(), 10.0),
 		"and Slay offers everybody at once", _labels())
-	_panel().press(0)
+
+	# Left open, then the game changes under it: its pages belong to the old game.
+	_server().console.execute("changelevel lobby")
+	_check(await _until(func() -> bool: return not _panel().is_open(), 30.0),
+		"a game change closes a menu that was open on the old game")
 	_done()
 
 

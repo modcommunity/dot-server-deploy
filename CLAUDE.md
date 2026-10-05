@@ -612,7 +612,7 @@ tools/check_boot_failures.sh  # two boots whose game cannot compile; ./server ch
 tools/package_check.sh      # the same thing in the shape an operator unpacks
 ```
 
-`examples/admin_loading_selftest.tscn` (149) and `examples/admin_live.tscn` (27) are the admin menu and the loading screen; see their section above.
+`examples/admin_loading_selftest.tscn` (149) and `examples/admin_live.tscn` (28) are the admin menu and the loading screen; see their section above.
 
 `examples/selftest.tscn` covers the YAML reader, the config translation, the permission
 translation, the content index, the game vote's HUD cues, the sink layer, the guard, the replay ring and the friends client against fixtures in
@@ -934,13 +934,17 @@ An independent review found no injection or permission bypass, and eight defects
 7. **A category's flag was checked only when drawing.** A typed path reached an info item under a category the admin could not see, or one the owner left off the menu. `on_menu` is checked on every path now.
 8. **`reset()` kept the last server's game name**, so the next server's map screen said "Loading <their game>…".
 
+### In a browser (2026-10-05)
+
+Verified in headless Chromium against a shell exported from the LOCKED addons (archived at their tags into a scratch tree, because eight sibling checkouts were ahead of the lock), with the real host in a probe scene and the packs served same-origin at `/content`. A guest joined the lobby and the menu opened over it. **1** pressed in the browser reached the server as `c:players` on the `tmc.admin_menu` kind. A `changelevel hungry_classic` put the loading screen up with the server's picture, title, tip and live download progress, and the WAV it named was fetched (both via a hostname, because the client refuses a literal private address and a browser cannot look one up). Once Hungario spawned, the screen went. **The frames found one more bug:** the menu stayed open across the change, still showing the old game's page. `_on_game_changed` closes it now, and `admin_live` checks it (armed). Not seen: whether the browser PLAYED the sound, which headless cannot say.
+
 ### Suites
 
-`examples/admin_loading_selftest.tscn` (149 checks, in CI): the config merge rules, the fun commands against stand-in tools, game layers from `game.yml` and from code, one check per review finding, visibility per flag against a standalone console with stand-in commands, every path from item to the exact argument list a command received (immunity, a player who left, a flag revoked mid-walk, a list index out of range, an injected semicolon), info and warn against a stand-in moderation manager, a 200-player page against the notice limit, the panel by pressing keys, `loading.yml`, the screen's timing and layering, URL refusal, the decoders, and one real HTTP fetch from a socket the suite serves. `examples/admin_live.tscn` (27 checks, `tools/check.sh` only, because it needs the packs in `dist/`) is the real `TmcHost` and the real shell over a socket. A player with no flags gets no menu; with root, `/admin` from chat opens it; it walks to Player info and Back again; it confirms a `changelevel hungry_classic`; the loading screen goes up with the picture the suite serves on :27109 and the new game's own tip, then comes down at spawn; and in both games the fun commands shown are exactly what that game's real tools report. Armed as described above.
+`examples/admin_loading_selftest.tscn` (149 checks, in CI): the config merge rules, the fun commands against stand-in tools, game layers from `game.yml` and from code, one check per review finding, visibility per flag against a standalone console with stand-in commands, every path from item to the exact argument list a command received (immunity, a player who left, a flag revoked mid-walk, a list index out of range, an injected semicolon), info and warn against a stand-in moderation manager, a 200-player page against the notice limit, the panel by pressing keys, `loading.yml`, the screen's timing and layering, URL refusal, the decoders, and one real HTTP fetch from a socket the suite serves. `examples/admin_live.tscn` (28 checks, `tools/check.sh` only, because it needs the packs in `dist/`) is the real `TmcHost` and the real shell over a socket. A player with no flags gets no menu; with root, `/admin` from chat opens it; it walks to Player info and Back again; it confirms a `changelevel hungry_classic`; the loading screen goes up with the picture the suite serves on :27109 and the new game's own tip, then comes down at spawn; and in both games the fun commands shown are exactly what that game's real tools report. Armed as described above.
 
 ### What is not verified
 
-- **No browser has run either.** The web export was not rebuilt. Media fetched by a browser needs the host's CORS headers (the README says so to owners), and audio may be held by the browser's autoplay rule until the page has had a gesture, which a player who has been playing has given. Neither has been seen.
+- **Audio in a real browser has not been heard.** The fetch and the decode were seen; whether the autoplay rule lets it play depends on the page having had a gesture, which a player who has been playing has given.
 - **Only WAV, PNG and JPEG were decoded in a suite.** Ogg, MP3 and WebP go through the engine's own loaders, called as documented, and have not been fed a real file here.
 - **Players need a new shell** (web and native) to see either. An older shell ignores both topics, so nothing breaks, and the server still answers `/admin` with a page nobody draws.
 

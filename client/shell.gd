@@ -1277,6 +1277,11 @@ const BUILTIN_CLIENTS := {}
 func _on_game_changed(game_id: String, _content_id: String, display_name: String) -> void:
 	if _has_spawned:
 		loading.begin(TmcLoadingScreen.REASON_GAME, game_id, display_name)
+	# What is on the menu depends on the game -- its live tools, its own items -- so a page
+	# from the last one is a page of choices that may not exist any more. Seen in a browser:
+	# "Player commands" still open over the new game after a change made from the menu.
+	if admin_menu != null:
+		admin_menu.close()
 	_clear_game()
 	if _friends != null:
 		_friends.on_game_changed(display_name if display_name != "" else game_id, link.server_hostname if link != null else "")
