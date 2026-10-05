@@ -379,6 +379,13 @@ echo
 # template or dot-ci is not beside this project. Capped: it drives package.sh and a server.
 echo "a game made from dot-game-template, delivered and joined"
 timeout 300 "$GODOT" --headless --path . res://examples/template_client.tscn || fails=$((fails + 1))
+echo
+# Wipeout's courses are not in its pack: they are a second pack, named in its game.yml as a
+# server_dependency and mounted on the server alone. A wrong mount prefix is a server that plays
+# the one practice course built into the game and says so at INFO, so this asserts the courses
+# arrived, a round runs on one, and the client built it from the document it was sent.
+echo "a delivered game whose courses are a server-only pack"
+timeout 300 "$GODOT" --headless --path . res://examples/wipeout_client.tscn || fails=$((fails + 1))
 
 # And the REAL shell, connected twice. Everything above connects at most once, and a
 # second connection in one session put the game on screen with an empty world -- the

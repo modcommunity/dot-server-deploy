@@ -34,8 +34,8 @@ by path; a game compiled into the shell has no such restriction.
 
 That constraint has not gone away — it is a property of the engine. What changed is the
 games: every one of them references its own files by relative path and rebases its own
-`res://` strings, so each is correct in a build and at a mount prefix alike. **All seven
-game ids are `kind: pack` and this build ships no game at all.** The five fourth-form
+`res://` strings, so each is correct in a build and at a mount prefix alike. **Every
+game id is `kind: pack` and this build ships no game at all.** The five fourth-form
 routes below are what had to be closed first, and `tools/check.sh` keeps them closed.
 
 The lobby was the last holdout and the argument for it was real: it is the shell's home
@@ -524,6 +524,12 @@ than trying to republish, because a deployment should not be holding the signing
 `examples/template_client.tscn`, 21 checks, in `tools/check.sh` after smash_client. smash_client publishes with this project's own `./server pack` from a checkout; a third-party developer ships something else — the `-pack.zip` their release workflow attaches, which the site signs under `<site username>/<repo>` — and that artifact had never been mounted by anything here. So this one takes `dot-game-template` (the repository a developer copies to start a game), packages its git HEAD with `../dot-ci/scripts/package.sh --pack --name dot-game-template` exactly as its release does, unpacks the zip and publishes it with `DotCloudPublisher` under `someone/dot-game-template@0.0.1` with a key made for the run and trusted by that run's `content.json` alone, stamps the pack's own `game.yml` with `install_games.gd`'s `stamp_identity`, boots a real host on it, joins a real client, and steers the template's client scene at a coin until the server scores it and the client shows the score. It says "skipped" and exits 0 when the template or dot-ci is not beside this project.
 
 **It packages HEAD, so commit the template before believing it.** Armed with a scratch clone whose bridge was reached by `class_name` rather than by `preload`: the mount fails with `Identifier "TplBridge" not declared`, the section aborts, and the two counters fail the run. Its first armed run also found that the artifact is named after the checkout's directory unless `--name` is passed — the reason the release workflow passes the repository's name — so the suite passes it too.
+
+### A game whose courses are a second pack
+
+`examples/wipeout_client.tscn`, 26 checks, in `tools/check.sh` after template_client. mg-wipeout's courses are not in its pack: `content/wipeout/game.yml` names `tmc/wipeout_maps@0.1.0` under `server_dependencies`, and `content/wipeout_maps/` publishes mg-wipeout-maps as that pack (setup.sh's `GAMES` carries it as `mg-wipeout-maps:wipeout_maps` — a content directory with a `pack.json` and no `game.yml`, so it is published and never offered). It is the **first user of `server_dependencies`** in the family, and the failure it exists to catch is silent: a mount prefix the game computes wrongly gives a server that plays the one practice course built into the game. So it asserts the dependency is listed, mounted where the game computes, read (11 courses, 6 arenas), played (a round on a delivered course), that the client — which was never sent a course file — built the same course with the same number of pieces from the STAGE document, and that a forced final death crosses with the same arena and the same pickups on both ends. **Armed**: with `server_dependencies` removed, seven checks fail and nothing else does.
+
+Teardown prints one engine `ERROR: Condition "ready_state != STATE_OPEN"`, from dot-net sending a snapshot in the tick its peer closed. smash_client's game has the identical send path; it is dot-net's, not this game's.
 
 ### It went stale, and so did the guard
 

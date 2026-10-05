@@ -1049,6 +1049,11 @@ GAMES=(
     "game-arena:arena"
     "mg-buses-from-hell:buses"
     "mg-smash-copter:smash"
+    "mg-wipeout:wipeout"
+    # Not a game: the courses mg-wipeout mounts on the server (its server_dependencies).
+    # Here because this list is what publishes from a repository, and a data pack is
+    # published exactly as a game is.
+    "mg-wipeout-maps:wipeout_maps"
 )
 
 # --- Or none of them -------------------------------------------------------
