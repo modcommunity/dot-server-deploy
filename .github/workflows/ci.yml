@@ -18,10 +18,21 @@ on:
     workflow_dispatch:
 
 jobs:
+    # [b]Godot is ON, against the lock.[/b] It ran with `godot: false` -- shell syntax only --
+    # because dot-ci could not resolve a bare `/addons/`, and on 2026-10-04 a host script
+    # calling an addon API no tag had yet passed here and broke a live server. dot-ci
+    # v1.2.3 resolves a project with an addons.lock at its locked refs, which is what a
+    # box installs. Pinned to that version rather than @v1 because v1 is older and moving
+    # it moves every repository in the family.
+    #
+    # selftest only: multigame and shell_notice boot real games, and those need the
+    # packed content a developer builds locally (content/<id>/manifest.json), which a
+    # fresh checkout does not have. The parse pass is the part that catches a lock
+    # behind the code -- armed against that night's lock, it fails on host/tmc_vote.gd.
     validate:
-        uses: modcommunity/dot-ci/.github/workflows/validate.yml@v1
+        uses: modcommunity/dot-ci/.github/workflows/validate.yml@v1.2.3
         with:
-            godot: false
+            suites: 'examples/selftest'
             shell-command: 'for f in setup.sh demo.sh upgrade.sh play.sh tools/*.sh deploy/*.sh; do bash -n "$f" || exit 1; done'
         secrets:
             DEPS_TOKEN: ${{ secrets.DOT_DEPS_TOKEN }}
