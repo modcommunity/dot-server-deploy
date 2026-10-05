@@ -77,6 +77,12 @@ const MANIFEST_DIR := "manifests"
 ## The descriptor, under a content directory and in the published tree alike.
 const DESCRIPTOR := "game.yml"
 
+## The descriptor lists that name published packs, all pinned at install the same way.
+## `dependencies` (server and every client mount them at load), `server_dependencies`
+## (the server only), `maps` (the game fetches each when it changes to it). See
+## DotGameDescriptor in dot-server.
+const PACK_LISTS: PackedStringArray = ["dependencies", "server_dependencies", "maps"]
+
 ## The pointer a publish writes beside a pack's versions, naming the newest.
 const LATEST_FILE := "latest.json"
 
@@ -591,14 +597,17 @@ func _prefetch(
 		var on_disk := TmcYaml.parse_file(_descriptor_path(content_dir, id))
 
 		if on_disk.ok:
-			var listed: Variant = TmcYaml.at(on_disk.value as Dictionary, "dependencies", [])
+			# Not `maps`: those are the game's to fetch when it changes to one, and
+			# prefetching a twenty-six-course list here would be a gigabyte before boot.
+			for field in ["dependencies", "server_dependencies"]:
+				var listed: Variant = TmcYaml.at(on_disk.value as Dictionary, field, [])
 
-			if listed is Array:
-				for entry in listed:
-					var ref := TmcGameRef.parse(str(entry))
+				if listed is Array:
+					for entry in listed:
+						var ref := TmcGameRef.parse(str(entry))
 
-					if ref["from_origin"] and str(ref["version"]) != "":
-						targets[str(ref["id"])] = str(ref["version"])
+						if ref["from_origin"] and str(ref["version"]) != "":
+							targets[str(ref["id"])] = str(ref["version"])
 
 	if targets.is_empty() or cloud == null:
 		return
@@ -881,15 +890,18 @@ func _install_from_pack(
 	# `@latest` itself -- it would hand two players two different packs under one game --
 	# so this is the one moment it can happen, and the answer is written into the file
 	# the server reads.
-	var deps := await _resolve_dependencies(str(stamped.value), bases)
+	# Every list of packs a descriptor can name, each pinned to a concrete version here so
+	# the host never resolves `latest` per join: what every client mounts is the same.
+	for field in PACK_LISTS:
+		var deps := await _resolve_dependencies(str(stamped.value), bases, field)
 
-	if not deps.ok:
-		return deps.wrap("%s@%s" % [content_id, version])
+		if not deps.ok:
+			return deps.wrap("%s@%s" % [content_id, version])
 
-	stamped = stamp_dependencies(str(stamped.value), deps.value as PackedStringArray)
+		stamped = stamp_dependencies(str(stamped.value), deps.value as PackedStringArray, field)
 
-	if not stamped.ok:
-		return stamped.wrap("%s out of %s@%s" % [DESCRIPTOR, content_id, version])
+		if not stamped.ok:
+			return stamped.wrap("%s out of %s@%s" % [DESCRIPTOR, content_id, version])
 
 	var written := _write_descriptor(
 		content_dir, dir_name, str(stamped.value).to_utf8_buffer()
@@ -962,18 +974,20 @@ static func stamp_identity(text: String, content_id: String, version: String) ->
 ## `gamemann/surf_mesa@latest`, `gamemann/surf_mesa@v1.0.0` -- and read through the same
 ## [TmcGameRef], so the two lists cannot disagree about what `@v1.0.0` means. A bare name
 ## with no owner is refused: a dependency is always a published pack.
-func _resolve_dependencies(text: String, bases: PackedStringArray) -> DotResult:
+func _resolve_dependencies(
+	text: String, bases: PackedStringArray, field: String = "dependencies"
+) -> DotResult:
 	var parsed := TmcYaml.parse(text, DESCRIPTOR)
 
 	if not parsed.ok:
 		return parsed
 
-	var listed: Variant = TmcYaml.at(parsed.value as Dictionary, "dependencies", [])
+	var listed: Variant = TmcYaml.at(parsed.value as Dictionary, field, [])
 	var out := PackedStringArray()
 
 	if not (listed is Array):
 		return DotResult.fail(
-			DotError.CODE_INVALID, "dependencies: must be a list of <owner>/<name>@<version>"
+			DotError.CODE_INVALID, "%s: must be a list of <owner>/<name>@<version>" % field
 		)
 
 	for entry in listed:
@@ -982,8 +996,8 @@ func _resolve_dependencies(text: String, bases: PackedStringArray) -> DotResult:
 		if not ref["from_origin"]:
 			return DotResult.fail(
 				DotError.CODE_INVALID,
-				"the dependency '%s' is not <owner>/<name>" % str(entry),
-				"a dependency is a published pack, never a directory on this box"
+				"the %s entry '%s' is not <owner>/<name>" % [field, str(entry)],
+				"it names a published pack, never a directory on this box"
 			)
 
 		var version := str(ref["version"])
@@ -992,7 +1006,7 @@ func _resolve_dependencies(text: String, bases: PackedStringArray) -> DotResult:
 			var latest := await _resolve_latest(str(ref["id"]), bases)
 
 			if not latest.ok:
-				return latest.wrap("could not resolve the dependency %s" % ref["id"])
+				return latest.wrap("could not resolve %s from %s:" % [ref["id"], field])
 
 			version = str(latest.value)
 
@@ -1006,7 +1020,9 @@ func _resolve_dependencies(text: String, bases: PackedStringArray) -> DotResult:
 ## Text, like [method stamp_identity], for the same reason: the file is one an operator
 ## reads and edits, and its comments and order are worth keeping. The old list's items are
 ## replaced in place; a descriptor with no `dependencies:` and no keys is left alone.
-static func stamp_dependencies(text: String, keys: PackedStringArray) -> DotResult:
+static func stamp_dependencies(
+	text: String, keys: PackedStringArray, field: String = "dependencies"
+) -> DotResult:
 	var lines := text.split("\n")
 	var out := PackedStringArray()
 	var i := 0
@@ -1015,7 +1031,7 @@ static func stamp_dependencies(text: String, keys: PackedStringArray) -> DotResu
 	while i < lines.size():
 		var line := lines[i]
 
-		if not found and line.begins_with("dependencies:"):
+		if not found and line.begins_with(field + ":"):
 			found = true
 			i += 1
 
@@ -1032,9 +1048,9 @@ static func stamp_dependencies(text: String, keys: PackedStringArray) -> DotResu
 				i += 1
 
 			if keys.is_empty():
-				out.append("dependencies: []")
+				out.append("%s: []" % field)
 			else:
-				out.append("dependencies:")
+				out.append("%s:" % field)
 				for key in keys:
 					out.append("  - %s" % key)
 			continue
@@ -1043,7 +1059,7 @@ static func stamp_dependencies(text: String, keys: PackedStringArray) -> DotResu
 		i += 1
 
 	if not found and not keys.is_empty():
-		out.append("dependencies:")
+		out.append("%s:" % field)
 		for key in keys:
 			out.append("  - %s" % key)
 
@@ -1053,7 +1069,7 @@ static func stamp_dependencies(text: String, keys: PackedStringArray) -> DotResu
 	if not parsed.ok:
 		return parsed
 
-	var back: Variant = TmcYaml.at(parsed.value as Dictionary, "dependencies", [])
+	var back: Variant = TmcYaml.at(parsed.value as Dictionary, field, [])
 
 	if not keys.is_empty() and (not (back is Array) or PackedStringArray(back) != keys):
 		return DotResult.fail(

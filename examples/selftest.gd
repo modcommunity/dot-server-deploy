@@ -14,7 +14,7 @@ extends Node
 
 const CFG := "res://examples/fixtures"
 
-const CHECKS := 244
+const CHECKS := 248
 
 var _passed := 0
 var _failed := 0
@@ -1059,6 +1059,31 @@ func _test_game_refs() -> void:
 	bare["dependencies"] = ["surf_mesa"]
 	_check(not TmcContent.new()._build("demo", bare).ok,
 		"a dependency with no owner is refused")
+
+	# The server-only packs and the delivered maps: the same pinning, their own fields.
+	var maps_yml := "name: X\nmaps:\n  - gamemann/surf_mesa\n  - gamemann/bhop_aztec@latest\nscene: s.tscn\n"
+	var maps_stamped: DotResult = installer.stamp_dependencies(maps_yml,
+		PackedStringArray(["gamemann/surf_mesa@0.0.0-aa", "gamemann/bhop_aztec@0.0.0-bb"]), "maps")
+	_check(maps_stamped.ok and str(maps_stamped.value).contains(
+			"maps:\n  - gamemann/surf_mesa@0.0.0-aa\n  - gamemann/bhop_aztec@0.0.0-bb\nscene: s.tscn"),
+		"the installer pins a maps: list in place", str(maps_stamped))
+	var untouched: DotResult = installer.stamp_dependencies("name: X\n", PackedStringArray(), "maps")
+	_check(untouched.ok and str(untouched.value) == "name: X\n",
+		"and leaves a descriptor that names no maps alone", str(untouched))
+	var full := base.duplicate()
+	full["server_dependencies"] = ["gamemann/bots@1.0.0"]
+	full["maps"] = ["gamemann/surf_mesa@0.0.0-aa", "gamemann/bhop_aztec@0.0.0-bb"]
+	var full_built: DotResult = TmcContent.new()._build("demo", full)
+	_check(full_built.ok
+			and Array((full_built.value as DotGameDescriptor).server_dependencies) == ["gamemann/bots@1.0.0"]
+			and Array((full_built.value as DotGameDescriptor).maps) == ["gamemann/surf_mesa@0.0.0-aa", "gamemann/bhop_aztec@0.0.0-bb"]
+			and (full_built.value as DotGameDescriptor).dependencies.is_empty(),
+		"server_dependencies and maps reach their own descriptor fields",
+		str(full_built.value.describe()) if full_built.ok else str(full_built))
+	var loose_map := base.duplicate()
+	loose_map["maps"] = ["gamemann/surf_mesa"]
+	_check(not TmcContent.new()._build("demo", loose_map).ok,
+		"an unpinned map is refused, like an unpinned dependency")
 	_done()
 
 

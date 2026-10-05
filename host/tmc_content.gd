@@ -274,20 +274,30 @@ func _build(name: String, tree: Dictionary) -> DotResult:
 			# `owner/name@latest` if they like; install-games pins each one when it
 			# installs the game, so what reaches the server is always a version -- and an
 			# entry that still is not one is refused here rather than resolved per join.
-			var listed: Variant = TmcYaml.at(tree, "dependencies", [])
+			# The same rule for the server-only packs and the delivered maps (dot-server's
+			# DotGameDescriptor documents all three).
+			for field in ["dependencies", "server_dependencies", "maps"]:
+				var listed: Variant = TmcYaml.at(tree, field, [])
 
-			if listed is Array:
+				if not (listed is Array):
+					continue
+
 				for entry in listed:
 					var ref := TmcGameRef.parse(str(entry))
 
 					if not ref["from_origin"] or str(ref["version"]) == "":
 						return DotResult.fail(
 							DotError.CODE_INVALID,
-							"The dependency '%s' has no version." % str(entry),
-							"./server install-games pins each dependency when it installs the game"
+							"The %s entry '%s' has no version." % [field, str(entry)],
+							"./server install-games pins each one when it installs the game"
 						)
 
-					descriptor.dependencies.append("%s@%s" % [ref["id"], ref["version"]])
+					var key := "%s@%s" % [ref["id"], ref["version"]]
+
+					match field:
+						"dependencies": descriptor.dependencies.append(key)
+						"server_dependencies": descriptor.server_dependencies.append(key)
+						"maps": descriptor.maps.append(key)
 
 			if scene.contains("://") and descriptor.manifest_url == "":
 				# An absolute scene in a pack game is the builtin spelling in the wrong
