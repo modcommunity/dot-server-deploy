@@ -25,14 +25,15 @@ jobs:
     # box installs. Pinned to that version rather than @v1 because v1 is older and moving
     # it moves every repository in the family.
     #
-    # selftest only: multigame and shell_notice boot real games, and those need the
+    # selftest and admin_loading_selftest only (the second needs nothing but a loopback
+    # socket it opens itself): multigame and shell_notice boot real games, and those need the
     # packed content a developer builds locally (content/<id>/manifest.json), which a
     # fresh checkout does not have. The parse pass is the part that catches a lock
     # behind the code -- armed against that night's lock, it fails on host/tmc_vote.gd.
     validate:
         uses: modcommunity/dot-ci/.github/workflows/validate.yml@v1.2.3
         with:
-            suites: 'examples/selftest'
+            suites: 'examples/selftest examples/admin_loading_selftest'
             shell-command: 'for f in setup.sh demo.sh upgrade.sh play.sh tools/*.sh deploy/*.sh; do bash -n "$f" || exit 1; done'
         secrets:
             DEPS_TOKEN: ${{ secrets.DOT_DEPS_TOKEN }}

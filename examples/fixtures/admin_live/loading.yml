@@ -1,0 +1,7 @@
+# The picture is served by examples/admin_live.gd itself, on this port.
+loading_images: ["http://127.0.0.1:27109/bg.png"]
+loading_tips: ["A tip from the fixture."]
+loading_title: "Admin Live"
+loading_games:
+  hungry_classic:
+    tips: ["Eat the small ones."]

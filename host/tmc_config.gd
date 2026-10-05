@@ -33,7 +33,7 @@ const CHANNEL := "tmc.config"
 const FILES := [
 	"server.yml", "net.yml", "log.yml", "rcon.yml", "auth.yml", "groups.yml",
 	"permissions.yml", "vote.yml", "security.yml", "party.yml", "matchmaking.yml",
-	"replay.yml",
+	"replay.yml", "admin_menu.yml", "loading.yml",
 ]
 
 ## Operator-facing name -> boot config property.
@@ -313,6 +313,14 @@ var auth: Dictionary = {}
 ## place for `method: instant_runoff` to mean something different.
 var vote: DotVoteRules = DotVoteRules.new()
 
+## `admin_menu.yml`, as parsed. Handed to [TmcAdminMenu], which is the only thing that
+## reads it and reports its own problems — the menu's vocabulary is its own, not the
+## console's.
+var admin_menu: Dictionary = {}
+
+## `loading.yml`, as parsed. Handed to [TmcLoading], for the same reason.
+var loading: Dictionary = {}
+
 ## Game ids `vote.yml` says are never on a ballot.
 ##
 ## Not a [DotVoteRules] setting: which of the things in `content/` count as games a
@@ -531,6 +539,12 @@ func _apply(file: String, tree: Dictionary) -> DotResult:
 			return DotResult.success(null)
 		"auth.yml":
 			auth = tree
+			return DotResult.success(null)
+		"admin_menu.yml":
+			admin_menu = tree
+			return DotResult.success(null)
+		"loading.yml":
+			loading = tree
 			return DotResult.success(null)
 		"vote.yml":
 			return _apply_vote(tree)

@@ -1,0 +1,62 @@
+# The loading screen: what players see and hear while this server changes game or map
+# under them. Not the first connect -- the page that launched them covers that.
+#
+# Everything here is a URL the player's game client fetches itself, in the background,
+# while they are still playing, so it is ready by the time a change happens. Host the
+# files anywhere that serves https. A browser player also needs that host to allow the
+# game's page to read them (Access-Control-Allow-Origin), which an image host or CDN
+# usually does and a home server usually does not.
+#
+#   images      PNG, JPEG or WebP. One is picked at random each time. Up to 8, ~4 MB each.
+#   music       OGG Vorbis, MP3 or WAV, looped and faded. One is picked at random. Up to
+#               ~12 MB each. Players can mute it with M on the loading screen, remembered.
+#   done_sound  played once when loading finishes.
+#   tips        lines shown one at a time.
+#   title       a heading over the game's own name.
+#
+# Console: `loading_screen` (what is configured), `loading_screen_reload` (read this
+# file again and send it to everybody playing).
+
+loading_enabled: true
+
+# Seconds a map download waits before showing a screen, so one that is over in a blink
+# does not flash one. A game change shows it at once.
+loading_show_delay_sec: 0.25
+
+# --- The default screen ------------------------------------------------------------------
+#
+# loading_images:
+#   - "https://example.com/loading/one.jpg"
+#   - "https://example.com/loading/two.jpg"
+# loading_music: "https://example.com/loading/theme.ogg"
+# loading_music_volume: 0.6        # 0 to 1
+# loading_done_sound: "https://example.com/loading/ready.ogg"
+# loading_title: "My Community"
+# loading_tips:
+#   - "Type /admin for the admin menu, if you are an admin."
+#   - "Say !game_rtv to vote for a different game."
+
+# --- Per game, by game id (what `games` lists) -------------------------------------------
+#
+# Each field falls through on its own: a game with images and no music plays the default
+# music over its own images.
+#
+# loading_games:
+#   g2gfast:
+#     images: ["https://example.com/loading/surf.jpg"]
+#     tips:
+#       - "Hold space to bunny hop."
+#   arena:
+#     image: "https://example.com/loading/arena.jpg"
+#     music: "https://example.com/loading/arena.ogg"
+
+# --- Per map, by map id ----------------------------------------------------------------
+#
+# Sent when that map starts loading, for games with a map list (the surf timer, the
+# deathmatch, the sandbox). Falls through to the game's screen, then the default.
+#
+# loading_maps:
+#   surf_mesa:
+#     image: "https://example.com/maps/surf_mesa.jpg"
+#     tips:
+#       - "Stay in the middle of the ramp."

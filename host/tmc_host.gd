@@ -62,6 +62,12 @@ var anticheat: DotAntiCheat = null
 ## Voting for the next game, or null when `vote.yml` turns it off.
 var votes: TmcVote = null
 
+## `/admin`, or null when `admin_menu.yml` turns it off.
+var admin_menu: TmcAdminMenu = null
+
+## The loading screen players see on a game or map change, from `loading.yml`.
+var loading: TmcLoading = null
+
 ## Reports this server's own state to its site listing. Never null; it reports nothing
 ## when there is no token, which is every LAN deployment and every test.
 var listing: TmcReport = null
@@ -768,6 +774,23 @@ func _boot() -> bool:
 	# the registry for each game's dot-moderation itself, so it does not have to be built
 	# before the module that registers one.
 	replay = TmcReplay.install(self, server, config, _data_dir)
+
+	# After the first game, so the menu's first look at the console sees the game's own
+	# commands -- though it looks again on every page, which is what keeps it right across
+	# a changelevel. `warn` is registered here only if nothing before it took the name.
+	var map_session := func() -> Object:
+		return _find_map_session(server.games)
+
+	admin_menu = TmcAdminMenu.install(self, server, config.admin_menu, map_session)
+
+	# After the first game too: it watches that game's map session for per-map screens.
+	var reread := func() -> DotResult:
+		var path := "%s/loading.yml" % _config_dir
+		if not FileAccess.file_exists(path):
+			return DotResult.success({})
+		return TmcYaml.parse_file(path)
+
+	loading = TmcLoading.install(self, server, config.loading, reread, map_session)
 
 	return true
 

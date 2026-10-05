@@ -102,6 +102,8 @@ Anything it does can be done on its own afterwards: the three scripts above take
 - **Configuration in YAML**, in files split by subject: `server.yml`, `net.yml`, `rcon.yml`, `auth.yml`, `groups.yml` and `permissions.yml`. Anything dot-server exposes as a console variable can go in them under its own name.
 - **Roles, not flags.** dot-server's permission model is flags, deliberately; `groups.yml` is the translation, so an operator writes `admin: [kick, ban, mute]` and a player gets the flags.
 - **Moderation.** Bans, kicks, mutes, votes and an audit log, all dot-server's, all reachable from the console or over RCON.
+- **An admin menu.** `/admin` in chat opens a menu on the admin's screen: kick, ban, warn, mute, gag, the live tools a game has (slay, freeze, bring…), player info with their record, change game, change map, announce. Pick with 1–7 or the mouse; 8 is back, 9 is more, 0 closes. Each admin sees exactly the part they have the flags for, and every item ends as the console command they could have typed, so immunity, the audit log and the replies are the console's own. What is on it, in what order, with which reasons and durations, plus items of your own, is `cfg/admin_menu.yml`. See [The admin menu](#the-admin-menu).
+- **Loading screens.** While the server changes game or map under its players, they see your picture and hear your music instead of a frozen frame: images, music, tips and a title, per game and per map, as URLs in `cfg/loading.yml`. See [Loading screens](#loading-screens).
 - **Games loaded at runtime, and delivered at runtime.** A directory under `content/` with a `game.yml` in it is a game; `changelevel` switches between them with players still connected. **This build ships no game code at all** — every one of them is a signed dot-cloud pack that the server and each client download and mount, so adding a game to your server is publishing a pack and writing a YAML file. No new client build, no upload, nothing in an admin panel, and every player already connected to something else gets it on the way in.
 - **The game, and the map it starts on.** `sv_game` and `sv_map` in `cfg/server.yml`, `--game` and `--map` on the command line, `TMC_GAME` and `TMC_MAP` in a unit file, and `-- +map <id>` for the fingers of anybody who has run a dedicated server before. A game decides whether it has maps at all, so a game with none, and an id its catalogue has never heard of, are both a line in the log rather than a refusal to boot.
 - **The players choose the next game.** `!game_nominate`, `!game_rtv`, `!game_vote`, `!game_timeleft` and `!game_next`, which is the shape every server in this genre has had since 2005, over the games in `content/` rather than over maps. They are prefixed because a game may run a vote of its own over its own maps, and those own the bare `!rtv` and `!nominate` that players' fingers already know. Each game gets its own time limit, in its own `game.yml`. All of it is `cfg/vote.yml`, and `enabled: false` turns it off.
@@ -144,6 +146,8 @@ cfg/                 what an operator edits. Written on first run, and not in th
   party.yml            parties: bookings, party chat, reporting to the website
   matchmaking.yml      the queue. Off unless you turn it on
   replay.yml           the last minute kept in memory, "replay save", evidence for bans
+  admin_menu.yml       what /admin offers, and to whom
+  loading.yml          the picture, music and tips over a game or map change
   permissions.yml      who is in which group
   content/<id>/        per-game configuration
 
@@ -193,6 +197,8 @@ The YAML reader is a deliberately small subset and refuses everything else with 
 `vote.yml` is the one file that is not a console surface: it is dot-vote's `DotVoteRules`, applied straight onto the resource, so every setting in it is documented on the property of the same name. **Enums are written by name**, so `method: instant_runoff` rather than `method: 2`, because a config file full of enum indices is one nobody can read or diff, and renumbering an enum would silently change how a server counts votes.
 
 `party.yml` and `matchmaking.yml` work the same way one step along: every setting of dot-party's `DotPartyConfig` is accepted with a `party_` prefix, your terms for a party booking are `party_reserve_*`, and every setting of dot-matchmaking's `DotMatchmakingConfig` is `mm_*`. The names are the addons' own, so a setting the addon gains needs no change here. `DOT_PARTY_*` / `--party-*` and `DOT_MM_*` / `--mm-*` override them, like every config in the family.
+
+`admin_menu.yml` and `loading.yml` are this deployment's own and are described in [The admin menu](#the-admin-menu) and [Loading screens](#loading-screens). Their unknown keys and bad URLs are reported at boot, like everything else's.
 
 `replay.yml` is the same again over dot-replay's `DotReplayConfig` (`replay_ring_seconds`, `replay_keyframe_seconds`, `replay_compression`, …), plus seven switches of this deployment's own: `replay_enabled`, `replay_record` (every match to a file), `replay_clip_on_punish`, `replay_clip_seconds`, `replay_evidence_cooldown_sec`, and `replay_keep_files` / `replay_keep_mib`, which cap each of `data/replays/matches`, `clips` and `evidence` separately so a moderator's manual saves never push evidence off the disk. `DOT_REPLAY_*` / `--replay-*` override them, so `./server -- --replay-ring-seconds 300` keeps five minutes for one tournament.
 
@@ -448,6 +454,53 @@ inf chat.relay  a relayed command was refused  uid=backbone:clx8f2k0kd command=m
 Paste that into `cfg/permissions.yml` under `users:` with a group, restart, and the same command works. The file ships with no `users:` key at all — a name written into a public template is a name anybody can register, and every server that never edited the file would hand that person its owner group — so the first entry adds the key as well as the person. There is deliberately **no** way to grant it by the name shown beside the message: a display name is a string the person can change on their own profile page, and a permission keyed on one is a permission anybody can take by renaming themselves.
 
 Once the relay is up, the server also posts its command table to `POST /api/integration/v1/chat/commands`, and the site's chat box offers those commands when a member types `/`. The list is built at the relay's own source, so what the menu shows is what that person could actually run. Offering a command that will always be refused teaches people the site is broken.
+
+## The admin menu
+
+Type `/admin` in chat. The menu opens on the left of your screen:
+
+```
+Player commands                     Kick
+  1. Player info                      Choose a player
+  2. Kick                ->           1. Bob (#12)          ->   1. Spamming  ...  7. Custom…
+  3. Ban                              2. Alice (#14)
+  ...                                 8. Back   0. Close
+```
+
+**1–7** choose, **8** goes back (or to the previous screen of a long list), **9** shows more, **0** or Esc closes. The mouse works too; it is freed while the menu is open and given back when it closes. A "Custom…" row opens a text box for a reason of your own.
+
+**What you see is what you may do.** An item appears only when the command it runs exists on this server right now, can be run from chat, and you hold its flag. A game without live tools has no Slay; a moderator without `ban` has no Ban; a game that refuses map changes from chat has no Change map. The player list only shows people you outrank. Nothing in `admin_menu.yml` grants a permission, because `groups.yml` and `permissions.yml` do that.
+
+**Every item is a console line**, run as you. "Ban → Bob → 1 day → Spamming → Yes" runs `ban #12 1d Spamming` exactly as if you had typed it, so the reply, the audit log entry and the immunity check are the same ones. Ban, change game and change map ask "Yes, do it" first. **Player info** shows the ids, the address (to anyone with `kick`, as `whois` does), time on the server, ping, whether they are silenced, and their record of warnings, kicks and bans. It also links straight to every action you could take on them.
+
+**`warn <player> <reason>`** is added when the server has no `warn` of its own. The player sees it on screen and in chat (never with your name), and it goes on their record when the game keeps one.
+
+`cfg/admin_menu.yml` sets the rest: which items are in which category, labels, your own items (`command: "say Read the rules"`), the reason and duration lists, which flag opens the menu at all, and whether it closes or returns to the player list after a command. The file shipped in `cfg.example/` is commented throughout. A client built before this ignores the menu; `/admin` then does nothing visible for that player.
+
+## Loading screens
+
+When the server changes game, or a map has to be downloaded, players already on the server see a full-screen loading screen with your picture, music and tips, and the download's own progress on top. The first connect is not covered, because the page that launched the player shows that.
+
+```yaml
+loading_images: ["https://example.com/loading/one.jpg", "https://example.com/loading/two.jpg"]
+loading_music: "https://example.com/loading/theme.ogg"
+loading_music_volume: 0.6
+loading_tips: ["Type /admin for the admin menu.", "Say !game_rtv to vote for a different game."]
+loading_games:
+  g2gfast:
+    image: "https://example.com/loading/surf.jpg"
+loading_maps:
+  surf_mesa:
+    image: "https://example.com/maps/surf_mesa.jpg"
+```
+
+- **Everything is a URL**, fetched by each player's client in the background while they are still playing, so it is ready before the change starts. Images are PNG, JPEG or WebP (up to 4 MB); music is OGG Vorbis, MP3 or WAV (up to 12 MB), looped, faded in and out, one picked at random. Only `http://` and `https://` URLs are fetched.
+- **A browser player needs your host to allow the game's page** (`Access-Control-Allow-Origin`). An image host or a CDN usually does; a home server usually does not, and then browser players get a plain screen while desktop players get yours.
+- **Per game and per map, field by field.** A map's picture over its game's music over the default tips. Per-map screens work for games with a map list (the surf timer, the deathmatch, the sandbox).
+- **Players can mute the music** with M on the loading screen, and it stays muted for them.
+- `loading_screen` at the console shows what is configured; `loading_screen_reload` re-reads the file and sends it to everybody playing without a restart.
+
+Players need a client built after this feature; an older one keeps its plain screen.
 
 ## Upgrading a server that is already running
 

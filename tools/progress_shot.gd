@@ -99,6 +99,60 @@ func _init() -> void:
 				})
 				list.append(DotFriend.of(str(r[0]).to_lower(), r[0], p))
 			shell.call("_render_friends", list)
+		"admin", "admin_info":
+			# The admin menu over a game: a reason step, and a player's info page. Pages as
+			# `host/tmc_admin_menu.gd` builds them, handed straight to the panel.
+			shell.get("_menu").visible = false
+			var panel: Node = shell.get("admin_menu")
+			panel.call("show_page", {"title": "Player commands", "path": "c:players", "rows": [{"label": "Kick", "go": "i:kick"}]})
+			if stage == "admin":
+				panel.call("show_page", {
+					"title": "Ban", "subtitle": "Bob (#12) · 1 day — Reason", "path": "i:ban #12 4",
+					"rows": [
+						{"label": "Spamming", "go": "i:ban #12 4 1"},
+						{"label": "Abusive language", "go": "i:ban #12 4 2"},
+						{"label": "Cheating", "go": "i:ban #12 4 3"},
+						{"label": "Griefing", "go": "i:ban #12 4 4"},
+						{"label": "Ignoring an admin", "go": "i:ban #12 4 5"},
+						{"label": "Inappropriate name", "go": "i:ban #12 4 6"},
+						{"label": "Mic spam in the spawn area, repeatedly, after a warning", "go": "i:ban #12 4 7"},
+						{"label": "Custom…", "input": "i:ban #12 4", "prompt": "Reason"},
+					],
+				})
+			else:
+				panel.call("show_page", {
+					"title": "Bob", "subtitle": "Player info", "path": "i:info #12",
+					"rows": [
+						{"label": "User id: #12"}, {"label": "Account: backbone:clx8f2k0kd"},
+						{"label": "Username: bob"}, {"label": "Address: 203.0.113.12"},
+						{"label": "Connected 41:07 · ping 38 ms"},
+						{"label": "On record: 2 warnings, 1 kick; 0 in force"},
+						{"label": "— Actions —"},
+						{"label": "Kick", "go": "i:kick #12"}, {"label": "Ban", "go": "i:ban #12"},
+						{"label": "Warn", "go": "i:warn #12"}, {"label": "Mute (voice and chat)", "go": "i:mute #12"},
+						{"label": "Gag (chat only)", "go": "i:gag #12"}, {"label": "Slay", "go": "i:slay #12"},
+						{"label": "Freeze", "go": "i:freeze #12"}, {"label": "Bring to me", "go": "i:bring #12"},
+					],
+				})
+		"loading":
+			# A game change under a player, with an owner's picture, title and tip. The
+			# picture is a game's own screenshot put straight into the screen's cache, so no
+			# fetch is involved: what is under test is the drawing.
+			shell.get("_menu").visible = false
+			shell.set("_has_spawned", true)
+			var screen: Node = shell.get("loading")
+			var url := "http://127.0.0.1:9/bg.png"
+			var picture := Image.load_from_file(ProjectSettings.globalize_path("res://../game-arena/screenshots/dm_atrium_overview.png"))
+			if picture != null and not picture.is_empty():
+				screen.get("_media")[url] = ImageTexture.create_from_image(picture)
+			screen.call("adopt", {"v": 1, "default": {
+				"images": [url], "title": "TMC Community",
+				"tips": ["Type /admin for the admin menu, if you are an admin."],
+			}})
+			screen.call("begin", &"game", "arena", "Arena")
+			screen.call("set_progress", 0.42, "Downloading Arena…", "23.5 / 63.0 MiB · 3.1 MiB/s")
+			for i in 30:
+				await process_frame
 
 	await process_frame
 	await process_frame

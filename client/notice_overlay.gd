@@ -171,6 +171,22 @@ func ballot(topic: StringName) -> DotBallotPanel:
 	return _ballots.get(topic, null)
 
 
+## Every ballot panel, open or not. The shell takes their number keys while the admin menu
+## is up.
+func ballots() -> Array:
+	return _ballots.values()
+
+
+## Gives the number keys back to the last open ballot, after something else had them.
+func restore_numbers() -> void:
+	var last: DotBallotPanel = null
+	for panel: DotBallotPanel in _ballots.values():
+		if panel.is_open():
+			last = panel
+	if last != null:
+		_give_numbers_to(last)
+
+
 func _make_ballot(topic: StringName) -> DotBallotPanel:
 	var panel := DotBallotPanel.new()
 	panel.name = "Ballot_%s" % String(topic)

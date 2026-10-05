@@ -405,6 +405,16 @@ echo
 echo "parties, bookings and party chat"
 "$GODOT" --headless --path . res://examples/party_live.tscn < /dev/null || fails=$((fails + 1))
 
+# The admin menu and the loading screen. The first suite is both halves against stand-ins
+# and needs nothing; the second is the real shell on a real socket -- /admin from chat, a
+# confirmed changelevel from the menu, and the loading screen up over it with a picture
+# the suite serves itself. Armed: with the server not registering the menu's envelope kind,
+# the choices fall back to chat, hit its flood limit, and seven checks fail.
+echo
+echo "the admin menu and the loading screen"
+"$GODOT" --headless --path . res://examples/admin_loading_selftest.tscn || fails=$((fails + 1))
+"$GODOT" --headless --path . res://examples/admin_live.tscn < /dev/null || fails=$((fails + 1))
+
 # The other half: a real DotServer, a real listener, the lobby loaded and a module in
 # it. Everything the selftest cannot reach without starting one.
 if [ -x ./server ]; then

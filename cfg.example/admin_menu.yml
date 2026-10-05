@@ -1,0 +1,112 @@
+# The admin menu: type /admin in chat and pick with a number key or the mouse.
+#
+#   1-7  choose        8  back (or the previous page)        9  next page        0  close
+#
+# What is on it is worked out per admin, every time a page opens: an item is shown when
+# the command its line starts with exists on this server right now (a game that has no
+# `slay` shows no Slay), may be run from chat, and the admin holds that command's flag.
+# So the menu below lists everything by default, and each admin sees the part of it they
+# are allowed to use. Nothing here grants a permission: groups.yml and permissions.yml do.
+#
+# Every item ends as one console line, run as if the admin had typed it, so the audit log,
+# immunity and the reply are exactly what typing it would give.
+#
+# Console: `admin` (the menu itself, players only), `warn <player> <reason>` (added when
+# nothing else on this server has a `warn`).
+
+admin_menu_enabled: true
+
+# What opens it. `/admin` in chat; list more to have several names for it.
+admin_menu_commands: [admin]
+
+# The heading on the first page.
+admin_menu_title: "Admin menu"
+
+# A flag needed to open the menu at all. Empty: anybody with at least one usable item.
+admin_menu_flag: ""
+
+# What happens after an item runs: close, back (to the item's first page, e.g. a fresh
+# player list, for kicking several people in a row) or root.
+admin_menu_after_run: close
+
+# Who may use `warn`. A warning is told to the player on screen and in chat, and kept on
+# their record when the game keeps one (dot-moderation).
+admin_menu_warn_flag: kick
+admin_menu_warn_announce: false
+
+# Who sees a player's address on the Player info page. `whois` shows it to `kick`.
+admin_menu_address_flag: kick
+
+# --- The layout ----------------------------------------------------------------------
+#
+# Leave `categories:` out to get the built-in layout, which is exactly this. Writing it
+# REPLACES the layout: an item you leave out is not on the menu. An item you add under
+# `items:` and place in no category goes under "Other" rather than nowhere.
+#
+# A category may have a `flag:` of its own, needed to see anything in it.
+#
+# categories:
+#   players:
+#     title: "Player commands"
+#     items: [info, kick, ban, warn, mute, gag, unmute, slay, slap, freeze, unfreeze, respawn, bring, goto]
+#   server:
+#     title: "Server commands"
+#     items: [changelevel, map, say]
+
+# --- Items -----------------------------------------------------------------------------
+#
+# Merged over the built-in items by name, so you only write what you change:
+#
+#   label    what the row says
+#   command  the console line, with {name} for each step's answer
+#   steps    what to ask, in order: player, game, map, text, or the name of a list below.
+#            `name:kind` asks a `kind` and fills {name}, for two of one kind:
+#            `steps: [player, "dest:player"]` with `command: "send {player} {dest}"`
+#   flag     a flag needed for this item on top of the command's own. Never a grant.
+#   confirm  ask "Yes, do it" before running it
+#   self     whether you appear on its player list (default: no)
+#   info     a Player info page rather than a command
+#   enabled  false takes a built-in item off the menu
+#
+# The built-in items: info, kick, ban, warn, mute, gag, unmute, slay, slap, freeze,
+# unfreeze, respawn, bring, goto, changelevel, map, say.
+#
+# items:
+#   kick:
+#     label: "Kick"
+#     command: "kick {player} {reason}"
+#     steps: [player, reason]
+#   slap:
+#     enabled: false
+#   slap_hard:
+#     label: "Slap for 50"
+#     command: "slap {player} 50"
+#     steps: [player]
+#   rules:
+#     label: "Remind everybody of the rules"
+#     command: "say Read the rules: no spawn camping, no mic spam."
+
+# --- Lists ------------------------------------------------------------------------------
+#
+# What a step that names a list offers. Merged over the built-in lists by name; give
+# `options:` and it replaces that list's options. `custom: true` adds a "Custom…" row that
+# lets the admin type their own (only on the last step). `format: duration` labels 1d as
+# "1 day" and 0 as "Permanent"; `format: seconds` labels 30 as "30 seconds".
+#
+# The built-in lists: reason, duration, seconds.
+#
+# lists:
+#   reason:
+#     title: "Reason"
+#     custom: true
+#     options:
+#       - "Spamming"
+#       - "Abusive language"
+#       - "Cheating"
+#       - "Griefing"
+#       - "Ignoring an admin"
+#       - "Inappropriate name"
+#   duration:
+#     title: "For how long"
+#     format: duration
+#     options: [5m, 30m, 1h, 1d, 7d, 30d, 0]

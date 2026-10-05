@@ -1,0 +1,5 @@
+# The shipped defaults, plus one item of the owner's own, which lands under "Other".
+items:
+  hello:
+    label: "Say hello"
+    command: "say hello from the menu"

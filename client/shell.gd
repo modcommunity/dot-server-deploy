@@ -86,6 +86,18 @@ var _locale: DotLocale = null
 ## countdown and its cues. See [TmcNoticeOverlay] for why the shell draws it.
 var notices: TmcNoticeOverlay = null
 
+## `/admin`, drawn. The server sends each page as a notice under its topic; see
+## [TmcAdminMenuPanel] and `host/tmc_admin_menu.gd`.
+var admin_menu: TmcAdminMenuPanel = null
+
+## The server owner's screen over a game or map change. See [TmcLoadingScreen].
+var loading: TmcLoadingScreen = null
+
+## Whether this connection has put a game on screen yet. The loading screen is for a
+## change UNDER a player, never for the first join -- the menu, or the page that launched
+## them, has that.
+var _has_spawned := false
+
 
 func _ready() -> void:
 	# Scoped to this subtree, for the reason the host scopes its own: Godot addresses an
@@ -122,6 +134,30 @@ func _ready() -> void:
 		if link != null:
 			link.send_chat(line)
 	add_child(notices)
+
+	admin_menu = TmcAdminMenuPanel.new()
+	admin_menu.name = "AdminMenu"
+	# Read through `link` at the moment of the choice, as the ballot's is. The menu's own
+	# kind first; the typed command for a server that does not know it, which costs a
+	# chat line per choice against chat's flood limit -- see `host/tmc_admin_menu.gd`.
+	admin_menu.send_fn = func(path: String) -> void:
+		if link == null:
+			return
+		if not link.send_kind(TmcAdminMenuPanel.KIND, {"path": path}, DotEnvelope.Lane.EVENT):
+			link.send_chat("/%s %s" % [TmcAdminMenuPanel.NAV_COMMAND, path])
+	# An admin who opened a menu meant the number keys for it, not for a ballot.
+	admin_menu.opened.connect(func() -> void:
+		for panel in notices.ballots():
+			panel.take_numbers = false
+	)
+	admin_menu.closed.connect(notices.restore_numbers)
+	add_child(admin_menu)
+
+	loading = TmcLoadingScreen.new()
+	loading.name = "Loading"
+	loading.in_game_fn = func() -> bool:
+		return _has_spawned and _menu != null and not _menu.visible
+	add_child(loading)
 
 	# Who is playing, before anything is dialled.
 	#
@@ -962,6 +998,17 @@ func _on_cloud_phase(phase: int, text: String) -> void:
 	if phase == DotCloudClient.Phase.FAILED and _menu != null and not _menu.visible:
 		show_content_failed(text)
 
+	# A fetch while a game is on screen is a map (or the next game's pack, which the game
+	# reason is already covering). The screen waits a moment before it shows, so a map
+	# already on the disk does not flash one.
+	if loading != null:
+		match phase:
+			DotCloudClient.Phase.IDLE, DotCloudClient.Phase.READY, DotCloudClient.Phase.FAILED:
+				loading.end(TmcLoadingScreen.REASON_CONTENT)
+			_:
+				loading.begin(TmcLoadingScreen.REASON_CONTENT)
+				loading.set_progress(-1.0, text)
+
 	# The detail line belongs to the download. Anything else and it is stale.
 	if _detail != null and phase != DotCloudClient.Phase.DOWNLOADING:
 		_detail.visible = false
@@ -985,6 +1032,11 @@ func _on_cloud_phase(phase: int, text: String) -> void:
 
 ## The second line: which file, how fast, how much longer.
 func _on_cloud_progress_detail(p: Dictionary) -> void:
+	if loading != null and loading.is_showing():
+		var total := int(p.get("total_bytes", 0))
+		loading.set_progress(float(p.get("fraction", 0.0)), "",
+			_bytes_pair(int(p.get("done_bytes", 0)), total) if total > 0 else "")
+
 	if _progress != null:
 		_indeterminate(false)
 		_progress.visible = true
@@ -1145,24 +1197,34 @@ func _connect_to(address: String) -> void:
 	# timeout as the only symptom.
 	link.name = "Server"
 	link.player_name = _name.text.strip_edges()
+	# Send-only, and declared before the connect so the credentials advertise it: the
+	# server sends a menu choice's kind to nobody, it only has to know this client can send
+	# one. See TmcAdminMenuPanel.KIND.
+	link.envelope.register(TmcAdminMenuPanel.KIND)
 	# Where the server's game scene is put. The shell never names a scene itself.
 	link.game_root_ref = DotNodeRef.of_path(_game_root.get_path())
 	add_child(link)
 
-	link.phase_changed.connect(func(_phase: int, text: String) -> void:
+	link.phase_changed.connect(func(phase: int, text: String) -> void:
 		_status.text = text
+		# A game change under a player who is already in: the link goes back through
+		# downloading and loading, and that is the stretch the loading screen covers.
+		if _has_spawned and phase in [DotClientLink.Phase.DOWNLOADING, DotClientLink.Phase.LOADING]:
+			loading.begin(TmcLoadingScreen.REASON_GAME)
+			loading.set_progress(-1.0, text)
 	)
 	link.download_progress.connect(func(fraction: float, text: String) -> void:
 		_indeterminate(false)
 		_progress.value = clampf(fraction, 0.0, 1.0) * 100.0
 		_status.text = "%s  %d%%" % [text, int(fraction * 100.0)]
+		loading.set_progress(fraction, text)
 	)
 	link.game_changed.connect(_on_game_changed)
 	link.spawned.connect(_on_spawned)
 	link.disconnected.connect(_on_disconnected)
 	# The server's HUD lines. Connected per link rather than once, because the link is
 	# rebuilt on every connection -- see [method _drop_link].
-	link.notice_received.connect(notices.show_notice)
+	link.notice_received.connect(_on_notice)
 
 	var connecting: DotResult = await link.connect_to_server(target)
 
@@ -1213,6 +1275,8 @@ const BUILTIN_CLIENTS := {}
 ## left this to the link would stack every game an operator ever switched to on top of the
 ## last, each with its own netcode manager ticking the same tree.
 func _on_game_changed(game_id: String, _content_id: String, display_name: String) -> void:
+	if _has_spawned:
+		loading.begin(TmcLoadingScreen.REASON_GAME, game_id, display_name)
 	_clear_game()
 	if _friends != null:
 		_friends.on_game_changed(display_name if display_name != "" else game_id, link.server_hostname if link != null else "")
@@ -1223,6 +1287,11 @@ func _on_game_changed(game_id: String, _content_id: String, display_name: String
 func _on_spawned() -> void:
 	_set_busy(false)
 	_menu.visible = false
+	_has_spawned = true
+	# Both: the new game is on screen, and whatever the content client was doing for it is
+	# done whether or not its last phase said so.
+	loading.end(TmcLoadingScreen.REASON_GAME)
+	loading.end(TmcLoadingScreen.REASON_CONTENT)
 	# A new connection is a new session on the server, which knows nothing of the last
 	# one's claim.
 	_claimed_party = ""
@@ -1336,6 +1405,34 @@ func _drop_link() -> void:
 	remove_child(link)
 	link.queue_free()
 	link = null
+
+
+## Routes a server notice: the admin menu's pages, the loading screen's document, and
+## everything else to the HUD overlay.
+func _on_notice(notice: DotNotice) -> void:
+	if notice == null:
+		return
+	match notice.topic:
+		TmcAdminMenuPanel.TOPIC:
+			if notice.is_clear():
+				admin_menu.close()
+			else:
+				var page: Variant = notice.data.get("menu", {})
+				admin_menu.show_page(page if page is Dictionary else {})
+		TmcLoadingScreen.TOPIC:
+			loading.adopt(notice.data)
+		_:
+			notices.show_notice(notice)
+
+
+## What goes when a game does: the menu an admin had open, and the loading screen with
+## whatever server it belonged to.
+func _leave_game_ui() -> void:
+	_has_spawned = false
+	if admin_menu != null:
+		admin_menu.close()
+	if loading != null:
+		loading.reset()
 
 
 ## Says something, whether or not the menu is on screen.
@@ -1545,6 +1642,7 @@ func clear_pending() -> int:
 ## cannot be shown a game needs the address box back, not a frozen screen.
 func _fail(text: String) -> void:
 	DotLog.error(CHANNEL, text)
+	_leave_game_ui()
 	_set_busy(false)
 	_menu.visible = true
 	_say(text)
@@ -1565,6 +1663,7 @@ func _on_disconnected(reason: String) -> void:
 		_friends.on_disconnected()
 	# A countdown from a server this player has left is a promise nobody is keeping.
 	notices.clear_all()
+	_leave_game_ui()
 
 	# [b]The one disconnection a player can actually act on, and it needs a different
 	# sentence from every other one.[/b] This build's `@rpc` surface does not match the
