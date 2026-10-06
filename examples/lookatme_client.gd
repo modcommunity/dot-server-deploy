@@ -26,7 +26,7 @@ const CONTENT_ID := "tmc/lookatme"
 const MODULE := "lookatme"
 
 ## Every check this suite runs, including the one that compares against it.
-const CHECKS := 17
+const CHECKS := 18
 
 var _passed := 0
 var _failed := 0
@@ -335,4 +335,7 @@ func _test_still_serving() -> void:
 	context.reply_sink = func(text: String) -> void: captured.append(text)
 	_server().console.execute("lm_status", context)
 	_check("\n".join(captured).contains("levels"), "lm_status describes the house")
+	captured.clear()
+	_server().console.execute("lm_house", context)
+	_check("\n".join(captured).contains("asylum"), "and the Asylum, a second house, was found inside the mount")
 	_done()
