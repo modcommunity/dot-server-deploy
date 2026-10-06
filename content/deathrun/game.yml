@@ -1,0 +1,29 @@
+# mg-deathrun, as this server publishes it.
+#
+# One long course of traps: most of the server runs it, one activator per ten players stands
+# beside it with a button per trap, and the first runner across calls the activators down to
+# settle it. The courses are NOT in this pack: they are deathrun_maps below, mounted on the
+# server only, because the server sends each client the course it is playing as a document.
+#
+# Keep scene, client_scene and module in step with mg-deathrun's own game.yml.
+
+name: Deathrun
+content_id: tmc/deathrun
+version: 0.1.0
+kind: pack
+max_players: 24
+
+scene: scenes/dr_server.tscn
+client_scene: game/dr.tscn
+module: game/dr_module.gd
+
+# Pinned, because TmcContent refuses an unpinned entry rather than resolving one per join.
+server_dependencies:
+  - tmc/deathrun_maps@0.1.0
+
+cvars:
+  dr_round_seconds: "300"
+  dr_players_per_activator: "10"
+  # Stand-ins, so one person on an empty server has an activator to run from.
+  dr_bots: "1"
+  dr_min_players: "3"

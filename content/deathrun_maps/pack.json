@@ -1,0 +1,6 @@
+{
+    "id": "tmc/deathrun_maps",
+    "version": "0.1.0",
+    "name": "Deathrun courses",
+    "exclude_dirs": ["tools", ".github"]
+}
