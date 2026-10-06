@@ -28,7 +28,7 @@ const CONTENT_ID := "tmc/delivery"
 const MODULE := "delivery"
 
 ## Every check this suite runs, including the one that compares against it.
-const CHECKS := 18
+const CHECKS := 20
 
 var _passed := 0
 var _failed := 0
@@ -68,6 +68,7 @@ func _run() -> void:
 			_test_the_pack_mounted()
 			await _test_the_routes_arrived()
 			await _test_driving_across_the_socket()
+			await _test_chat_crosses()
 			_test_still_serving()
 
 	await _teardown()
@@ -314,16 +315,33 @@ func _test_driving_across_the_socket() -> void:
 	var gap := (mirror as Node3D).global_position.distance_to(server_truck.global_position) if mirror is Node3D and server_truck != null else INF
 	_check(gap < 4.0, "and the client's copy follows it", "%.2f m" % gap)
 
-	var others := 0
-
-	for other: Variant in (client_world.get("drivers") as Dictionary).keys() if client_world != null else []:
-		if StringName(str(other)) != key:
-			others += 1
-
-	# dd_bots 2 less one for the one person here: a person takes a stand-in's place.
-	_check(others == 1, "the client sees the stand-in, one less for the person who came", "%d" % others)
+	# Waited for: the module seats stand-ins on its own two-second roster check, and a fast
+	# drive can finish before the first one. The first version read 0 one run in three.
+	var others := [0]
+	var _seated := await _until(func() -> bool:
+		others[0] = 0
+		for other: Variant in (client_world.get("drivers") as Dictionary).keys():
+			if StringName(str(other)) != key:
+				others[0] += 1
+		return others[0] == 1, 10.0)
+	_check(others[0] == 1, "the client sees the stand-in, one less for the person who came", "%d" % others[0])
 	_check(_refused[0] == "", "and is still connected", _refused[0])
 	client.set("command_override", null)
+	_done()
+
+
+## A line typed in the client's box goes to the server's chat router and comes back to the
+## client as the router addressed it: the wire, the services and the box, end to end.
+func _test_chat_crosses() -> void:
+	_section("chat crosses the socket")
+	var client := _client_scene()
+	var heard := [""]
+	client.get("bridge").connect("chat_received", func(wire: Dictionary) -> void:
+		heard[0] = str(wire.get("m", "")))
+	client.get("chat").call("_on_submitted", "anyone on the pass?", &"all")
+	var arrived := await _until(func() -> bool: return heard[0] == "anyone on the pass?", 10.0)
+	_check(arrived, "a line the client typed comes back through the server's chat", heard[0])
+	_check(int(client.get("chat").call("describe").get("lines", 0)) >= 1, "and is in the client's box")
 	_done()
 
 
