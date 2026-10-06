@@ -1,0 +1,17 @@
+# mg-look-at-me, as this server publishes it.
+#
+# A dark house, thirty-two levels deep, with witches walking its rooms. The server never ends:
+# people arrive in the lobby and go through the levels at their own pace, and what each has
+# opened is theirs. The levels travel inside this pack; a client is sent the documents.
+#
+# Keep scene, client_scene and module in step with mg-look-at-me's own game.yml.
+
+name: Look At Me
+content_id: tmc/lookatme
+version: 0.1.0
+kind: pack
+max_players: 24
+
+scene: scenes/lm_server.tscn
+client_scene: game/lm.tscn
+module: game/lm_module.gd
