@@ -1,0 +1,21 @@
+# mg-dangerous-delivery, as this server publishes it.
+#
+# Trucks up mountain roads with no rails, through zone weather and falling rock, to a depot.
+# Every route is a level and a corner of one world; the routes travel inside this pack and
+# the server sends each client the documents in its hello.
+#
+# Keep scene, client_scene and module in step with mg-dangerous-delivery's own game.yml.
+
+name: Dangerous Delivery
+content_id: tmc/delivery
+version: 0.1.0
+kind: pack
+max_players: 16
+
+scene: scenes/dd_server.tscn
+client_scene: game/dd.tscn
+module: game/dd_module.gd
+
+cvars:
+  # Stand-ins, so one person on an empty mountain has trucks to share the road with.
+  dd_bots: "2"

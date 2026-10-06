@@ -1,0 +1,3 @@
+# Off. This suite is about one game on one socket; a ballot that changed the game halfway
+# through would make every check after it a check about a different game.
+enabled: false
