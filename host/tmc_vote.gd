@@ -54,8 +54,8 @@ extends Node
 ## screen for a ballot that never opens.
 ##
 ## [b]One game is nothing to vote about.[/b] A server whose content offers one game —
-## after `vote_exclude`, and counting a game's several modes as one ([method votable_count])
-## — installs no game vote at all: no `!game_*` commands, no clock, no
+## after `vote_exclude`, counting a game's several modes as one and two installs under one
+## name as one ([method votable_count]) — installs no game vote at all: no `!game_*` commands, no clock, no
 ## ballot asking the players to choose between that game and extending it. The game's own
 ## MAP vote is then the only vote on the server, and it is unaffected either way: it runs
 ## inside the game, on its own rules, with or without this one beside it. Where there are
@@ -233,8 +233,16 @@ static func install(
 ## vote over exactly those five. A server running only hungario counted as five games would
 ## put two ballots over the same choice on every screen. A descriptor with no content id is
 ## a game of its own.
+##
+## [b]And by the name a player reads[/b], because that is all a ballot shows. A box with the
+## built-in `g2gfast` beside a published `owner/game-g2gfast` has two content ids and one
+## game, and counting it as two held a vote between g2gfast and Extend on a server that
+## runs nothing else. dot-vote now drops a choice named like the running one from the
+## ballot as well; this is the half that keeps the vote from being installed at all.
 static func votable_count(p_source: DotVoteGameSource, manager: DotGameManager) -> int:
-	var games := {}
+	var keys := {}
+	var names := {}
+	var count := 0
 
 	for choice in p_source.choices():
 		if not choice.enabled:
@@ -246,9 +254,15 @@ static func votable_count(p_source: DotVoteGameSource, manager: DotGameManager) 
 		if descriptor != null and descriptor.content_id != "":
 			key = descriptor.content_id
 
-		games[key] = true
+		var shown := choice.name_or_id().strip_edges().to_lower()
 
-	return games.size()
+		if not keys.has(key) and not names.has(shown):
+			count += 1
+
+		keys[key] = true
+		names[shown] = true
+
+	return count
 
 
 func _wire() -> void:

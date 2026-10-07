@@ -43,7 +43,7 @@ const DATA := "user://tmc_multigame"
 ## Every check this suite runs, including the one that compares against it. The section
 ## counter cannot see a section that aborted after announcing itself — its remaining checks
 ## simply never run — and a total can. See docs/testing.md.
-const CHECKS := 72
+const CHECKS := 73
 
 var _passed := 0
 var _failed := 0
@@ -510,6 +510,23 @@ func _test_vote_changes_the_game() -> void:
 	_check(
 		TmcVote.votable_count(votes.source, _host.server.games) >= TmcVote.MIN_GAMES,
 		"and this one, with %d, does" % TmcVote.votable_count(votes.source, _host.server.games)
+	)
+
+	# The same game twice: the built-in copy and a published `owner/<name>` beside it. Two
+	# content ids, one name on the ballot — which put "<that game> or Extend" to the players
+	# of a server that runs nothing else.
+	var original: DotGameDescriptor = _host.server.games.find_game(kept)
+	var twin := DotGameDescriptor.new()
+	twin.game_id = "someone/%s" % kept
+	twin.content_id = "someone/%s" % kept
+	twin.display_name = original.display_name if original.display_name != "" else kept
+	_host.server.games.add_game(twin)
+	var twinned := TmcVote.install(self, _host.server, director.rules, all_but_one)
+	_host.server.games.games.erase(twin)
+	_check(
+		twinned == null,
+		"nor does one game installed twice under one name (%s, %s)" % [kept, twin.game_id],
+		"two content ids, one name: the ballot would be that game against Extend"
 	)
 
 	# hungario alone: five modes, one game, and its own map vote is already over the five.
