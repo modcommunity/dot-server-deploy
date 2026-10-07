@@ -21,10 +21,12 @@ services:
     # able to reach everything on the host's network, which for a process that accepts
     # connections from strangers is the wrong default. Publish the two ports instead.
     ports:
-      # The game. WebSocket, because a browser has no UDP and Godot's web template does
-      # not ship ENetMultiplayerPeer at all -- so a server that expects browser clients
-      # listens on WebSocket, and then all of its clients do.
+      # The game, twice over one number: WebSocket on TCP for browsers (they have no
+      # UDP), and ENet on UDP for the desktop app -- which also carries A2S and DQP,
+      # told apart from ENet by their first bytes. Drop the UDP line and native players
+      # fall back to WebSocket and no tracker can query the server.
       - "6064:6064/tcp"
+      - "6064:6064/udp"
       # RCON. Bound to loopback on the host: it is a remote console, and the password is
       # the only thing between it and whoever finds the port. Reach it through an SSH
       # tunnel, or put an address allow-list in cfg/rcon.yml and widen this deliberately.
@@ -102,10 +104,9 @@ services:
 
       # --- The other three ports -----------------------------------------------
       #
-      # RCON derives the game port plus one; A2S derives the game port itself,
-      # which is free because the game is a WebSocket listener and therefore TCP;
-      # and DQP derives the A2S port, so the two query protocols share one socket
-      # and are told apart by their first four bytes.
+      # RCON derives the game port plus one; A2S derives the game port itself, over
+      # UDP, where ENet listens too (one socket, told apart by the first bytes); and
+      # DQP derives the A2S port, so all three share the game's UDP port.
       #
       # Set these only to move them, and publish whatever you set in `ports:`
       # above -- a listener on an unpublished port is reachable from inside the

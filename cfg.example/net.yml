@@ -3,6 +3,20 @@
 net_bind_ip: "0.0.0.0"
 net_port: 6064
 
+# How clients connect. `dual` (the default): browsers over WebSocket on TCP net_port,
+# native (desktop app) clients over ENet on UDP net_enet_port, in the same match. A
+# native client tries UDP first and falls back to WebSocket. `websocket` puts everyone
+# on WebSocket (the behaviour before dual); `enet` serves native clients only.
+net_transport: dual
+
+# 0: the same number as net_port, over UDP. A2S and DQP answer there too by default;
+# the server tells the three apart by their first bytes (net_enet_share_udp). Publish
+# the UDP port as well as the TCP one. nginx does not carry UDP: the ENet port is
+# reached directly, never through the proxy, and needs no certificate.
+net_enet_port: 0
+# Empty follows query_bind_ip, which is what a server behind nginx wants.
+net_enet_bind_ip: ""
+
 # Uses the bind IP if not set. Only needed if the server is behind NAT. Nothing binds
 # to it -- it is what the join address is printed from and what a listing reports.
 net_public_ip: ""

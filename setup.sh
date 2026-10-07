@@ -2489,9 +2489,10 @@ if [ -n "${FULL_FIREWALL:-}" ]; then
     step "firewall"
 
     fw_allow() {
+        local proto="${2:-tcp}"
         case "$FULL_FIREWALL" in
-            ufw)       $SUDO ufw allow "$1/tcp" >/dev/null 2>&1 ;;
-            firewalld) $SUDO firewall-cmd --permanent --add-port="$1/tcp" >/dev/null 2>&1 ;;
+            ufw)       $SUDO ufw allow "$1/$proto" >/dev/null 2>&1 ;;
+            firewalld) $SUDO firewall-cmd --permanent --add-port="$1/$proto" >/dev/null 2>&1 ;;
         esac
     }
 
@@ -2501,6 +2502,10 @@ if [ -n "${FULL_FIREWALL:-}" ]; then
     else
         fw_allow "$FULL_PORT" && ok "$FULL_PORT/tcp open"
     fi
+    # The game's UDP port: ENet for the desktop app, plus A2S and DQP. Direct in both
+    # cases -- nginx carries the WebSocket and cannot carry UDP -- and on the game's
+    # own number, which is the port the server advertises to native clients.
+    fw_allow "$FULL_PORT" udp && ok "$FULL_PORT/udp open (desktop clients, server queries)"
 
     [ "$FULL_FIREWALL" = "firewalld" ] && $SUDO firewall-cmd --reload >/dev/null 2>&1
 fi

@@ -202,6 +202,15 @@ func _requested_server() -> String:
 	return ""
 
 
+## A user argument's value ([code]--name value[/code]), or "".
+func _user_arg(name: String) -> String:
+	var args := OS.get_cmdline_user_args()
+	var index := args.find(name)
+	if index >= 0 and index + 1 < args.size():
+		return args[index + 1]
+	return ""
+
+
 ## Signs in against the backbone, when the page we are embedded in offers a way.
 ##
 ## [b]Deliberately not a login screen.[/b] The only sign-in this shell performs is
@@ -1197,6 +1206,13 @@ func _connect_to(address: String) -> void:
 	# timeout as the only symptom.
 	link.name = "Server"
 	link.player_name = _name.text.strip_edges()
+	# Native launches join over UDP when the server serves ENet: `--udp host:port`
+	# names it (the launcher passes the server's advertised enet_port), and
+	# `--transport auto|udp|ws` overrides the choice. See DotClientLink.
+	link.udp_address = _user_arg("--udp")
+	var preference := _user_arg("--transport")
+	if preference in ["auto", "udp", "ws"]:
+		link.transport_preference = preference
 	# Send-only, and declared before the connect so the credentials advertise it: the
 	# server sends a menu choice's kind to nobody, it only has to know this client can send
 	# one. See TmcAdminMenuPanel.KIND.

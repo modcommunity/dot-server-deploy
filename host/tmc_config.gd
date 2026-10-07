@@ -45,6 +45,14 @@ const FILES := [
 const BOOT_KEYS := {
 	"net_port": "port",
 	"net_bind_ip": "bind_address",
+	# dual (WebSocket for browsers + ENet over UDP for native clients, one match),
+	# websocket, or enet. See DotServerConfig.transport_mode.
+	"net_transport": "transport_mode",
+	# ENet's UDP port; 0 is the game port's number, shared with A2S/DQP through a demux.
+	"net_enet_port": "enet_port",
+	# Empty follows query_bind_ip: behind nginx the UDP side must face the world itself.
+	"net_enet_bind_ip": "enet_bind_address",
+	"net_enet_share_udp": "enet_share_udp_port",
 	"sv_name": "hostname",
 	"sv_id": "server_id",
 	"sv_maxplayers": "max_players",
