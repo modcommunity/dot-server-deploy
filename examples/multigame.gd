@@ -546,10 +546,13 @@ func _test_vote_changes_the_game() -> void:
 		"it is this server's home screen; 'vote to go back to the menu' is not "
 		+ "something anybody votes for"
 	)
-	_check(
-		Array(offered).has("hungry_classic") or Array(offered).has("hungry_frenzy"),
-		"and the games are (%s)" % [offered]
-	)
+	# Any of the games, not two named ones: the ballot is a sample, and since
+	# deathrun, lookatme and delivery joined content/ a ballot without a hungry mode
+	# on it is an ordinary draw. What must hold is that it offers several real games.
+	var real := offered.size() >= 2
+	for id in offered:
+		real = real and FileAccess.file_exists("res://content/%s/game.yml" % id)
+	_check(real, "and the games are (%s)" % [offered])
 
 	# The whole player-facing sequence, in the order a player meets it.
 	var nominated := director.nominate(&"u1", &"hungry_frenzy")
