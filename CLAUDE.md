@@ -38,11 +38,11 @@ games: every one of them references its own files by relative path and rebases i
 game id is `kind: pack` and this build ships no game at all.** The five fourth-form
 routes below are what had to be closed first, and `tools/check.sh` keeps them closed.
 
-The lobby was the last holdout and the argument for it was real: it is the shell's home
-screen and what a player sees before anything is downloaded. It lost anyway, because a
-built-in lobby is a lobby that has to be re-exported to change — and a client that
+A built-in game is a game that has to be re-exported to change, and a client that
 contains one game contains the machinery for all of them, which is the thing this was
-trying to stop. `content/lobby/game.yml` sets out the whole of it.
+trying to stop. `content/arena/game.yml` sets out the constraint. When nothing names a
+game the server boots `arena` (`default: true` in its `game.yml`); the 2D lobby that used
+to be the default was scratched on 2026-10-08, and the suites that booted it boot buses.
 
 It is the same shape as the constraint dot-cloud already documents for avatar packs — "the
 pack is data, the code ships in the build" — reached from further along.
@@ -160,11 +160,10 @@ The engine is **dot-vote**, and the whole of the policy is `vote.yml`, which is 
 
 Three decisions in that file are this deployment's rather than dot-vote's:
 
-- **The lobby is not on the ballot.** `vote_exclude: [lobby]`. It is this server's home
-  screen rather than a game, and "vote to go back to the menu" is not something anybody
-  votes for. It is a TMC key rather than a `DotVoteRules` one for exactly that reason:
-  dot-vote should not have an opinion about what a lobby is.
-- **A game's time limit lives in its own `game.yml`**, under `metadata: vote: time_limit_sec:`. Forty minutes of surf and ten minutes of a lobby-sized deathmatch are not the same number and never will be, and the alternative is a second table of game ids that goes stale — which this project has already been bitten by twice. **That block was dropped until 2026-09-23**: `TmcContent` built the descriptor's metadata from `kind`, `module` and `directory` and nothing else, so every per-game vote setting anybody wrote was ignored in silence. It is passed through now, and `metadata: map_vote:` rides with it — the game's own map vote reads that as the layer between its code defaults and `user://cfg/<game>_vote.json`. The three keys this host sets win over the block, so it is not a second way to say `module:`.
+- **`vote_exclude` takes a game off the ballot.** Empty by default. It is a TMC key
+  rather than a `DotVoteRules` one because which installed games a player would choose
+  between is a question about this deployment.
+- **A game's time limit lives in its own `game.yml`**, under `metadata: vote: time_limit_sec:`. Forty minutes of surf and ten minutes of a small deathmatch are not the same number and never will be, and the alternative is a second table of game ids that goes stale — which this project has already been bitten by twice. **That block was dropped until 2026-09-23**: `TmcContent` built the descriptor's metadata from `kind`, `module` and `directory` and nothing else, so every per-game vote setting anybody wrote was ignored in silence. It is passed through now, and `metadata: map_vote:` rides with it — the game's own map vote reads that as the layer between its code defaults and `user://cfg/<game>_vote.json`. The three keys this host sets win over the block, so it is not a second way to say `module:`.
 - **`begin_on_apply` is off.** dot-vote's director would otherwise announce a change
   it made *and* this host would announce the same change through `game_loaded` — which
   is two notifications of one play, two entries in the play history, and every cooldown
@@ -348,7 +347,7 @@ as a different type, or refuses it.
 Invisible to every suite in the family, because they all run both ends in one process —
 sharing one intern table and therefore one order. A browser client is the first peer that
 is a genuinely separate program, and it disagreed immediately: server `8a9acd7731ef`,
-client `861a4fd82a45`, for the same two types. game-simple-lobby's `headless_net` now asserts the
+client `861a4fd82a45`, for the same two types. a game's `headless_net` asserted the
 order is lexicographic, which catches it without two processes.
 
 **In dot-core — `isSecureContext` is not "the page is HTTPS".** A browser treats
@@ -407,7 +406,7 @@ There was also **no way to change a MAP at all**, on any of them. dot-server gav
 
 **The Windows launcher was a nine-line batch file, and the README described the Bash one.** `server.cmd` understood `check`, `config` and `games` and handed everything else to Godot unread, so `--port`, `--bind`, `--name`, `--max-players`, `--game`, the directory flags, `--godot`, `--dry-run`, the `--` passthrough, the runtime version check and the refusal of a secret on the command line existed on Linux and macOS and not on Windows. Nothing could report it: every one of those options was correct, tested and reachable — from the other script. `server.ps1` is the launcher now and `server.cmd` forwards to it. Reviewed rather than run: there is no PowerShell on the machine this was written on, which is a weaker claim than anything else in this repository makes.
 
-**`./server check` printed `selftest ok` over a game module that never compiled.** On a fresh clone `./setup.sh --only-games lobby` left `addons/dot_game` unlinked; the lobby's module logged `Could not find base class "DotGameModule"`, and the check passed. A script that fails to parse takes no exit path: Godot logs it and hands back a script nothing can instantiate, dot-server's `load_module` called `.new()` on it and aborted its coroutine, the host awaited null, read `.ok` off it and aborted too, and the boot carried on to the end. Two fixes, each armed on its own. dot-server's `load_module` checks `can_instantiate()` and returns a failed result (dot-server 004e8f2), so the host's existing "module did not load" exit fires. And the host installs `TmcScriptWatch` — a `Logger` on the engine's own log — for the length of a selftest and fails it with exit 7 on any script error or any `Parse Error` / `Could not find base class` / `Failed to load script`, which also catches a broken script that is NOT the module (a server scene's, which loads with its script silently missing). `tools/check_boot_failures.sh`, run by `check.sh`, boots both shapes through the real launcher and requires both refused. It cannot catch a parse failure in `host/tmc_host.gd` itself: the scene then runs no script and never quits, which is why the cases are capped with `timeout`.
+**`./server check` printed `selftest ok` over a game module that never compiled.** On a fresh clone `./setup.sh --only-games <one game>` left `addons/dot_game` unlinked; that game's module logged `Could not find base class "DotGameModule"`, and the check passed. A script that fails to parse takes no exit path: Godot logs it and hands back a script nothing can instantiate, dot-server's `load_module` called `.new()` on it and aborted its coroutine, the host awaited null, read `.ok` off it and aborted too, and the boot carried on to the end. Two fixes, each armed on its own. dot-server's `load_module` checks `can_instantiate()` and returns a failed result (dot-server 004e8f2), so the host's existing "module did not load" exit fires. And the host installs `TmcScriptWatch` — a `Logger` on the engine's own log — for the length of a selftest and fails it with exit 7 on any script error or any `Parse Error` / `Could not find base class` / `Failed to load script`, which also catches a broken script that is NOT the module (a server scene's, which loads with its script silently missing). `tools/check_boot_failures.sh`, run by `check.sh`, boots both shapes through the real launcher and requires both refused. It cannot catch a parse failure in `host/tmc_host.gd` itself: the scene then runs no script and never quits, which is why the cases are capped with `timeout`.
 
 **Nothing checked the SERVER side of a join, and one probe said it did not happen.** `reconnect` waited for the client's `PLAYING` and called it "the server admits them", but `DotClientLink` enters `PLAYING` itself, on the line after it sends `loaded`, with nothing coming back. A 2026-09-14 probe of this exact shape — a `TmcHost` and the real `client/shell.tscn` in one process, over a loopback WebSocket — saw the client in `PLAYING` and the server's session in `LOADING` for ever; two processes joined fine. `reconnect` now also waits for a server session in `SPAWNED` on both connects (16 -> 18). **On today's code it passes every time** (six of six runs on 2026-09-27): the probe's RPC, `report_loaded`, went away with dot-server 52fe6bd's six envelope lanes, and the in-process shape spawns on the server like two processes do. Why the old per-method RPC was lost in one process was not established, and cannot be now without rebuilding the 09-14 tree. The check is armed: with the client's `loaded` send removed it reproduces the probe's states exactly (client `PLAYING`, server `["LOADING"]`) and fails on only these two lines, while every older check passes — which is how the old suite had been passing over it.
 
@@ -446,7 +445,7 @@ Those two failing requests were also what made the wrong domain visible at all.
 
 ### A real client in a delivered game
 
-`examples/smash_client.tscn`, 40 checks, in `tools/check.sh`. Everything else here that opens a socket connects to `a_room` — a 2D lobby small enough that a mount which half worked would still look right. This one connects to a 3D game whose map is rebuilt every round out of a pack, and asserts the whole delivery path from the operator's end: the pack mounts at the prefix the game computes, the module's script is the mounted copy rather than a built-in one, the world describes itself with platforms and its own gravity, a round starts and the cannon puts something in the air, the client rebuilds a field of its own, and the game's own console command still answers afterwards. **Since 2026-09-26 it does all of that as two builds**: the client and the server each register an envelope kind the other lacks before the join (see dot-server's `DotEnvelope`), neither sends the other what it lacks, each drops what is forced onto the wire anyway, and the round runs over it. Its last section hands the server's game netcode the schema of a client that cannot play this game and asserts the client is disconnected with dot-net's sentence as `CODE_VERSION` — which found that a kick from outside an RPC handler never delivered its reason at all (dot-server's `_close_peer`), and that smash's bridge cast freed bodies when a client left mid-round.
+`examples/smash_client.tscn`, 40 checks, in `tools/check.sh`. The multigame suites boot buses and switch to hungario, where a mount which half worked could still look right. This one connects to a 3D game whose map is rebuilt every round out of a pack, and asserts the whole delivery path from the operator's end: the pack mounts at the prefix the game computes, the module's script is the mounted copy rather than a built-in one, the world describes itself with platforms and its own gravity, a round starts and the cannon puts something in the air, the client rebuilds a field of its own, and the game's own console command still answers afterwards. **Since 2026-09-26 it does all of that as two builds**: the client and the server each register an envelope kind the other lacks before the join (see dot-server's `DotEnvelope`), neither sends the other what it lacks, each drops what is forced onto the wire anyway, and the round runs over it. Its last section hands the server's game netcode the schema of a client that cannot play this game and asserts the client is disconnected with dot-net's sentence as `CODE_VERSION` — which found that a kick from outside an RPC handler never delivered its reason at all (dot-server's `_close_peer`), and that smash's bridge cast freed bodies when a client left mid-round.
 
 **Refusals the shell says in words.** `CODE_VERSION` in a disconnect is a kinds or message-types mismatch between two builds that share a signon revision — the shell shows the server's sentence ("This server needs a newer game client.") rather than the build-mismatch message, which would name the same revision twice. `_cloud.host_role` is `"client"` in the shell and `"server"` in `TmcHost`, so a pack whose `requires.json` asks for more than the build has says which side is behind. `tools/install_games.gd` builds its own `DotCloudClient` and leaves the role at `"build"`; set it there too when that file is next touched.
 
@@ -483,8 +482,8 @@ twice.
 
 **A pack is named for its CONTENT id, not its directory.** Those are the same almost
 everywhere and where they differ it is load-bearing: hungario is three game ids over one
-`content_id: hungry`, and the lobby is `a_room`. Everything that looks a pack up builds
-`{base}/{content id}/manifest.json` and `dist/` is one of those bases, so `dist/lobby/`
+`content_id: hungry`. Everything that looks a pack up builds
+`{base}/{content id}/manifest.json` and `dist/` is one of those bases, so `dist/hungry_classic/`
 would have been a pack nothing — not the server that wrote it — could find.
 
 **Imports happen before publishing, and that ordering is the whole of it.** A `.glb` or a
@@ -538,8 +537,7 @@ Teardown prints one engine `ERROR: Condition "ready_state != STATE_OPEN"`, from 
 ### It went stale, and so did the guard
 
 **Both halves of that arrangement had gone stale at once, and each hid the other.**
-`setup.sh`'s list still named `dot-a-room` and `dot-2d-hungry`, renamed months ago to
-`game-simple-lobby` and `game-hungario`. So it deleted `game/` and `scenes/` (the wipe
+`setup.sh`'s list still named `dot-2d-hungry`, renamed months ago to `game-hungario`. So it deleted `game/` and `scenes/` (the wipe
 came first), warned twice about repositories it could not find, and died with "No games
 were found beside this repository, and none are vendored" — having just made that true.
 Whatever was in the tree was whatever the last successful run had left, nine days old.
@@ -558,7 +556,7 @@ list out of `setup.sh` rather than holding a second copy of it.
 What that un-staling then exposed: the current `hungry_module.gd` declares its
 statistics through `DotStatsSchema`, and `dot_stats` was not in the addon list. Every
 type reference in the module became a parse error, a module that will not parse does
-not load, and `changelevel hungry_classic` swapped the world while leaving the lobby's
+not load, and `changelevel hungry_classic` swapped the world while leaving the previous game's
 module driving it — with the failure visible only as `Could not find type` lines
 scrolling past during a scene change.
 
@@ -631,7 +629,7 @@ are asserted on value by value, so changing one changes a check — which is the
 are the exact keys an operator writes, checked against the exact settings they are supposed
 to reach.
 
-`./server check` is the other half: a real `DotServer`, a real listener, the lobby loaded
+`./server check` is the other half: a real `DotServer`, a real listener, the default game loaded
 and its module in it.
 
 `tools/package_check.sh` runs in the configuration this project is **shipped** in rather
@@ -639,9 +637,9 @@ than the one it is developed in. `check.sh` sees seventeen symlinks in `addons/`
 every game resolving, through `games/` or beside it; a release tarball and the
 container's final stage see neither. It exports the tracked files only, runs `setup.sh --vendor`, moves the result
 away from the siblings, and then checks that nothing points back out of the tree, that
-`addons/` holds real directories, that the lobby travelled with it, and that it boots.
+`addons/` holds real directories, and that it boots.
 It also reaches the one branch of `check.sh` a developer checkout never can: with no
-sibling to compare against the lobby staleness check reports `--` and must still pass,
+sibling to compare against the staleness check reports `--` and must still pass,
 because there the copy is the only record there is.
 
 It does not build the container — that needs a Docker daemon. Everything else about the
@@ -749,7 +747,7 @@ in the same afternoon when three games gained every addon in the family:
   `examples/live_switch.tscn` caught it as *"7 of 6"* — and said nothing else, which is a
   failure nobody can act on. It names them now.
 
-And the collision check earned its place: **game-simple-lobby added a `game/prop.tscn` and
+And the collision check earned its place: **one game added a `game/prop.tscn` and
 game-playground already had one.** Every built-in game is flattened into one `game/`
 directory, because a `.tscn` names its scripts by absolute `res://` path and there is no
 relative form — so two games sharing a filename means one silently overwrites the other,
@@ -830,7 +828,7 @@ dot-party, dot-matchmaking and dot-locale arrived with suites and READMEs and no
 
 ### What running it found
 
-**The first `changelevel` took every booking off the seam, in silence.** `DotPartyReservations` chains onto whatever holds `dot_ban_source` when it enters the tree, which at boot is the lobby's dot-moderation. A game change unloads that module and the next one registers its own moderation there — and `DotRegistry` is last-wins, so the booking was simply no longer asked. A private booking then admitted anybody, from the first game change on, and nothing anywhere reported it: the booking still showed in `party_status`, still counted down, and still said "private". `TmcParty` watches `DotRegistry.signals()` and puts the booking back on top, chained to whoever just arrived, deferred so the newcomer has finished registering — and walks the holder's own `previous_source` chain first, because dot-server-security's ban feeds chain too, and re-registering over something that already chains to the booking would make the chain a loop that recurses on every admission. `examples/party_live.tscn` checks the seam before and after a real `changelevel`, and was armed: with the re-chain disabled, both of those checks fail and every other one passes.
+**The first `changelevel` took every booking off the seam, in silence.** `DotPartyReservations` chains onto whatever holds `dot_ban_source` when it enters the tree, which at boot is the first game's dot-moderation. A game change unloads that module and the next one registers its own moderation there — and `DotRegistry` is last-wins, so the booking was simply no longer asked. A private booking then admitted anybody, from the first game change on, and nothing anywhere reported it: the booking still showed in `party_status`, still counted down, and still said "private". `TmcParty` watches `DotRegistry.signals()` and puts the booking back on top, chained to whoever just arrived, deferred so the newcomer has finished registering — and walks the holder's own `previous_source` chain first, because dot-server-security's ban feeds chain too, and re-registering over something that already chains to the booking would make the chain a loop that recurses on every admission. `examples/party_live.tscn` checks the seam before and after a real `changelevel`, and was armed: with the re-chain disabled, both of those checks fail and every other one passes.
 
 **An owner's console booking was refused by the owner's own terms.** `DotPartyReservations.book` runs the policy — `enabled` off by default, `empty_only` on — which is right for a party booking on the site and wrong for an owner typing at their own console. `party_reserve` lends the booking a copy of the terms with the gates open and the ceiling kept.
 
@@ -921,7 +919,7 @@ The shell shows it only once `_has_spawned` is true and the menu is hidden; the 
 
 The defaults now carry dot-moderation's whole live-tool set in four categories (Players, Fun commands, Powers, Teleport, then Server), with lists sized for a menu: slap's damage ("Just a shove", 5, 10, 25, 50), fire, blind, beacon, on/off for the toggles, health, speed and gravity multipliers.
 
-**"The command exists" is not the test for these, and that is dot-moderation's design, not a bug in it.** `DotModToolCommands` registers every live-tool command whether or not the game has a handler, so `!slap` in a game that cannot slap answers with the game's own reason. That is right for somebody typing. A menu row that can only fail is wrong. So an item may name an `ability`, and `TmcAdminMenu.supports` asks the command's own handler object for its `tools` and asks those `supports(ability)`; `teleport` asks whether the game gave the tools a `teleport_fn`. It is all duck-typed: an item whose command belongs to something with no `tools` is shown, and that command answers for itself. **`admin_live` measured this against the real games, and it corrected me twice.** The lobby's tools do noclip, so the lobby has a Powers category. Hungario's tools slay and do not slap or burn (a grep for `ACTION_SLAP` in its tools file matched the *unsupported* list, which is how I first "knew" it did). Arena, g2gfast and the sandbox slap. The suite asserts the menu against what each game's tools report, not against a list of what I believed.
+**"The command exists" is not the test for these, and that is dot-moderation's design, not a bug in it.** `DotModToolCommands` registers every live-tool command whether or not the game has a handler, so `!slap` in a game that cannot slap answers with the game's own reason. That is right for somebody typing. A menu row that can only fail is wrong. So an item may name an `ability`, and `TmcAdminMenu.supports` asks the command's own handler object for its `tools` and asks those `supports(ability)`; `teleport` asks whether the game gave the tools a `teleport_fn`. It is all duck-typed: an item whose command belongs to something with no `tools` is shown, and that command answers for itself. **`admin_live` measured this against the real games, and it corrected me twice.** A game whose tools do noclip has a Powers category. Hungario's tools slay and do not slap or burn (a grep for `ACTION_SLAP` in its tools file matched the *unsupported* list, which is how I first "knew" it did). Arena, g2gfast and the sandbox slap. The suite asserts the menu against what each game's tools report, not against a list of what I believed.
 
 **`@all` and `@others`** are offered first on the player step of an item with `groups: true`, as dot-moderation's live tools spell them, and are refused on any other item, so nobody kicks the whole server through a path. The command's own immunity rule skips and counts the people the admin cannot outrank. **`anyone`** is the player kind with no immunity filter, for a step that names a place rather than a victim (`goto`, `send`'s destination), which is dot-moderation's own rule for those. **`item`** is what the loaded game's `give` can hand out, read from that command's `items_fn`, which every game with `give` already fills in for completion.
 
@@ -946,7 +944,7 @@ An independent review found no injection or permission bypass, and eight defects
 
 ### In a browser (2026-10-05)
 
-Verified in headless Chromium against a shell exported from the LOCKED addons (archived at their tags into a scratch tree, because eight sibling checkouts were ahead of the lock), with the real host in a probe scene and the packs served same-origin at `/content`. A guest joined the lobby and the menu opened over it. **1** pressed in the browser reached the server as `c:players` on the `tmc.admin_menu` kind. A `changelevel hungry_classic` put the loading screen up with the server's picture, title, tip and live download progress, and the WAV it named was fetched (both via a hostname, because the client refuses a literal private address and a browser cannot look one up). Once Hungario spawned, the screen went. **The frames found one more bug:** the menu stayed open across the change, still showing the old game's page. `_on_game_changed` closes it now, and `admin_live` checks it (armed). Not seen: whether the browser PLAYED the sound, which headless cannot say.
+Verified in headless Chromium against a shell exported from the LOCKED addons (archived at their tags into a scratch tree, because eight sibling checkouts were ahead of the lock), with the real host in a probe scene and the packs served same-origin at `/content`. A guest joined a game and the menu opened over it. **1** pressed in the browser reached the server as `c:players` on the `tmc.admin_menu` kind. A `changelevel hungry_classic` put the loading screen up with the server's picture, title, tip and live download progress, and the WAV it named was fetched (both via a hostname, because the client refuses a literal private address and a browser cannot look one up). Once Hungario spawned, the screen went. **The frames found one more bug:** the menu stayed open across the change, still showing the old game's page. `_on_game_changed` closes it now, and `admin_live` checks it (armed). Not seen: whether the browser PLAYED the sound, which headless cannot say.
 
 ### Suites
 

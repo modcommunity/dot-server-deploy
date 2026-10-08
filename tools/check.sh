@@ -62,7 +62,7 @@ echo "the published games"
 #
 # [b]The list is setup.sh's, and it is READ from setup.sh rather than repeated.[/b] The
 # line here used to say "it has to stay setup.sh's" and the two had already drifted: this
-# one still named `dot-a-room` and `dot-2d-hungry` long after they were renamed, so
+# one still named `dot-2d-hungry` long after it was renamed, so
 # nothing was checked at all and the line printed looked like the release-tarball case
 # working correctly. Two copies of one list is the bug the list was guarding against, one
 # level up.
@@ -362,8 +362,8 @@ echo "changing games under a live client"
 "$GODOT" --headless --path . res://examples/live_switch.tscn || fails=$((fails + 1))
 
 # And a real client in a DELIVERED game, which is a different question from a real client
-# in the lobby. Everything above connects to a_room, a 2D lobby small enough that a mount
-# that half worked would still look right. This one connects to a 3D game whose map is
+# in the multigame suites. Those boot buses and switch to hungario, where a mount
+# that half worked could still look right. This one connects to a 3D game whose map is
 # rebuilt every round out of a pack: the first boot of it found a path the publisher had
 # already rewritten being rebased a second time, a combat manager setting itself up twice,
 # and lag compensation reporting as unwired on a server where it works. None of those are
@@ -426,13 +426,13 @@ echo "the admin menu and the loading screen"
 "$GODOT" --headless --path . res://examples/admin_loading_selftest.tscn || fails=$((fails + 1))
 "$GODOT" --headless --path . res://examples/admin_live.tscn < /dev/null || fails=$((fails + 1))
 
-# The other half: a real DotServer, a real listener, the lobby loaded and a module in
+# The other half: a real DotServer, a real listener, the default game loaded and a module in
 # it. Everything the selftest cannot reach without starting one.
 if [ -x ./server ]; then
     echo
     echo "booting"
     ./server check >/dev/null 2>&1 \
-        && printf '  %sok%s   the server boots, loads the lobby, and shuts down\n' "$GRN" "$OFF" \
+        && printf '  %sok%s   the server boots, loads its default game, and shuts down\n' "$GRN" "$OFF" \
         || { printf '  %sFAIL%s ./server check\n' "$RED" "$OFF"; fails=$((fails + 1)); }
 else
     printf '  %s--%s   ./server is not built; run ./setup.sh\n' "$RED" "$OFF"

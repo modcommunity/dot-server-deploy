@@ -10,9 +10,9 @@ extends RefCounted
 ## [codeblock]
 ## content/
 ##   global/          loaded by every game. No game.yml; it is not a game.
-##   lobby/
-##     game.yml
 ##   arena/
+##     game.yml
+##   buses/
 ##     game.yml
 ##     pack/          what gets published, when kind is `pack`
 ## [/codeblock]
@@ -33,8 +33,8 @@ extends RefCounted
 ## globals are not registered in the host, so every cross-file type reference inside it
 ## fails to compile — the pack mounts, the scene loads, and every script in it is dead.
 ## `preload("res://path.gd")` and `extends "res://path.gd"` both work. That is the whole
-## constraint and it is why the lobby is `builtin`: it is the shell's home screen and is
-## written in the family's ordinary style.
+## constraint, and why a game that cannot follow it has to be `builtin`, compiled into
+## the shell.
 
 const CHANNEL := "tmc.content"
 
@@ -227,7 +227,7 @@ func _build(name: String, tree: Dictionary) -> DotResult:
 	# [b]What the game is made of, as opposed to what this server calls it.[/b] The id is
 	# the directory name — an operator's choice, and what they type at the console — but a
 	# client holds a table of the games built into it and cannot be keyed on that: renaming
-	# `content/lobby` to `content/foyer` would leave every client unable to find the scene
+	# `content/arena` to `content/dm` would leave every client unable to find the scene
 	# for a game it has. It is also how two game ids share one client: hungry's two modes
 	# are one `hungry`.
 	#

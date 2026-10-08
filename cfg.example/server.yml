@@ -91,7 +91,7 @@ sv_game: ""
 # setting exists at all; it used to be accepted, dispatched into a console that had
 # no game loaded yet, and dropped without a word.
 #
-# A GAME DECIDES WHETHER IT HAS MAPS. A lobby and an arena of built geometry do not,
+# A GAME DECIDES WHETHER IT HAS MAPS. A game of built geometry does not,
 # and neither does a game whose catalogue has never heard of this id. Both are a line
 # in the log and not a refusal to boot -- an operator's typo should not cost a server
 # that is already full of people.
@@ -113,7 +113,7 @@ sv_map: ""
 # `sv_query_app` is also a cvar, so it can be changed on a running server.
 sv_query_app: ""
 
-sv_tags: [lobby, tmc]
+sv_tags: [tmc]
 
 # Server queries.
 #

@@ -16,7 +16,7 @@ extends Node
 ## inside a pack fails to compile: the pack mounts, its scenes load, and every script in it
 ## is dead. A game meant to be delivered references its own files by path
 ## (`preload("res://x.gd")`, `extends "res://x.gd"`), both of which resolve out of a mount.
-## Games compiled into this build have no such restriction, which is why the lobby is one.
+## Games compiled into this build have no such restriction.
 
 const CHANNEL := "tmc.shell"
 
@@ -1259,7 +1259,7 @@ func _connect_to(address: String) -> void:
 ## outside dot-cloud's mount — so for those, the id is the only thing that says which of
 ## this build's clients to put on screen.
 ##
-## A match, never a default. A shell that fell back to the lobby for an unknown id would
+## A match, never a default. A shell that fell back to some other game for an unknown id would
 ## put a player in a room the server is not running, with the netcode of a game nobody is
 ## playing — which looks like a working connection and is not one.
 ## Keyed on the game's CONTENT id, not on the id the operator types.
@@ -1335,8 +1335,8 @@ func _on_spawned() -> void:
 	if content_id == "":
 		# A server running nothing at all. Legitimate — dot-server supports it — and said
 		# out loud, because an empty screen is indistinguishable from a broken client.
-		# There is no lobby to fall back to any more: the lobby is delivered like every
-		# other game, so a server that is running none has nothing for this client to show.
+		# Every game is delivered, so a server that is running none has nothing for this
+		# client to show.
 		_fail("This server is not running a game yet.")
 		return
 

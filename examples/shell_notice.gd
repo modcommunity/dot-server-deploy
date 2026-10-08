@@ -387,7 +387,7 @@ func _test_the_ballot() -> void:
 		_check(panel.local_voter == me, "knowing which voter is this player (%s)" % panel.local_voter)
 
 		# "Extend", so the vote changes nothing and the sections after this one still have
-		# a server on the lobby with a running clock.
+		# a server on buses with a running clock.
 		var extend_at := -1
 		for i in panel.option_count():
 			if panel._options[i]["id"] == String(DotVoteBallot.EXTEND):

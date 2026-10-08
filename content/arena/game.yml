@@ -1,4 +1,4 @@
-# arena. The reference game: a 3D dev-textured deathmatch, and the only place
+# arena. The default game, which a server runs when nothing names another, and the reference game: a 3D dev-textured deathmatch, and the only place
 # dot-player-controller, dot-combat, dot-loadout, dot-match and dot-ui run in one process.
 #
 #     changelevel arena
@@ -17,7 +17,22 @@
 #     is what reconciliation reads as "what the client is showing". The measured
 #     correction becomes the whole replay distance.
 #
-# kind: pack -- delivered, for the reason content/lobby/game.yml sets out at length.
+# kind: pack -- the code is DELIVERED, and the build contains none of it.
+#
+# A mounted dot-cloud pack's `class_name` globals are NOT registered in the host, so every
+# cross-file type reference inside a pack fails to compile: the pack mounts, its scenes
+# load, and every script in it is dead. That is a property of the engine. Every game here
+# references its own files by relative path and rebases its own `res://` strings instead,
+# so it is correct in both places, and `tools/check.sh` refuses a new `class_name`.
+#
+# WHAT THAT BUYS: this build ships no game. A server owner adds one by publishing a pack
+# and writing a `game.yml`, and every player's client downloads it on connect -- no new
+# client build, no upload, nothing in an admin panel.
+#
+# `client_scene` is relative and MUST be. DotClientLink refuses every absolute res://
+# path outside dot-cloud's mount -- a server that could name one could ask every client
+# to load any scene in its build -- so a relative path is the only spelling that resolves.
+#
 # game-arena references its own files by relative path and rebases its own res:// strings,
 # which is what makes it correct both in a build and at res://dot_cloud/arena/<version>/.
 # Published with `./server pack arena --source games/game-arena`.
@@ -32,6 +47,7 @@ name: Arena
 content_id: tmc/arena
 version: 0.1.0
 kind: pack
+default: true
 max_players: 16
 
 scene: scenes/arena_server.tscn

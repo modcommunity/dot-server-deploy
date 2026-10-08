@@ -260,30 +260,7 @@ addons\<name> folders into .\addons\.
 }
 Ok "$($addons.Count) addons $(if ($Vendor) { 'copied' } else { 'linked' })"
 
-# --- 3. The lobby ----------------------------------------------------------
-
-Step "the lobby"
-
-$room = Join-Path $Root '..\dot-a-room'
-
-if (Test-Path -LiteralPath (Join-Path $room 'game') -PathType Container) {
-    # Copied, not linked. It is compiled into this build -- content\lobby\game.yml
-    # says why -- and the paths line up because the layout matches dot-a-room's.
-    Remove-Item -LiteralPath 'game','scenes' -Recurse -Force -ErrorAction SilentlyContinue
-    Copy-Item -LiteralPath (Join-Path $room 'game') -Destination 'game' -Recurse -Force
-    New-Item -ItemType Directory -Force -Path 'scenes' | Out-Null
-    Copy-Item -Path (Join-Path $room 'scenes\*.tscn') -Destination 'scenes' -Force
-    Get-ChildItem -Path 'game','scenes' -Filter '*.uid' -Recurse | Remove-Item -Force
-    Ok "copied from $room"
-}
-elseif (Test-Path -LiteralPath (Join-Path $Root 'game') -PathType Container) {
-    Ok "already present"
-}
-else {
-    Die "dot-a-room is not beside this repository and no lobby is vendored." 4
-}
-
-# --- 4. Import -------------------------------------------------------------
+# --- 3. Import -------------------------------------------------------------
 
 if (-not $NoImport) {
     Step "importing"
@@ -294,7 +271,7 @@ if (-not $NoImport) {
     Ok "class_name globals registered"
 }
 
-# --- 5. Configuration ------------------------------------------------------
+# --- 4. Configuration ------------------------------------------------------
 #
 # [b]cfg/ is not in the repository; cfg.example/ is.[/b] setup.sh says why at length.
 # The short version is that a tracked configuration file is one `git pull` on a
@@ -394,7 +371,7 @@ foreach ($template in (Get-ChildItem -LiteralPath $templates -File -Filter '*.ym
 
 if ($newConfig) { Ok "cfg\ written from cfg.example\" } else { Ok "cfg\ already exists and was not touched" }
 
-# --- 6. export_presets.cfg -------------------------------------------------
+# --- 5. export_presets.cfg -------------------------------------------------
 #
 # [b]An export preset nobody has is a build command that cannot run.[/b] Godot's editor
 # rewrites export_presets.cfg, so it is gitignored the way cfg\ is -- and the
@@ -420,7 +397,7 @@ if (Test-Path -LiteralPath $presets) {
     Warn "export_presets.example.cfg is missing; the export commands will have no presets"
 }
 
-# --- 7. server.ps1 / server.cmd -------------------------------------------
+# --- 6. server.ps1 / server.cmd -------------------------------------------
 #
 # [b]server.cmd used to be the whole Windows launcher, and it was nine lines.[/b] It
 # understood `check`, `config` and `games` and handed everything else to Godot unread
@@ -472,7 +449,7 @@ if ($Check) {
     Step "checking"
     & (Join-Path $Root 'server.ps1') check
     if ($LASTEXITCODE -ne 0) { Die "the server did not come up. Run .\server.ps1 check --verbose" 1 }
-    Ok "the server boots, loads the lobby, and shuts down"
+    Ok "the server boots, loads its default game, and shuts down"
 }
 
 Write-Host ""

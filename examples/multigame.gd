@@ -12,7 +12,7 @@ extends Node
 # one, the check below reports "a hungry world is registered: false", which is the right
 # failure and names the right thing.
 const HUNGRY_WORLD := &"hungry_world"
-const ROOM_WORLD := &"room_world"
+const BUSES_GAME := &"bfh_game"
 
 ## Changing the game under a running server, which is what a multi-game server is for.
 ##
@@ -29,10 +29,10 @@ const ROOM_WORLD := &"room_world"
 ## What it proves, in the order an operator meets it:
 ##
 ## - three games are registered from `content/`, so `changelevel` can reach any of them
-## - switching from the lobby to hungry unloads one module and loads another
+## - switching from buses to hungry unloads one module and loads another
 ## - switching between hungry's two modes keeps the same module and rebinds it, because
 ##   reloading would drop every connected player
-## - switching back brings the lobby's module back
+## - switching back brings buses's module back
 ## - and the client is told which game it is now, which is the only thing that tells a
 ##   multi-game client which of its built-in scenes to show
 
@@ -226,11 +226,11 @@ func _test_finds_a_map_session() -> void:
 	remove_child(probe)
 	probe.free()
 
-	# The server is on the lobby here, which genuinely has no maps. A false positive is
+	# The server is on buses here, which genuinely has no maps. A false positive is
 	# worse than no match: it would send `change_to` to whatever answered.
 	_check(
-		_at_game("lobby"),
-		"the server is on the lobby for the negative case (%s)"
+		_at_game("buses"),
+		"the server is on buses for the negative case (%s)"
 			% _server().games.current_content_id()
 	)
 	_check(
@@ -246,7 +246,7 @@ func _test_registered() -> void:
 
 	var ids := Array(_host.content.ids())
 
-	for wanted in ["lobby", "hungry_classic", "hungry_frenzy"]:
+	for wanted in ["buses", "hungry_classic", "hungry_frenzy"]:
 		_check(ids.has(wanted), "%s is registered" % wanted)
 		_check(
 			_server().games.find_game(wanted) != null,
@@ -254,12 +254,12 @@ func _test_registered() -> void:
 		)
 
 	_check(
-		_at_game("lobby"),
-		"the server booted into the lobby, which is what content/lobby/game.yml claims"
+		_at_game("buses"),
+		"the server booted into buses, which is what content/buses/game.yml claims"
 	)
 	_check(
-		_server().modules.has_module("room"),
-		"with the lobby's module loaded"
+		_server().modules.has_module("buses"),
+		"with buses's module loaded"
 	)
 	_check(
 		not _server().modules.has_module("hungry"),
@@ -291,28 +291,31 @@ func _test_registered() -> void:
 
 
 func _test_switch_to_hungry() -> void:
-	_section("lobby -> hungry")
+	_section("buses -> hungry")
 
-	# [b]With somebody in the room.[/b] Switching an EMPTY server exercises the module
+	# [b]With somebody in the game.[/b] Switching an EMPTY server exercises the module
 	# swap and nothing else — no entity is despawned, no peer is removed from the
 	# netcode, and the world that is about to be freed is holding nothing. A real
 	# `changelevel` happens under players, and that is a different code path: it took a
-	# browser sitting in the lobby to reach it, and it segfaulted the server.
-	var lobby: DotModule = _server().modules.get_module("room")
+	# browser sitting in buses to reach it, and it segfaulted the server.
+	var buses: DotModule = _server().modules.get_module("buses")
+	# Buses fills its empty driving seats with bots, so the count is taken against what was
+	# there before anybody joined.
+	var before: int = buses.game.players.size()
 
 	# [b]Somebody came and went before the one who is still here.[/b] That is what a real
 	# server looks like by the time anybody types `changelevel`, and it is the difference
 	# between the two runs that found the crash: switching with one client attached is
 	# fine, and switching after another has been through leaves state behind for the
 	# change to walk over.
-	lobby.bridge.add_occupant(2, 4242, "Left already")
-	lobby.bridge.remove_peer(2)
+	buses.bridge.add_player(2, 4242, "Left already")
+	buses.bridge.remove_peer(2)
 
-	var seated: DotResult = lobby.bridge.add_occupant(3, 4243, "Occupant")
-	_check(seated.ok, "somebody is in the lobby first", str(seated.error))
+	var seated: DotResult = buses.bridge.add_player(3, 4243, "Occupant")
+	_check(seated.ok, "somebody is in buses first", str(seated.error))
 	_check(
-		lobby.world.occupant_count() == 1,
-		"and the one who left is gone (%d in the room)" % lobby.world.occupant_count()
+		buses.game.players.size() == before + 1,
+		"and the one who left is gone (%d players, %d before)" % [buses.game.players.size(), before]
 	)
 
 	var result := _console("changelevel hungry_classic")
@@ -331,16 +334,16 @@ func _test_switch_to_hungry() -> void:
 		+ "load one, so without the host doing it the new game has no netcode at all"
 	)
 	_check(
-		not _server().modules.has_module("room"),
-		"and the lobby's is gone",
+		not _server().modules.has_module("buses"),
+		"and buses' is gone",
 		"two modules each holding a DotNetManager would both tick the same world"
 	)
 
 	var world := DotRegistry.get_node_service(HUNGRY_WORLD)
 	_check(world != null, "a hungry world is registered")
 	_check(
-		DotRegistry.get_node_service(ROOM_WORLD) == null,
-		"and the room's world is not"
+		DotRegistry.get_node_service(BUSES_GAME) == null,
+		"and buses' world is not"
 	)
 
 	var module: DotModule = _server().modules.get_module("hungry")
@@ -411,22 +414,22 @@ func _test_switch_between_modes() -> void:
 
 
 func _test_switch_back() -> void:
-	_section("hungry -> lobby")
+	_section("hungry -> buses")
 
-	var result := _console("changelevel lobby")
-	_check(result.ok, "the lobby can be returned to", str(result.error))
+	var result := _console("changelevel buses")
+	_check(result.ok, "buses can be returned to", str(result.error))
 
-	var arrived := await _until(func() -> bool: return _at_game("lobby"))
+	var arrived := await _until(func() -> bool: return _at_game("buses"))
 
 	if not _check(arrived, "and the server ends up on it"):
 		_done()
 		return
 
-	_check(_server().modules.has_module("room"), "the lobby's module is back")
+	_check(_server().modules.has_module("buses"), "buses's module is back")
 	_check(not _server().modules.has_module("hungry"), "and hungry's is gone")
 	_check(
-		DotRegistry.get_node_service(ROOM_WORLD) != null,
-		"a room world is registered again"
+		DotRegistry.get_node_service(BUSES_GAME) != null,
+		"buses' world is registered again"
 	)
 	_check(
 		DotRegistry.get_node_service(HUNGRY_WORLD) == null,
@@ -450,12 +453,12 @@ func _test_unknown_game() -> void:
 	await _until(func() -> bool: return false, 1.0)
 
 	_check(
-		_at_game("lobby"),
+		_at_game("buses"),
 		"changing to a game the server does not have leaves it where it was",
 		"a failed change restores the previous game; a server on no game at all is worse "
 		+ "than one on the old one"
 	)
-	_check(_server().modules.has_module("room"), "with its module untouched")
+	_check(_server().modules.has_module("buses"), "with its module untouched")
 	_check(
 		not _server().modules.has_module("hungry"),
 		"and nothing else loaded"
@@ -488,14 +491,14 @@ func _test_vote_changes_the_game() -> void:
 		return
 
 	var director := votes.director
-	var here := _at_game("lobby")
+	var here := _at_game("buses")
 
 	# One game on offer is nothing to vote about: the server gets no game vote at all, and
 	# that game's own map vote is the only one. Every game but one excluded here.
-	var all_but_one := PackedStringArray(["lobby"])
+	var all_but_one := PackedStringArray(["buses"])
 	var kept := ""
 	for descriptor: DotGameDescriptor in _host.server.games.games:
-		if descriptor.game_id == "lobby":
+		if descriptor.game_id == "buses":
 			continue
 		if kept == "":
 			kept = descriptor.game_id
@@ -530,12 +533,12 @@ func _test_vote_changes_the_game() -> void:
 	)
 
 	# hungario alone: five modes, one game, and its own map vote is already over the five.
-	var only_hungry := PackedStringArray(["lobby"])
+	var only_hungry := PackedStringArray(["buses"])
 	var modes := 0
 	for descriptor: DotGameDescriptor in _host.server.games.games:
 		if descriptor.content_id == "tmc/hungry":
 			modes += 1
-		elif descriptor.game_id != "lobby":
+		elif descriptor.game_id != "buses":
 			only_hungry.append(descriptor.game_id)
 	_check(
 		modes >= 2 and TmcVote.install(self, _host.server, director.rules, only_hungry) == null,
@@ -543,10 +546,10 @@ func _test_vote_changes_the_game() -> void:
 		"the game vote and hungario's own mode vote would be two ballots over the same five"
 	)
 
-	_check(here, "the server is back on the lobby after the switches above")
+	_check(here, "the server is back on buses after the switches above")
 
 	_check(
-		director.current_id() == &"lobby",
+		director.current_id() == &"buses",
 		"and the vote system knows it (%s)" % director.current_id(),
 		"a director on no game has no clock, nothing on cooldown, and offers the "
 		+ "game everybody is playing on its own first ballot"
@@ -558,8 +561,8 @@ func _test_vote_changes_the_game() -> void:
 		offered.append(String(choice.id))
 
 	_check(
-		not Array(offered).has("lobby"),
-		"the lobby is not on the ballot (%s)" % [offered],
+		not Array(offered).has("buses"),
+		"buses is not on the ballot (%s)" % [offered],
 		"it is this server's home screen; 'vote to go back to the menu' is not "
 		+ "something anybody votes for"
 	)
@@ -703,12 +706,12 @@ func _test_vote_changes_the_game() -> void:
 	)
 
 	# And the same clock reset for a change the vote had nothing to do with.
-	await _console("changelevel lobby")
-	var manual := await _until(func() -> bool: return _at_game("lobby"), 20.0)
+	await _console("changelevel buses")
+	var manual := await _until(func() -> bool: return _at_game("buses"), 20.0)
 
 	_check(manual, "an operator changes the game by hand")
 	_check(
-		director.current_id() == &"lobby",
+		director.current_id() == &"buses",
 		"and the vote clock follows that too (%s)" % director.current_id(),
 		"otherwise a manual changelevel leaves the previous game's timer running "
 		+ "and the new game ends early"

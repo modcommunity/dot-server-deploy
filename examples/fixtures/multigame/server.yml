@@ -4,4 +4,4 @@
 # is what this suite does while nobody is connected.
 sv_name: "Multigame Fixture"
 sv_maxplayers: 8
-sv_game: "lobby"
+sv_game: "buses"

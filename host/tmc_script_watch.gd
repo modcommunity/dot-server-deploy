@@ -6,7 +6,7 @@ extends Logger
 ## not find base class "DotGameModule"`, hands back a script that cannot be instantiated,
 ## and carries on — so a boot whose game module never compiled still reached the end of
 ## the selftest and printed `selftest ok`. That is exactly what a fresh clone did when
-## `./setup.sh --only-games lobby` left `addons/dot_game` unlinked. Nothing the host asks
+## `./setup.sh --only-games <one game>` left `addons/dot_game` unlinked. Nothing the host asks
 ## afterwards can see it: the error went to the engine's log and nowhere else.
 ##
 ## So the check listens to the engine's log itself. Installed with [method OS.add_logger]

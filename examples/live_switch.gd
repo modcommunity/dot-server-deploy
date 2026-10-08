@@ -1,6 +1,6 @@
 extends Node
-# [b]Nothing preloaded out of a game, because no game is in this build.[/b] The lobby is
-# a delivered pack: its files are at `res://dot_cloud/a_room/<version>/…` and this file
+# [b]Nothing preloaded out of a game, because no game is in this build.[/b] Buses is
+# a delivered pack: its files are at `res://dot_cloud/tmc/buses/<version>/…` and this file
 # cannot name that path, because the version is the game's. The module is reached through
 # the host's own module table instead, which is where a host is supposed to reach it.
 
@@ -219,7 +219,7 @@ func _test_connect() -> bool:
 
 	_check(_server().sessions().size() == 1, "the server has one session")
 	_check(
-		_games_seen.size() == 1 and _games_seen[0] == "lobby",
+		_games_seen.size() == 1 and _games_seen[0] == "buses",
 		"and it was told which game it is in (%s)" % [_games_seen]
 	)
 	_done()
@@ -247,8 +247,8 @@ func _test_switch() -> void:
 	)
 	_check(
 		_server().modules.has_module("hungry")
-			and not _server().modules.has_module("room"),
-		"with hungry's module in place of the lobby's"
+			and not _server().modules.has_module("buses"),
+		"with hungry's module in place of buses'"
 	)
 
 	var told := await _until(func() -> bool: return _games_seen.size() >= 2)
@@ -274,14 +274,14 @@ func _test_switch() -> void:
 func _test_switch_back() -> void:
 	_section("and back again")
 
-	_server().console.execute("changelevel lobby")
+	_server().console.execute("changelevel buses")
 
-	var arrived := await _until(func() -> bool: return _at_game("lobby"), 25.0)
+	var arrived := await _until(func() -> bool: return _at_game("buses"), 25.0)
 
-	_check(arrived, "the lobby comes back")
+	_check(arrived, "buses comes back")
 	_check(_server().state == DotServer.State.RUNNING, "the server is still running")
 	_check(
-		_server().modules.has_module("room"),
+		_server().modules.has_module("buses"),
 		"with its module"
 	)
 	_check(_refused[0] == "", "and the client is still connected")
@@ -314,7 +314,7 @@ func _test_still_serving() -> void:
 			]
 	)
 
-	var module: DotModule = _server().modules.get_module("room")
+	var module: DotModule = _server().modules.get_module("buses")
 	_check(
 		module != null and module.net != null and module.net.is_running(),
 		"and the current game's netcode is running"

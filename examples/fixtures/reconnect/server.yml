@@ -2,7 +2,7 @@
 # address twice and must not race a `multigame` or `live_switch` run on 27101.
 sv_name: "Reconnect Fixture"
 sv_maxplayers: 8
-sv_game: "lobby"
+sv_game: "buses"
 
 # Off, and the suite does not work without it. Two servers are started in one process
 # here -- that is what a restart is -- and each one starts a thread blocked in a read of

@@ -4,14 +4,14 @@
 sv_name: "Fixture Server"
 sv_maxplayers: 12
 sv_tickrate: 30
-sv_game: "lobby"
+sv_game: "buses"
 sv_map: "fixture_map"
 sv_web_loader: "fixture-loader"
 sv_tags: [fixture, test]
 
 # Not a setting this layer knows. Handed to the console, because a module registers
 # cvars that cannot be known at read time.
-room_pellets: 400
+bfh_round_seconds: 120
 
 # Not the default: here so the suite can see the key reach DotServerConfig.
 sv_stdin_console_pipes: true

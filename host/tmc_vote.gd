@@ -69,14 +69,10 @@ extends Node
 ## draws it as a [DotBallotPanel]: number keys, a click, and every voter's avatar on what
 ## they chose. A shell built before the field ignores it and still has the HUD line.
 ##
-## [b]The lobby is excluded by default and that is a real decision.[/b] It is this
-## server's home screen rather than a game, and "vote to go back to the menu" is not a
-## thing anybody votes for. An operator who disagrees empties `vote_exclude`.
+## Nothing is excluded by default: every installed game is a game somebody might choose.
+## `vote_exclude` takes a game off the ballot.
 
 const CHANNEL := "tmc.vote"
-
-## Games never offered on a ballot, unless `vote.yml` says otherwise.
-const DEFAULT_EXCLUDED := ["lobby"]
 
 ## What every console command of the server-level vote is called.
 ##

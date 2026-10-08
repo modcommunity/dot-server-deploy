@@ -3,7 +3,7 @@
 #
 #   tools/check_boot_failures.sh        exit 0 when every broken boot below was refused
 #
-# [b]Why this exists.[/b] On a fresh clone `./setup.sh --only-games lobby` left
+# [b]Why this exists.[/b] On a fresh clone `./setup.sh --only-games <one game>` left
 # `addons/dot_game` unlinked, and `./server check` logged
 # `Could not find base class "DotGameModule"` and then printed `selftest ok`. A script
 # that fails to parse takes no exit path: Godot logs it, hands back a script nothing can

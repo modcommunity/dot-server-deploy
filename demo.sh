@@ -8,7 +8,7 @@
 #   ./demo.sh servers   the five of them, by name and number
 #
 # Every command below takes a server first, by number (1..5) or by what it runs
-# (lobby, hungry, g2gfast, playground, arena -- surf, sandbox and dm also work).
+# (buses, hungry, g2gfast, playground, arena -- surf, sandbox and dm also work).
 # Leave it out and it means server 1, which is what these did before they could
 # mean anything else.
 #
@@ -97,6 +97,10 @@ PUBLIC_PORT="${TMC_DEMO_PUBLIC_PORT:-6064}"
 # server opened for itself.
 GAME2_PORT="${TMC_DEMO_GAME2_PORT:-6080}"
 GAME2_PUBLIC_PORT="${TMC_DEMO_GAME2_PUBLIC_PORT:-6065}"
+# Server 1 runs on the base ports with the name in cfg/server.yml. Buses From Hell, since
+# every other game here has a server of its own below.
+GAME1="${TMC_DEMO_GAME1-buses}"
+
 GAME2="${TMC_DEMO_GAME2-hungry_classic}"
 GAME2_NAME="${TMC_DEMO_GAME2_NAME:-TMC Hungry Server}"
 
@@ -189,7 +193,7 @@ GAME4_TICKRATE="${TMC_DEMO_GAME4_TICKRATE:-128}"
 # reference game with nothing to sit down at. It had a netcode bridge, a headless suite
 # that played a whole deathmatch, and no camera rig, no input sampling and no renderer.
 #
-# It is here because the four servers above are a lobby, an eating game, a timer and a
+# It is here because the four servers above are a bus chase, an eating game, a timer and a
 # sandbox: not one of them is a game where players SHOOT each other, which is the shape
 # most of dot-combat exists for and the only one that exercises lag compensation on a
 # real link. It is also the only server here whose hits are rewound.
@@ -296,7 +300,7 @@ do_up() {
         ok "already listening on $GAME_PORT"
     else
         [ -x ./server ] || { bad "./server is missing — run ./setup.sh"; exit 4; }
-        nohup ./server > "$RUN/server.log" 2>&1 &
+        nohup ./server --game "$GAME1" > "$RUN/server.log" 2>&1 &
         echo $! > "$RUN/server.pid"
 
         if wait_for_port "$GAME_PORT" 90; then
@@ -538,7 +542,7 @@ $BLD  Open one of these.$OFF
         inside the site's own player.
 
     $GAME_ORIGIN/game/embed.html?server=wss://$HOST:$PUBLIC_PORT
-        The lobby server, standalone, with no website around it.
+        Buses From Hell, standalone, with no website around it.
 
     $GAME_ORIGIN/game/embed.html?server=wss://$HOST:$GAME2_PUBLIC_PORT
         The Hungry server, standalone.
@@ -560,11 +564,11 @@ $BLD  While somebody is playing:$OFF
 
     ./demo.sh servers                   the five, by name and number
     ./demo.sh switch hungry_classic     server 1 moves to Hungry, still connected
-    ./demo.sh switch lobby              and back
+    ./demo.sh switch buses              and back
 
     ./demo.sh map surf surf_mesa        the timer changes map under them
     ./demo.sh map 4                     what the sandbox has to change to
-    ./demo.sh switch 5 lobby            the deathmatch becomes a lobby
+    ./demo.sh switch 5 buses            the deathmatch becomes a bus chase
 
 $DIM    A GAME change swaps the module, the netcode and the client's scene and puts
     everybody through signon. A MAP change swaps the world and nothing else. Every
@@ -646,7 +650,7 @@ do_status() {
 #
 # [b]Every command below took the first server and no other, and there are five.[/b]
 # `switch` hardcoded $GAME_PORT, so the only server in the demonstration an operator
-# could change was the lobby -- the surf timer, the sandbox and the deathmatch were
+# could change was server 1 -- the surf timer, the sandbox and the deathmatch were
 # reachable by nothing but `node tools/rcon.mjs --port ...` typed by hand, which is
 # exactly the knowledge a script like this exists to hold. `rcon.mjs` has taken
 # `--port` since it was written; nothing here passed it.
@@ -656,7 +660,7 @@ do_status() {
 
 # Number, alias, game port, public port, what it is.
 SERVERS=(
-    "1 lobby      $GAME_PORT  $PUBLIC_PORT        the lobby"
+    "1 buses      $GAME_PORT  $PUBLIC_PORT        Buses From Hell"
     "2 hungry     $GAME2_PORT $GAME2_PUBLIC_PORT  Hungry"
     "3 g2gfast    $GAME3_PORT $GAME3_PUBLIC_PORT  the bhop/surf timer"
     "4 playground $GAME4_PORT $GAME4_PUBLIC_PORT  the sandbox"
@@ -724,13 +728,13 @@ list_servers() {
     done
 }
 
-## The first argument if it names a server, otherwise nothing -- so `switch lobby` and
+## The first argument if it names a server, otherwise nothing -- so `switch buses` and
 ## `switch 3 g2gfast` are both unambiguous and neither needs a flag.
 ##
-## [b]`lobby` is both a server name and a game id, and that is the one collision.[/b]
-## It resolves as a SERVER only when something follows it, which is what `switch lobby
-## g2gfast` means and is the reading that cannot be got any other way; `switch lobby`
-## alone keeps its old meaning of putting server 1 into the lobby game. The old spelling
+## [b]`buses` is both a server name and a game id, and that is the one collision.[/b]
+## It resolves as a SERVER only when something follows it, which is what `switch buses
+## g2gfast` means and is the reading that cannot be got any other way; `switch buses`
+## alone means putting server 1 into the buses game. The old spelling
 ## of every command in this file therefore still does what it did.
 ## Two arguments where the first names no server is a typo. Stop, rather than treat it
 ## as "server 1" and quietly throw the second one away.
@@ -749,11 +753,11 @@ reject_unknown_server() {
 ## Sets $SERVER, and returns 0 when it consumed the first argument so the caller can
 ## shift it off. A function cannot shift its caller's positional parameters, which is
 ## why this is a return code and a global rather than something returned on stdout:
-## `take_server 1 lobby` has to be distinguishable from `take_server lobby`, and a
+## `take_server 1 buses` has to be distinguishable from `take_server buses`, and a
 ## function that only prints "1" cannot say which of those it saw.
 ##
 ## [b]The whole rule, because the ambiguity is real and there is no clever way out of
-## it:[/b] four of the five server aliases are also game ids -- `lobby`, `g2gfast`,
+## it:[/b] four of the five server aliases are also game ids -- `buses`, `g2gfast`,
 ## `playground` and `arena` -- so a single word cannot say which of the two it is.
 ##
 ##   - two or more arguments: the first names a server, and must.
@@ -795,11 +799,11 @@ rcon_on() {
 # --- switch, map, rcon -----------------------------------------------------
 
 do_switch() {
-    # [b]Strict, and `rcon` below deliberately is not.[/b] `switch 9 lobby` used to set
+    # [b]Strict, and `rcon` below deliberately is not.[/b] `switch 9 buses` used to set
     # server 1's game to "9" and discard the rest, because nothing named a server and
     # the fallback is server 1. A game change is the one command here that reaches
     # everybody connected, so a spelling this file does not recognise stops rather than
-    # picks. `rcon` cannot be strict the same way -- `rcon changelevel lobby` is two
+    # picks. `rcon` cannot be strict the same way -- `rcon changelevel buses` is two
     # words of a command and not a server followed by one.
     reject_unknown_server "switch" "$@"
     take_server "$@" && shift

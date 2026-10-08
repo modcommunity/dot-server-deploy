@@ -49,7 +49,7 @@ Every one of these is encoded somewhere in dot-core already; they are collected 
 | **A tab cannot listen** | The web build is a client. The server is somewhere else, always, and the shell offers no Host button rather than one that fails |
 | **No threads** unless the template was built for them | `DotScheduler` slices on the main thread inside a frame budget. The preset has thread support **off**: turning it on requires cross-origin isolation on every response and breaks every third-party embed on the page |
 | **`user://` is an IndexedDB mirror** needing explicit flushes | Every write path calls `DotWeb.sync_filesystem()` |
-| **Storage quota the user can refuse** | The lobby caches nothing. A downloaded game pack does, and `DotCloudStore` awaits `navigator.storage.estimate()` rather than assuming |
+| **Storage quota the user can refuse** | A downloaded game pack is cached, and `DotCloudStore` awaits `navigator.storage.estimate()` rather than assuming |
 | **CORS, with `fetch()` refusing to say why it failed** | Serve the export and its assets from one origin, or set the headers below exactly |
 | **An HTTPS page may not open a `ws://` socket** | `embed.html` checks for it and says so, because the browser's own error does not mention mixed content |
 | **A mounted resource pack can never be unmounted** | dot-cloud namespaces content by `id/version`, so nothing ever needs replacing |
@@ -64,7 +64,7 @@ preload("res://path.gd")                    works
 extends "res://path.gd"                     works
 ```
 
-So a game meant to be **delivered** references its own files by path. A game compiled into the shell has no such restriction, which is why the lobby is one.
+So a game meant to be **delivered** references its own files by path. A game compiled into the shell has no such restriction.
 
 ## Headers
 

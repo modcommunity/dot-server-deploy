@@ -495,7 +495,7 @@ if [ "$DO_FULL" -eq 1 ]; then
     FULL_NAME="$(ask       "Server name" "$(cfg_or cfg/server.yml sv_name 'TMC Test Server')")"
 
     # The games are published out of games/ in step 3, so on a first run this directory
-    # holds the lobby and nothing else. Offering what is here is therefore a hint rather
+    # may hold nothing at all. Offering what is here is therefore a hint rather
     # than the list -- and the answer is checked again after the publish, where the real
     # list exists.
     installed_games=""
@@ -506,7 +506,7 @@ if [ "$DO_FULL" -eq 1 ]; then
     done
     [ -n "$installed_games" ] && printf '    %sgames here now:%s%s\n' "$DIM" "$OFF" "$installed_games" >&2
 
-    FULL_GAME="$(ask       "Game to boot" "$(cfg_or cfg/server.yml sv_game lobby)")"
+    FULL_GAME="$(ask       "Game to boot" "$(cfg_or cfg/server.yml sv_game arena)")"
     FULL_MAXPLAYERS="$(ask "Player slots" "$(cfg_or cfg/server.yml sv_maxplayers 64)")"
     FULL_TICKRATE="$(ask   "Tickrate" "$(cfg_or cfg/server.yml sv_tickrate 60)")"
     FULL_PORT="$(ask       "Port the server listens on" "$(cfg_or cfg/net.yml net_port 6064)")"
@@ -1031,10 +1031,9 @@ step "games"
 # repository:content id
 #
 # The repository name is the DIRECTORY beside this one and it is not the game's name:
-# `dot-a-room` and `dot-2d-hungry` were renamed to `game-simple-lobby` and
-# `game-hungario` and this list was not, so every run skipped both games. A stale name
-# here is a hard failure rather than a warning: "skipping the lobby" scrolls past and a
-# server with no games does not.
+# `dot-2d-hungry` was renamed to `game-hungario` and this list was not, so every run
+# skipped it. A stale name here is a hard failure rather than a warning: "skipping a
+# game" scrolls past and a server with no games does not.
 #
 # The second field is the CONTENT directory whose `game.yml` and `pack.json` describe
 # the pack -- which is not always the pack's name, and deliberately: hungario is three
@@ -1042,7 +1041,6 @@ step "games"
 # the one pack. What each pack excludes is in its `pack.json`, beside the game.yml,
 # because that is a property of the game rather than of this script.
 GAMES=(
-    "game-simple-lobby:lobby"
     "game-hungario:hungry_classic"
     "game-g2gfast:g2gfast"
     "game-playground:playground"
@@ -1370,7 +1368,7 @@ fi
 # compared nothing. The first `setup.sh` that copied the current hungry turned every
 # type reference in its module into a parse error, and a module that will not parse is
 # a module that does not load: `changelevel hungry_classic` swapped the world and left
-# the lobby's module driving it.
+# the previous game's module driving it.
 # Every addon any vendored game names. A game that gains a dependency and is not added
 # here vendors, imports, and then fails to compile every script that names the missing
 # class — dozens of "not declared in the current scope" errors in files nobody touched,
@@ -2164,10 +2162,9 @@ if [ ${#DROPPED_DIRS[@]} -gt 0 ]; then
     done
     mapfile -t EXCLUDE_IDS < <(printf '%s\n' "${EXCLUDE_IDS[@]}" | sort -u)
 
-    # What vote.yml already excludes, kept: `lobby` is in the template because a lobby is
-    # not something a player votes FOR, and a run that replaced that line rather than
-    # adding to it would put the lobby back in the ballot as a side effect of a flag
-    # about something else.
+    # What vote.yml already excludes, kept: an operator's own exclusions are theirs, and a
+    # run that replaced that line rather than adding to it would put their games back on
+    # the ballot as a side effect of a flag about something else.
     existing="$(grep -E '^vote_exclude:' cfg/vote.yml 2>/dev/null | head -1 \
         | sed -E 's/^vote_exclude:[[:space:]]*\[?//; s/\][[:space:]]*$//' | tr -d '" ' | tr ',' ' ')"
     merged="$(printf '%s\n' $existing "${EXCLUDE_IDS[@]}" | sed '/^$/d' | sort -u | tr '\n' ' ')"
@@ -2219,7 +2216,7 @@ fi
 # its own manifest on disk, failed the signature, fell through to the network, and died
 # on
 #
-#     [forbidden] Could not get lobby's content. … <Code>AccessDenied</Code>
+#     [forbidden] Could not get arena's content. … <Code>AccessDenied</Code>
 #
 # an S3 error, on a server that had every byte it needed in dist/. Nothing about that
 # message points at the key, and the packs verify perfectly against the key that made
@@ -2355,7 +2352,7 @@ if [ "$DO_FULL" -eq 1 ]; then
 
     # The game list is real now -- step 3 copied them -- so the answer given before
     # any of that existed can finally be checked. A server whose sv_game names
-    # nothing boots into the lobby and says so in one line of a log nobody has opened
+    # nothing boots into the default game and says so in one line of a log nobody has opened
     # yet, which looks like the setting being ignored.
     if [ -n "$FULL_GAME" ] && [ ! -f "content/$FULL_GAME/game.yml" ]; then
         have=""
@@ -2363,7 +2360,7 @@ if [ "$DO_FULL" -eq 1 ]; then
             [ -f "$gy" ] || continue
             gid="${gy#content/}"; have="$have ${gid%/game.yml}"
         done
-        warn "no content/$FULL_GAME/game.yml, so the server will fall back to the lobby.
+        warn "no content/$FULL_GAME/game.yml, so the server will fall back to the default game.
        This build has:$have
        Fix it with: sed -i 's/^sv_game:.*/sv_game: \"<one of those>\"/' cfg/server.yml"
     fi
@@ -2621,7 +2618,7 @@ fi
 if [ "$DO_CHECK" -eq 1 ]; then
     step "checking"
     if ./server check; then
-        ok "the server boots, loads the lobby, and shuts down"
+        ok "the server boots, loads its default game, and shuts down"
     else
         die "the server did not come up. Run ./server check --verbose" 1
     fi

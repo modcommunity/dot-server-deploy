@@ -1,7 +1,7 @@
 # Hungry: Classic. An agar.io-shaped free-for-all — eat food, eat players, do not
 # be eaten.
 #
-# The first non-lobby game on this server, and the one an operator switches to:
+# A 2D game, and the one the multigame suites switch to:
 #
 #     changelevel hungry_classic
 #

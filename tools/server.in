@@ -259,7 +259,7 @@ usage() {
 
   Anything after -- is handed to the server console once it is up:
 
-    ./server -- +sv_cheats 1 +changelevel lobby
+    ./server -- +sv_cheats 1 +changelevel arena
 
   With one exception, and it is the one worth knowing: `+map ID` is read by the
   HOST, not by the console. The console's +command half runs when the listener

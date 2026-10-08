@@ -32,7 +32,7 @@ It prints a link. Open it.
 ## A Server You Start With One Command
 TMC's server tool, as a thing you can run.
 
-This repository is where the [dot-*](https://github.com/modcommunity) family comes together into something a server owner starts with one command. It is a Godot project that boots a [dot-server](https://github.com/modcommunity/dot-server), reads its configuration from `cfg/*.yml`, loads games out of `content/`, and serves a browser client. It ships **no game of its own**. The games are copied in from their own repositories by `setup.sh`: [game-simple-lobby](https://github.com/gamemann/game-simple-lobby), which is the lobby it serves by default, [game-hungario](https://github.com/gamemann/game-hungario) and [game-g2gfast](https://github.com/gamemann/game-g2gfast).
+This repository is where the [dot-*](https://github.com/modcommunity) family comes together into something a server owner starts with one command. It is a Godot project that boots a [dot-server](https://github.com/modcommunity/dot-server), reads its configuration from `cfg/*.yml`, loads games out of `content/`, and serves a browser client. It ships **no game of its own**. The games are copied in from their own repositories by `setup.sh`: [game-hungario](https://github.com/gamemann/game-hungario) and [game-g2gfast](https://github.com/gamemann/game-g2gfast).
 
 ```bash
 ./setup.sh              # get a runtime, wire the addons into addons/, write ./server
@@ -56,8 +56,8 @@ Windows: `setup.bat` (a shim for `setup.ps1`), then `.\server.ps1`. It takes the
   Return takes the answer in the brackets. Nothing happens until the end.
 
     Server name [TMC Test Server]
-    games here now: arena g2gfast hungry_classic lobby playground
-    Game to boot [lobby]
+    games here now: arena g2gfast hungry_classic playground
+    Game to boot [arena]
     Player slots [64]
     Tickrate [60]
     Port the server listens on [6064]
@@ -73,7 +73,7 @@ Windows: `setup.bat` (a shim for `setup.ps1`), then `.\server.ps1`. It takes the
   This is the whole of it:
 
     - set up the project: runtime, addons, games, cfg/, ./server
-    - cfg/server.yml: TMC Test Server, game lobby, 64 slots, 60 tick
+    - cfg/server.yml: TMC Test Server, game arena, 64 slots, 60 tick
     - cfg/net.yml: port 6064, bound to 127.0.0.1 (nginx is the way in)
     - install nginx and certbot if they are missing
     - open 80 and 443 in ufw
@@ -154,7 +154,7 @@ cfg/                 what an operator edits. Written on first run, and not in th
 content/             what the server serves
   global/              loaded by every game
   avatars/             cosmetic parts, published as a pack of their own
-  lobby/               the lobby. The default
+  arena/               the default game
     game.yml             what it is, where its scene is inside the pack
     pack.json            what its pack leaves out
 
@@ -216,7 +216,7 @@ The YAML reader is a deliberately small subset and refuses everything else with 
 ./server --help               every option
 
 ./server --port 27015 --name "My server"
-./server -- +sv_cheats 1 +changelevel lobby
+./server -- +sv_cheats 1 +changelevel arena
 ```
 
 Exit codes are meaningful, so a supervisor can tell a misconfiguration from a crash: `2` usage, `3` no runtime, `4` no project, `5` bad config, `6` port in use, `7` bad content.
@@ -343,7 +343,6 @@ Every one of these was published and booted as a pack — mounted, module loaded
 | `g2gfast` | `games/game-g2gfast` | `dist/g2gfast` — 171 files, 3.1 MiB | `scenes/g2g_server.tscn` | `game/g2g.tscn` | `game/g2g_module.gd` |
 | `playground` | `games/game-playground` | `dist/playground` — 76 files, 755 KiB | `scenes/pg_server.tscn` | `game/playground.tscn` | `game/playground_module.gd` |
 | `hungry_classic` `hungry_frenzy` `hungry_gauntlet` | `games/game-hungario` | `dist/hungry` — 65 files, 644 KiB | `game/modes/<mode>.tscn` | `game/client/hungry_client.tscn` | `game/hungry_module.gd` |
-| `lobby` | `games/game-simple-lobby` | `dist/a_room` — 36 files, 399 KiB | `scenes/room_server.tscn` | `scenes/room_client.tscn` | `game/room_module.gd` |
 
 `exclude_dirs` is `addons`, `examples`, `tools`, `screenshots` everywhere, plus `imported` for g2gfast — `maps/imported/` is 66 MB of converted geometry that is published as its own packs, and a game pack carrying it would deliver every map to every player on connect — and `web` for hungario, which has a browser build of its own in the repository.
 
@@ -413,7 +412,7 @@ A bare PEM still means every id, because that is what every config written befor
 **Without that merge a fresh install can verify nothing it just published.** The packs are signed by the new key; the trusted set holds only ours. The server finds its own manifest on disk, fails the signature, falls through to the network, and dies on
 
 ```
-[forbidden] Could not get lobby's content. … <Code>AccessDenied</Code>
+[forbidden] Could not get arena's content. … <Code>AccessDenied</Code>
 ```
 
 an S3 error, on a box holding every byte it needs in `dist/`. Nothing in that message points at a key, and the packs verify perfectly against the key that made them.
@@ -597,7 +596,6 @@ A game left out is left out *everywhere except `dist/`*: **a pack an earlier run
 | build | addons wired in |
 | --- | --- |
 | `--only-games buses-from-hell` | 27 |
-| `--only-games simple-lobby` | 33 |
 | `--only-games hungario` | 42 |
 | `--only-games arena` | 45 |
 | `--only-games g2gfast` | 46 |
@@ -747,7 +745,7 @@ tools/package_check.sh  # vendor the addons, move the tree away from its sibling
 | `examples/live_switch.tscn` | **the same, with a real client on a real socket** |
 | `examples/reconnect.tscn` | **the real shell, connected twice**, across a server that went down and came back |
 | `examples/party_live.tscn` | parties on a real server: the booking on the ban seam, before and after a game change; party chat in the game's own chat; a claim checked against a roster |
-| `./server check` | a real `DotServer` booting, loading the lobby, and shutting down — and `party_status` answering on its console, and the replay ring recording |
+| `./server check` | a real `DotServer` booting, loading its default game, and shutting down — and `party_status` answering on its console, and the replay ring recording |
 
 The third one earns its place. Switching games under a live client segfaulted the server, twice over, once going in and once coming out, and `multigame` passes the same switch with an occupant seated in the world. An occupant is not a socket.
 
@@ -770,7 +768,6 @@ node tools/browser_check.mjs \
 - **One transport at a time.** A server listens on WebSocket *or* ENet, so a desktop client on UDP and a browser client on TCP cannot share a match yet. See [PLATFORM.md](../../PLATFORM.md).
 - **`cfg/permissions.yml` does nothing until `cfg/auth.yml` is turned on.** `DotAdminManager` refuses permissions to any unauthenticated session, because a guest uid is a random per-device string, so granting anything to one grants it to anyone. Correct, and it looks exactly like the file being ignored — `auth.yml` says so on boot rather than leaving you to work it out.
 - **A connecting player is a guest until this server can PROVE otherwise.** Signing in on the website fills in the display name and nothing more: that name travels as a label, exactly like the one a player types, and no server should trust a name a client chose. `cfg/auth.yml` is what turns a label into an identity — `strategy: ticket` verifies a short-lived, server-scoped ticket offline against the issuer's public key, which is the only shape safe to hand to an operator you do not employ. **The issuer is publisher-run and TMC does not run one yet**, so `ticket` is configurable and not yet usable end to end; `introspect` works today against the backbone and is first-party only, because it hands the operator a live credential for the player's whole site account.
-- **No game has been delivered as a pack yet.** The lobby ships inside the build. See CLAUDE.md for the constraint that decides what a delivered game may look like.
 - **No TLS in the server itself.** A page on HTTPS cannot open `ws://`, and the certificate and the reverse proxy in front of it are deployment rather than code — `deploy/issue-letsencrypt.sh` and `deploy/install-server-tls.sh` are how you get both.
 
 ## Licence

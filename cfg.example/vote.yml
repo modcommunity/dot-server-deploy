@@ -41,10 +41,8 @@ enabled: true
 # Not a DotVoteRules setting: this is TMC's, because "which of the things in
 # content/ are games a player would choose" is a question about this deployment.
 #
-# The lobby is this server's home screen rather than a game. "Vote to go back to
-# the menu" is not something anybody votes for, and leaving it on the ballot means
-# a server that occasionally votes itself into having nothing to play.
-vote_exclude: [lobby]
+# Games named here are never on a ballot. Empty offers every installed game.
+vote_exclude: []
 
 # --- When a vote happens --------------------------------------------------
 

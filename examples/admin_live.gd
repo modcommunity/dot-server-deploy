@@ -276,9 +276,9 @@ func _test_menu() -> void:
 		"an admin's /admin opens the menu on their screen")
 	_check(not _row("Player commands").is_empty() and not _row("Server commands").is_empty() and not _row("Other").is_empty(),
 		"listing the categories, and the owner's own item under Other", _labels())
-	# What a game can do is asked of the game. The lobby's live tools do noclip and not slay,
+	# What a game can do is asked of the game. Buses' live tools say for themselves whether they slay,
 	# and so the menu says, which is checked by walking into its categories below.
-	var lobby_can_slay := _game_supports(&"slay")
+	var buses_can_slay := _game_supports(&"slay")
 
 	_panel().choose(_row("Player commands"))
 	await _until(func() -> bool: return _panel().title_text() == "Player commands", 10.0)
@@ -302,8 +302,8 @@ func _test_menu() -> void:
 	if not _row("Fun commands").is_empty():
 		_panel().choose(_row("Fun commands"))
 		await _until(func() -> bool: return _panel().title_text() == "Fun commands", 10.0)
-	_check(_row("Slay").is_empty() != lobby_can_slay,
-		"Slay is on the lobby's menu exactly when the lobby's own tools say they can slay (%s)" % lobby_can_slay, _labels())
+	_check(_row("Slay").is_empty() != buses_can_slay,
+		"Slay is on buses' menu exactly when buses' own tools say they can slay (%s)" % buses_can_slay, _labels())
 	_panel().press(0)
 	_done()
 
@@ -380,7 +380,7 @@ func _test_change_under_the_player() -> void:
 		"and Slay offers everybody at once", _labels())
 
 	# Left open, then the game changes under it: its pages belong to the old game.
-	_server().console.execute("changelevel lobby")
+	_server().console.execute("changelevel buses")
 	_check(await _until(func() -> bool: return not _panel().is_open(), 30.0),
 		"a game change closes a menu that was open on the old game")
 	_done()

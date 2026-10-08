@@ -9,7 +9,7 @@ extends Node
 ## Exits non-zero on any failure.
 ##
 ## The YAML reader, the config translation, the permission translation and the content
-## index. `./server check` is the other half — it boots a real server, loads the lobby and
+## index. `./server check` is the other half — it boots a real server, loads its default game and
 ## shuts down — and between them they cover everything before a client connects.
 
 const CFG := "res://examples/fixtures"
@@ -294,7 +294,7 @@ func _test_config() -> void:
 			% config.net.per_client_budget
 	)
 	_check(config.public_address == "203.0.113.7", "net_public_ip is kept for the join line")
-	_check(config.initial_game == "lobby", "sv_game names the boot game")
+	_check(config.initial_game == "buses", "sv_game names the boot game")
 	# [b]Its own key, and not a console line.[/b] `sv_map` has no cvar and no command
 	# behind it at this level — the `map` command belongs to whichever game is loaded,
 	# and at read time that is none of them. So the check that matters is the negative
@@ -324,7 +324,7 @@ func _test_config() -> void:
 	# register cvars this layer cannot know about at read time, so a name-based guess would
 	# refuse every setting a game contributed.
 	_check(
-		config.console_lines.has("room_pellets 400"),
+		config.console_lines.has("bfh_round_seconds 120"),
 		"an unrecognised setting is queued for the console (%s)" % [config.console_lines]
 	)
 
@@ -1006,8 +1006,8 @@ func _test_game_refs() -> void:
 		"a v that is not followed by a digit is part of the version")
 	_check(TmcGameRef.parse("asher/game-testing@v1.0.0")["dir"] == "asher/game-testing",
 		"a published game's id is owner/name, with no version")
-	_check(TmcGameRef.dirs_in("asher/game-testing@v1.0.0, bob/game-testing, lobby")
-			== PackedStringArray(["asher/game-testing", "bob/game-testing", "lobby"]),
+	_check(TmcGameRef.dirs_in("asher/game-testing@v1.0.0, bob/game-testing, arena")
+			== PackedStringArray(["asher/game-testing", "bob/game-testing", "arena"]),
 		"a fork and its original are two games in one list")
 
 	# Two owners' same-named games, installed side by side, both scan.
@@ -1017,12 +1017,12 @@ func _test_game_refs() -> void:
 	DotPaths.write_text(root + "/asher/game-testing/game.yml", fork_yml % "asher/game-testing")
 	DotPaths.write_text(root + "/bob/game-testing/game.yml", fork_yml % "bob/game-testing")
 	DotPaths.write_text(root + "/gamemann/game-g2gfast/game.yml", fork_yml % "gamemann/game-g2gfast")
-	DotPaths.write_text(root + "/lobby/game.yml", "kind: pack\nscene: s.tscn\ncontent_id: a_room\n")
+	DotPaths.write_text(root + "/arena/game.yml", "kind: pack\nscene: s.tscn\ncontent_id: arena\n")
 	DirAccess.make_dir_recursive_absolute(root + "/emptyowner")
 	var forks := TmcContent.scan(root)
 	var index: TmcContent = forks.value if forks.ok else null
 	_check(index != null and index.ids() == PackedStringArray(
-			["asher/game-testing", "bob/game-testing", "gamemann/game-g2gfast", "lobby"]),
+			["arena", "asher/game-testing", "bob/game-testing", "gamemann/game-g2gfast"]),
 		"content/<owner>/<name>/ scans as owner/name beside a built-in's content/<name>/",
 		str(index.ids()) if index != null else str(forks))
 	_check(index != null and index.find("game-testing") == null
@@ -1323,9 +1323,9 @@ func _test_vote() -> void:
 		+ "changing two votes is a flag nobody can use"
 	)
 	_check(
-		Array(config.vote_exclude) == ["lobby", "playground"],
+		Array(config.vote_exclude) == ["playground"],
 		"and names the games that are never on a ballot (%s)" % [config.vote_exclude],
-		"which is TMC's question rather than dot-vote's: a lobby is not a game"
+		"which is TMC's question rather than dot-vote's"
 	)
 
 	# Every enum written by NAME. A config file full of enum indices is one nobody can

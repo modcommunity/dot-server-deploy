@@ -14,7 +14,7 @@ const Installer := preload("res://tools/install_games.gd")
 
 ## Every check below, counted. See docs/testing.md: a section that aborts part-way still
 ## counts as entered, so the total is the only thing that notices.
-const CHECKS := 25
+const CHECKS := 23
 
 var _passed := 0
 var _failed := 0
@@ -115,7 +115,6 @@ func _test_template() -> void:
 ## skips, visibly, rather than failing on something it was never given.
 const REPOSITORIES := {
 	"game-arena": "arena",
-	"game-simple-lobby": "lobby",
 	"game-playground": "playground",
 	"game-g2gfast": "g2gfast",
 	"game-hungario": "hungry_classic",

@@ -222,7 +222,7 @@ func _test_built() -> void:
 	_check(
 		p.reservations.previous_source != null
 			and p.reservations.previous_source.has_method("check_admission"),
-		"and chained to what the lobby's module put there, so its bans still hold"
+		"and chained to what buses' module put there, so its bans still hold"
 	)
 
 	var said := _say("party_status")
@@ -239,7 +239,7 @@ func _test_party_chat() -> void:
 
 	var router := _chat_router()
 
-	_check(router != null, "the lobby registered a chat router")
+	_check(router != null, "buses registered a chat router")
 	_check(
 		router != null and bool(router.call("has_channel", &"party"))
 			and (router.call("channel", &"party") as DotChatChannel).grouped,

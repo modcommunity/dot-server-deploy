@@ -1,0 +1,20 @@
+# Hungario: Shallows. Lines of posts across the world whose gaps narrow toward the
+# shallow wall, so how far in a monster can go depends on how small it is.
+#
+#     changelevel hungry_shallows
+#
+# Shares a module with hungry_classic — see that directory's game.yml.
+#
+# The sixth mode, and the same story as reef's: the game gained `shallows` in its own
+# repository on 2026-09-30, and nothing here noticed until a republished pack registered
+# it and `examples/live_switch.tscn` counted one game more than content/ describes.
+
+name: "Hungario: Shallows"
+content_id: tmc/hungry       # shared with hungry_classic: one client, six modes
+version: 0.1.0
+kind: pack
+max_players: 32
+
+scene: game/modes/shallows.tscn
+client_scene: game/client/hungry_client.tscn
+module: game/hungry_module.gd

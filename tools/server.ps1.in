@@ -128,7 +128,7 @@ function Show-Usage {
 
   Anything after -- is handed to the server console once it is up:
 
-    .\server.ps1 -- +sv_cheats 1 +changelevel lobby
+    .\server.ps1 -- +sv_cheats 1 +changelevel arena
 
   With one exception, and it is the one worth knowing: `+map ID` is read by the
   HOST, not by the console. The console's +command half runs when the listener
@@ -329,7 +329,7 @@ if ($rest.Count -gt 0) {
         }
         '^pack$' {
             $Command = 'pack'
-            if ($rest.Count -lt 2) { Die 'pack needs a game id: .\server.ps1 pack lobby' }
+            if ($rest.Count -lt 2) { Die 'pack needs a game id: .\server.ps1 pack arena' }
             $PackId = $rest[1]
             $rest = Get-Tail $rest 2
         }

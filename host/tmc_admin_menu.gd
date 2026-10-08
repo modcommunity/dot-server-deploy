@@ -198,7 +198,7 @@ const DEFAULT_LISTS := {
 ## Every item a server gets without writing one. An item whose command this server does
 ## not have is simply not drawn — see the class notes — and one with an `ability` is drawn
 ## only when the loaded game says it can do that (see [method supports]). So the fun ones
-## below appear in the 3D games, which implement them, and not in a 2D lobby, which has no
+## below appear in the 3D games, which implement them, and not in a 2D game, which has no
 ## body to slap.
 const DEFAULT_ITEMS := {
 	"kick": {"label": "Kick", "command": "kick {player} {reason}", "steps": ["player", "reason"]},
@@ -1065,7 +1065,7 @@ func may_use(ctx: DotCmdContext, item: Dictionary) -> bool:
 ##
 ## [b]The command existing is not enough for these, and that is dot-moderation's own
 ## design.[/b] Its live-tool commands are registered whether or not a game supports them,
-## so `!slap` in a lobby answers with the game's reason rather than "unknown command" —
+## so `!slap` in a 2D game answers with the game's reason rather than "unknown command" —
 ## right for somebody typing, wrong for a menu, where a Slap row that can only fail is a
 ## row that should not be there. So an item with an ability asks the command's own handler
 ## object for its `tools` and asks those `supports(ability)`; `teleport` asks whether the

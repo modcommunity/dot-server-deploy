@@ -159,7 +159,7 @@ func _publish_one(
 	var meta: Dictionary = spec.value
 
 	# [b]A builtin game has nothing to publish, and publishing it anyway is worse than
-	# refusing.[/b] `content/lobby/` is a `game.yml` and some cvars -- the game's code is
+	# refusing.[/b] a builtin game's `content/<id>/` is a `game.yml` and some cvars -- the game's code is
 	# compiled into the build -- so this produced a signed, verifiable pack containing one
 	# configuration file. It mounts, it contains no game, and every symptom of using it
 	# points somewhere else. Found by running `--all`, which cheerfully published five of

@@ -4,7 +4,7 @@
 # The suite opens every ballot itself, so the clock is long enough never to, and the
 # countdown is short enough that a suite waiting for it is not slow.
 enabled: true
-vote_exclude: [lobby]
+vote_exclude: []
 
 trigger: time_limit
 duration_sec: 3600

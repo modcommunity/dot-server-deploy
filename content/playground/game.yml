@@ -6,7 +6,7 @@
 #
 #     changelevel playground
 #
-# kind: pack -- delivered, for the reason content/lobby/game.yml sets out at length.
+# kind: pack -- delivered, for the reason content/arena/game.yml sets out.
 # Published with `./server pack playground --source games/game-playground`.
 #
 # ITS PROPS WERE ALREADY WRITTEN THIS WAY, which is why this game was the easiest to

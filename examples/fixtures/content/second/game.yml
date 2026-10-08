@@ -2,4 +2,4 @@ name: The Second
 version: 2.0.0
 kind: builtin
 default: true
-scene: res://scenes/room_server.tscn
+scene: res://scenes/second_server.tscn

@@ -3,7 +3,7 @@
 # Everything is short or off: the suite drives the clock itself and a real
 # thirty-second ballot would make one check take thirty seconds.
 enabled: true
-vote_exclude: [lobby]
+vote_exclude: []
 
 trigger: time_limit
 duration_sec: 60

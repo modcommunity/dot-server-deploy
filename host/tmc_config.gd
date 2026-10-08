@@ -333,7 +333,7 @@ var loading: Dictionary = {}
 ##
 ## Not a [DotVoteRules] setting: which of the things in `content/` count as games a
 ## player would choose is a question about this deployment, and dot-vote should not have
-## an opinion about a lobby.
+## an opinion about it.
 var vote_exclude: PackedStringArray = PackedStringArray()
 
 ## The game to load at boot, or "" for whatever the content directory says is first.
@@ -355,8 +355,8 @@ var web_loader: String = ""
 ##
 ## `sv_map` in the YAML, `--map` on the command line, and `+map` after a `--` for the
 ## muscle memory of every other dedicated server. [b]It is a request, not a
-## guarantee.[/b] A game decides whether it has maps at all — a lobby and an arena of
-## built geometry do not — and the id has to be in that game's catalogue. Both are
+## guarantee.[/b] A game decides whether it has maps at all — a game of built
+## geometry does not — and the id has to be in that game's catalogue. Both are
 ## reported and neither is fatal: a server that refused to boot because one argument
 ## named a map that is not there is a server an operator cannot get back.
 ##

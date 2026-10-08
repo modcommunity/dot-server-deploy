@@ -89,7 +89,7 @@ func _init() -> void:
 				["Bo", "in_game", "Playing Smash Copter", 0, "5123", true],
 				["Cy", "online", "", 0, "", false],
 				["Dee", "in_game", "Playing Surf on g2gfast", 7, "", false],
-				["Eve", "in_game", "Playing Lobby", 3, "", true],
+				["Eve", "in_game", "Playing Arena", 3, "", true],
 				["Fin", "offline", "", 0, "", false],
 			]
 			for r in rows:

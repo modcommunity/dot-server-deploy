@@ -800,7 +800,7 @@ func _boot() -> bool:
 ## [b]This is what makes a multi-game server a multi-game server.[/b] A game's server-side
 ## behaviour is a [DotModule], and dot-server does not load one: it changes the scene and
 ## tells whatever modules are already loaded. So without this, `changelevel` swaps the world
-## and leaves the previous game's module driving it — or, from a lobby, leaves no module at
+## and leaves the previous game's module driving it — or, from a game with no module of its own, leaves no module at
 ## all, which is a game whose netcode never ticks and whose players never join. Nothing
 ## errors either way.
 ##
@@ -1305,7 +1305,7 @@ func _apply_initial_map() -> void:
 		DotLog.warn(CHANNEL, "a map was asked for and this game has no maps", {
 			"map": config.initial_map,
 			"game": server.games.current_content_id(),
-			"why": "not every game has a catalogue; a lobby and a built arena do not",
+			"why": "not every game has a catalogue; a game of built geometry does not",
 		})
 		return
 

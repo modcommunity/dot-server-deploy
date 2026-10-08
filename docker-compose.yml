@@ -73,7 +73,7 @@ services:
       TMC_PORT: "6064"
       # TMC_NAME: "My server"
       # TMC_MAX_PLAYERS: "64"
-      # TMC_GAME: "lobby"
+      # TMC_GAME: "arena"
 
       # --- Installing games instead of carrying them ---------------------------
       #

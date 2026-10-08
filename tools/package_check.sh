@@ -77,7 +77,7 @@ echo "staging"
 #
 # [b]Read out of setup.sh, not written down again.[/b] This was a third hand-kept copy
 # of the same knowledge and it had drifted like the other two: it still named
-# `dot-a-room`, and it was missing every addon added since — so the staged tree was
+# a renamed game, and it was missing every addon added since — so the staged tree was
 # vendored without them and the packaged check passed on a build the real one could not
 # make. setup.sh is the one place that knows what this project is made of.
 #
@@ -232,7 +232,7 @@ echo
 echo "booting"
 
 if (cd "$TREE" && ./server check) >"$WORK/boot.log" 2>&1; then
-    pass "the server boots, loads the lobby, and shuts down"
+    pass "the server boots, loads its default game, and shuts down"
 else
     fail "./server check in the shipped tree"
     sed 's/^/       /' "$WORK/boot.log" | tail -25
