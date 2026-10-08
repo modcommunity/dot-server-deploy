@@ -1,0 +1,6 @@
+{
+    "id": "tmc/playground_maps",
+    "version": "0.1.0",
+    "name": "Playground custom maps",
+    "exclude_dirs": ["tools", ".github"]
+}

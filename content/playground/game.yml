@@ -36,6 +36,16 @@ scene: scenes/pg_server.tscn
 client_scene: game/playground.tscn
 module: game/playground_module.gd
 
+# The custom maps (game-playground-maps, published as content/playground_maps). Under
+# `dependencies`, NOT `server_dependencies` like wipeout's and deathrun's courses: a
+# playground map is a document of boxes and props that the CLIENT builds too, so every
+# client fetches this pack in the same content sync as the game and adds `<mount>/maps`
+# from DotClientLink.content_extra (PlaygroundClient), as the server does from the game
+# manager's dependency keys (PlaygroundModule._add_delivered_maps). The first game to use
+# client dependencies.
+dependencies:
+  - tmc/playground_maps@0.1.0
+
 # Set when this game is loaded, and only while it is loaded.
 #
 # A sandbox is not a records server, so the map runs until somebody votes it out rather

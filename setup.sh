@@ -1054,6 +1054,9 @@ GAMES=(
     # Here because this list is what publishes from a repository, and a data pack is
     # published exactly as a game is.
     "mg-wipeout-maps:wipeout_maps"
+    # Not a game either: game-playground's custom maps, which every playground CLIENT
+    # mounts too (content/playground/game.yml's `dependencies`).
+    "game-playground-maps:playground_maps"
 )
 
 # --- Or none of them -------------------------------------------------------

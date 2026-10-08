@@ -1,0 +1,8 @@
+# A fixture for examples/playground_client.tscn. Loopback, a port nothing else here uses, and
+# the game booted directly: this suite is about the delivered playground and its maps pack.
+sv_name: "Playground Fixture"
+sv_maxplayers: 8
+sv_game: "playground"
+
+# Off for the reason examples/fixtures/wipeout/server.yml gives: nobody is typing.
+sv_stdin_console: false

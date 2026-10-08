@@ -388,6 +388,8 @@ echo "a delivered game whose courses are a server-only pack"
 timeout 300 "$GODOT" --headless --path . res://examples/wipeout_client.tscn || fails=$((fails + 1))
 echo "deathrun, the same shape: its courses a server-only pack, its traps built from STAGE"
 timeout 300 "$GODOT" --headless --path . res://examples/deathrun_client.tscn || fails=$((fails + 1))
+echo "playground, whose custom maps are a CLIENT dependency: mounted on both ends, built on both"
+timeout 300 "$GODOT" --headless --path . res://examples/playground_client.tscn || fails=$((fails + 1))
 
 # And the REAL shell, connected twice. Everything above connects at most once, and a
 # second connection in one session put the game on screen with an empty world -- the
