@@ -6,3 +6,9 @@ sv_game: "playground"
 
 # Off for the reason examples/fixtures/wipeout/server.yml gives: nobody is typing.
 sv_stdin_console: false
+
+# Off, because this check runs the server and a client in ONE process, and one process has one
+# engine tick rate: a server that hibernates before the client connects (as an empty server now
+# does from boot) puts the engine at 5 Hz, and the client's playground then starts at 5 Hz. Two
+# processes, as in production, do not share it.
+sv_hibernate_when_empty: false

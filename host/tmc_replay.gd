@@ -21,7 +21,7 @@ extends Node
 ## one for every game would be recording the wrong player in most of them.
 ##
 ## [b]The clock is the wall clock, at the configured tick rate.[/b] dot-server drops to
-## `sv_hibernate_tickrate` when nobody is connected, so a count of physics ticks would make
+## `DotServerConfig.hibernate_tickrate` when nobody is connected, so a count of physics ticks would make
 ## "the last sixty seconds" mean sixty seconds at one rate and several minutes at another,
 ## and a clip saved just after somebody joined would reach back into an empty hour.
 ## `tick = elapsed ms * sv_tickrate / 1000` is monotonic, which is all the recorder asks

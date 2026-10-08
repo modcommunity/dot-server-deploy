@@ -1,6 +1,7 @@
 # A fixture for examples/multigame.tscn. Loopback, an ephemeral-ish port nothing else
-# here uses, and hibernation left alone — a server with no players still has to tick,
-# because the suite changes its game while nobody is connected.
+# here uses, and hibernation left alone: an empty server hibernates from boot now, ticking at
+# the hibernate rate, and wakes for every game change (dot-server's "a game loads awake"), which
+# is what this suite does while nobody is connected.
 sv_name: "Multigame Fixture"
 sv_maxplayers: 8
 sv_game: "lobby"

@@ -61,6 +61,13 @@ sv_allow_mobile: 1
 # client as well as here. Fixed at boot.
 sv_tickrate: 60
 
+# What an empty server does. 1 (the default): it idles at a low tick rate while nobody is
+# connected, and every map clock waits and starts again from the top when somebody joins. 0: it
+# keeps running, and when a map's time limit runs out on nobody it changes to a map from the
+# rotation (dot-vote's `empty_choice`, random by default; set it in a game's map_vote metadata).
+# Live: `sv_hibernate_when_empty 0` wakes an empty server at once. A game always loads awake.
+# sv_hibernate_when_empty: 1
+
 # Which game in the content directory boots.
 #
 # Empty means "whatever content/ says is the default" -- a game marks itself with

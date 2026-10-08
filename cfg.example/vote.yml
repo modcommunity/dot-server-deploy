@@ -208,6 +208,14 @@ on_no_quorum: winner_anyway
 # extend) or rotation (the next in content/ order).
 # on_no_votes: keep
 
+# The limit running out with NOBODY connected (hibernation off, see server.yml): random (draw
+# one of the ballot's options, never the one running), rotation, or wait (stay, as it used to).
+# empty_choice: random
+
+# Whether a clock that waited out a hibernation starts again from the top on the next join
+# (true), or carries on from where it stopped.
+# wake_restart: true
+
 # --- History --------------------------------------------------------------
 
 # Games excluded after being played. Deliberately small: there are five games here,

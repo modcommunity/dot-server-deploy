@@ -14,3 +14,8 @@ sv_game: "lookatme"
 # Still off after dot-server 5f46687 (a pipe is not read by default any more): a
 # terminal would still be, and a suite takes no commands.
 sv_stdin_console: false
+
+# Off: server and client share ONE process, so one engine tick rate. A server that hibernates
+# before the client connects (as an empty one now does from boot) starts the client's game at
+# the hibernate rate. See examples/fixtures/playground/server.yml.
+sv_hibernate_when_empty: false
