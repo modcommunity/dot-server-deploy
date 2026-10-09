@@ -390,6 +390,13 @@ echo "deathrun, the same shape: its courses a server-only pack, its traps built 
 timeout 300 "$GODOT" --headless --path . res://examples/deathrun_client.tscn || fails=$((fails + 1))
 echo "playground, whose custom maps are a CLIENT dependency: mounted on both ends, built on both"
 timeout 300 "$GODOT" --headless --path . res://examples/playground_client.tscn || fails=$((fails + 1))
+# The two delivered games with nobody on foot and with a house of levels, which existed and
+# passed (20 and 18 checks) but ran only when somebody remembered them: a suite that is not
+# in the check is a suite that stops being run the week it would have caught something.
+echo "dangerous delivery: a real client drives a delivered truck"
+timeout 300 "$GODOT" --headless --path . res://examples/delivery_client.tscn || fails=$((fails + 1))
+echo "look at me: a real client in the delivered house, levels sent one by one"
+timeout 300 "$GODOT" --headless --path . res://examples/lookatme_client.tscn || fails=$((fails + 1))
 
 # And the REAL shell, connected twice. Everything above connects at most once, and a
 # second connection in one session put the game on screen with an empty world -- the
