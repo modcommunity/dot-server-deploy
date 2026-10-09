@@ -1,0 +1,6 @@
+{
+    "id": "tmc/prophunt_maps",
+    "version": "0.1.0",
+    "name": "Prop Hunt maps",
+    "exclude_dirs": ["tools", ".github"]
+}

@@ -1,0 +1,30 @@
+# mg-prop-hunt, as this server publishes it.
+#
+# Hide as the furniture: the props pick something in the room to become, the hunters are
+# blindfolded while they hide and then have a few minutes to find them, and every wrong guess
+# costs a hunter health. The maps are NOT in this pack: they are prophunt_maps below, mounted
+# on the server only, because the server sends each client the map it is playing as a document.
+#
+# Keep scene, client_scene and module in step with mg-prop-hunt's own game.yml.
+
+name: Prop Hunt
+content_id: tmc/prophunt
+version: 0.1.0
+kind: pack
+max_players: 24
+
+scene: scenes/ph_server.tscn
+client_scene: game/ph.tscn
+module: game/ph_module.gd
+
+# Pinned, because TmcContent refuses an unpinned entry rather than resolving one per join.
+server_dependencies:
+  - tmc/prophunt_maps@0.1.0
+
+cvars:
+  ph_round_seconds: "300"
+  ph_hide_seconds: "30"
+  ph_players_per_hunter: "3"
+  # Stand-ins, so one person on an empty server has somebody to find or to hide from.
+  ph_bots: "1"
+  ph_min_players: "3"
