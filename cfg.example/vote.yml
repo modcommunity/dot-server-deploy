@@ -106,7 +106,7 @@ vote_cooldown_sec: 60
 
 rtv_enabled: true
 rtv_fraction: 0.6
-rtv_min_players: 2
+rtv_min_players: 1
 
 # No rtv in the first five minutes of a game. Otherwise the first thing that happens
 # every time the game changes is somebody asking to change it again.
