@@ -75,3 +75,23 @@ games:
         - gamemann/bhop_pit
         - gamemann/bhop_supernova
         - gamemann/bhop_tesquo_v2
+
+  mg-wipeout:
+    maps:
+      add:
+        - gamemann/mg-wipeout-maps        # every course and final arena, one pack
+
+  mg-deathrun:
+    maps:
+      add:
+        - gamemann/mg-deathrun-maps       # the trap courses, one pack
+
+  mg-prop-hunt:
+    maps:
+      add:
+        - gamemann/mg-prop-hunt-maps      # the school, the house, the office, the woods
+
+  game-playground:
+    maps:
+      add:
+        - gamemann/game-playground-maps   # the custom sandbox maps; sent to every player too

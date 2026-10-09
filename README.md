@@ -284,7 +284,9 @@ The order is the game's `game.yml`, then `defaults:`, then the game's own sectio
 
 **Maps** are published one pack each (`gamemann/surf_mesa`), so they come and go without a new release of the game. `game_maps: false` drops the ones the game itself lists. Every start, `install-games` asks the origin which version of each unpinned map is newest and keeps the answers in `data/content-maps.json`, so a new upload reaches the server on its next restart, and an origin that is down keeps the versions it had. Nothing is downloaded at boot: a map is fetched the first time the server changes to it. Only a game that reads its descriptor's maps uses the list (game-g2gfast does); a game that ships all its maps as one pack names that pack under `server_dependencies` in its own `game.yml`.
 
-A box without the file gets the template's on its next start, which carries game-g2gfast's 26 courses.
+**When a map is downloaded is the game's choice**, written as `metadata: maps_delivery:` in its own `game.yml`: `lazy` (the default) fetches a map when the server changes to it, for games whose maps are large scenes (game-g2gfast, game-arena); `server` fetches them all before the game loads, for games whose maps are small documents the server sends players itself (the minigames); `client` does the same and also sends each pack to every player, for a game whose client builds a map from its pack (game-playground).
+
+A box without the file gets the template's on its next start. The template lists the stock maps for every game (game-g2gfast's 26 courses, and the maps pack of mg-wipeout, mg-deathrun, mg-prop-hunt and game-playground), so a server offers them until its owner takes them out. A file that already exists is never rewritten, so a box that got an older template keeps it: compare it with `cfg.example/content.yml` after an update, or delete it to take the new one.
 
 ### Installing somebody else's game
 

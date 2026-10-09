@@ -14,7 +14,7 @@ extends Node
 
 const CFG := "res://examples/fixtures"
 
-const CHECKS := 267
+const CHECKS := 268
 
 var _passed := 0
 var _failed := 0
@@ -1176,6 +1176,24 @@ defaults:
 	_check(game4.metadata["module"] == "res://m.gd" and host.warnings.size() == 1,
 		"the host's own metadata keys are not overridden, and that is reported")
 
+	var delivered := _game_config("games:\n  game-x:\n    maps:\n      - me/docs@5\n")
+	var client_game := _owner_game("owner/game-x", g2g)
+	client_game.metadata["maps_delivery"] = "client"
+	client_game.dependencies = PackedStringArray(["me/a@1"])
+	delivered.apply(client_game)
+	var server_game := _owner_game("owner/game-x", g2g)
+	server_game.metadata["maps_delivery"] = "server"
+	delivered.apply(server_game)
+	var lazy_game := _owner_game("owner/game-x", g2g)
+	delivered.apply(lazy_game)
+	_check(client_game.dependencies == PackedStringArray(["me/a@1", "me/b@1", "me/c@1", "me/docs@5"])
+		and client_game.server_dependencies.is_empty()
+		and server_game.server_dependencies == PackedStringArray(["me/a@1", "me/b@1", "me/c@1", "me/docs@5"])
+		and server_game.dependencies.is_empty()
+		and lazy_game.dependencies.is_empty() and lazy_game.server_dependencies.is_empty(),
+		"maps_delivery: client fetches maps before load for everybody, server for the server, lazy on a change",
+		"%s / %s" % [client_game.dependencies, server_game.server_dependencies])
+
 	var stray := _game_config("games:\n  nothing-here:\n    max_players: 2\n")
 	stray.apply_all(content)
 	_check(stray.warnings.size() == 1, "a game the server does not have is reported")
@@ -1199,9 +1217,12 @@ defaults:
 	var template := TmcGameConfig.load_from("res://cfg.example", "res://examples/fixtures/nothing")
 	_check(template.ok, "the template reads", str(template.error) if not template.ok else "")
 	if template.ok:
-		var adds := (template.value as TmcGameConfig).all_map_entries()
-		_check(adds.size() == 26 and adds.has("gamemann/surf_mesa"),
-			"the template offers g2gfast's 26 courses (%d)" % adds.size())
+		var parsed: TmcGameConfig = template.value
+		var g2g_adds: PackedStringArray = (parsed.games.get("game-g2gfast", {}) as Dictionary).get("maps", {}).get("add", PackedStringArray())
+		var every := parsed.all_map_entries()
+		_check(g2g_adds.size() == 26 and g2g_adds.has("gamemann/surf_mesa")
+			and every.has("gamemann/mg-wipeout-maps") and every.has("gamemann/game-playground-maps"),
+			"the template offers g2gfast's 26 courses (%d) and every other game's maps pack" % g2g_adds.size())
 
 	_done()
 

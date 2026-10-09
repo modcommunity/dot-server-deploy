@@ -2,9 +2,11 @@
 #
 # Obstacle courses over water: a fall is a restart from the last checkpoint, and two or more
 # sides across the line fight a final death in a random arena with props to throw and
-# weapons on the floor. The courses are NOT in this pack: they are wipeout_maps below,
-# mounted on the server only, because the server sends each client the course it is playing
-# as a document and no player needs the files.
+# weapons on the floor. The courses are NOT in this pack, and this file does not name them:
+# like every game now, the server owner does, in cfg/content.yml (`games: wipeout: maps:
+# [tmc/wipeout_maps@0.1.0]` for this deployment's own build; examples/fixtures/wipeout has
+# exactly that). The server sends each client the course it is playing as a document, so
+# no player needs the files.
 #
 # Keep scene, client_scene and module in step with mg-wipeout's own game.yml;
 # examples/install_descriptor compares the two.
@@ -19,10 +21,6 @@ scene: scenes/wo_server.tscn
 client_scene: game/wo.tscn
 module: game/wo_module.gd
 
-# Pinned, because TmcContent refuses an unpinned entry rather than resolving one per join.
-server_dependencies:
-  - tmc/wipeout_maps@0.1.0
-
 cvars:
   # Solo by default: everybody is their own side, and two finishers make a final death.
   wo_teams: "0"
@@ -34,3 +32,9 @@ cvars:
   # final death can happen at all.
   wo_bots: "1"
   wo_min_players: "3"
+
+# The courses are small documents the server sends, so they are fetched before the game
+# loads rather than on a change: no player is ever admitted to a server playing only the
+# practice course. See TmcGameConfig._maps_to_clients.
+metadata:
+  maps_delivery: server

@@ -1,0 +1,6 @@
+# The courses, named by the server owner rather than by the game (see cfg.example/content.yml).
+# Pinned, so the suite needs no installer run to resolve a version.
+games:
+  wipeout:
+    maps:
+      - tmc/wipeout_maps@0.1.0

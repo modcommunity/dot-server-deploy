@@ -16,9 +16,10 @@ extends Node
 ##
 ## [b]What only this can see.[/b] mg-wipeout's four suites run inside its own project, where
 ## its courses are a link at `res://courses`. Delivered, they are not in the game's pack at
-## all: they are `server_dependencies` in its game.yml, mounted by dot-server's game manager
-## on the server alone, and the game finds them only if the prefix it computes from the
-## pinned key is where the pack really mounted. A wrong guess is a server that boots, plays
+## all, and the game does not name them: the server owner's cfg/content.yml does (the
+## fixture's), the host lays that over the descriptor's `maps`, and the game fetches each pack
+## through dot-game's DotGameContent and reads its `courses/` -- which works only if the
+## prefix it computes from the pinned key is where the pack really mounted. A wrong guess is a server that boots, plays
 ## the one practice course built into the game, and logs an INFO line. So this asserts the
 ## courses arrived as content, that a round runs on one of them, that the client — which was
 ## never sent the course files — built the same course from the document the server sent,
@@ -34,7 +35,7 @@ const MAPS_KEY := "tmc/wipeout_maps@0.1.0"
 const MODULE := "wipeout"
 
 ## Every check this suite runs, including the one that compares against it.
-const CHECKS := 26
+const CHECKS := 27
 
 var _passed := 0
 var _failed := 0
@@ -272,8 +273,16 @@ func _test_the_packs_mounted() -> void:
 	var path := String((script as Resource).resource_path) if script != null else ""
 	_check(path.begins_with("res://dot_cloud/tmc/wipeout/"), "its module is the mounted copy", path)
 
-	var server_only: PackedStringArray = _server().games.current_server_dependencies()
-	_check(server_only.has(MAPS_KEY), "the courses are its server-only dependency", str(server_only))
+	var named: PackedStringArray = _server().games.current_maps()
+	var authored := TmcYaml.parse_file(CONTENT.path_join("wipeout/game.yml"))
+	var game_lists := []
+	if authored.ok:
+		for field in ["maps", "server_dependencies", "dependencies"]:
+			game_lists.append_array(TmcYaml.at(authored.value, field, []) as Array)
+	_check(named.has(MAPS_KEY) and authored.ok and game_lists.is_empty(),
+		"the courses are named by the server's cfg/content.yml, not by the game", str(named))
+	_check(_server().games.current_server_dependencies().has(MAPS_KEY),
+		"and fetched before the game loaded, because the game asks for maps_delivery: server")
 
 	var file := DotCloudClient.mount_prefix_for(&"tmc/wipeout_maps", "0.1.0").path_join("courses/wo_first_splash.json")
 	_check(FileAccess.file_exists(file), "and are mounted where the game computes they are", file)

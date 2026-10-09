@@ -188,7 +188,8 @@ func apply_all(content: TmcContent) -> int:
 ## anything changed.
 func apply(descriptor: DotGameDescriptor) -> bool:
 	var before := [descriptor.display_name, descriptor.max_players,
-		descriptor.cvars.duplicate(true), descriptor.metadata.duplicate(true), descriptor.maps]
+		descriptor.cvars.duplicate(true), descriptor.metadata.duplicate(true), descriptor.maps,
+		descriptor.dependencies, descriptor.server_dependencies]
 
 	_apply_section(descriptor, defaults)
 
@@ -197,8 +198,11 @@ func apply(descriptor: DotGameDescriptor) -> bool:
 	if not own.is_empty():
 		_apply_section(descriptor, own)
 
+	_maps_to_clients(descriptor)
+
 	var after := [descriptor.display_name, descriptor.max_players,
-		descriptor.cvars, descriptor.metadata, descriptor.maps]
+		descriptor.cvars, descriptor.metadata, descriptor.maps, descriptor.dependencies,
+		descriptor.server_dependencies]
 
 	if str(before) == str(after):
 		return false
@@ -379,6 +383,51 @@ func _apply_section(descriptor: DotGameDescriptor, section: Dictionary) -> void:
 		descriptor.metadata[key] = _merged(descriptor.metadata.get(key), metadata[key])
 
 	descriptor.maps = _maps(descriptor, section["maps"])
+
+
+## When a game's maps are fetched, which only the game can say: `metadata: maps_delivery:`
+## in its game.yml.
+##
+## - `lazy` (or absent): only in `maps`, fetched when the server changes to one. For a game
+##   whose maps are large scenes, one pack each -- a gigabyte before boot otherwise.
+## - `server`: also in `server_dependencies`, which dot-server fetches and mounts BEFORE the
+##   game loads, on the server only. For a game whose maps are small documents the server
+##   sends each client itself. Without it the game fetched them during its own module load,
+##   which dot-server does not wait for: the first players were admitted to a server playing
+##   only the game's built-in course (dot-server-deploy's wipeout_client found that).
+## - `client`: also in `dependencies`, fetched before load and sent to every client in the
+##   content sync, for a game whose client builds a map from its pack itself.
+func _maps_to_clients(descriptor: DotGameDescriptor) -> void:
+	var mode := str(descriptor.metadata.get("maps_delivery", "lazy"))
+	var into: PackedStringArray
+
+	match mode:
+		"server":
+			into = descriptor.server_dependencies
+		"client":
+			into = descriptor.dependencies
+		"lazy":
+			return
+		_:
+			warnings.append("%s: maps_delivery '%s' is not lazy, server or client; treated as lazy" % [
+				descriptor.game_id, mode])
+			return
+
+	var have := {}
+
+	for key in into:
+		have[_content_id(key)] = true
+
+	for key in descriptor.maps:
+		if not have.has(_content_id(key)):
+			into.append(key)
+			have[_content_id(key)] = true
+
+	# Assigned back: a PackedStringArray is a value, and `into` is a copy of the property.
+	if mode == "server":
+		descriptor.server_dependencies = into
+	else:
+		descriptor.dependencies = into
 
 
 ## [param over] laid over [param base]: dictionaries merge key by key, anything else
