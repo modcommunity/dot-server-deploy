@@ -52,6 +52,12 @@
 # Without it the server is up and reachable on the loopback and a browser gets nothing,
 # which the nginx step below reports rather than leaving to be discovered.
 #
+# THE UDP HALF IS NOT BEHIND NGINX. Every server listens dual-stack (cfg net_transport):
+# WebSocket on its game port through the TLS listener above, and ENet for the desktop
+# client on the SAME NUMBER over UDP (6070, 6080, ...), reached directly -- nginx carries
+# no UDP. Open those UDP ports on the firewall, or a desktop client falls back to the
+# WebSocket after 2.5 s and plays over TCP.
+#
 # The database rows those servers appear as are website-city's
 # `scripts/seed-godot-apps.ts --demo-servers`, which knows the PUBLIC ports above.
 #
