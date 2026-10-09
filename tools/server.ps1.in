@@ -298,7 +298,7 @@ function Invoke-ExportNative {
         Write-Host "        --app godot --platform $($row[0]) --version $BuildVersion ``"
         Write-Host "        --file $($row[1]) ``"
         Write-Host "        --entry `"$($row[2])`" ``"
-        Write-Host "        --args `"--,--connect,{host}:{port}`""
+        Write-Host "        --args `"--,--connect,{host}:{port},--udp,{host}:{udpPort}`""
         Write-Host ""
     }
 

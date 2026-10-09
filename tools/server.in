@@ -764,8 +764,10 @@ do_verify() {
 # which is *only* what follows a `--` on the command line; Godot 4 silently ignores an
 # argument it does not recognise rather than refusing to start, so
 # `tmc.x86_64 --connect host:port` runs perfectly, shows the menu, and connects to
-# nothing. `--args "--,--connect,{host}:{port}"` is the spelling that works, and the
-# app's own argument builder drops the pair cleanly when no server was chosen.
+# nothing. `--args "--,--connect,{host}:{port},--udp,{host}:{udpPort}"` is the
+# spelling that works, and the app's own argument builder drops a pair cleanly when its
+# value is missing: no server chosen, or a server that advertises no ENet port
+# (`{udpPort}` is the server's own A2S `udp:<port>` keyword, carried by the site).
 
 # [b]An imported map must NOT be in a pack, and MUST be on the CDN.[/b] Shared by both
 # export commands, because either build reaches a player who then has to fetch those maps
@@ -1003,7 +1005,7 @@ do_export_native() {
         printf '        --app godot --platform %s --version %s \\\n' "$api_platform" "$BUILD_VERSION"
         printf '        --file %s/%s \\\n' "$PROJECT" "$archive"
         printf '        --entry "%s" \\\n' "$entry"
-        printf '        --args "--,--connect,{host}:{port}"\n\n'
+        printf '        --args "--,--connect,{host}:{port},--udp,{host}:{udpPort}"\n\n'
     done
 
     # `--app godot` is the ENGINE app, and it is deliberate. A server hangs off the
