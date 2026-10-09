@@ -178,8 +178,9 @@ usage() {
     --port N            Listen here instead of what cfg/net.yml says.
     --bind ADDR         Interface to bind. * or 0.0.0.0 is every one.
     --rcon-port N       RCON listens here. Default is the game port plus one.
-    --a2s-port N        A2S answers here (UDP). Default is the game port --
-                        which is free because the game itself is WebSocket.
+    --a2s-port N        A2S answers here (UDP). Default is the game port, whose
+                        UDP side it shares with the desktop clients' ENet,
+                        told apart by their first bytes.
     --query-port N      DQP answers here (UDP). Default is --a2s-port, so the
                         two share one socket and are told apart by their first
                         four bytes. Give both to split them.
