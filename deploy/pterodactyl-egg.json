@@ -4,7 +4,7 @@
         "version": "PTDL_v2",
         "update_url": null
     },
-    "exported_at": "2026-09-30T00:00:00+00:00",
+    "exported_at": "2026-10-09T00:00:00+00:00",
     "name": "dot-server",
     "author": "contact@moddingcommunity.com",
     "description": "A dot-server that installs the games it is told to run. GAMES is a comma-separated list, fetched from the content origin at startup -- descriptors and signed packs alike -- so this ships no game and a new one needs no new build. TMC_GAME picks which of them boots, and it can be changed live over RCON without a restart.",
@@ -110,7 +110,7 @@
         },
         {
             "name": "A2S port",
-            "description": "Where A2S answers, over UDP. Empty derives THE GAME PORT ITSELF, and that is usually what you want: the game is a WebSocket listener and therefore TCP, so the same number is free on UDP, and an allocation opens both protocols -- one allocation serves the game and the query. It is also the only port a tracker will try. Set this only when something else on the node has taken that UDP port, and give the server an allocation for whatever you set.",
+            "description": "Where A2S answers, over UDP. Empty derives THE GAME PORT ITSELF, and that is usually what you want: one allocation opens the number on TCP and UDP, and this server uses both halves of it. Browsers join over WebSocket on TCP; the TMC desktop client joins over ENet on the same number's UDP side; and A2S and the dot query protocol answer on that UDP port too, told apart from ENet's traffic by their first bytes. So one allocation serves every kind of player and every query, and it is also the only port a tracker will try. Set this only when something else on the node has taken that UDP port, and give the server an allocation for whatever you set: queries then move there, and ENet stays on the game port.",
             "env_variable": "TMC_A2S_PORT",
             "default_value": "",
             "user_viewable": true,
