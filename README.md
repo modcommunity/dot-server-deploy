@@ -148,6 +148,7 @@ cfg/                 what an operator edits. Written on first run, and not in th
   replay.yml           the last minute kept in memory, "replay save", evidence for bans
   admin_menu.yml       what /admin offers, and to whom
   loading.yml          the picture, music and tips over a game or map change
+  content.yml          your settings per game over its author's: cvars, maps, votes, slots
   permissions.yml      who is in which group
   content/<id>/        per-game configuration
 
@@ -251,6 +252,39 @@ Both land in `dist/`, which is already what gets uploaded, so there is no second
 **A `game.yml` already on the disk is never overwritten.** It is the file an operator edits, so a startup that re-downloaded it would undo their work on the *next* restart, which is the worst kind of bug to own. `--refresh` is the explicit way to take the origin's copy.
 
 **The list is also a filter.** Installing two games does not stop a content directory that already has ten from offering all of them, so `--games` narrows what the server scans — the `games` listing, `changelevel`, the vote menu and the boot game all read that one set. `--games-mode` says what happens to a game that is installed and no longer listed: `hide` (default — kept, not offered), `remove` (deleted, and **only** games `install-games` installed itself, recorded in `data/installed-games.json`), or `keep` (kept and still offered).
+
+### Your settings for each game, and its maps
+
+A game's `game.yml` travels inside its pack: it is the game author's defaults, and the installer replaces your copy with each new version's. `cfg/content.yml` is yours. Nothing else writes it, every game update leaves it alone, and what you set there wins:
+
+```yaml
+defaults:                         # every game on this server
+  cvars:
+    sv_alltalk: "1"
+games:
+  game-g2gfast:                   # the game's id, or its name half
+    name: "Surf & Bhop"
+    max_players: 24
+    cvars:
+      sv_airaccelerate: "150"
+    metadata:                     # merged key by key into the game's own
+      map_vote:
+        duration_sec: 1800        # the map vote and rotation
+      vote:
+        time_limit_sec: 2400      # this game's time in the server's game vote
+    maps:
+      add:
+        - gamemann/surf_mesa      # the newest on the origin, checked every start
+        - gamemann/bhop_grove@1.2.0
+      remove:
+        - gamemann/bhop_pit       # a map the game itself lists that you do not want
+```
+
+The order is the game's `game.yml`, then `defaults:`, then the game's own section. Cvars and metadata merge key by key, so changing one `map_vote` setting keeps the rest of the game's. What makes a game the game it is (`scene`, `client_scene`, `module`, `kind`, `content_id`, `version`, its dependencies) cannot be set here, and the server refuses to start if you try. A misspelt key is refused too, with its name, rather than ignored.
+
+**Maps** are published one pack each (`gamemann/surf_mesa`), so they come and go without a new release of the game. `game_maps: false` drops the ones the game itself lists. Every start, `install-games` asks the origin which version of each unpinned map is newest and keeps the answers in `data/content-maps.json`, so a new upload reaches the server on its next restart, and an origin that is down keeps the versions it had. Nothing is downloaded at boot: a map is fetched the first time the server changes to it. Only a game that reads its descriptor's maps uses the list (game-g2gfast does); a game that ships all its maps as one pack names that pack under `server_dependencies` in its own `game.yml`.
+
+A box without the file gets the template's on its next start, which carries game-g2gfast's 26 courses.
 
 ### Installing somebody else's game
 

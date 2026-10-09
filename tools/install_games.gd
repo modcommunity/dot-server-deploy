@@ -97,18 +97,25 @@ func _init() -> void:
 	)
 
 	var wanted := _list(str(opts.get("games", "")))
-
-	if wanted.is_empty():
-		# Not an error, and this is the ordinary case for a hand-run server: no list
-		# means "run what is in the content directory", which needs no installer at all.
-		print("  no games list; nothing to install")
-		quit(EXIT_OK)
-		return
-
 	var content_dir := str(opts.get("content", "content"))
 	var data_dir := str(opts.get("data", "data"))
 	var config_dir := str(opts.get("config", "cfg"))
 	var bases := _list(str(opts.get("base", "")))
+
+	if wanted.is_empty():
+		# Not an error, and this is the ordinary case for a hand-run server: no list
+		# means "run what is in the content directory", which needs no installer at all
+		# -- except for the maps an owner added in cfg/content.yml, which still need a
+		# version each (see _resolve_owner_maps).
+		print("  no games list; nothing to install")
+
+		if bases.is_empty():
+			bases = _bases_from_config(config_dir)
+
+		await process_frame
+		await _resolve_owner_maps(config_dir, data_dir, bases)
+		quit(EXIT_OK)
+		return
 
 	# [b]One statement of where content comes from, and it is the server's own.[/b]
 	# Without this the launcher would have to carry a default origin of its own beside the
@@ -362,6 +369,8 @@ func _init() -> void:
 
 	state["installed"] = installed
 	_write_state(data_dir, state)
+
+	await _resolve_owner_maps(config_dir, data_dir, bases)
 
 	print("")
 	print("  games    : %s" % ", ".join(present))
@@ -1079,6 +1088,73 @@ static func stamp_dependencies(
 		)
 
 	return DotResult.success(result)
+
+
+## Resolves every unpinned map in `cfg/content.yml` to the origin's newest version and
+## writes the answers to `data/content-maps.json`, which TmcGameConfig reads at boot.
+##
+## [b]Every start, not once.[/b] The point of a server-side map list is that a new upload
+## of a map reaches the server without anybody touching the game, so a version decided at
+## first install and kept for ever would be the frozen pin this exists to replace. It is
+## one small `latest.json` per map. An answer the origin cannot give keeps the version the
+## cache already had: a restart during an outage must not take a working map away.
+##
+## Pinned entries are not looked up -- the host reads them straight from the file -- and
+## nothing is downloaded here: a map is fetched when the server changes to it.
+func _resolve_owner_maps(config_dir: String, data_dir: String, bases: PackedStringArray) -> void:
+	var loaded := TmcGameConfig.load_from(config_dir, data_dir)
+
+	if not loaded.ok:
+		DotLog.error(CHANNEL, "could not read the server's map list", {"why": str(loaded.error)})
+		return
+
+	var owner_maps := loaded.value as TmcGameConfig
+	var entries := owner_maps.all_map_entries()
+
+	if entries.is_empty() and owner_maps.resolved.is_empty():
+		return
+
+	var out := {}
+	var kept := 0
+	var failed := PackedStringArray()
+
+	for entry in entries:
+		var ref := TmcGameRef.parse(entry)
+
+		if str(ref["version"]) != "":
+			continue
+
+		var id := str(ref["id"])
+		var latest := await _resolve_latest(id, bases)
+
+		if latest.ok:
+			out[id] = str(latest.value)
+		elif owner_maps.resolved.has(id):
+			out[id] = owner_maps.resolved[id]
+			kept += 1
+		else:
+			failed.append(id)
+
+	DirAccess.make_dir_recursive_absolute(data_dir)
+	var file := FileAccess.open("%s/%s" % [data_dir.rstrip("/"), TmcGameConfig.RESOLVED_FILE], FileAccess.WRITE)
+
+	if file == null:
+		DotLog.error(CHANNEL, "could not write the resolved map versions", {
+			"why": error_string(FileAccess.get_open_error()),
+		})
+		return
+
+	file.store_string(JSON.stringify({"maps": out}, "\t") + "\n")
+	file.close()
+
+	print("  maps     : %d from cfg/%s" % [out.size(), TmcGameConfig.FILE])
+
+	if kept > 0:
+		print("             %d kept at the version they had; the origin did not answer" % kept)
+
+	if not failed.is_empty():
+		print("  NO MAP   : %s" % ", ".join(failed))
+		print("             not on the origin; left out until it is")
 
 
 ## The newest published version of a pack, from the pointer beside its versions.

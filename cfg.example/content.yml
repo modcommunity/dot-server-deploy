@@ -1,0 +1,77 @@
+# What THIS SERVER says about each game, over what the game's author shipped.
+#
+# A game's own game.yml travels inside its pack and is replaced by each new version's,
+# so it is the author's defaults. This file is yours: nothing but you writes it, every
+# game update leaves it alone, and whatever you set here wins.
+#
+#   defaults:                    every game on this server
+#     cvars:
+#       sv_alltalk: "1"
+#   games:
+#     <game>:                    its id (gamemann/game-g2gfast) or its name half
+#       name: "Surf & Bhop"      what the server list and the game vote call it
+#       max_players: 24
+#       cvars:                   any cvar the game reads; see its game.yml for its own
+#         g2g_example: "1"
+#       metadata:                merged key by key into the game's metadata:, e.g.
+#         map_vote:              its map vote and rotation (dot-vote's settings)
+#           duration_sec: 1800
+#         vote:                  this game's time limit in the server's game vote
+#           time_limit_sec: 2400
+#       maps:
+#         game_maps: true        also offer the maps the game itself lists (the default)
+#         add:                   maps to offer on top
+#           - owner/map          the newest on the content origin, checked every start
+#           - owner/map@1.2.0    held at that version until you change it here
+#         remove:                maps the game lists that this server does not want
+#           - owner/map
+#
+# Order: the game's game.yml < defaults < games: <game>. Cvars and metadata merge key by
+# key; a list replaces a list. What makes a game the game it is -- scene, client_scene,
+# module, kind, content_id, version, its dependencies -- cannot be set here, and the
+# server refuses to start if you try, rather than run something else under its name.
+#
+# Maps: nothing is downloaded at boot. `./server` (install-games, every start) asks the
+# origin which version of each map is newest and keeps the answers in
+# data/content-maps.json; a map is fetched the first time the server changes to it. An
+# upload of a new version reaches this server on its next restart, and if the origin is
+# down at a restart every map keeps the version it had. Only a game that reads its
+# descriptor's maps uses this list (game-g2gfast does); a game that ships all its maps as
+# one pack names that pack in its own game.yml instead.
+
+defaults:
+
+games:
+  game-g2gfast:
+    maps:
+      # The bhop and surf courses, one pack each, from github.com/gamemann/g2gfast-maps.
+      # Left out: bhop_eazy, bhop_lego2 and buses_from_hell_fixed have no finish line;
+      # bhop_arcane_v2 carries a texture the publisher refuses; surf_quilavar and
+      # surf_beginner are not published yet.
+      add:
+        - gamemann/surf_mesa
+        - gamemann/surf_beginner2
+        - gamemann/surf_kitsune
+        - gamemann/surf_aquaflow
+        - gamemann/surf_arcade
+        - gamemann/surf_interference
+        - gamemann/surf_summit
+        - gamemann/surf_year3000
+        - gamemann/surf_greensway
+        - gamemann/surf_life_of_duck
+        - gamemann/surf_stonework3
+        - gamemann/bhop_ananas
+        - gamemann/bhop_aztec
+        - gamemann/bhop_badges
+        - gamemann/bhop_badges_mini
+        - gamemann/bhop_evolve
+        - gamemann/bhop_fur
+        - gamemann/bhop_fury_2
+        - gamemann/bhop_grove
+        - gamemann/bhop_interloper
+        - gamemann/bhop_mario_fxd
+        - gamemann/bhop_monster_jam
+        - gamemann/bhop_pandora2_fix
+        - gamemann/bhop_pit
+        - gamemann/bhop_supernova
+        - gamemann/bhop_tesquo_v2

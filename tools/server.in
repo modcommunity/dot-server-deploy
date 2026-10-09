@@ -691,6 +691,11 @@ do_pack() {
 }
 
 INSTALL_TOOL="res://tools/install_games.gd"
+
+## True when cfg/content.yml names maps, whose newest versions install-games resolves.
+has_owner_maps() {
+    [ -f "$CONFIG_DIR/content.yml" ] && grep -qE '^[[:space:]]+maps:' "$CONFIG_DIR/content.yml"
+}
 INDEX_TOOL="res://tools/index.gd"
 
 ## Fetch the descriptors and the packs for TMC_GAMES. Returns the tool's exit code:
@@ -699,7 +704,8 @@ do_install_games() {
     if [ -z "$OPT_GAMES" ]; then
         note "no games list: TMC_GAMES, or --games arena,g2gfast"
         note "without one this server offers whatever is already in $CONTENT_DIR"
-        return 0
+        # The maps an owner added still need a version each; the tool resolves only those.
+        has_owner_maps || return 0
     fi
 
     local args=(--headless --path "$PROJECT" --script "$INSTALL_TOOL" --
@@ -1184,7 +1190,18 @@ if [ "$AUTO_UPDATE" = "always" ] && [ -z "${TMC_AUTO_UPDATED:-}" ] \
     update_and_restart || warn "starting on the addons this box already has"
 fi
 
-if [ -z "$NO_INSTALL" ] && [ -n "$OPT_GAMES" ] \
+# cfg/content.yml (a server's settings per game, maps included) is newer than most boxes'
+# cfg/, and setup.sh (which copies a missing template) runs only on an install or an
+# update. Without it a game whose maps moved out of its game.yml and into this file would
+# come up with only the maps in its pack. So the one file is copied here when it is
+# missing -- never over one that exists, like setup.
+if [ ! -f "$CONFIG_DIR/content.yml" ] && [ -f "$PROJECT/cfg.example/content.yml" ] \
+        && [ -d "$CONFIG_DIR" ] && { [ "$COMMAND" = "run" ] || [ "$COMMAND" = "check" ]; }; then
+    cat "$PROJECT/cfg.example/content.yml" > "$CONFIG_DIR/content.yml" \
+        && note "wrote $CONFIG_DIR/content.yml from the template: this server's settings per game"
+fi
+
+if [ -z "$NO_INSTALL" ] && { [ -n "$OPT_GAMES" ] || has_owner_maps; } \
         && { [ "$COMMAND" = "run" ] || [ "$COMMAND" = "check" ]; }; then
     printf '\n  %sgames%s\n' "$BLD" "$OFF"
     do_install_games

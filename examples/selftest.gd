@@ -14,7 +14,7 @@ extends Node
 
 const CFG := "res://examples/fixtures"
 
-const CHECKS := 248
+const CHECKS := 267
 
 var _passed := 0
 var _failed := 0
@@ -40,6 +40,7 @@ func _run() -> void:
 	_test_config()
 	_test_admins()
 	_test_content()
+	_test_owner_maps()
 	_test_game_refs()
 	_test_vote()
 	_test_vote_layers_reach_a_ballot()
@@ -1084,6 +1085,124 @@ func _test_game_refs() -> void:
 	loose_map["maps"] = ["gamemann/surf_mesa"]
 	_check(not TmcContent.new()._build("demo", loose_map).ok,
 		"an unpinned map is refused, like an unpinned dependency")
+	_done()
+
+
+func _game_config(text: String) -> TmcGameConfig:
+	var config := TmcGameConfig.new()
+	var read := config.read(_parse(text))
+	return config if read.ok else null
+
+
+func _owner_game(id: String, maps: PackedStringArray) -> DotGameDescriptor:
+	var game := DotGameDescriptor.new()
+	game.game_id = id
+	game.content_id = id
+	game.maps = maps
+	game.max_players = 16
+	game.cvars = {"g_speed": "1", "g_keep": "x"}
+	game.metadata = {
+		"kind": "pack", "module": "res://m.gd", "directory": "content/x",
+		"map_vote": {"duration_sec": 600, "trigger": "rtv_only"},
+	}
+	return game
+
+
+func _test_owner_maps() -> void:
+	_section("a server's settings per game (cfg/content.yml)")
+
+	var g2g := PackedStringArray(["me/a@1", "me/b@1", "me/c@1"])
+
+	var layered := _game_config("""games:
+  game-x:
+    name: "Renamed"
+    max_players: 24
+    cvars:
+      g_speed: "2"
+    metadata:
+      map_vote:
+        duration_sec: 1800
+    maps:
+      add:
+        - me/d
+        - me/b@9
+      remove:
+        - me/c
+defaults:
+  cvars:
+    g_speed: "9"
+    g_all: "1"
+""")
+	_check(layered != null, "defaults and a game section with every key read")
+	layered.resolved = {"me/d": "4"}
+	var game := _owner_game("owner/game-x", g2g)
+	var content := TmcContent.new()
+	content.games.append(game)
+	content.games.append(_owner_game("owner/other", PackedStringArray(["me/z@1"])))
+	_check(layered.apply_all(content) == 2, "defaults reach every game")
+	_check(
+		game.maps == PackedStringArray(["me/a@1", "me/b@9", "me/d@4"]),
+		"the game's maps, one removed, one re-pinned by the owner, one added at its resolved version",
+		str(game.maps)
+	)
+	_check(game.display_name == "Renamed" and game.max_players == 24, "name and max_players override")
+	_check(game.cvars == {"g_speed": "2", "g_keep": "x", "g_all": "1"},
+		"cvars merge: the game's section beats defaults beats the game's own", str(game.cvars))
+	_check(game.metadata["map_vote"] == {"duration_sec": 1800, "trigger": "rtv_only"},
+		"metadata merges key by key, keeping what the owner did not mention", str(game.metadata["map_vote"]))
+	var other: DotGameDescriptor = content.games[1]
+	_check(other.maps == PackedStringArray(["me/z@1"]) and other.cvars["g_speed"] == "9"
+		and other.max_players == 16, "another game gets the defaults and nothing else")
+
+	var bare := _game_config("games:\n  owner/game-x:\n    maps:\n      - me/e\n      - me/f@2\n")
+	var game2 := _owner_game("owner/game-x", g2g)
+	bare.apply(game2)
+	_check(
+		game2.maps == PackedStringArray(["me/a@1", "me/b@1", "me/c@1", "me/f@2"]),
+		"a bare map list adds; an unpinned map with no resolved version is left out",
+		str(game2.maps)
+	)
+	_check(bare.warnings.size() == 1 and bare.warnings[0].contains("me/e"),
+		"and the server says which, and why", str(bare.warnings))
+
+	var replaced := _game_config("games:\n  game-x:\n    maps:\n      game_maps: false\n      add:\n        - me/q@3\n")
+	var game3 := _owner_game("owner/game-x", g2g)
+	replaced.apply(game3)
+	_check(game3.maps == PackedStringArray(["me/q@3"]), "game_maps: false replaces the game's list", str(game3.maps))
+
+	var host := _game_config("games:\n  game-x:\n    metadata:\n      module: res://evil.gd\n")
+	var game4 := _owner_game("owner/game-x", g2g)
+	host.apply(game4)
+	_check(game4.metadata["module"] == "res://m.gd" and host.warnings.size() == 1,
+		"the host's own metadata keys are not overridden, and that is reported")
+
+	var stray := _game_config("games:\n  nothing-here:\n    max_players: 2\n")
+	stray.apply_all(content)
+	_check(stray.warnings.size() == 1, "a game the server does not have is reported")
+
+	_check(_game_config("games:\n  game-x:\n    scene: res://other.tscn\n") == null,
+		"what makes the game the game (scene) is refused")
+	_check(_game_config("games:\n  game-x:\n    max_player: 3\n") == null, "a misspelt key is refused")
+	_check(_game_config("games:\n  game-x:\n    maps:\n      - surf_mesa\n") == null,
+		"a map that is not owner/map is refused")
+
+	var none := TmcGameConfig.load_from("res://examples/fixtures/nothing", "res://examples/fixtures/nothing")
+	var game5 := _owner_game("owner/game-x", g2g)
+	if _check(none.ok, "no cfg/content.yml is no overrides, not an error"):
+		# The invariant, not the outcome. With `defaults` left as `{}` the script error is
+		# inside _apply_section, which is all it aborts: apply() carries on and returns an
+		# honest false, so a check on the result passes over the bug (it did, armed).
+		var empty: Dictionary = (none.value as TmcGameConfig).defaults
+		_check(empty.has("cvars") and empty.has("metadata") and empty.has("maps"),
+			"and its defaults are an empty section, not {}", str(empty))
+
+	var template := TmcGameConfig.load_from("res://cfg.example", "res://examples/fixtures/nothing")
+	_check(template.ok, "the template reads", str(template.error) if not template.ok else "")
+	if template.ok:
+		var adds := (template.value as TmcGameConfig).all_map_entries()
+		_check(adds.size() == 26 and adds.has("gamemann/surf_mesa"),
+			"the template offers g2gfast's 26 courses (%d)" % adds.size())
+
 	_done()
 
 

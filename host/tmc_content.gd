@@ -317,7 +317,7 @@ func _build(name: String, tree: Dictionary) -> DotResult:
 	var cvars: Variant = TmcYaml.at(tree, "cvars", {})
 
 	if cvars is Dictionary:
-		descriptor.cvars = _flatten_cvars(cvars as Dictionary)
+		descriptor.cvars = flatten_cvars(cvars as Dictionary)
 
 	# The module is named rather than derived from the id. A module is a script path and a
 	# guessed one produces a load failure that reads as a missing game — and a game with no
@@ -395,7 +395,7 @@ func _build(name: String, tree: Dictionary) -> DotResult:
 ## and every list-shaped cvar in this family splits on either. The cost is that an
 ## element containing a space cannot be expressed — which is equally true of typing the
 ## cvar at the console, so the YAML is not promising anything the console would keep.
-func _flatten_cvars(cvars: Dictionary) -> Dictionary:
+static func flatten_cvars(cvars: Dictionary) -> Dictionary:
 	var out := {}
 
 	for name: Variant in cvars:

@@ -207,6 +207,12 @@ func _run() -> void:
 
 	content = scanned.value as TmcContent
 
+	var overrides := _apply_game_config()
+
+	if not overrides.ok:
+		_die(EXIT_CONTENT, str(overrides.error))
+		return
+
 	if "--list-games" in args:
 		for line in content.describe_lines():
 			print(line)
@@ -411,6 +417,11 @@ func start(
 
 	content = scanned.value as TmcContent
 
+	var overrides := _apply_game_config()
+
+	if not overrides.ok:
+		return overrides
+
 	var built: bool = await _boot()
 
 	if not built:
@@ -578,6 +589,25 @@ func _apply_overrides(args: PackedStringArray) -> void:
 				"flag": flag,
 				"why": "argv is readable by other processes; put it in cfg/server.yml",
 			})
+
+
+## The owner's per-game settings from `cfg/content.yml` -- cvars, metadata, player
+## counts, maps -- laid over each game's own `game.yml` before anything reads a
+## descriptor. Here rather than in TmcContent.scan because the scan knows a content
+## directory and nothing about cfg/ or data/; see TmcGameConfig.
+func _apply_game_config() -> DotResult:
+	var loaded := TmcGameConfig.load_from(_config_dir, _absolute(_data_dir))
+
+	if not loaded.ok:
+		return loaded
+
+	var overrides := loaded.value as TmcGameConfig
+	overrides.apply_all(content)
+
+	for line in overrides.warnings:
+		DotLog.warn(CHANNEL, line)
+
+	return DotResult.success(overrides)
 
 
 func _boot() -> bool:
