@@ -1,0 +1,33 @@
+# game-zombie-zone, as this server publishes it.
+#
+# A co-operative zombie shooter: survivors cross a map from safe room to safe room (or hold a
+# survival map for its clock) against a directed horde, specials and random boxes. The maps
+# are NOT in this pack: they are zombiezone_maps below, mounted on the server only, because the
+# server sends each client the map it is playing as a document.
+#
+# It carries two weapon packs, zee-dot-weapons and zed-dot-weapons, so the client shell must be
+# built with addons/zed_weapons and with a zee-dot-weapons that has ZeeWeaponPack.add_source.
+#
+# Keep scene, client_scene and module in step with game-zombie-zone's own game.yml.
+
+name: Zombie Zone
+content_id: tmc/zombiezone
+version: 0.1.0
+kind: pack
+max_players: 8
+
+scene: scenes/zz_server.tscn
+client_scene: game/zz.tscn
+module: game/zz_module.gd
+
+# Pinned, because TmcContent refuses an unpinned entry rather than resolving one per join.
+server_dependencies:
+  - tmc/zombiezone_maps@0.1.0
+
+cvars:
+  zz_difficulty: "1"
+  zz_friendly_fire: "0.1"
+  zz_box_drops: "1"
+  # Stand-ins, so one person on an empty server has a team.
+  zz_bots: "1"
+  zz_min_players: "4"
