@@ -1,0 +1,31 @@
+# game-hide-n-seek, as this server publishes it.
+#
+# Hide and seek: one or two seekers count blindfolded while everybody else hides, then every
+# hider they catch (by a touch, by default) joins them. The maps are NOT in this pack: they are
+# hideseek_maps below, mounted on the server only, because the server sends each client the
+# map it is playing as a document.
+#
+# Keep scene, client_scene and module in step with game-hide-n-seek's own game.yml.
+
+name: Hide & Seek
+content_id: tmc/hideseek
+version: 0.1.0
+kind: pack
+max_players: 24
+
+scene: scenes/hs_server.tscn
+client_scene: game/hs.tscn
+module: game/hs_module.gd
+
+# Pinned, because TmcContent refuses an unpinned entry rather than resolving one per join.
+server_dependencies:
+  - tmc/hideseek_maps@0.1.0
+
+cvars:
+  hs_round_seconds: "240"
+  hs_hide_seconds: "40"
+  hs_players_per_seeker: "8"
+  hs_catch_mode: "0"
+  # Stand-ins, so one person on an empty server has somebody to find or to hide from.
+  hs_bots: "1"
+  hs_min_players: "5"

@@ -390,6 +390,8 @@ echo "deathrun, the same shape: its courses a server-only pack, its traps built 
 timeout 300 "$GODOT" --headless --path . res://examples/deathrun_client.tscn || fails=$((fails + 1))
 echo "prop hunt, the same shape, and its prop catalogue, models and taunts read from inside its own mount"
 timeout 300 "$GODOT" --headless --path . res://examples/prophunt_client.tscn || fails=$((fails + 1))
+echo "hide and seek, the same shape as prop hunt: its maps a server-only pack, its props and taunts read from its own mount"
+timeout 300 "$GODOT" --headless --path . res://examples/hideseek_client.tscn || fails=$((fails + 1))
 echo "playground, whose custom maps are a CLIENT dependency: mounted on both ends, built on both"
 timeout 300 "$GODOT" --headless --path . res://examples/playground_client.tscn || fails=$((fails + 1))
 # The two delivered games with nobody on foot and with a house of levels, which existed and
