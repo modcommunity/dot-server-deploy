@@ -212,11 +212,12 @@ usage() {
                         spelling every other dedicated server uses. A game that
                         has no maps, or has not got this one, says so and boots
                         on its default anyway.
-    --auto-update MODE  when-needed (default): if a game this server installs needs
+    --auto-update MODE  when-needed (default): if the addon lock on this checkout's
+                        branch has moved, or a game this server installs needs
                         newer addons than it has, pull this checkout and move the
                         addons to its lock (what a reinstall does), then start.
                         always: do that on every start. never: keep the installed
-                        game versions and say so.
+                        addons and game versions, and say so.
     --web-loader LABEL  Ask the site for this version of the web game loader
                         for this server's players (reported as sv_web_loader).
                         For a server on older addons than the site's default.
@@ -816,6 +817,47 @@ ensure_export_templates() {
 }
 
 
+## Every preset carries `addons.lock`: the export's record of which addon versions it was
+## built from.
+##
+## [b]A client compares it against the addon set a server announces[/b] and fetches the
+## newer ones as packs (dot-cloud's `DotCloudAddonSet`), which is what lets an addon release
+## reach players without a new shell. A build without it cannot say what is newer, so it
+## takes nothing -- silently, as far as the player is concerned. And it is not a resource,
+## so `all_resources` leaves it out unless `include_filter` names it.
+##
+## The tracked presets name it. A copy written before they did is never overwritten (the
+## editor owns it), so the line is added here, in place, rather than trusted.
+ensure_lock_exported() {
+    local cfg="$PROJECT/export_presets.cfg" tmp
+
+    [ -f "$cfg" ] || return 0
+    grep -E '^include_filter=' "$cfg" | grep -qvF 'addons.lock' || return 0
+
+    tmp="$(mktemp "$PROJECT/.export_presets.XXXXXX")" || die "could not write a temporary file" 5
+    awk '
+        /^include_filter=/ && index($0, "addons.lock") == 0 {
+            value = substr($0, length("include_filter=\"") + 1)
+            sub(/"$/, "", value)
+            print "include_filter=\"" (value == "" ? "addons.lock" : value ", addons.lock") "\""
+            next
+        }
+        { print }
+    ' "$cfg" > "$tmp" && mv "$tmp" "$cfg" || { rm -f "$tmp"; die "could not update $cfg" 5; }
+
+    printf '  export_presets.cfg now exports addons.lock (a copy older than the tracked presets)\n'
+}
+
+## The export holds `addons.lock`. Checked in the artifact, like the maps, because a filter
+## that stopped working is otherwise a shell that never takes a newer addon.
+check_lock_exported() {
+    grep -qF "addons.lock" "$1" \
+        || die "the export does not carry addons.lock, so its players would never take a newer addon.
+
+    The presets' include_filter has to name it; ensure_lock_exported adds it to an older
+    export_presets.cfg, so if this fired the file has a filter that does not match." 3
+}
+
 check_excluded_maps() {
     local pack="$1" carried=0 unpublished=0 bin rel id
 
@@ -960,6 +1002,7 @@ do_export_native() {
         mkdir -p "$PROJECT/$outdir" || die "could not create $PROJECT/$outdir" 5
 
         ensure_export_templates
+        ensure_lock_exported
 
         printf '\n  %sexporting %s%s\n' "$BLD" "$preset" "$OFF"
 
@@ -980,6 +1023,8 @@ do_export_native() {
     that is what happened it already said so above." 3
 
         check_excluded_maps "$PROJECT/$outdir/$binary"
+        # The macOS artifact is a zip Godot wrote; the pack inside it is compressed.
+        [ "$target" = "macos" ] || check_lock_exported "$PROJECT/$outdir/$binary"
 
         if [ "$target" = "macos" ]; then
             cp "$PROJECT/$outdir/$binary" "$PROJECT/$archive"
@@ -1038,6 +1083,7 @@ case "$COMMAND" in
     export-native) do_export_native ;;
     export-web)
         ensure_export_templates
+        ensure_lock_exported
         mkdir -p "$PROJECT/web/build"
 
         # Godot caches its text->binary scene conversions in .godot/exported/, and
@@ -1064,6 +1110,7 @@ case "$COMMAND" in
         # Shared with `export-native`, which excludes the same directory for the same
         # reason -- the story that put the check here is on the function.
         check_excluded_maps "$PROJECT/web/build/index.pck"
+        check_lock_exported "$PROJECT/web/build/index.pck"
 
         # The standalone page, which takes ?server= from the URL.
         [ -f "$PROJECT/web/embed.html" ] && cp "$PROJECT/web/embed.html" "$PROJECT/web/build/embed.html"
@@ -1181,6 +1228,39 @@ update_and_restart() {
     return 1
 }
 
+## Whether the addon lock on origin's branch differs from this checkout's.
+##
+## [b]An addon release is a lock bump, and a lock bump has to reach a box by a restart.[/b]
+## Players fetch newer addons as packs when the server they join says it runs them (see
+## `TmcHost._advertise_addons`); a server says what its lock says. So a lock pushed to the
+## deploy branch reached no player until each box was reinstalled -- `when-needed` updated
+## only for a game that refused to run, and an addon fix makes no game refuse anything.
+##
+## One shallow fetch per start, and every reason not to answer is "no": no git, not a
+## checkout, not on a branch, local changes, a developer's own commits, an origin that does
+## not answer in twenty seconds. A box that cannot ask starts on what it has, quietly; the
+## reinstall that has always worked still does.
+lock_moved() {
+    command -v git >/dev/null 2>&1 || return 1
+    [ -d "$PROJECT/.git" ] || return 1
+
+    local branch
+    branch="$(git -C "$PROJECT" rev-parse --abbrev-ref HEAD 2>/dev/null)"
+    [ -n "$branch" ] && [ "$branch" != "HEAD" ] || return 1
+    [ -z "$(git -C "$PROJECT" status --porcelain --untracked-files=no)" ] || return 1
+
+    local fetch=(git -C "$PROJECT" fetch --quiet --depth 1 origin "$branch")
+    command -v timeout >/dev/null 2>&1 && fetch=(timeout 20 "${fetch[@]}")
+    GIT_TERMINAL_PROMPT=0 "${fetch[@]}" 2>/dev/null || return 1
+
+    if [ "$(git -C "$PROJECT" rev-parse --is-shallow-repository)" != "true" ] \
+            && ! git -C "$PROJECT" merge-base --is-ancestor HEAD "origin/$branch" 2>/dev/null; then
+        return 1
+    fi
+
+    ! git -C "$PROJECT" diff --quiet HEAD "origin/$branch" -- addons.lock 2>/dev/null
+}
+
 case "$AUTO_UPDATE" in
     when-needed|always|never) ;;
     *) die "--auto-update / TMC_AUTO_UPDATE is when-needed, always or never, not '$AUTO_UPDATE'" ;;
@@ -1189,6 +1269,13 @@ esac
 if [ "$AUTO_UPDATE" = "always" ] && [ -z "${TMC_AUTO_UPDATED:-}" ] \
         && { [ "$COMMAND" = "run" ] || [ "$COMMAND" = "check" ]; }; then
     printf '\n  %supdate%s\n' "$BLD" "$OFF"
+    update_and_restart || warn "starting on the addons this box already has"
+fi
+
+if [ "$AUTO_UPDATE" = "when-needed" ] && [ -z "${TMC_AUTO_UPDATED:-}" ] \
+        && { [ "$COMMAND" = "run" ] || [ "$COMMAND" = "check" ]; } && lock_moved; then
+    printf '\n  %supdate%s\n' "$BLD" "$OFF"
+    note "the addon lock on this checkout's branch has moved; updating so players are offered the new addons"
     update_and_restart || warn "starting on the addons this box already has"
 fi
 

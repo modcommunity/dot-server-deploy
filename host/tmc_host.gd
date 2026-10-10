@@ -333,6 +333,26 @@ func _selftest_operator_surface() -> bool:
 
 		print("sv_web_build: %s" % named)
 
+	# [b]The addon versions a joining client is told about.[/b] Empty on a box with a lock
+	# means every player keeps the addons their shell was exported with, however old -- the
+	# thing this list exists to stop, and invisible from here unless asked.
+	# Through `get`, not the property: a box's dot-server may predate it, and a typed access
+	# would stop this whole script compiling there rather than skip one check.
+	var announced: Variant = server.get("addon_set")
+
+	if announced is Array and OS.get_environment("TMC_ADDONS_LOCK") != "off" \
+			and FileAccess.file_exists(ADDONS_LOCK):
+		if (announced as Array).is_empty():
+			printerr("selftest FAILED: %s names addons and none are advertised to clients" % ADDONS_LOCK)
+			return false
+
+		for entry in announced:
+			if str(entry.get("dir", "")) == "dot_server" and str(entry.get("id", "")) != "modcommunity/dot-server":
+				printerr("selftest FAILED: dot_server is advertised as %s" % str(entry.get("id", "")))
+				return false
+
+		print("addons advertised: %d" % (announced as Array).size())
+
 	# Registered ALWAYS, empty or not, so an operator can move a running server with rcon.
 	# A cvar that only exists when the config named a version is one `sv_web_loader x`
 	# answers "unknown command" to on every server that has not needed it yet.
@@ -678,6 +698,10 @@ func _boot() -> bool:
 	# its initial change.
 	_build_cloud()
 
+	# Before boot() too: the list rides the signon challenge, and the first client can
+	# arrive the moment the listener opens.
+	_advertise_addons()
+
 	# [b]Before boot() for a second reason: the challenge.[/b] `DotServer` answers a
 	# connecting client with the strategy it wants, and it works that out by asking the
 	# registry for `dot_auth_server` -- so an auth server registered after the listener
@@ -903,6 +927,95 @@ func _hand_backbone_to_auth() -> void:
 
 	auth.backbone = client
 	DotLog.info(CHANNEL, "sign-ins are verified by the site, as this server")
+
+
+## The addon refs this checkout installs. See setup.sh's "The addon lock".
+const ADDONS_LOCK := "res://addons.lock"
+
+
+## Tells every joining client which addon versions this server runs.
+##
+## [b]This is what lets an addon release skip the client build.[/b] A client whose shell is
+## older fetches the newer addons as packs (each tag is published as
+## `modcommunity/<repo>@<version>`), lays them over its own and restarts into them -- see
+## dot-cloud's `DotCloudAddonSet`. Without the list a client can only play on the addons it
+## was exported with, and every addon fix waited for the next shell.
+##
+## [b]The lock, not a guess at the checkout.[/b] setup.sh puts every addon clone it owns
+## at the locked ref, so the lock is what a box runs. `TMC_ADDONS_LOCK=off` -- addons at
+## whatever their branch is -- advertises nothing, because then the lock is not true.
+func _advertise_addons() -> void:
+	if OS.get_environment("TMC_ADDONS_LOCK") == "off":
+		DotLog.info(CHANNEL, "addons are not at the lock (TMC_ADDONS_LOCK=off); none advertised")
+		return
+
+	# [b]A box runs the dot-server its lock names, which may predate the field.[/b] Assigning
+	# a property an older DotServer does not declare is a script error at boot, so the
+	# question is asked of the object rather than assumed.
+	if not ("addon_set" in server):
+		DotLog.info(CHANNEL, "this dot-server cannot announce addons; clients keep their own", {
+			"needs": "dot-server with DotServer.addon_set",
+		})
+		return
+
+	var dirs := DirAccess.get_directories_at("res://addons")
+	var announced := addon_set_from(FileAccess.get_file_as_string(ADDONS_LOCK), dirs)
+	server.set("addon_set", announced)
+
+	DotLog.info(CHANNEL, "the addon versions clients are told about", {
+		"addons": announced.size(), "lock": ADDONS_LOCK,
+	})
+
+
+## One `{dir, repo, id, version}` per installed addon the lock names.
+static func addon_set_from(lock_text: String, dirs: PackedStringArray) -> Array:
+	var versions := {}
+
+	for raw in lock_text.split("\n"):
+		var line := raw.strip_edges()
+
+		if line == "" or line.begins_with("#"):
+			continue
+
+		var parts := line.split("\t", false)
+
+		if parts.size() >= 2:
+			versions[parts[0].strip_edges()] = parts[1].strip_edges().trim_prefix("v")
+
+	var out: Array = []
+
+	for dir in dirs:
+		if dir.begins_with("."):
+			continue
+
+		var repo := addon_repo(dir)
+
+		if not versions.has(repo):
+			continue
+
+		out.append({
+			"dir": dir,
+			"repo": repo,
+			"id": "%s/%s" % [content_owner(repo), repo],
+			"version": versions[repo],
+		})
+
+	return out
+
+
+## The repository an addon directory comes from. setup.sh's `addon_repo`, and the two
+## must agree: one exception, and otherwise underscores become dashes.
+static func addon_repo(dir: String) -> String:
+	if dir == "zee_weapons":
+		return "zee-dot-weapons"
+
+	return dir.replace("_", "-")
+
+
+## Whose namespace a repository's packs are published under. setup.sh's `repo_url`: the
+## `dot-*` addons are the organisation's, everything else (the weapons pack) Christian's.
+static func content_owner(repo: String) -> String:
+	return "modcommunity" if repo.begins_with("dot-") else "gamemann"
 
 
 ## The tracked file naming the web client shell built from this checkout's addons.lock.

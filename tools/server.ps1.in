@@ -157,6 +157,31 @@ function Show-Usage {
 # What has to be true now is the other pair, and the second one is the one worth having:
 # a map excluded from the build and never published is a map nobody can reach, and the
 # symptom is a player who connects, spawns, and sees sky in every direction.
+# Every preset exports addons.lock, the build's record of which addon versions it carries;
+# a client compares it with a server's set to fetch newer addons as packs. The bash
+# launcher's ensure_lock_exported, line for line: an export_presets.cfg older than the
+# tracked presets is never overwritten, so the filter is added in place. Reviewed, not run
+# -- there is no PowerShell on the machine this was written on.
+function Use-ExportedLock {
+    $cfg = Join-Path $Project 'export_presets.cfg'
+    if (-not (Test-Path -LiteralPath $cfg)) { return }
+
+    $lines = Get-Content -LiteralPath $cfg
+    $changed = $false
+    $out = foreach ($line in $lines) {
+        if ($line -match '^include_filter="(.*)"$' -and $line.IndexOf('addons.lock') -lt 0) {
+            $changed = $true
+            if ($Matches[1] -eq '') { 'include_filter="addons.lock"' }
+            else { 'include_filter="' + $Matches[1] + ', addons.lock"' }
+        } else { $line }
+    }
+
+    if ($changed) {
+        Set-Content -LiteralPath $cfg -Value $out
+        Write-Host '  export_presets.cfg now exports addons.lock (a copy older than the tracked presets)'
+    }
+}
+
 function Test-ExcludedMaps([string]$Pack) {
     $mapsDir = Join-Path $Project 'maps\imported'
     if (-not (Test-Path -LiteralPath $Pack)) { return }
@@ -210,6 +235,7 @@ function Invoke-ExportNative {
     }
 
     $presetFile = Join-Path $Project 'export_presets.cfg'
+    Use-ExportedLock
     if (-not (Test-Path -LiteralPath $presetFile)) {
         Die "no export_presets.cfg -- the editor rewrites that file so it is not tracked. Copy export_presets.example.cfg over it, or run .\setup.ps1." 5
     }
@@ -563,6 +589,7 @@ switch ($Command) {
     }
     'export-web' {
         New-Item -ItemType Directory -Path (Join-Path $Project 'web\build') -Force | Out-Null
+        Use-ExportedLock
 
         # Godot caches its text->binary scene conversions in .godot\exported\, and
         # --import does NOT invalidate them. setup copies each game's .gd files out of

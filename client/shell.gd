@@ -11,12 +11,14 @@ extends Node
 ## a tab cannot listen and a person who followed a link has already chosen where they are
 ## going.
 ##
-## [b]What a delivered game may not do.[/b] A mounted pack's `class_name` globals are not
-## registered in this process — measured, not assumed — so every cross-file type reference
-## inside a pack fails to compile: the pack mounts, its scenes load, and every script in it
-## is dead. A game meant to be delivered references its own files by path
-## (`preload("res://x.gd")`, `extends "res://x.gd"`), both of which resolve out of a mount.
-## Games compiled into this build have no such restriction.
+## [b]What a delivered game may not do.[/b] A game pack mounts at its own prefix and brings
+## no class list, so its `class_name` globals are not registered in this process — measured,
+## not assumed — and every cross-file type reference inside it fails to compile: the pack
+## mounts, its scenes load, and every script in it is dead. A game meant to be delivered
+## references its own files by path (`preload("res://x.gd")`, `extends "res://x.gd"`), both
+## of which resolve out of a mount. (Newer ADDONS are different: they are laid over
+## `res://addons/` at boot with the class list swapped in, before anything is compiled —
+## see [DotCloudAddonSet] and [method _on_server_info].)
 
 const CHANNEL := "tmc.shell"
 
@@ -98,6 +100,17 @@ var loading: TmcLoadingScreen = null
 ## them, has that.
 var _has_spawned := false
 
+## Whose packs may replace this build's addons: the organisation's, and the one addon that
+## is not theirs (the weapons pack, published under its author). See [DotCloudAddonSet].
+const ADDON_NAMESPACES := ["modcommunity/", "gamemann/zee-dot-weapons"]
+
+## Set while newer addons are being fetched for the server just left.
+var _addons_updating := false
+
+## Servers whose addon update failed this session, so they are joined on this build's
+## addons rather than left and re-joined for ever.
+var _addons_skipped := {}
+
 
 func _ready() -> void:
 	# Scoped to this subtree, for the reason the host scopes its own: Godot addresses an
@@ -159,6 +172,11 @@ func _ready() -> void:
 		return _has_spawned and _menu != null and not _menu.visible
 	add_child(loading)
 
+	# The shell is built, so a start on the addon overlay arrived. Until this line a broken
+	# addon is still a start that died, and the boot script comes up without the overlay
+	# next time. See [DotCloudAddonSet].
+	DotCloudAddonSet.confirm_boot()
+
 	# Who is playing, before anything is dialled.
 	#
 	# Awaited rather than fired off, because the answer changes the name the
@@ -167,9 +185,19 @@ func _ready() -> void:
 	# everybody. It costs one round trip inside the TMC player and nothing at all
 	# anywhere else — `sign_in()` falls through immediately when there is no page
 	# handoff to redeem.
-	await _sign_in()
+	# Read before signing in: a restart onto newer addons says who was signed in, and the
+	# sign-in needs that (see [method _sign_in]).
+	var resumed := _take_resume()
+
+	await _sign_in(resumed)
 
 	var wanted := _requested_server()
+
+	# Restarted onto newer addons: back to the server that asked for them. A page whose
+	# link names a server already goes there; one where the address was typed would
+	# otherwise come back to an empty menu.
+	if wanted == "":
+		wanted = str(resumed.get("server", ""))
 
 	if wanted != "":
 		# The box shows what we ACTUALLY dialled, before we dial it.
@@ -228,7 +256,7 @@ func _user_arg(name: String) -> String:
 ## server as `player_name` does, and a server that needs to know who somebody
 ## really is verifies that itself — a scope key handed over on join, or a
 ## `dot-auth` ticket. Nothing here asks a server to trust us.
-func _sign_in() -> void:
+func _sign_in(resumed: Dictionary = {}) -> void:
 	if not DotAuthWebHandoff.supported():
 		return
 
@@ -274,6 +302,19 @@ func _sign_in() -> void:
 	# It is also what made the wrong backbone visible: those were the two failing requests
 	# in the browser console, and a device flow nobody wanted is what was making them.
 	var res: DotResult = await _auth.try_web_handoff()
+
+	# [b]A restart onto newer addons must not sign a member out.[/b] The page's code is
+	# single-use and was redeemed by the start before this one, so the handoff can fail
+	# here for a player who is signed in -- and the credentials it bought are in the
+	# store. They are used only for the member the update recorded: a stored session from
+	# somebody else on a shared browser is not this player, and a guest stays a guest.
+	if not res.ok and str(resumed.get("member", "")) != "":
+		var restored: DotResult = await _auth.restore_session()
+
+		if restored.ok and (restored.value as DotAuthIdentity).uid == str(resumed["member"]):
+			res = restored
+		elif restored.ok:
+			_auth.sign_out(true)
 
 	if not res.ok:
 		DotLog.debug(
@@ -1238,6 +1279,8 @@ func _connect_to(address: String) -> void:
 	link.game_changed.connect(_on_game_changed)
 	link.spawned.connect(_on_spawned)
 	link.disconnected.connect(_on_disconnected)
+	# The first thing a server says, and it says which addon versions it runs.
+	link.server_info.connect(_on_server_info.bind(target))
 	# The server's HUD lines. Connected per link rather than once, because the link is
 	# rebuilt on every connection -- see [method _drop_link].
 	link.notice_received.connect(_on_notice)
@@ -1249,6 +1292,219 @@ func _connect_to(address: String) -> void:
 			"Could not connect: %s" % _explain(connecting.error))
 		_set_busy(false)
 		_drop_link()
+
+
+## The server's challenge: if it runs newer addons than this build, leave, fetch them, and
+## restart into them.
+##
+## [b]Before the join, because after it the old addons have run.[/b] The challenge is the
+## first message and arrives before anything of the game is loaded; a newer addon fetched
+## once a game is playing could not replace the copy already compiled (see
+## [DotCloudAddonSet] for the measurement). So the join is abandoned here, the packs are
+## fetched with the menu up, and the restart comes back to this server on the new addons.
+##
+## Never twice for one set: a set whose last start failed, or a server whose update failed
+## this session, is joined on this build's addons instead -- older addons than the server's
+## is the situation every release before this one was in, and it is a game, where a loop is
+## not.
+func _on_server_info(_challenge: Dictionary, target: String) -> void:
+	if link == null or _addons_updating or _addons_skipped.has(target):
+		return
+
+	var addons := DotCloudAddonSet.new(_cloud)
+	addons.namespaces = PackedStringArray(ADDON_NAMESPACES)
+	var decided := addons.plan_for(link.server_addons)
+	var refused: Dictionary = decided["refused"]
+
+	if not refused.is_empty():
+		DotLog.debug(CHANNEL, "addons this server runs that are not taken", {"refused": refused})
+
+	var wanted: Dictionary = decided["wanted"]
+
+	if wanted.is_empty():
+		return
+
+	if DotCloudAddonSet.failed_before(wanted):
+		DotLog.warn(CHANNEL, "the server's addons failed to start here before; joining on this build's", {
+			"server": target,
+		})
+		return
+
+	var attempt := _attempt_key(target, wanted)
+
+	if _update_attempts(attempt) >= MAX_UPDATE_RESTARTS:
+		DotLog.warn(CHANNEL, "restarting for this server's addons did not take; joining on this build's", {
+			"server": target, "restarts": _update_attempts(attempt),
+		})
+		return
+
+	DotLog.info(CHANNEL, "this server runs newer addons; updating before joining", {
+		"server": target, "addons": wanted.keys(),
+	})
+
+	_addons_updating = true
+	# Deferred: this runs inside the link's challenge handler, which goes on to send
+	# credentials on the socket after it returns.
+	_update_addons.call_deferred(addons, wanted, target, attempt)
+
+
+func _update_addons(addons: DotCloudAddonSet, wanted: Dictionary, target: String, attempt: String) -> void:
+	# Quietly: `_drop_link` closes without a reason, so no "Disconnected" is said about a
+	# server this client is about to come straight back to.
+	#
+	# An exported (release) build logs one engine line here, `Attempt to disconnect a
+	# nonexistent connection from 'Server' ... 'tree_exited'`, from closing an ENet peer
+	# right after the server's first message. It is the engine's multiplayer cache, it is
+	# the same with the drop deferred by frames, a debug run does not print it, and the
+	# update and the rejoin complete either way (measured, 2026-10-10).
+	_drop_link()
+	_set_busy(true)
+	_indeterminate(true)
+	_say(_text("shell.addons.updating", {}, "Updating the game for this server…"))
+
+	# Where to come back to, and who was signed in -- the page's sign-in code will
+	# already have been spent by the time the restart asks for it.
+	var resume := {"server": target}
+	if _auth != null and _auth.is_signed_in() and _auth.identity() != null:
+		resume["member"] = _auth.identity().uid
+
+	var built: DotResult = await addons.build(wanted, resume)
+
+	if not built.ok:
+		DotLog.error(CHANNEL, "could not update the addons; joining on this build's", {
+			"server": target, "why": str(built.error),
+		})
+		_addons_updating = false
+		_addons_skipped[target] = true
+		_connect_to(target)
+		return
+
+	_say(_text("shell.addons.restarting", {}, "Restarting to finish the update…"))
+	_note_update_attempt(attempt)
+
+	if not await _restart():
+		# A platform that cannot restart itself: the overlay applies on the next launch,
+		# and this one plays on what it has.
+		_addons_updating = false
+		_addons_skipped[target] = true
+		_say(_text("shell.addons.next_start", {},
+			"The update finishes the next time the game starts."))
+		_connect_to(target)
+
+
+## Restarts for one server's addons before giving up on them for the session.
+const MAX_UPDATE_RESTARTS := 2
+
+## The `sessionStorage` key restarts are counted under.
+const UPDATE_ATTEMPTS_KEY := "tmc.addon_updates"
+
+
+func _attempt_key(target: String, wanted: Dictionary) -> String:
+	var parts := PackedStringArray()
+	for dir: String in wanted:
+		parts.append("%s@%s" % [dir, str((wanted[dir] as Dictionary).get("version", ""))])
+	parts.sort()
+	return "%s|%s" % [target, ",".join(parts)]
+
+
+## How many times this tab has restarted for [param key].
+##
+## [b]A browser guard that does not live where the failure does.[/b] The plan, the overlay
+## and the boot's own loop guard are all files in `user://`, which in a browser is a copy of
+## IndexedDB that reaches it only through an asynchronous sync -- and a restart onto newer
+## addons is a reload, so a write that did not land is a page that comes back with no plan,
+## sees the same newer addons, updates and reloads again, for ever. Measured: six reloads in
+## seventy seconds. `sessionStorage` is written synchronously and survives a reload of the
+## same tab, so this count is there whatever happened to the files. A desktop build writes
+## files synchronously and has the plan's own guard; it counts nothing here.
+func _update_attempts(key: String) -> int:
+	var counts := _read_update_attempts()
+	return int(counts.get(key, 0))
+
+
+func _note_update_attempt(key: String) -> void:
+	var storage: Variant = DotWeb.get_global("sessionStorage") if DotPlatform.is_web() else null
+	if storage == null:
+		return
+	var counts := _read_update_attempts()
+	counts[key] = int(counts.get(key, 0)) + 1
+	storage.setItem(UPDATE_ATTEMPTS_KEY, JSON.stringify(counts))
+
+
+func _read_update_attempts() -> Dictionary:
+	var storage: Variant = DotWeb.get_global("sessionStorage") if DotPlatform.is_web() else null
+	if storage == null:
+		return {}
+	var raw: Variant = storage.getItem(UPDATE_ATTEMPTS_KEY)
+	var parsed: Variant = JSON.parse_string(str(raw)) if raw != null else null
+	return parsed if parsed is Dictionary else {}
+
+
+## Where the last restart onto newer addons was going and who was signed in, taken once:
+## `{server, member}`, or empty.
+func _take_resume() -> Dictionary:
+	var plan := DotCloudAddonSet.read_plan()
+	var resume: Variant = plan.get("resume", {})
+
+	if not (resume is Dictionary) or (resume as Dictionary).is_empty():
+		return {}
+
+	plan["resume"] = {}
+	DotCloudAddonSet.write_plan(plan)
+	return resume as Dictionary
+
+
+## Restarts this client, by its platform's means. False when it cannot.
+##
+## A browser reloads its page and a desktop build relaunches itself with the same
+## arguments; [member restart_fn] stands in for both under test. The reload waits a second
+## after asking IndexedDB to flush, because `FS.syncfs` reports no completion and the
+## restart is pointless if what was written before it is not there after.
+func _restart() -> bool:
+	if restart_fn.is_valid():
+		restart_fn.call()
+		return true
+
+	if not DotPlatform.can_self_restart():
+		return false
+
+	if DotPlatform.is_web():
+		# [b]Asked four times, not once.[/b] The engine DROPS a sync requested while one is
+		# running rather than queueing it, and dot-cloud asks for one after every object it
+		# stores -- so the request made after the last write was routinely the one dropped,
+		# and the reload lost the plan, the overlay and the last few objects (measured: the
+		# same eight re-downloaded on every load of a reload loop). Repeating it means one
+		# starts after the last write, and the waits let it finish. A sync of what changed
+		# is small; three seconds against a restart the player has just been told about.
+		for i in 4:
+			DotWeb.sync_filesystem()
+			await get_tree().create_timer(0.75).timeout
+		# Through the location object rather than `eval`, which a page with a strict
+		# Content-Security-Policy refuses; see `DotWeb.get_global`.
+		#
+		# Called as a method, not through `Object.call("reload")`: on a JavaScriptObject
+		# that asks JavaScript for a method named `call`, and the page says
+		# "obj[method] is not a function" and stays where it is.
+		var location: Variant = DotWeb.get_global("location")
+		if location == null:
+			return false
+		location.reload()
+		return true
+
+	# [b]Both halves of the command line.[/b] `get_cmdline_args()` stops at the bare `--`,
+	# and everything this shell reads -- `--connect`, `--udp`, `--transport`,
+	# `--content-cache` -- is after it, so relaunching with that alone came back as a
+	# client that had forgotten where it was going and how. Measured, not assumed.
+	var args := OS.get_cmdline_args()
+	var user := OS.get_cmdline_user_args()
+
+	if not user.is_empty():
+		args.append("--")
+		args.append_array(user)
+
+	OS.set_restart_on_exit(true, args)
+	get_tree().quit()
+	return true
 
 
 ## The client scene for every game that ships inside this build.
@@ -1546,12 +1802,16 @@ func downloaded_bytes() -> int:
 	var total := 0
 	for dir in _cache_dirs():
 		for rel in DotPaths.list_files_recursive(dir):
+			# The addon directory's plan and saved class list are bookkeeping, not content;
+			# only its overlays are something a player downloaded.
+			if dir == DotCloudAddonSet.DIR and not rel.ends_with(".pck"):
+				continue
 			total += maxi(DotPaths.file_size(dir.path_join(rel)), 0)
 	return total
 
 
 func _cache_dirs() -> PackedStringArray:
-	var dirs := PackedStringArray([DEFAULT_CACHE, SESSION_CACHE])
+	var dirs := PackedStringArray([DEFAULT_CACHE, SESSION_CACHE, DotCloudAddonSet.DIR])
 	if _cloud != null and _cloud.config != null and not _cloud.config.cache_dir in dirs:
 		dirs.append(_cloud.config.cache_dir)
 	return dirs
@@ -1596,40 +1856,25 @@ func _ask_clear() -> void:
 ## is still there, and still correct to delete.
 func request_clear() -> void:
 	DotPaths.write_text(CLEAR_PENDING, Time.get_datetime_string_from_system(true))
+	# The addon overlay is downloaded content too. Forgotten now, so the restart below
+	# comes up on this build's own addons and nothing has it mounted when it is deleted.
+	DotCloudAddonSet.forget()
 	DotWeb.sync_filesystem()
 	DotLog.info(CHANNEL, "downloaded content will be cleared on restart",
 		{"bytes": downloaded_bytes()})
 
-	if restart_fn.is_valid():
-		restart_fn.call()
-		return
-
-	if not DotPlatform.can_self_restart():
+	if not restart_fn.is_valid() and not DotPlatform.can_self_restart():
 		_say("Downloaded content will be cleared the next time the game starts.")
 		return
 
-	_say("Restarting to clear downloaded content\u2026")
-	# Not `_set_busy`, which says "Connecting".
-	_join.disabled = true
+	if not restart_fn.is_valid():
+		_say("Restarting to clear downloaded content\u2026")
+		# Not `_set_busy`, which says "Connecting".
+		_join.disabled = true
 
-	if DotPlatform.is_web():
-		await get_tree().create_timer(1.0).timeout
-		# Through the location object rather than `eval`, which a page with a strict
-		# Content-Security-Policy refuses; see `DotWeb.get_global`.
-		#
-		# Called as a method, not through `Object.call("reload")`: on a JavaScriptObject
-		# that asks JavaScript for a method named `call`, and the page says
-		# "obj[method] is not a function" and stays where it is.
-		var location: Variant = DotWeb.get_global("location")
-		if location != null:
-			location.reload()
-			return
+	if not await _restart():
 		_join.disabled = false
 		_say("Reload the page to finish clearing downloaded content.")
-		return
-
-	OS.set_restart_on_exit(true, OS.get_cmdline_args())
-	get_tree().quit()
 
 
 ## Empties every download cache if [method request_clear] asked for it. Returns the bytes

@@ -15,7 +15,12 @@ config/features=PackedStringArray("4.7")
 
 ; The client shell, not the server. A person who double-clicks this wants to play;
 ; a server operator runs ./server, which names the host scene explicitly.
-run/main_scene="res://client/shell.tscn"
+;
+; Through client/boot.tscn, which mounts the addon overlay (newer addons fetched as packs,
+; see dot-cloud's DotCloudAddonSet) before any addon script is compiled, then changes to
+; client/shell.tscn. It names no addon class, and must not: a script compiled before the
+; overlay is mounted keeps its old code for the life of the process.
+run/main_scene="res://client/boot.tscn"
 
 ; The macOS bundle is named from the project name, and this project's name is the
 ; SERVER tool while the thing macOS installs is the client. A feature-tagged override
