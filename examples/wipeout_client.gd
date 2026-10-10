@@ -35,7 +35,7 @@ const MAPS_KEY := "tmc/wipeout_maps@0.1.0"
 const MODULE := "wipeout"
 
 ## Every check this suite runs, including the one that compares against it.
-const CHECKS := 27
+const CHECKS := 30
 
 var _passed := 0
 var _failed := 0
@@ -77,6 +77,7 @@ func _run() -> void:
 			await _test_the_packs_mounted()
 			await _test_the_courses_arrived()
 			await _test_the_client_builds_the_course()
+			await _test_net_stat()
 			await _test_a_final_death_crosses()
 			_test_still_serving()
 
@@ -337,6 +338,40 @@ func _test_the_client_builds_the_course() -> void:
 	_check(not pieces.is_empty() and pieces.size() == server_pieces.size(), "with every piece built",
 		"%d of %d" % [pieces.size(), server_pieces.size()])
 	_check(_client_world().get("catalogue") == null, "and no course files of its own")
+	_done()
+
+
+## net_stat in a delivered game, over a real socket: typed at the game's console (which is
+## dot-console's kit), drawn by the game's menu (dot-menu), reading the link's meter
+## (dot-server's peer, wrapped by dot-core). Four addons and a pack, and the only place all
+## of them meet is a real client in the shell's shape.
+func _test_net_stat() -> void:
+	_section("net_stat, typed at the delivered game's console, reads the link's meter")
+
+	var client: Object = null
+	var root := _link.get_node_or_null(^"GameRoot")
+	for child in (root.get_children() if root != null else []):
+		if child.get("console") != null:
+			client = child
+	var console: Object = client.get("console") if client != null else null
+	if not _check(console != null, "the delivered game has a console"):
+		_done()
+		return
+
+	console.call("submit", "net_stat 3")
+	var settings: Object = client.get("settings")
+	var menu: Object = settings.get("menu") if settings != null else null
+	var overlay: Object = menu.get("net_stat") if menu != null else null
+	_check(overlay != null and int(overlay.get("level")) == 3 and bool(overlay.get("visible")),
+		"and the game's menu draws it, at level 3")
+
+	var reading := await _until(func() -> bool:
+		var d: Dictionary = overlay.call("describe") if overlay != null else {}
+		return bool(d.get("connected", false)) and float(d.get("in_rate", 0.0)) > 0.0 and float(d.get("rtt", -1.0)) >= 0.0,
+		8.0)
+	_check(reading, "what it draws is the link's own meter: bytes arriving and a ping",
+		str(overlay.call("describe")) if overlay != null else "no overlay")
+	console.call("submit", "net_stat 0")
 	_done()
 
 
