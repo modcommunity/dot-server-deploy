@@ -59,6 +59,12 @@ static func install(
 
 func _build() -> void:
 	_config = DotAuthConfig.new()
+	# The listing borrows dot-auth's config for its backbone URL and token and never
+	# authenticates a player, so the strategy means nothing here -- but it is VALIDATED, and
+	# the default (`ticket`) demands a server_id and a public key. A file holding only a
+	# token, which is all an operator or [TmcEnroll] writes, was refused for that. INTROSPECT
+	# asks for nothing but the backbone URL; a file that names a strategy still wins.
+	_config.strategy = DotAuthConfig.Strategy.INTROSPECT
 
 	if _path == "" or not FileAccess.file_exists(_path):
 		DotLog.info(CHANNEL, "no listing configuration; this server will not be listed", {

@@ -98,6 +98,15 @@ var _data_dir := "data"
 
 var _selftest := false
 
+## Whether this boot asks the site for a credential when it has none ([TmcEnroll]).
+##
+## Off unless the command line booted it: a suite embeds this host through [method start]
+## with a fixture `data/` that has no token, and sixteen suites each asking the real site
+## who they are would be sixteen requests from CI to production per run. A real server is
+## always `_run`, which turns it on (except for `--selftest`, which is a check, not a
+## server anybody joins).
+var enroll_with_site := false
+
 ## Every script error the engine logs during a selftest; null on a normal run. See
 ## [TmcScriptWatch] for why the check cannot trust its own exit path without it.
 var _script_watch: TmcScriptWatch = null
@@ -156,6 +165,7 @@ func _run() -> void:
 	_content_dir = _value(args, "--content", "content")
 	_data_dir = _value(args, "--data", "data")
 	_selftest = "--selftest" in args
+	enroll_with_site = not _selftest
 
 	if _selftest:
 		# First, before anything that could load a script: a parse error logged before
@@ -783,9 +793,23 @@ func _boot() -> bool:
 	# never sees. The auth server gets it here too, which closes the window in which a
 	# signed-in join is refused. Nothing is reported early: reports are on the client's
 	# timer, whose first tick is an interval away, by which time the game is loaded.
-	listing = TmcReport.install(
-		self, server, content, "%s/listing.json" % _data_dir
-	)
+	# [b]And the credential is asked for first, when there is none.[/b] A box nobody put a
+	# token on proves to the site that it is the server at its listed address and is
+	# issued one (see [TmcEnroll]). Awaited, bounded, because everything below reads it.
+	var listing_path := "%s/listing.json" % _data_dir
+	var enroll: TmcEnroll = null
+
+	if enroll_with_site:
+		enroll = await TmcEnroll.at_boot(
+			self, server, listing_path,
+			auth.config.backbone_url if auth != null and auth.config != null else DotAuthConfig.new().backbone_url,
+			config.public_address
+		)
+
+	if enroll != null and not enroll.done:
+		enroll.enrolled.connect(_on_enrolled_late.bind(listing_path), CONNECT_ONE_SHOT)
+
+	listing = TmcReport.install(self, server, content, listing_path)
 
 	_hand_backbone_to_auth()
 
@@ -927,6 +951,25 @@ func _hand_backbone_to_auth() -> void:
 
 	auth.backbone = client
 	DotLog.info(CHANNEL, "sign-ins are verified by the site, as this server")
+
+
+## The site issued a credential after the boot stopped waiting for it.
+##
+## The listing and the sign-in check take it now, which is what a player notices: the next
+## member to join arrives as themselves. The party tracker and a game's avatar reads were
+## handed the listing's client when they were built and pick it up at the next restart and
+## the next game change respectively -- rebuilding those under live players is not worth
+## a credential that arrives seconds late once in a server's life.
+func _on_enrolled_late(_token: String, listing_path: String) -> void:
+	if listing != null and listing.backbone != null:
+		return
+
+	if listing != null:
+		listing.queue_free()
+
+	listing = TmcReport.install(self, server, content, listing_path)
+	_hand_backbone_to_auth()
+	DotLog.info(CHANNEL, "the site's credential is in use; parties start with the next restart")
 
 
 ## The addon refs this checkout installs. See setup.sh's "The addon lock".
