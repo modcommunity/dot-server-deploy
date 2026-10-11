@@ -109,6 +109,7 @@ Exit codes: `2` usage, `3` no runtime, `4` no project (`install-games`: addons b
 
 - `host/` is not in the client build: anything both sides need (vote cue ids, `is_safe_url`) is written twice and a suite checks the copies agree. [vote](docs/game-vote.md#on-the-hud), [admin](docs/admin-menu.md#the-loading-screen-covers-a-change-never-the-first-join)
 - The game vote's commands keep the `game_` prefix and its director `register_service = false`; one game on offer means no game vote. [vote](docs/game-vote.md)
+- The notice overlay draws nothing at the top centre (every game's second line is there): lines then ballots in one right-hand column, a third of the frame wide; a ballot hides the line it names (`data["line"]`). [vote](docs/game-vote.md#on-the-hud)
 - The game vote and a game's own vote never show a ballot together: `TmcVote` finds every game `DotVoteDirector` in the tree and chains each `busy_fn`; one ballot entry per content id. [vote](docs/game-vote.md#the-games-own-vote-and-this-one-take-turns)
 - A module's unload runs AFTER its game's scene is freed: guard every world reference in `_module_unload` with `is_instance_valid` (g2gfast segfaulted the server). `game_vote_all` switches out of every game with a client attached. [vote](docs/game-vote.md#the-games-own-vote-and-this-one-take-turns)
 - An admin menu leaf is a console line run with the admin's context; never act directly. Notice payloads are measured in bytes with `var_to_bytes`. [admin](docs/admin-menu.md#the-menu-is-a-way-of-typing-a-command)

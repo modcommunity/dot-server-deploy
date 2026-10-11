@@ -371,6 +371,9 @@ func _send_ballot(state: Dictionary) -> void:
 func _send_ballot_to(session: DotClientSession, state: Dictionary) -> void:
 	var data := state.duplicate()
 	data["you"] = String(_voter_id(session))
+	# The line this ballot stands for: the overlay does not draw it while the ballot is open,
+	# because the ballot says the same thing. A shell older than that ignores the field.
+	data["line"] = String(NOTICE_TOPIC)
 	server.send_notice(session, DotNotice.make(
 		&"", "", float(state.get("seconds", -1.0)), BALLOT_TOPIC, data
 	))

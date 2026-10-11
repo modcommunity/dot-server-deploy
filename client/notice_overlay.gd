@@ -30,12 +30,27 @@ extends CanvasLayer
 
 ## [b]A notice can also carry a ballot[/b] — the game vote's, and a game's map vote — in its
 ## [code]data[/code], and that is drawn as a [DotBallotPanel] per topic down the right-hand
-## side, beside rather than over the line. A player chooses with a number key or a click,
+## side, under the lines. A player chooses with a number key or a click,
 ## and the choice goes back as the same command they could type, through [member vote_fn].
 ## With two ballots open the number keys belong to the one that opened last; the other is
 ## still clickable. Each voter's avatar is fetched from its URL once and kept, and a voter
 ## whose picture cannot be fetched — no URL, a host that refuses a browser, a format this
 ## build cannot read — is drawn as an initial, never as a gap.
+
+## [b]Everything here is in one column down the right-hand side, and nothing is at the top
+## centre.[/b] The lines were a bar across the top centre, 56 px down, and that is where
+## nearly every game puts its own second line: the round clock's, the map's name, "between
+## rounds", the portraits under the scores. Rendered over all thirteen games at 1280x720 the
+## game vote's line hid one of them in ten. The right-hand column under 110 px was already
+## the ballots' and already clear of them, so the lines go at its head. The column narrows
+## with the frame ([method column_width]): at a fixed 360 px a ballot on a phone in
+## landscape was nearly half the screen and over the crosshair.
+##
+## [b]A ballot names the line it stands for[/b] ([code]data["line"][/code], a topic), and
+## that line is not drawn while the ballot is open: the ballot already says what the line
+## says (the title, how to vote, the time), and two copies were the second-tallest thing on
+## the HUD. The line still exists, for [method line_text] and for a shell older than this
+## that draws no ballot.
 
 const CHANNEL := "tmc.notice"
 
@@ -60,6 +75,11 @@ const CUE_VOTE_COUNT := &"tmc_vote_count"
 ## Above the menu's layer, so a line the server sends while the menu is up is still seen.
 const LAYER := 20
 
+## The column: [constant COLUMN_TOP] px down (clear of the one-line bars and the first rows of
+## a kill feed games put at the top right), [constant COLUMN_MARGIN] px in from the right.
+const COLUMN_TOP := 110.0
+const COLUMN_MARGIN := 16.0
+
 var audio: DotAudioManager = null
 
 ## [code]func(line: String)[/code] that sends a chat line as this player. The shell points it
@@ -83,6 +103,7 @@ const MAX_FETCHES := 4
 const MAX_AVATAR_BYTES := 512 * 1024
 
 var _root: Control = null
+var _column: VBoxContainer = null
 var _box: VBoxContainer = null
 
 ## topic -> {"notice": DotNotice, "at": float, "panel": Control, "label": Label}.
@@ -94,6 +115,8 @@ func _ready() -> void:
 	layer = LAYER
 	_build_view()
 	_build_audio()
+	get_viewport().size_changed.connect(_fit_column)
+	_fit_column()
 
 
 # --- What a line says ---------------------------------------------------------
@@ -133,6 +156,7 @@ func show_notice(notice: DotNotice) -> void:
 	line["notice"] = notice
 	line["at"] = _now()
 	_render(line)
+	_cover_lines()
 
 
 ## Takes everything down. The shell calls this when a connection ends: a countdown from
@@ -160,6 +184,7 @@ func show_ballot(topic: StringName, data: Dictionary) -> void:
 	var opening := open and not panel.is_open()
 	panel.local_voter = str(data.get("you", panel.local_voter))
 	panel.show_state(data)
+	_cover_lines()
 
 	if opening:
 		# Arrived mid-ballot or not, what was already cast is not news.
@@ -191,6 +216,7 @@ func _make_ballot(topic: StringName) -> DotBallotPanel:
 	var panel := DotBallotPanel.new()
 	panel.name = "Ballot_%s" % String(topic)
 	panel.ui_theme = DotUiTheme.space()
+	panel.panel_width = column_width(_frame_width())
 	panel.avatar_fn = _avatar_texture
 	panel.chosen.connect(func(index: int, _id: String, command: String) -> void:
 		if vote_fn.is_valid() and command != "":
@@ -286,6 +312,9 @@ func _process(_delta: float) -> void:
 	if _lines.is_empty():
 		return
 
+	# A ballot closes on its own clock, with no message to hang this on.
+	_cover_lines()
+
 	var now := _now()
 
 	for key in _lines.keys():
@@ -332,6 +361,49 @@ func _remove(key: StringName) -> void:
 		panel.queue_free()
 
 
+## Whether [param topic]'s line is drawn: not while an open ballot names it as the line it
+## stands for. See the class notes.
+func is_line_shown(topic: StringName) -> bool:
+	var line: Dictionary = _lines.get(topic, {})
+	return not line.is_empty() and (line["panel"] as Control).visible
+
+
+func _cover_lines() -> void:
+	var covered := {}
+	for panel: DotBallotPanel in _ballots.values():
+		if panel.is_open():
+			var named := str(panel.state.get("line", ""))
+			if named != "":
+				covered[StringName(named)] = true
+	for key: StringName in _lines.keys():
+		var panel: Control = _lines[key]["panel"]
+		if is_instance_valid(panel):
+			panel.visible = not covered.has(key)
+
+
+## The column's width on a frame [param frame_width] wide: a third of it, between 240 and
+## 360 px. 240 still fits a game's name, its count and two avatars on a ballot row.
+static func column_width(frame_width: float) -> float:
+	return clampf(frame_width * 0.34, 240.0, 360.0)
+
+
+func _frame_width() -> float:
+	return get_viewport().get_visible_rect().size.x if is_inside_tree() else 1280.0
+
+
+func _fit_column() -> void:
+	if _column == null:
+		return
+	var width := column_width(_frame_width())
+	_column.offset_left = -COLUMN_MARGIN - width
+	_column.offset_right = -COLUMN_MARGIN
+	# A panel lays itself out in `show_state`, so an open one takes the new width with the
+	# next state the server sends (every vote cast sends one). Re-showing the old state here
+	# would restart its clock from the seconds it arrived with.
+	for panel: DotBallotPanel in _ballots.values():
+		panel.panel_width = width
+
+
 ## Wall time, in seconds. Not the engine's process time: a browser tab that was hidden
 ## stopped its frames, and a countdown should read what is true when it comes back.
 func _now() -> float:
@@ -349,42 +421,34 @@ func _build_view() -> void:
 	_root.theme = DotUiTheme.space().build()
 	add_child(_root)
 
-	# Across the top and centred by a container rather than offset from the middle, for
-	# the reason the menu gives: the browser player is a panel whose size the page decides.
-	# Down from the edge by enough to clear the one-line bars games put there.
-	var top := MarginContainer.new()
-	top.set_anchors_preset(Control.PRESET_TOP_WIDE)
-	top.add_theme_constant_override("margin_top", 56)
-	top.add_theme_constant_override("margin_left", 16)
-	top.add_theme_constant_override("margin_right", 16)
-	top.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_root.add_child(top)
-
-	var centre := CenterContainer.new()
-	centre.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	top.add_child(centre)
+	# One column down the right-hand side: the lines, then the ballots. See the class notes.
+	# Offsets set after the anchors, every one, for the reason dot-ui's docs/hud.md gives;
+	# the width is [method _fit_column]'s.
+	_column = VBoxContainer.new()
+	_column.name = "Column"
+	_column.add_theme_constant_override("separation", 10)
+	_column.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_column.anchor_left = 1.0
+	_column.anchor_right = 1.0
+	_column.anchor_top = 0.0
+	_column.anchor_bottom = 1.0
+	_column.offset_left = -COLUMN_MARGIN - column_width(1280.0)
+	_column.offset_right = -COLUMN_MARGIN
+	_column.offset_top = COLUMN_TOP
+	_column.offset_bottom = -COLUMN_MARGIN
+	_root.add_child(_column)
 
 	_box = VBoxContainer.new()
+	_box.name = "Lines"
 	_box.add_theme_constant_override("separation", 6)
 	_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	centre.add_child(_box)
+	_column.add_child(_box)
 
-	# Ballots down the right-hand side, under the line: the left is where games put chat and
-	# health, and the middle is where the player is aiming. Offsets set after the anchors,
-	# every one, for the reason dot-ui's docs/hud.md gives.
 	_ballot_box = VBoxContainer.new()
 	_ballot_box.name = "Ballots"
 	_ballot_box.add_theme_constant_override("separation", 10)
 	_ballot_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_ballot_box.anchor_left = 1.0
-	_ballot_box.anchor_right = 1.0
-	_ballot_box.anchor_top = 0.0
-	_ballot_box.anchor_bottom = 1.0
-	_ballot_box.offset_left = -376.0
-	_ballot_box.offset_right = -16.0
-	_ballot_box.offset_top = 110.0
-	_ballot_box.offset_bottom = -16.0
-	_root.add_child(_ballot_box)
+	_column.add_child(_ballot_box)
 
 
 func _make_line() -> Dictionary:
@@ -400,9 +464,11 @@ func _make_line() -> Dictionary:
 	style.content_margin_bottom = 8
 	panel.add_theme_stylebox_override("panel", style)
 
+	# Wrapped: the column is a third of the frame, and a line is a sentence.
 	var label := Label.new()
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	label.add_theme_font_size_override("font_size", 20)
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	label.add_theme_font_size_override("font_size", 18)
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	panel.add_child(label)
 

@@ -14,7 +14,7 @@ extends Node
 
 const CFG := "res://examples/fixtures"
 
-const CHECKS := 268
+const CHECKS := 272
 
 var _passed := 0
 var _failed := 0
@@ -1629,6 +1629,27 @@ func _test_vote_notices() -> void:
 		sink != null and sink.count_of(&"tmc_no_such_cue") == 0,
 		"an id the shell does not have is silence, not an error"
 	)
+	# The ballot names the line it stands for, and the line is not drawn while it is open:
+	# the two said the same thing, and the line sat on every game's top-centre HUD.
+	overlay.show_notice(DotNotice.make(&"", "", 20.0, &"game_ballot", {
+		"open": true, "title": "Vote for the next game", "command": "game_vote", "seconds": 20.0,
+		"options": [{"id": "a", "label": "A"}, {"id": "b", "label": "B"}], "line": "game_vote",
+	}))
+	_check(
+		overlay.has_line(&"game_vote") and not overlay.is_line_shown(&"game_vote"),
+		"an open ballot hides the line it names, and the line is still there"
+	)
+	overlay.show_notice(DotNotice.make(&"", "Restarting soon", 30.0, &"restart"))
+	_check(overlay.is_line_shown(&"restart"), "and only that line: another one is drawn")
+	overlay.show_notice(DotNotice.make(&"", "", -1.0, &"game_ballot", {"open": false}))
+	_check(overlay.is_line_shown(&"game_vote"), "and once the ballot closes the line is back")
+	# A headless viewport is 64 x 64, so the width is checked as the function it is.
+	_check(
+		TmcNoticeOverlay.column_width(1280.0) == 360.0 and TmcNoticeOverlay.column_width(854.0) < 300.0
+			and TmcNoticeOverlay.column_width(400.0) == 240.0,
+		"the column is a third of the frame, 240..360 px (%d at 854)" % int(TmcNoticeOverlay.column_width(854.0))
+	)
+	overlay.show_notice(DotNotice.clear(&"restart"))
 	overlay.show_notice(DotNotice.clear(&"game_vote"))
 	_check(not overlay.has_line(&"game_vote"), "and a clear takes the line down")
 	_check(
