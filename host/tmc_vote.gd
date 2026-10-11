@@ -44,7 +44,7 @@ extends Node
 ## game on screen — and the shell's [code]TmcNoticeOverlay[/code] draws the line and plays
 ## the cue out of its own catalogue. It was chat only until 2026-09-24, because the shell
 ## had no channel but chat and a loaded game's wire is the game's; the pair that closed it
-## changed the signon revision, which is written up in dot-server's CLAUDE.md.
+## changed the signon revision, which is written up in dot-server's docs/history.md.
 ##
 ## [b]One HUD line, [constant NOTICE_TOPIC], and this file owns it.[/b] Each countdown
 ## second replaces it; the ballot replaces it with its own time; and it is taken down by
