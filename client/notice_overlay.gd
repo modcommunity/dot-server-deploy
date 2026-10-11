@@ -371,7 +371,7 @@ func _build_view() -> void:
 
 	# Ballots down the right-hand side, under the line: the left is where games put chat and
 	# health, and the middle is where the player is aiming. Offsets set after the anchors,
-	# every one, for the reason dot-ui's CLAUDE.md gives.
+	# every one, for the reason dot-ui's docs/hud.md gives.
 	_ballot_box = VBoxContainer.new()
 	_ballot_box.name = "Ballots"
 	_ballot_box.add_theme_constant_override("separation", 10)

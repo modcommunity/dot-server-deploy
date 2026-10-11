@@ -19,7 +19,7 @@ extends Node
 ##
 ## Headless, so the overlay's sounds go to dot-audio's null sink, which records what it
 ## would have played. That is what "the cue was played" means here, and it is the real
-## catalogue, cooldowns and concurrency caps in front of it — see dot-audio's CLAUDE.md.
+## catalogue, cooldowns and concurrency caps in front of it — see dot-audio's docs/design.md.
 
 const CONFIG := "res://examples/fixtures/shell_notice"
 const CONTENT := "res://content"
