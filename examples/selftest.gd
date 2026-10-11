@@ -14,7 +14,10 @@ extends Node
 
 const CFG := "res://examples/fixtures"
 
-const CHECKS := 274
+## A loaded game with rounds and no match the game vote can find. See the section that uses it.
+const RoundsWithoutMatch := preload("res://examples/fixtures/rounds_without_match.gd")
+
+const CHECKS := 279
 
 var _passed := 0
 var _failed := 0
@@ -44,6 +47,7 @@ func _run() -> void:
 	_test_game_refs()
 	_test_vote()
 	_test_vote_layers_reach_a_ballot()
+	_test_vote_rounds_without_a_match()
 	_test_vote_notices()
 	_test_auth()
 	_test_logging()
@@ -1522,6 +1526,97 @@ func _test_vote() -> void:
 		+ "it took effect"
 	)
 
+	_done()
+
+
+## `time_up: finish_round` in a game whose match the game vote cannot find: the change waits
+## for the round end the game's own director forwards, and goes on it.
+##
+## [b]The only check on the forwarding.[/b] `TmcVote` asks the running game's match every frame
+## whether a round is LIVE (`round_in_progress`), and every game in the family keeps one beside
+## its director, so `game_vote_rounds` lets each change go the frame the match leaves LIVE
+## whether or not `round_ended` reached the game vote. A game with rounds and no findable match
+## is answered "live" and is held until a forwarded `round_ended`: break the forwarding and its
+## change waits for ever (`finish_round_max_sec: 0`). The stand-in is
+## `fixtures/rounds_without_match.gd`; no server is needed, so the vote is advanced by hand.
+func _test_vote_rounds_without_a_match() -> void:
+	_section("finish_round in a game whose match the game vote cannot find")
+
+	var rules := DotVoteRules.new()
+	rules.enabled = true
+	rules.duration_sec = 10.0
+	rules.time_up = DotVoteRules.TimeUp.FINISH_ROUND
+	rules.finish_round_max_sec = 0.0
+
+	var votes := TmcVote.new()
+	votes.name = "RoundsVotes"
+	votes.director = DotVoteDirector.new()
+	votes.director.name = "Director"
+	votes.director.rules = rules
+	# A list rather than the server's games: there is no server, and the ballot is not under test.
+	votes.director.source = DotVoteListSource.of_ids(["standin", "next"])
+	votes.director.register_service = false
+	votes.director.begin_on_apply = false
+	# Advisory, so `change_due` is the change and nothing tries to load a game.
+	votes.director.auto_apply = false
+	votes._wire()
+	# Chat is the server's, and there is none: what the vote says is kept here instead.
+	var said := PackedStringArray()
+	votes.director.announce_fn = func(line: String) -> void: said.append(line)
+	# Advanced by hand below: there is no server here for its HUD poll to tell.
+	votes.set_physics_process(false)
+	add_child(votes)
+	votes.add_child(votes.director)
+
+	var game: Node = RoundsWithoutMatch.new()
+	add_child(game)
+
+	var due: Array[StringName] = []
+	votes.director.change_due.connect(
+		func(id: StringName, _choice: DotVoteChoice) -> void: due.append(id)
+	)
+
+	votes.director.begin(&"standin")
+	votes._rescan()
+
+	_check(
+		votes.director.round_based,
+		"the game vote hears rounds from the game's own round-based director"
+	)
+	_check(
+		votes._rounds_match() == null and votes.round_in_progress(),
+		"and with no match beside it, a round counts as live",
+		"the stand-in must leave round_in_progress with nothing to ask, or the forwarding is not what is tested"
+	)
+
+	var next := votes.director.set_next(&"next")
+	_check(next.ok, "the next game is decided before the clock runs out", str(next.error))
+
+	# Twice the limit, in frames: the clock runs out at ten seconds mid-round.
+	for i in 120:
+		votes.director.advance(1.0 / 6.0)
+
+	_check(
+		votes.director.clock.is_expired() and due.is_empty()
+			and votes.director.is_finishing_round(),
+		"the clock ran out mid-round and the change waits for the round (%s)" % [due],
+		"finish_round changed the game at the expiry"
+	)
+
+	game.end_round()
+
+	for i in 3:
+		votes.director.advance(1.0 / 60.0)
+
+	_check(
+		due == [&"next"],
+		"the round's end, forwarded from the game's director, lets the change go (%s)" % [due],
+		"TmcVote._rescan forwards the game director's clock.round_ended to note_round_end; "
+		+ "without it a game whose match cannot be found never changes under finish_round"
+	)
+
+	votes.free()
+	game.free()
 	_done()
 
 
