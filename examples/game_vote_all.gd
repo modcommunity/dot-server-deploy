@@ -51,7 +51,7 @@ const ORDER := [
 ]
 
 ## Checks per game section, whichever branch it takes.
-const PER_GAME := 16
+const PER_GAME := 17
 
 ## The games this run plays: [constant ORDER], or `-- --order=arena,smash,wipeout`. The first
 ## is always ORDER's first, because the fixture boots into it (`sv_game`); an order without it
@@ -519,7 +519,31 @@ func _test_game(game_id: String, next: String) -> void:
 	)
 
 	# The player asks for the next game, so it is on the next ballot.
+	var heard: Array[String] = []
+	var hear := func(payload: Dictionary) -> void:
+		if str(payload.get("kind", "")) == "system":
+			heard.append(str(payload.get("text", "")))
+	_link().chat_received.connect(hear)
 	_link().send_chat("/%snominate %s" % [TmcVote.COMMAND_PREFIX, next])
+
+	# The line everybody reads names the player. It named the voter id: "[Server] u1
+	# nominated Arena." in every game, while the ballot beside it drew the name.
+	var sessions := _server().sessions() if _server() != null else []
+	var me: DotClientSession = sessions[0] if not sessions.is_empty() else null
+	var nominated_line := func() -> String:
+		for line in heard:
+			if line.contains(" nominated "):
+				return line
+		return ""
+	await _until(func() -> bool: return nominated_line.call() != "", 5.0)
+	_link().chat_received.disconnect(hear)
+	var said: String = nominated_line.call()
+	_check(
+		me != null and me.display_name != "" and said.begins_with("%s nominated " % me.display_name)
+			and not said.begins_with("u%d " % me.userid),
+		"the nomination line names the player (%s)" % said,
+		"the director's line printed the voter id; DotVoteDirector.people_fn / the feed's"
+	)
 
 	# The game's own ballot follows the game ballot rather than being lost.
 	var follows := true
