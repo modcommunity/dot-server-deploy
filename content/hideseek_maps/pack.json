@@ -2,5 +2,5 @@
     "id": "tmc/hideseek_maps",
     "version": "0.1.0",
     "name": "Hide & Seek maps",
-    "exclude_dirs": ["tools", ".github"]
+    "exclude_dirs": ["tools", ".github", "docs"]
 }

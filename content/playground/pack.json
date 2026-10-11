@@ -5,6 +5,7 @@
         "tools",
         "screenshots",
         "images",
-        "custom"
+        "custom",
+        "docs"
     ]
 }
