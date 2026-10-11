@@ -138,15 +138,19 @@ func _build_reservations(backbone: Object) -> void:
 
 	# Seats a joining session would compete for: everybody past authentication. The one
 	# being judged is still AUTHENTICATING and is not counted against itself.
+	#
+	# Written as "not still signing on" rather than a list of the stages after it: a list
+	# missed dot-server's PROFILE stage (API level 7), where a player a module is holding
+	# has already claimed a slot, and a new stage would be missed the same way. A rejected
+	# or disconnected session is no longer in sessions() at all.
 	reservations.seats_fn = func() -> Vector2i:
 		var occupied := 0
 
 		for session in server.sessions():
-			if session.state in [
-				DotClientSession.State.DOWNLOADING,
-				DotClientSession.State.LOADING,
-				DotClientSession.State.SPAWNED,
-			]:
+			if session.is_active() and not (session.state in [
+				DotClientSession.State.CONNECTING,
+				DotClientSession.State.AUTHENTICATING,
+			]):
 				occupied += 1
 
 		return Vector2i(occupied, server.config.max_players)
