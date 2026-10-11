@@ -37,7 +37,7 @@ const DATA := "user://tmc_live_switch"
 ## Every check this suite runs, including the one that compares against it. The section
 ## counter cannot see a section that aborted after announcing itself — its remaining checks
 ## simply never run — and a total can. See docs/testing.md.
-const CHECKS := 23
+const CHECKS := 30
 
 var _passed := 0
 var _failed := 0
@@ -69,7 +69,9 @@ func _run() -> void:
 
 	if await _boot():
 		if await _test_connect():
+			await _test_self_mute()
 			await _test_switch()
+			await _test_self_mute_survives()
 			await _test_switch_back()
 			await _test_still_serving()
 
@@ -227,6 +229,89 @@ func _test_connect() -> bool:
 	)
 	_done()
 	return true
+
+
+## The player's own block list (`sm`, dot-chat's DotChatSelfMute) against a real server: the
+## roster it learns without the board held, a mute by the server's key, and `!sm` typed in a
+## real chat box never reaching the server, which is what keeps the muted player from being
+## told. The client mutes itself here because it is the only player; the list does not care.
+var _mutes: DotChatSelfMute = null
+var _muted_key := [""]
+const SELF_MUTE_FILE := DATA + "/self_mute.json"
+
+
+func _new_list() -> DotChatSelfMute:
+	var list := DotChatSelfMute.new()
+	list.path = SELF_MUTE_FILE
+	list.refresh_sec = 0.0
+	list.link = _link
+	list.load_list()
+	DotRegistry.register(DotChatSelfMute.SERVICE, list)
+	return list
+
+
+func _test_self_mute() -> void:
+	_section("the player's own block list: the roster, a mute, and !sm stays on this client")
+
+	_mutes = _new_list()
+	_mutes.refresh()
+	var learned := await _until(func() -> bool: return not _mutes.roster.is_empty(), 5.0)
+	var session: DotClientSession = _server().sessions()[0]
+	var row: Dictionary = _mutes.roster[0] if learned else {}
+	_check(learned and str(row.get("key", "")) != "" and int(row.get("peer", 0)) == session.peer_id,
+		"one board on request carries each player's key and peer (%s)" % str(row))
+	_check(not session.wants_scoreboard, "and the board is not left held")
+
+	_mutes.set_muted(row, true)
+	_muted_key[0] = str(row.get("key", ""))
+	_check(_mutes.is_muted(str(row.get("name", "")), str(row.get("id", 0))),
+		"muting by the server's key holds for that player's lines")
+
+	# A real box, sending what it emits the way a game does.
+	var seen: Array[String] = []
+	var watch := func(event: DotEvent) -> void:
+		if event.name == "player_chat":
+			seen.append(str(event.data.get("text", "")))
+		elif event.name == "player_command":
+			seen.append("!" + str(event.data.get("command", "")))
+	_server().events.event_fired.connect(watch)
+	var box := DotChatWindow.new()
+	box.register_actions = false
+	box.self_mute = _mutes
+	_client_side.add_child(box)
+	box.submitted.connect(func(text: String, _c: StringName) -> void: _link.send_chat(text))
+	for typed in ["!sm", "/sm Switcher", "sm is a word here"]:
+		box.open()
+		box.entry().text = typed
+		box.entry().text_submitted.emit(typed)
+	var arrived := await _until(func() -> bool: return seen.has("sm is a word here"), 5.0)
+	await get_tree().create_timer(0.5).timeout
+	_check(arrived and seen == ["sm is a word here"],
+		"!sm and /sm never reach the server; a bare sm in a sentence does (%s)" % str(seen))
+	_check(not _mutes.is_muted(str(row.get("name", "")), str(row.get("id", 0))),
+		"and /sm <name> toggled the mute off, here, on this client")
+	_mutes.set_muted(row, true)
+	_server().events.event_fired.disconnect(watch)
+	box.queue_free()
+	_done()
+
+
+func _test_self_mute_survives() -> void:
+	_section("the block list survives the game change")
+
+	# What a client that restarted, or a list made again, reads: the file, and a new roster.
+	DotRegistry.unregister_instance(DotChatSelfMute.SERVICE, _mutes)
+	var again := _new_list()
+	again.refresh()
+	var learned := await _until(func() -> bool: return not again.roster.is_empty(), 5.0)
+	var row: Dictionary = again.roster[0] if learned else {}
+	_check(again.entries.size() == 1 and str(again.entries[0].get("key", "")) == _muted_key[0],
+		"the list comes back from user:// keyed by the server's key")
+	_check(learned and str(row.get("key", "")) == _muted_key[0]
+		and again.is_muted(str(row.get("name", "")), str(row.get("id", 0))),
+		"and the player is still muted in the next game: the server's key did not change")
+	DotRegistry.unregister_instance(DotChatSelfMute.SERVICE, again)
+	_done()
 
 
 ## The switch that crashed the server.
