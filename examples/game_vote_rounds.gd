@@ -1,17 +1,18 @@
 extends Node
-# [b]Nothing preloaded out of a game, because no game is in this build.[/b] Both games are
-# delivered packs; each one's match is reached through the module's `game` and its
+# [b]Nothing preloaded out of a game, because no game is in this build.[/b] Every game is a
+# delivered pack; each one's match is reached through the module's `game` and its
 # `match_node`, a dot-match DotMatch, which this build does carry.
 
-## The game vote's `time_up: finish_round`, through REAL round ends in three delivered games.
+## The game vote's `time_up: finish_round`, through REAL round ends in four delivered games.
 ##
 ## [codeblock]
 ## godot --headless --path . res://examples/game_vote_rounds.tscn
 ## [/codeblock]
 ##
-## Exits non-zero on any failure. Needs `dist/tmc/smash`, `dist/tmc/prophunt`,
+## Exits non-zero on any failure. Needs `dist/tmc/arena`, `dist/tmc/smash`, `dist/tmc/prophunt`,
 ## `dist/tmc/prophunt_maps` and `dist/tmc/buses` (`./server pack <id> --source games/<repo>`);
-## says "skipped" without them.
+## says "skipped" without them. Arena's pack must carry game-arena b7d00ff or later: before
+## it, `arena_timelimit` did not exist and the match ran its mode's ten minutes.
 ##
 ## [b]Why this exists.[/b] `game_vote_all` asserts that the game vote knows whether each game
 ## reports rounds, and `multigame` that the rule reads right, but neither ever lets the game
@@ -23,12 +24,19 @@ extends Node
 ## from the expiry: the server stays on the game until its match ends the round, and changes
 ## after that.
 ##
-## [b]Three round shapes.[/b] Smash Copter is a survival phase, a short warning and then a
+## [b]Four round shapes.[/b] Arena is a deathmatch whose round is the whole match, ended by
+## its time limit (or a score limit nobody reaches in it) and then an intermission, shortened
+## through `arena_timelimit`, `arena_scorelimit` and `arena_warmup`; its own map vote is the
+## director that hears the match's `round_ended`. Smash Copter is a survival phase, a short warning and then a
 ## showdown, ending when one side is left or the showdown runs out; Prop Hunt is a hiding
 ## phase, then a hunt that ends when the props are found or its own clock runs out; Buses
 ## from Hell is two bot-driven buses against the one person on foot, ending on the round
-## clock. Smash votes Prop Hunt in, Prop Hunt votes Buses, and Buses votes Smash back, so each
-## is switched into and out of under `finish_round`.
+## clock. Arena votes Smash in, Smash votes Prop Hunt, Prop Hunt votes Buses, and Buses votes
+## Arena back, so each is switched into and out of under `finish_round`.
+##
+## [b]Arena's limits are asserted on its match[/b] ([constant RULES]): its match cvars were once
+## registered and read by nothing, and a round that is merely short for another reason would
+## pass every other check here.
 ##
 ## [b]Each game is asked whether a round is live[/b] (`TmcVote.round_in_progress`, from the
 ## game's own match): `round_based` alone held a change through a warmup for nothing.
@@ -50,21 +58,30 @@ const CONTENT := "res://content"
 const DATA := "user://tmc_game_vote_rounds"
 const SHELL := "res://client/shell.tscn"
 
-const ORDER := ["smash", "prophunt", "buses"]
+const ORDER := ["arena", "smash", "prophunt", "buses"]
 
 ## The packs the games need, prophunt's maps among them.
-const NEEDS := ["tmc/smash", "tmc/prophunt", "tmc/prophunt_maps", "tmc/buses"]
+const NEEDS := ["tmc/arena", "tmc/smash", "tmc/prophunt", "tmc/prophunt_maps", "tmc/buses"]
+
+## What each game's match must be playing to once the fixture's cvars are applied: the values
+## in `fixtures/game_vote_rounds/content.yml`, read back off the running match's
+## [DotMatchRules]. One check per game listed. Arena's are none of its mode's numbers (25,
+## 600 s and a warmup), so a cvar that reaches nothing fails here.
+const RULES := {
+	"arena": {"score_limit": 50, "time_limit_sec": 50.0, "warmup_sec": 0.0},
+}
 
 ## Games whose one person is the hunted and would end a round early by being caught: given an
 ## admin's god (`DotHealth.invulnerable`, which carries across rounds) so the round runs to
 ## its clock and the vote's clock runs out inside it. Buses' bots drive straight at them.
 const PROTECT := ["buses"]
 
-## Checks per game section, whichever branch it takes.
+## Checks per game section, whichever branch it takes, besides its [constant RULES] check.
 const PER_GAME := 10
 
-## Every check this suite runs: booting (3), each game, the way back (2), the RPC watch and the two totals.
-const CHECKS := 3 + PER_GAME * 3 + 2 + 3
+## Every check this suite runs: booting (3), each game and its rules, the way back (2), the RPC
+## watch and the two totals.
+const CHECKS := 3 + PER_GAME * 4 + 1 + 2 + 3
 
 ## dot-match's `State.LIVE`: the round is being played.
 const LIVE := DotMatch.State.LIVE
@@ -98,6 +115,7 @@ func _run() -> void:
 	for id: String in NEEDS:
 		if not FileAccess.file_exists("res://dist/%s/manifest.json" % id):
 			print("skipped: dist/%s is not published here" % id)
+			print("  ./server pack arena --source games/game-arena")
 			print("  ./server pack smash --source games/mg-smash-copter")
 			print("  ./server pack prophunt_maps --source games/mg-prop-hunt-maps")
 			print("  ./server pack prophunt --source games/mg-prop-hunt")
@@ -304,6 +322,27 @@ func _panel_index(id: StringName) -> int:
 	return -1
 
 
+## The running match's rules against [constant RULES]: the fixture's cvars reached the match.
+func _check_rules(game_id: String) -> void:
+	var want: Dictionary = RULES[game_id]
+	var rules: DotMatchRules = _match.rules if _match != null and is_instance_valid(_match) else null
+	var wrong := PackedStringArray()
+
+	for key: String in want:
+		var have: Variant = rules.get(key) if rules != null else null
+
+		if have == null or not is_equal_approx(float(have), float(want[key])):
+			wrong.append("%s %s, not %s" % [key, str(have), str(want[key])])
+
+	_check(
+		rules != null and wrong.is_empty(),
+		"its match plays to content.yml's limits (%s)" % ", ".join(
+			want.keys().map(func(k: String) -> String: return "%s %s" % [k, str(want[k])])
+		),
+		"no match" if rules == null else "; ".join(wrong)
+	)
+
+
 func _on_round_ended(_number: int, _winner: int, _outcome: int) -> void:
 	_round_ends.append(Time.get_ticks_msec())
 
@@ -396,7 +435,7 @@ func _test_game(game_id: String, next: String) -> void:
 
 	var here := await _until(func() -> bool: return _at_game(game_id) and _client_in(game_id), 60.0)
 	if not _check(here, "the server runs %s with the client in it" % game_id):
-		_skip(PER_GAME - 1, "%s never ran" % game_id)
+		_skip(PER_GAME - 1 + (1 if RULES.has(game_id) else 0), "%s never ran" % game_id)
 		_done()
 		return
 
@@ -407,6 +446,9 @@ func _test_game(game_id: String, next: String) -> void:
 	if _match != null:
 		_match.round_ended.connect(_on_round_ended)
 	_check(_match != null, "its match is found (%s)" % _match_state())
+
+	if RULES.has(game_id):
+		_check_rules(game_id)
 
 	# Let TmcVote's tree scan find the game's own vote and hear its rounds.
 	# The director it hears must be this game's: the last game's is freed by the change, and
@@ -455,7 +497,7 @@ func _test_game(game_id: String, next: String) -> void:
 	var ends_before := _round_ends.size()
 	_check(
 		expired and _match != null and is_instance_valid(_match) and _match.state == LIVE,
-		"the game vote's clock runs out while a %s round is being played" % game_id,
+		"the game vote's clock runs out while %s's round is being played" % game_id,
 		"expired %s, match %s, %s" % [expired, state_at_expiry, _world_says()]
 	)
 	_check(

@@ -1,5 +1,12 @@
 # Rounds short enough to play out in a suite, through each game's own cvars, as an owner would set them (buses' round runs to its clock: the suite gives its one runner god). The game vote's thirty seconds run out inside a round of each.
+#
+# Arena's round is its whole match: no warmup, fifty seconds, and a score limit its bots cannot reach in that time, so the match ends on its clock twenty seconds after the game vote's. The suite reads all three back off the running match (RULES in the suite): none is the mode's own number, so a cvar that reaches nothing fails there.
 games:
+  arena:
+    cvars:
+      arena_scorelimit: "50"
+      arena_timelimit: "50"
+      arena_warmup: "0"
   smash:
     cvars:
       sc_survival_seconds: "25"
