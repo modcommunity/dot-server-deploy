@@ -1,0 +1,7 @@
+# A fixture for examples/game_vote_all.tscn: the first game it walks, no stdin console (see
+# docs/testing.md), and no hibernation, so the vote's clock runs from the first frame.
+sv_name: "Game Vote Fixture"
+sv_maxplayers: 8
+sv_game: "arena"
+sv_stdin_console: false
+sv_hibernate_when_empty: false

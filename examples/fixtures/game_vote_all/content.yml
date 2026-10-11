@@ -1,0 +1,5 @@
+# The course pack wipeout plays from, as examples/fixtures/wipeout/content.yml has it.
+games:
+  wipeout:
+    maps:
+      - tmc/wipeout_maps@0.1.0

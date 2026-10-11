@@ -105,6 +105,24 @@ var feed: DotVoteBallotFeed = null
 
 var server: DotServer = null
 
+## How often the tree is searched for the loaded game's own vote directors. A game builds its
+## director when its module loads, which [method _on_game_loaded] catches; this catches one
+## built later (a round's, a map's).
+const RESCAN_SEC := 1.0
+
+## The chained [member DotVoteDirector.busy_fn] set on a game's director, kept on it as meta.
+const CHAINED_META := &"tmc_game_vote_chained"
+
+## The loaded game's own vote directors: its map, mode or layout vote. See [method game_directors].
+var _game_directors: Array[DotVoteDirector] = []
+var _rescan_in := 0.0
+
+## The operator's `vote_exclude`, kept apart from what [method _refresh_offer] adds per game.
+var _operator_excluded: Array[StringName] = []
+
+## The game director whose round ends this vote hears, or null.
+var _rounds_from: DotVoteDirector = null
+
 ## Whether clients have been told a line is up, so it is taken down exactly once.
 var _notice_live := false
 
@@ -176,6 +194,8 @@ static func install(
 	# host holds, so it needs no global name at all.
 	votes.director.register_service = false
 
+	votes._operator_excluded = source.excluded.duplicate()
+	votes._refresh_offer()
 	votes._wire()
 
 	host.add_child(votes)
@@ -284,10 +304,12 @@ func _wire() -> void:
 		var session := _session_for(voter)
 		return session != null and session.has_permission(DotAdminFlags.CHANGEMAP)
 
-	# A votekick on screen: a ballot opened on top of it would be two menus fighting for
-	# the same number keys. The due vote waits, through dot-vote's own retry.
+	# A votekick on screen, or the loaded game's own ballot: a ballot opened on top of either
+	# would be two menus fighting for the same number keys. The due vote waits, through
+	# dot-vote's own retry. The other half — the game's ballot waiting for this one — is
+	# chained onto the game's director in _rescan().
 	director.busy_fn = func() -> bool:
-		return server.votes != null and server.votes.is_active()
+		return (server.votes != null and server.votes.is_active()) or game_ballot_up()
 
 	director.is_spectator_fn = func(voter: StringName) -> bool:
 		var session := _session_for(voter)
@@ -435,6 +457,11 @@ func _session_for(voter: StringName) -> DotClientSession:
 
 
 func _physics_process(delta: float) -> void:
+	_rescan_in -= delta
+
+	if _rescan_in <= 0.0:
+		_rescan()
+
 	if director != null:
 		director.advance(delta)
 		_sync_notice()
@@ -449,11 +476,151 @@ func _on_game_loaded(_content_key: String) -> void:
 	if current == null:
 		return
 
+	_rescan()
+	_refresh_offer()
 	director.begin(StringName(current.game_id))
 
 	DotLog.info(CHANNEL, "the vote clock restarted for the new game", {
 		"game": current.game_id, "limit": director.clock.formatted_remaining(),
 	})
+
+
+# --- The game's own vote ---------------------------------------------------------
+
+## One choice per GAME on the ballot, and none of the running game's other modes.
+##
+## [b]A game with several modes is several game ids over one content id[/b] (hungario: six), and
+## [DotVoteGameSource] lists every id. Until 2026-10-11 that put six hungario entries in a pool of
+## eighteen, so least-recently-played filling put a hungario mode on 23 of 27 ballots in
+## `game_vote_all`, and while hungario was running the game ballot offered its other modes —
+## the same choice its own mode vote already offers, decided by a full game change instead. The
+## rule [method votable_count] already followed for "is there a vote at all" now holds for the
+## ballot: a content id is one game, the first of its ids in `content/` stands for it, and the
+## running game's own modes are its own vote's to choose.
+func _refresh_offer() -> void:
+	var excluded: Array[StringName] = _operator_excluded.duplicate()
+	var current := server.games.current() if server != null and server.games != null else null
+	var running := current.content_id if current != null else ""
+	var seen := {}
+
+	for descriptor: DotGameDescriptor in server.games.games:
+		var id := StringName(descriptor.game_id)
+		var key := descriptor.content_id
+
+		if key == "" or excluded.has(id):
+			continue
+
+		if current != null and key == running and descriptor.game_id != current.game_id:
+			excluded.append(id)
+		elif key != running and seen.has(key):
+			excluded.append(id)
+
+		seen[key] = true
+
+	source.excluded = excluded
+
+
+## The loaded game's own vote directors (its map, mode or layout vote), found in the tree.
+##
+## [b]Found, not registered.[/b] A delivered game cannot name anything in this project, half the
+## games keep their director out of [DotRegistry] ([code]register_service = false[/code]), and
+## the registry is last-wins anyway. Every one of them is a [DotVoteDirector] node, and this
+## build carries that class, so a search of the tree finds each game's vote whatever it is
+## called and wherever its module put it.
+func game_directors() -> Array[DotVoteDirector]:
+	var live: Array[DotVoteDirector] = []
+
+	for d in _game_directors:
+		if is_instance_valid(d) and d.is_inside_tree():
+			live.append(d)
+
+	_game_directors = live
+	return live
+
+
+## Whether the loaded game's own ballot is on screen, or counting down to it.
+func game_ballot_up() -> bool:
+	for d in game_directors():
+		if d.is_voting() or d.is_counting_down():
+			return true
+
+	return false
+
+
+## Whether this vote's ballot is on screen, or counting down to it.
+func is_on_screen() -> bool:
+	return director != null and (director.is_voting() or director.is_counting_down())
+
+
+## Finds the game's directors, makes each wait for this vote, and hears its rounds.
+##
+## [b]Two ballots at once was the design until 2026-10-11[/b] ("the number keys belong to the
+## one opened last"). A minigame opens its layout ballot by itself twenty seconds into every
+## round, so on a multigame server the game ballot and the layout ballot met every time the
+## clock fell due mid-round, and a player pressing 2 voted in whichever opened last. Now each
+## waits for the other: this director through its own [code]busy_fn[/code], the game's through
+## one chained in front of whatever the game set, and dot-vote owes a ballot refused for it
+## rather than dropping it.
+##
+## [b]Rounds.[/b] The game vote's clock is the game's time; it hears nothing of rounds unless a
+## game's director does. One that is [member DotVoteDirector.round_based] says so on every
+## round's end ([signal DotVoteClock.round_ended]), and forwarding that is what lets
+## [code]time_up: finish_round[/code] in vote.yml play a round-based game's round out.
+func _rescan() -> void:
+	_rescan_in = RESCAN_SEC
+
+	if not is_inside_tree() or director == null:
+		return
+
+	var found: Array[DotVoteDirector] = []
+
+	for node in get_tree().root.find_children("*", "DotVoteDirector", true, false):
+		var d := node as DotVoteDirector
+
+		if d == null or d == director or d.get_parent() is TmcVote:
+			continue
+
+		found.append(d)
+
+		# Compared with the chain itself, not a flag: a game that assigns busy_fn again after
+		# this ran (a director rebuilt on a map change) is chained again rather than missed.
+		var chained: Variant = d.get_meta(CHAINED_META) if d.has_meta(CHAINED_META) else null
+
+		if not (chained is Callable and d.busy_fn == chained):
+			var theirs := d.busy_fn
+			var mine: WeakRef = weakref(self)
+			var chain := func() -> bool:
+				if theirs.is_valid() and bool(theirs.call()):
+					return true
+				var votes: TmcVote = mine.get_ref()
+				return votes != null and votes.is_on_screen()
+			d.busy_fn = chain
+			d.set_meta(CHAINED_META, chain)
+
+	_game_directors = found
+
+	var rounds: DotVoteDirector = null
+
+	for d in found:
+		if d.round_based:
+			rounds = d
+			break
+
+	if rounds != _rounds_from:
+		if _rounds_from != null and is_instance_valid(_rounds_from) \
+				and _rounds_from.clock.round_ended.is_connected(_on_game_round_ended):
+			_rounds_from.clock.round_ended.disconnect(_on_game_round_ended)
+
+		_rounds_from = rounds
+
+		if rounds != null:
+			rounds.clock.round_ended.connect(_on_game_round_ended)
+
+	director.round_based = rounds != null
+
+
+func _on_game_round_ended(_played: int, _limit: int) -> void:
+	var _over := director.note_round_end()
 
 
 ## Forgets a player who left.
@@ -470,6 +637,9 @@ func describe_lines() -> PackedStringArray:
 
 	var out := director.describe_lines()
 	out.append("hud line   %s" % (('"%s"' % _notice_text) if _notice_live else "none"))
+	out.append("game's own votes %d%s" % [
+		game_directors().size(), ", its ballot is up" if game_ballot_up() else "",
+	])
 	return out
 
 

@@ -575,7 +575,7 @@ func _test_vote_changes_the_game() -> void:
 	_check(real, "and the games are (%s)" % [offered])
 
 	# The whole player-facing sequence, in the order a player meets it.
-	var nominated := director.nominate(&"u1", &"hungry_frenzy")
+	var nominated := director.nominate(&"u1", &"hungry_classic")
 	_check(nominated.ok, "a player nominates a game", str(nominated.error))
 
 	# Nobody is connected, so rocking the vote cannot pass and must say so. A fraction
@@ -608,15 +608,19 @@ func _test_vote_changes_the_game() -> void:
 	var opened := await _console(revote)
 	_check(opened.ok, "an operator opens the ballot with `%s`" % revote, str(opened.error))
 	_check(
-		_server().console.find_command("revote") == null,
-		"and the bare `revote` is left alone for a game's own vote to claim"
+		not votes.commands.registered.has("revote")
+			and votes.commands.registered.has(revote),
+		"and the bare `revote` is left alone for a game's own vote to claim",
+		# Asked of the game vote's own list, not the console: buses has a vote of its own
+		# now, so the bare name IS registered, by buses, as it should be.
+		str(votes.commands.registered)
 	)
 	_check(
 		director.is_voting(),
 		"which opens a ballot rather than changing the game blind"
 	)
 	_check(
-		director.ballot.option_ids().has(&"hungry_frenzy"),
+		director.ballot.option_ids().has(&"hungry_classic"),
 		"with the nomination on it"
 	)
 	# `[mce-1]`: the fixture's vote.yml has said `include_extend: false` since it was
@@ -644,13 +648,13 @@ func _test_vote_changes_the_game() -> void:
 
 	# Counted BEFORE, because the sections above already switched through this game and
 	# each of those was a real play. The number that matters is the delta.
-	var played_before := director.history.times_played(&"hungry_frenzy")
+	var played_before := director.history.times_played(&"hungry_classic")
 
-	director.cast_one(&"u1", &"hungry_frenzy")
+	director.cast_one(&"u1", &"hungry_classic")
 
 	var result := director.close_vote()
 	_check(
-		result.winner_id == &"hungry_frenzy",
+		result.winner_id == &"hungry_classic",
 		"the vote elects it (%s)" % result.summary
 	)
 
@@ -672,7 +676,7 @@ func _test_vote_changes_the_game() -> void:
 	_check(cleared, "and the closed ballot comes off every HUD")
 	_server().notice_sent.disconnect(on_notice)
 
-	var switched := await _until(func() -> bool: return _at_game("hungry_frenzy"), 20.0)
+	var switched := await _until(func() -> bool: return _at_game("hungry_classic"), 20.0)
 
 	_check(
 		switched,
@@ -688,13 +692,13 @@ func _test_vote_changes_the_game() -> void:
 	# The host's game_loaded is what tells the director a change landed, and it fires
 	# for an operator typing `changelevel` too.
 	_check(
-		director.current_id() == &"hungry_frenzy",
+		director.current_id() == &"hungry_classic",
 		"the vote system followed the change (%s)" % director.current_id()
 	)
 	_check(
-		director.history.times_played(&"hungry_frenzy") == played_before + 1,
+		director.history.times_played(&"hungry_classic") == played_before + 1,
 		"and counted it as played exactly ONCE (%d, was %d)" % [
-			director.history.times_played(&"hungry_frenzy"), played_before
+			director.history.times_played(&"hungry_classic"), played_before
 		],
 		"the director applying the change and the host announcing it are two "
 		+ "notifications of one play, and counting both halves every cooldown — "

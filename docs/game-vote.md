@@ -25,9 +25,19 @@ A loaded game may run its own map vote, and its module registers `rtv`, `nominat
 - **Counted by content id**, not game id (`TmcVote.votable_count`): hungario's modes are several game ids over one `tmc/hungry`, and its own map vote already chooses between them.
 - **And by the name on the ballot**: a built-in `g2gfast` beside a published `<owner>/game-g2gfast` is two content ids and one game. dot-vote also drops a choice named like the running one and holds no ballot when nothing else is left, at the time it falls due, so a game whose `min_players` stops being met does not leave a ballot of Extend alone.
 - `multigame` asserts null over one game, one game installed twice under one name, and hungario alone.
-- **mg-smash-copter and mg-buses-from-hell have no map vote**, so a server running only one of them has no vote at all. That is a gap for those games to close.
+- **mg-smash-copter and mg-buses-from-hell have votes of their own now** (layouts, bowls), so every game in the family has a vote when it runs alone.
+With two or more games both votes run, each on its own clock; the prefix and the two ballot topics keep their commands and panels apart, and the next section keeps their ballots apart.
 
-With two or more games both votes run at once; the prefix and the two ballot topics keep them apart.
+## The game's own vote and this one take turns
+
+Every game in the family has a vote of its own (map, mode, layout, course or mountain), and none can name this one: a delivered game cannot reference `host/`, and this director is not in `DotRegistry`. So `TmcVote` finds them: every `DotVoteDirector` in the tree that is not its own (`game_directors()`), searched on every `game_loaded` and once a second for one built later.
+
+- **Never two ballots at once.** This director's `busy_fn` is true while a votekick or the game's own ballot (or its countdown) is up, and each game director's `busy_fn` is wrapped so it is also true while this one is. The wrap is compared with what is stored in the director's meta, so a game that assigns `busy_fn` again is wrapped again.
+- **A ballot that waits is owed, not dropped.** A time limit falling due waits through dot-vote's retry; a game's own `start_vote` refused for this one is owed the same way (dot-vote, since 2026-10-11). A minigame opens its round ballot once, so before that the game ballot on screen cost that round its ballot.
+- **One choice per game.** A content id is one game: the first of its ids in `content/` stands for it on the ballot, and the running game's other ids are never offered (`_refresh_offer()`), because its own vote already chooses between them. Before, hungario's six modes were six choices among eighteen and a hungario mode was on 23 of 27 ballots. `!game_nominate` names the standing id (`hungry_classic`); the mode is hungario's own vote's to choose.
+- **Rounds are heard from the game's vote.** A game director that is `round_based` forwards every `round_ended` to this one, which is then `round_based` too, so `time_up: finish_round` in `vote.yml` plays a round-based game's round out. Without it this director heard no round ever, and `finish_round` changed mid-round in every game. A game without rounds (playground, g2gfast, lookatme) changes on time; its game vote is the clock alone, and `game_vote_all` shows it offered there like everywhere else.
+
+`examples/game_vote_all.tscn` plays all of this through every game with a real shell: rock the vote, "don't change", the game's own ballot refused and then following, the time limit waiting for it, one entry per game, never two ballots in any physics frame, and a click on the next game played.
 
 ## On the HUD
 
@@ -41,7 +51,7 @@ The ballot, countdown and result reach chat through `announce_fn`, and also go o
 
 ## The ballot is drawn, and a click votes
 
-`DotVoteBallotFeed` sends the open ballot as a notice's `data` under `TmcVote.BALLOT_TOPIC` (`game_ballot`) per playing session (each copy carries that session's voter id as `you`), and to a late joiner. Every game's map vote does the same under `map_ballot`. The overlay draws one dot-ui `DotBallotPanel` per topic: number keys, F3 to free the mouse and click, or both (`ballot_input`, the server's choice), with voters' avatars. A choice goes back as `/<command> <n>` through `link.send_chat`, so nothing new is on the wire. With both ballots open the number keys belong to the one opened last. A shell older than this ignores `data` and still has the HUD line.
+`DotVoteBallotFeed` sends the open ballot as a notice's `data` under `TmcVote.BALLOT_TOPIC` (`game_ballot`) per playing session (each copy carries that session's voter id as `you`), and to a late joiner. Every game's map vote does the same under `map_ballot`. The overlay draws one dot-ui `DotBallotPanel` per topic: number keys, F3 to free the mouse and click, or both (`ballot_input`, the server's choice), with voters' avatars. A choice goes back as `/<command> <n>` through `link.send_chat`, so nothing new is on the wire. The two ballots are never open together (see above); if a shell ever met both, the number keys would belong to the one opened last. `game_vote_all -- --shot=<png>` under `xvfb-run` renders the drawn ballot over the first game. A shell older than this ignores `data` and still has the HUD line.
 
 ## Template changes do not reach existing deployments
 

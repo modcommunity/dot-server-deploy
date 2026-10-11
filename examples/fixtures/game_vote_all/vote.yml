@@ -1,0 +1,37 @@
+# A fixture for examples/game_vote_all.tscn, which plays every game's vote in turn.
+#
+# Thirty seconds a game and the ballot due at ten: long enough for a rocked ballot, a "don't
+# change" and the game's own ballot to come and go first, short enough that thirteen games take
+# minutes. The next game gets on the ballot the way a player puts it there: !game_nominate.
+enabled: true
+vote_exclude: []
+
+trigger: time_limit
+duration_sec: 30
+vote_lead_sec: 20
+vote_warning_sec: 1
+runoff_warning_sec: 0
+vote_duration_sec: 20
+vote_cooldown_sec: 0
+close_when_all_voted: true
+
+rtv_enabled: true
+rtv_fraction: 0.6
+rtv_min_players: 1
+rtv_delay_sec: 0
+rtv_interval_sec: 0
+
+max_options: 5
+nomination_slots: 1
+include_extend: true
+early_vote_keep: true
+cooldown: 0
+min_players_to_vote: 1
+
+apply: immediate
+apply_delay_sec: 0
+
+cue_vote_start: "tmc_vote_start"
+cue_vote_end: "tmc_vote_end"
+cue_warning: "tmc_vote_warning"
+cue_countdown: "tmc_vote_count"

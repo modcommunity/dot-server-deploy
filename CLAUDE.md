@@ -34,7 +34,7 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first; this file is what is specifi
 | `cfg.example/` | the tracked config templates; `cfg/` is written from them once and gitignored |
 | `content/<id>/` | descriptors (`game.yml`, `pack.json`) for first-party games and map packs; installed games land in `content/<owner>/<name>/` |
 | `tools/` | `server.in` (generates `./server`), `server.ps1.in`, `install_games.gd`, `index.gd`, `pack.gd`, `check.sh`, `check_boot_failures.sh`, `package_check.sh`, `browser_check.mjs`, `addons-lock.sh`, `fetch-godot.sh`, `fetch-export-templates.sh`, `game_source.sh`, `rcon.mjs`, `progress_shot.gd` |
-| `examples/` | every suite: `selftest`, `multigame`, `live_switch`, `reconnect`, `shell_notice`, `party_live`, `admin_*`, and one `*_client` per delivered game |
+| `examples/` | every suite: `selftest`, `multigame`, `game_vote_all`, `live_switch`, `reconnect`, `shell_notice`, `party_live`, `admin_*`, and one `*_client` per delivered game |
 | `addons/`, `addons.lock` | linked addons (`addons/.repos/` holds clones) and the tag each is locked to |
 | `games/` | game repositories (links on a developer box), `.gdignore`d |
 | `dist/`, `data/`, `keys/` | published packs, runtime state, the signing key (all gitignored) |
@@ -109,6 +109,8 @@ Exit codes: `2` usage, `3` no runtime, `4` no project (`install-games`: addons b
 
 - `host/` is not in the client build: anything both sides need (vote cue ids, `is_safe_url`) is written twice and a suite checks the copies agree. [vote](docs/game-vote.md#on-the-hud), [admin](docs/admin-menu.md#the-loading-screen-covers-a-change-never-the-first-join)
 - The game vote's commands keep the `game_` prefix and its director `register_service = false`; one game on offer means no game vote. [vote](docs/game-vote.md)
+- The game vote and a game's own vote never show a ballot together: `TmcVote` finds every game `DotVoteDirector` in the tree and chains each `busy_fn`; one ballot entry per content id. [vote](docs/game-vote.md#the-games-own-vote-and-this-one-take-turns)
+- A module's unload runs AFTER its game's scene is freed: guard every world reference in `_module_unload` with `is_instance_valid` (g2gfast segfaulted the server). `game_vote_all` switches out of every game with a client attached. [vote](docs/game-vote.md#the-games-own-vote-and-this-one-take-turns)
 - An admin menu leaf is a console line run with the admin's context; never act directly. Notice payloads are measured in bytes with `var_to_bytes`. [admin](docs/admin-menu.md#the-menu-is-a-way-of-typing-a-command)
 - A new client-to-server feature is a new envelope kind, not chat (chat has a flood limit) and not a handshake key (a signon change). [admin](docs/admin-menu.md#the-menu-is-a-way-of-typing-a-command)
 - The shell signs in only by `try_web_handoff()`; `client/auth.json` names the site origin, never the game origin. [web](docs/web-client.md#what-the-web-player-signs-in-against)
@@ -139,6 +141,5 @@ The game listens on `net_port` (6064 in the template) with `net_transport: dual`
 - Not in `setup.sh`'s `GAMES` (unreleased): deathrun, delivery, lookatme, prophunt, hideseek, zombiezone and their map packs.
 - Server enrollment is not verified on production (site deploy, `prisma db push`, box reinstalls). [enrollment](docs/enrollment.md#verified-and-what-is-not)
 - The site's party booking feed and player party routes are not known to be deployed. [services](docs/operator-services.md#party-matchmaking-and-locale)
-- mg-smash-copter and mg-buses-from-hell have no map vote, so a server running only one has no vote. [vote](docs/game-vote.md#one-game-on-offer-is-no-game-vote)
 - The PowerShell launcher lacks the bash `pack` and is untested on Windows. [setup](docs/setup.md#windows)
 - Audio in a real browser is unheard; Ogg, MP3 and WebP loading-screen media never fed a real file. [admin](docs/admin-menu.md#testing-it)
