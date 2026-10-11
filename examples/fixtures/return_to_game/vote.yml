@@ -1,0 +1,3 @@
+# Off. The suite changes games with changelevel, in an order it chose; a ballot that changed the
+# game on its own would make every check after it a check about a different game.
+enabled: false

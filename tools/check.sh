@@ -410,6 +410,14 @@ echo
 echo "reconnecting after the server restarts"
 "$GODOT" --headless --path . res://examples/reconnect.tscn || fails=$((fails + 1))
 
+# Back to a game this process already ran: its own RPC link must carry inputs and snapshots,
+# for the client that followed and for a fresh joiner. Every other suite asks only whether
+# the client is "in" the game, which a dead game link passes. Armed: with dot-server's
+# retire of the last game's link disabled, every return's netcode checks fail.
+echo
+echo "returning to a game: its netcode for the client and a fresh joiner"
+timeout 600 "$GODOT" --headless --path . res://examples/return_to_game.tscn < /dev/null || fails=$((fails + 1))
+
 # The game vote on the real shell's HUD. The director counts, dot-server carries a
 # DotNotice, the overlay draws and plays -- each tested on its own elsewhere, and this is
 # the only place a countdown the SERVER counts becomes a line and a sound on a client it
