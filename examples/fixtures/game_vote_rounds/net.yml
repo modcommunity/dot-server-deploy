@@ -1,0 +1,3 @@
+# A fixture for examples/game_vote_rounds.tscn. Loopback, and a port no other suite here uses.
+net_bind_ip: "127.0.0.1"
+net_port: 27193

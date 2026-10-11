@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://examples/game_vote_rounds.gd" id="1_game_vote_rounds"]
+
+[node name="GameVoteRounds" type="Node"]
+script = ExtResource("1_game_vote_rounds")

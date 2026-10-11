@@ -419,6 +419,14 @@ echo
 echo "the game vote on the shell's HUD"
 "$GODOT" --headless --path . res://examples/shell_notice.tscn < /dev/null || fails=$((fails + 1))
 
+# The game vote's `time_up: finish_round` through real round ends: smash and prophunt on
+# short rounds, the clock running out mid-round, the change held until the match ends that
+# round. About two minutes. Armed: with TmcVote hearing no rounds the change happens at the
+# expiry; with rounds heard and never forwarded it never happens.
+echo
+echo "the game vote plays a round out"
+timeout 600 "$GODOT" --headless --path . res://examples/game_vote_rounds.tscn < /dev/null || fails=$((fails + 1))
+
 # Parties on a real server. The booking chains onto dot_ban_source, and a game's module
 # puts dot-moderation there when it loads -- so the first `changelevel` after boot took
 # every booking off the seam, in silence, until the host started putting it back. Armed:

@@ -34,7 +34,7 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first; this file is what is specifi
 | `cfg.example/` | the tracked config templates; `cfg/` is written from them once and gitignored |
 | `content/<id>/` | descriptors (`game.yml`, `pack.json`) for first-party games and map packs; installed games land in `content/<owner>/<name>/` |
 | `tools/` | `server.in` (generates `./server`), `server.ps1.in`, `install_games.gd`, `index.gd`, `pack.gd`, `check.sh`, `check_boot_failures.sh`, `package_check.sh`, `browser_check.mjs`, `addons-lock.sh`, `fetch-godot.sh`, `fetch-export-templates.sh`, `game_source.sh`, `rcon.mjs`, `progress_shot.gd` |
-| `examples/` | every suite: `selftest`, `multigame`, `game_vote_all`, `live_switch`, `reconnect`, `shell_notice`, `party_live`, `admin_*`, and one `*_client` per delivered game |
+| `examples/` | every suite: `selftest`, `multigame`, `game_vote_all`, `game_vote_rounds`, `live_switch`, `reconnect`, `shell_notice`, `party_live`, `admin_*`, and one `*_client` per delivered game |
 | `addons/`, `addons.lock` | linked addons (`addons/.repos/` holds clones) and the tag each is locked to |
 | `games/` | game repositories (links on a developer box), `.gdignore`d |
 | `dist/`, `data/`, `keys/` | published packs, runtime state, the signing key (all gitignored) |

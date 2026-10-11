@@ -1,0 +1,34 @@
+# A fixture for examples/game_vote_rounds.tscn: `time_up: finish_round` through a real round end.
+#
+# Thirty seconds a game, the ballot at ten seconds in, the winner applied when the clock runs out (end_of_time), and the clock running out mid-round waits for that round however long it takes (finish_round_max_sec 0), so a change at the expiry is the bug and not a cap.
+enabled: true
+vote_exclude: []
+
+trigger: time_limit
+duration_sec: 30
+vote_lead_sec: 20
+vote_warning_sec: 1
+runoff_warning_sec: 0
+vote_duration_sec: 15
+vote_cooldown_sec: 0
+close_when_all_voted: true
+
+rtv_enabled: true
+rtv_min_players: 1
+rtv_delay_sec: 0
+
+max_options: 5
+nomination_slots: 1
+include_extend: false
+cooldown: 0
+min_players_to_vote: 1
+
+apply: end_of_time
+apply_delay_sec: 0
+time_up: finish_round
+finish_round_max_sec: 0
+
+cue_vote_start: "tmc_vote_start"
+cue_vote_end: "tmc_vote_end"
+cue_warning: "tmc_vote_warning"
+cue_countdown: "tmc_vote_count"

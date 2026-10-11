@@ -1,0 +1,10 @@
+# Rounds short enough to play out in a suite, through each game's own cvars, as an owner would set them. The game vote's thirty seconds run out inside a round of each.
+games:
+  smash:
+    cvars:
+      sc_survival_seconds: "25"
+      sc_showdown_seconds: "20"
+  prophunt:
+    cvars:
+      ph_hide_seconds: "8"
+      ph_round_seconds: "45"
