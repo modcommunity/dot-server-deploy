@@ -33,7 +33,7 @@ mapfile -t REPOS < <(
 url_of() {
     case "$1" in
         dot-*) printf 'https://github.com/modcommunity/%s.git\n' "$1" ;;
-        *)     printf 'https://github.com/gamemann/%s.git\n' "$1" ;;
+        *)     printf 'https://github.com/zees-games/%s.git\n' "$1" ;;
     esac
 }
 

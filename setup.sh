@@ -818,7 +818,7 @@ GIT_BASE="${TMC_GIT_BASE:-$GIT_BASE_DEFAULT}"
 ## with no route to github.com -- and honouring an override against it would send some
 ## clones somewhere the operator did not point us, which on an air-gapped machine is
 ## exactly the one that hangs.
-GAMES_GIT_BASE="https://github.com/gamemann"
+GAMES_GIT_BASE="https://github.com/zees-games"
 
 repo_url() {
     local repo="$1"

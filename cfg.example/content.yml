@@ -44,7 +44,7 @@ defaults:
 games:
   game-g2gfast:
     maps:
-      # The bhop and surf courses, one pack each, from github.com/gamemann/g2gfast-maps.
+      # The bhop and surf courses, one pack each, from github.com/zees-games/g2gfast-maps.
       # Left out: bhop_eazy, bhop_lego2 and buses_from_hell_fixed have no finish line;
       # bhop_arcane_v2 carries a texture the publisher refuses; surf_quilavar and
       # surf_beginner are not published yet.
