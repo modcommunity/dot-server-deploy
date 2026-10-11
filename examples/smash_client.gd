@@ -43,7 +43,7 @@ const MODULE := "smash"
 ## Every check this suite runs, including the one that compares against it. The section
 ## counter cannot see a section that aborted after announcing itself — its remaining checks
 ## simply never run — and a total can. See docs/testing.md.
-const CHECKS := 40
+const CHECKS := 43
 
 var _passed := 0
 var _failed := 0
@@ -83,6 +83,7 @@ func _run() -> void:
 			await _test_a_round_runs()
 			await _test_the_client_sees_the_field()
 			await _test_two_builds_on_one_socket()
+			await _test_teammate_cvar_reaches_the_client()
 			await _test_still_serving()
 			await _test_a_client_the_game_cannot_play_with()
 
@@ -606,3 +607,50 @@ func _test_still_serving() -> void:
 			% [_server().games.game_ids().size(), expected]
 	)
 	_done()
+
+
+## [b]dot-combat's `mp_teammate_passthrough` on the delivered client.[/b] The client traces its
+## own shots for tracers and impacts; on its default 1 against a server on 0 or 2 they ended in,
+## or went through, a team-mate where the server's shot did the opposite. The game's client
+## calls `game.combat.follow_cvars(link)`, and this is the only place that call runs out of a
+## mount against a real server: the game's own suites only see the cvar flagged replicated.
+func _test_teammate_cvar_reaches_the_client() -> void:
+	_section("the server's mp_teammate_passthrough reaches the client's combat, live")
+
+	var cvar: DotConVar = _server().console.find_cvar("mp_teammate_passthrough")
+	var held := cvar.get_string() if cvar != null else ""
+	_check(cvar != null and cvar.has_flag(DotConVar.FLAG_REPLICATED)
+		and await _until(func() -> bool: return _client_pass_through() == int(held), 10.0),
+		"the delivered game's cvar is replicated and the client joined on its level",
+		"server %s, client %d" % [held, _client_pass_through()])
+
+	var _two := _server().console.set_cvar("mp_teammate_passthrough", "2")
+	_check(await _until(func() -> bool: return _client_pass_through() == 2, 10.0),
+		"the server goes to 2 and the client's combat rules follow", "client %d" % _client_pass_through())
+
+	var _zero := _server().console.set_cvar("mp_teammate_passthrough", "0")
+	_check(await _until(func() -> bool: return _client_pass_through() == 0, 10.0),
+		"and to 0", "client %d" % _client_pass_through())
+
+	if held != "":
+		var _back := _server().console.set_cvar("mp_teammate_passthrough", held)
+	_done()
+
+
+## The client's `game.combat.rules.pass_through_level()`, found by walking the link's
+## `GameRoot` (nothing here can name the game's types); -1 when there is none.
+func _client_pass_through() -> int:
+	var root := _link.get_node_or_null(^"GameRoot") if _link != null else null
+
+	if root == null:
+		return -1
+
+	for child in root.get_children():
+		var world: Variant = child.get("game")
+		var combat: Variant = (world as Object).get("combat") if world is Object else null
+		var rules: Variant = (combat as Object).get("rules") if combat is Object else null
+
+		if rules is Object and (rules as Object).has_method("pass_through_level"):
+			return int((rules as Object).call("pass_through_level"))
+
+	return -1

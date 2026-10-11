@@ -39,6 +39,8 @@ Each `*_client` suite publishes a game from its sibling repository, boots a real
 | `zombiezone_client` | both weapon packs on the server's catalogue (needs `addons/zed_weapons`, see [releases.md](releases.md#pending-zed_weapons)); the first map is a delivered one; the client draws the server's replicated zombies |
 | `playground_client` | the family's first client `dependencies` (game-playground-maps): both catalogues list the map from the mount, the client builds every static box and the server's props |
 
+The five games with team combat (`zombiezone`, `prophunt`, `deathrun`, `smash`, `wipeout`) also set the server's `mp_teammate_passthrough` to 2 and 0 live and assert the delivered client's `game.combat.rules` follows it (the game's client calls `combat.follow_cvars(link)`; the game's own suites only see the cvar flagged replicated).
+
 Rules these suites taught:
 
 - **Turn the stdin console off in a fixture.** dot-server's reader is a thread blocked in a read the engine cannot cancel; a suite that shuts the server down with stdin open leaves it destroyed unjoined (one "Thread object is being destroyed" warning).
