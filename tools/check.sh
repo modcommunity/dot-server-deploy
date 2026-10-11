@@ -251,7 +251,7 @@ if [ "$checked_any" -eq 1 ]; then
     else
         printf '       a delivered game must reference its own files by path; see
 '
-        printf '       CLAUDE.md, "the one constraint that decides what a delivered game may look like"
+        printf '       docs/delivery-constraint.md
 '
         fails=$((fails + globals))
     fi
@@ -320,8 +320,7 @@ if [ "$checked_any" -eq 1 ]; then
         printf '  %s~~%s   %d reference(s) a delivered game would resolve wrongly\n' \
             "$YLW" "$OFF" "$absolute"
         printf '       Wrap them in <Game>Paths.rebase(), or make an `extends` relative.\n'
-        printf '       See CLAUDE.md, "the one constraint that decides what a delivered\n'
-        printf '       game may look like".\n'
+        printf '       See docs/delivery-constraint.md.\n'
     fi
 fi
 

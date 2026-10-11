@@ -1,0 +1,58 @@
+# Configuration
+
+The README's "Configuration" section is the operator's view of each file. This is why it is shaped the way it is.
+
+## `cfg/` is written by setup, `cfg.example/` is tracked
+
+**A file an operator edits in place cannot also be a file git tracks.** When the `cfg/*.yml` were committed, and each setup script carried its own heredoc copy of them:
+
+- `git pull` on a running server refused to merge over an operator's edits, so operators stashed their config or committed a box's port into the repository;
+- the three copies drifted in the direction that grants nothing (the setup scripts kept writing group flag names that match no flag, and a tarball install had no `vote.yml` at all);
+- a generated RCON password reached a public repository through `git add -A` on a tracked `cfg/rcon.yml`. `rcon_allowed: ["127.0.0.1"]` made it a rotation rather than an incident.
+
+So `cfg.example/` is the only copy. `cfg/` is gitignored, written file by file on first run by whichever setup script ran, and **never overwritten**: an upgrade that regenerated a config would throw away the edits on the one run nobody is watching. The cost is that a template which gains a setting is invisible, so both setup scripts finish by naming the keys the templates have that your files do not mention, counting a commented-out key as answered. `rcon_password: "@RCON_PASSWORD@"` is substituted on the way in, so the tracked file never holds a secret. The same rule covers `export_presets.example.cfg` ([native-client.md](native-client.md)).
+
+## Layers
+
+```
+exported defaults  <  cfg/*.yml  <  DOT_SERVER_* (and each addon's DOT_* prefix)  <  command line
+```
+
+**`TMC_*` is not a fifth layer.** Each `TMC_*` variable becomes the matching launcher ARGUMENT, so it outranks the YAML. That is for a container or a panel with no `cfg/` to edit; `DOT_SERVER_*` is the nudge a `--` argument still beats. `./server --help` has the table. Secrets are refused from argv and the environment (`--rcon-password` is rejected outright).
+
+## The configuration is a surface, not a second parser
+
+`cfg/*.yml` compiles to a `.cfg` that dot-server's own console executes, in dot-server's startup-config slot. The console is the parser, validator, range clamp, permission check and audit trail; a second one here would drift from it silently.
+
+- **It goes through `startup_config`, not a hook.** That slot runs after the console exists and before the listener opens, the only window in which a `FLAG_STARTUP_ONLY` cvar (`sv_tickrate` and the rest fixed at boot) is still settable.
+- **`data/from_yaml.cfg` is written on every boot.** It is derived, so overwriting it is right, and it answers "what did my configuration actually become".
+- **Some settings cannot be console lines and are config fields instead**: anything whose cvar or command does not exist yet when the startup config runs. `sv_query_app` (registered by the query host later), `sv_game`, `sv_web_loader` (`TmcConfig.web_loader`; a passed-through console line was dropped as naming nothing) and `sv_map`. There is no `map` command at host level at all, because `map` belongs to whichever game is loaded. So `TmcHost` reads `+map`, `--map` and `TMC_MAP` out of argv itself and applies it after the game is up through a duck-typed `change_to` (`has_method`, not `is DotMapSession`). It loads two maps at boot: the game's own scene picks the first one before anything here can say otherwise, and reaching into an uninstantiated scene to change it is the kind of thing that works until a game builds its session elsewhere. `+sv_web_loader` on argv is read the same way.
+
+`TmcYaml` is deliberately small and refuses everything outside its subset with a file and line: tabs, duplicate keys, anchors, aliases, tags, block scalars, inline mappings, document markers. A full YAML parser has a long history of parser bugs and none of that belongs in the file that decides what port a server listens on. **`on`/`off`/`yes`/`no` are bools in its dialect**, so a setting that takes words must accept a bool too (`log_router: on` is what an operator writes). It belongs in dot-core eventually and stays here while it has one consumer.
+
+## Prefixes that keep two copies of an addon apart
+
+- `vote.yml` is the GAME vote's `DotVoteRules` and layers `DOT_GAME_VOTE_*` / `--game-vote-*`, **not `DOT_VOTE_*`**, which is the prefix of the MAP vote inside the loaded game in the same process. One prefix for both would make one flag change two votes. `TmcConfig._layer_vote_overrides`; selftest asserts the plain prefix does not reach it.
+- `party.yml` and `matchmaking.yml` are **by prefix, not by table**: `party_<prop>` lands on `DotPartyConfig`, `party_reserve_<prop>` on `DotPartyReservePolicy`, `mm_<prop>` on `DotMatchmakingConfig`, so a setting the addon gains needs no change here. Plain `Resource`s are coerced through the property's own type by `TmcConfig._set_on_resource`, and enums are read by name. `DOT_PARTY_*` / `DOT_MM_*` layer on top, because there is only one of each in the process.
+- `replay.yml` is the same over `DotReplayConfig` plus this deployment's own switches.
+- Everywhere else a table maps operator names to properties because they differ (`net_port` is `port`).
+
+## Roles in, flags out
+
+dot-server's permission model is flags, not roles: operators do not agree on what a "moderator" is, and a game adds `slay` without coordinating. What an operator writes is roles. `TmcAdmins` is the translation and the only place the two vocabularies meet. It is a **source**, not a replacement: `DotAdminManager` merges every source, so a player named here and in a site group gets the union.
+
+**It does nothing without authentication.** `DotAdminManager.resolve` returns before consulting any source when a session is not authenticated, because a guest uid is a random per-device string. That looks exactly like the file being ignored, which is why `cfg/auth.yml` says so at the top.
+
+## A server owner's settings per game: `cfg/content.yml`
+
+**The installer replaces a game's `game.yml` with each new version's**, so an owner's edit there lasted until the next game update and then sat unread in `game.yml.prev`. `host/tmc_game_config.gd` (`TmcGameConfig`) is the owner's half: `cfg/content.yml` holds `defaults:` and `games: <id>:` sections of `name`, `max_players`, `cvars`, `metadata` and `maps` (`add`, unpinned = newest; `remove`; `game_maps`). `TmcHost._apply_game_config` lays it over each descriptor right after the content scan, on both boot paths, so dot-server, dot-vote and the game see one descriptor.
+
+- Order: `game.yml` < `defaults` < the game's section. Cvars and metadata merge key by key (metadata recursively); lists replace.
+- **Identity keys are refused, not applied** (`scene`, `client_scene`, `module`, `kind`, `content_id`, `version`, the dependency lists): a different value is a different game under this one's name. **Unknown keys are refused by name**, because an override silently ignored is the bug this replaced. The host's own metadata keys (`kind`, `module`, `directory`) win.
+- A game's cvars are applied by dot-server before the module registers them and again after (`reapply_descriptor_cvars`); an override rides both passes.
+- **Unpinned maps are resolved by the installer on every start**, into `data/content-maps.json` (`_resolve_owner_maps`), because a version decided per join would hand two players two packs under one map. An origin that does not answer keeps the cached version; an entry with no cached version is left out with a WARN, never a failed boot.
+- The launcher runs `install-games` when `cfg/content.yml` names maps even with no games list, and copies the template into a `cfg/` that lacks it. The stock map lists live in `cfg.example/content.yml` (no game's own `game.yml` names a map pack any more), so a server offers them by default and its owner can remove them.
+- **Every game reads the map list**: game-g2gfast through `_adopt_descriptor_maps`, the minigames, look-at-me and delivery through dot-game's `DotGameContent.map_dirs`, playground through its dependencies, arena through its own delivered-map path.
+- **When a map pack is fetched is the game's `metadata: maps_delivery:`** (`TmcGameConfig._maps_to_clients`): `lazy` leaves it in `maps` (fetched on a change); `server` also puts it in `server_dependencies`, mounted before the game loads; `client` puts it in `dependencies`, mounted before load and sent to every player. `server` exists because dot-server admits players once the scene is up and does not wait for a module, so a game that fetched its maps in its own module load ran its first seconds on its built-in course.
+
+selftest's "a server's settings per game" section holds these rules and ties the template to the reader.

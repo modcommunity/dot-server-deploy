@@ -1,0 +1,47 @@
+# `/admin` and the loading screen
+
+Two server-owner features with one shape: the server decides, a `DotNotice` carries it, and the shell draws it. `host/tmc_admin_menu.gd` + `client/admin_menu_panel.gd`, configured by `cfg/admin_menu.yml`; `host/tmc_loading.gd` + `client/loading_screen.gd`, configured by `cfg/loading.yml`. Both are installed at the end of `TmcHost._boot`, after the first game. The README's "The admin menu" and "Loading screens" are the owner's view. Players need a shell that has both; an older shell ignores the topics and the server still answers `/admin` with a page nobody draws.
+
+## The menu is a way of typing a command
+
+- **Every leaf is one console line run through `DotConsole.execute` with the admin's own context.** Permission, immunity, the chat gate, the audit line and the reply are the console's, exactly as if the admin had typed `/kick #12 Spamming`. The drawing check is a courtesy; the console's is the one that counts.
+- **What is listed is computed per page, not configured**: an item is drawn when the first word of its line is a command in the console now, that command `allows_chat`, and the admin holds its flag (plus the item's own `flag`, a further restriction, never a grant). A game that marks `map` `no_chat()` has no Change map, or the menu would be the way round that game's rule. A category's flag (`on_menu`) is checked on every path, not only when drawing.
+- **A path, not per-admin state.** `i:ban #12 3 2` is "ban, player #12, the third duration, the second reason"; `y:…` is the same, confirmed. Confirmation sits in the HEAD token because a custom entry (`t:…`) is the last value and swallows every word after it. Every path is re-validated from scratch (a player who left, a flag revoked mid-walk). List choices travel as indices into the SERVER's list; computed lists travel by value (`=red`) and are checked against what the list offers when chosen. **The only free text is a custom entry, stripped of quotes, semicolons and control characters and quoted into one argument**: a semicolon would start a second statement with the admin's permissions.
+- **Pages are built when asked for**, and Back re-asks rather than redrawing a cache. A page already in the history truncates the history to it. Root has the path `root`, because an empty path is not pushed.
+- **Sizes are bytes, measured with `var_to_bytes`.** `DotNotice` drops a `data` tree over 8 KiB WHOLE. `_page` caps rows at 60 and pops rows until the page is under the margin, adding "…and N more". Character counts let sixty CJK names through to a silent drop.
+- **Choices ride their own envelope kind, `tmc.admin_menu`** (`{"path": …}`, limited 4/s, burst 16), not chat: dot-server's chat limiter allows a burst of five, and a menu walk is six presses in a few seconds. The client's `send_kind` asks the SERVER's advert, so a server without the kind gets the typed `/admin_menu` command. **Arm a test of this on the server side**: removing the client registration changes nothing. A choice on the kind is answered as `Source.CHAT`, so the chat gate holds. A player whose challenge predates the install (a join during boot) uses chat for that connection.
+- `_on_game_changed` closes the menu, which otherwise showed the old game's page across a change.
+
+## `warn`
+
+`TmcAdminMenu` registers `warn <player> <reason>` (flag `admin_menu_warn_flag`, default `kick`) **only if the console has no `warn`**. It tells the player on the HUD (`admin_warning`) and in chat without naming the admin, files `issue(4, …)` on the registry's `dot_moderation` by duck type (a number, not the enum), and writes an audit line.
+
+## Fun commands: ask the game what it can do
+
+`DotModToolCommands` registers every live-tool command whether or not the game has a handler, so "the command exists" is not the test. An item may name an `ability`, and `TmcAdminMenu.supports` asks the command's handler for its `tools` and those for `supports(ability)`; `teleport` asks whether the game gave the tools a `teleport_fn`. All duck-typed: a command with no `tools` is shown and answers for itself. **`admin_live` asserts the menu against what each real game's tools report**, because a grep of a game's tools file was wrong about what it supports.
+
+`@all` and `@others` are offered on an item with `groups: true` and refused elsewhere. `anyone` is a player step with no immunity filter, for a place rather than a victim (`goto`). `item` reads the loaded game's `give` command's `items_fn`. Durations read "1 hour", not `1h` (`TmcAdminMenu.human_duration`).
+
+## Games extend the menu: four layers, the owner's last
+
+Built-in defaults, then the loaded game's `metadata: admin_menu:` (`adopt_game`, on every `game_loaded`), then layers a game registers in code (`DotRegistry.get_service(&"admin_menu").set_layer(key, tree, owner)` / `add_list(key, name, fn)`), then the owner's `admin_menu.yml`. Items and lists merge by key. A game's `categories:` merge; the owner's replace only the built-in layout, so a game's "Restart the match" survives an owner reordering moderation. Unplaced items go under a category named after the game. `admin_menu_game_items: false` hides them all; `items: x: enabled: false` hides one. A code layer with an owner goes when the owner leaves the tree. **`_read_settings` starts from the defaults on every read**, or a deleted key would survive a re-read.
+
+## The loading screen covers a change, never the first join
+
+The shell shows it only once `_has_spawned` is true and the menu is hidden.
+
+- Two reasons hold it up. `game`: the server's hint at `game_changing`, or the link going back through DOWNLOADING/LOADING; it ends at `spawned`, which also clears `content`. `content`: the content client fetching while a game runs (a map), after `loading_show_delay_sec` (0.25) so a map already on disk does not flash; every content call only starts the delay. A failed change sends `{"cancel": true}`. A screen with no activity for 90 s takes itself down.
+- **The server sends URLs, never bytes.** The document goes out on every `client_spawned`, and the shell prefetches every URL in it one at a time while the player plays. Map entries ride a hint from the loaded game's map session (`TmcHost._find_map_session`, duck-typed), game entries ride the document when it fits and the `game_changing` hint otherwise. Hints are cut to fit (tips, then extra images, then extra songs, then the entry) and never lose `show`; boot warns about any entry that would be cut, measured uncut.
+- **Only http(s), decided on the client.** The rule is written twice, `TmcLoading.is_safe_url` (so an owner hears at boot) and `TmcLoadingScreen.is_safe_url` (the one that counts), and the suite checks they agree. **Loopback, LAN, link-local and `.local` hosts are refused**, and a hostname is resolved first (off-web, without blocking a frame) and refused if any address is private. IPv6 is parsed into groups (`_ipv6_groups`), because the engine writes `::1` as `0:0:0:0:0:0:0:1`. DNS rebinding between the check and the fetch is not stopped. A browser has no lookup but blocks public pages reaching private addresses itself. `allow_private_hosts` is the suites' seam.
+- **Media is decoded by magic number** (PNG, JPEG, WebP, Ogg, MP3, WAV), and **the declared size is read before any decoder runs** (`declared_size`; anything over 8192×4096 or unreadable is refused): the byte limit bounds the download, not the decode. Pictures are scaled to 2560 px on the longest side. Decoding runs on a `WorkerThreadPool` task where `DotPlatform.has_threads()`; only the texture is made on the main thread, and `_exit_tree` waits for a running task.
+- **The prefetch budget counts only live media**, a reset clears the queue and failures, and a song's kind is fixed at queue time.
+- Music loops by replaying on `finished` (WAV may carry no loop end), plays on `Master`, and M mutes it, remembered in `user://tmc_loading.cfg` with `DotWeb.sync_filesystem()`.
+- `reset()` clears the last server's game name.
+
+## Testing it
+
+- `examples/admin_loading_selftest.tscn` (in CI): config merges, fun commands against stand-in tools, game layers, one check per review finding, visibility per flag, every path to the exact argument list a command received, a 200-player page against the notice limit, the panel by key presses, the screen's timing, URL refusal, the decoders, and one real HTTP fetch.
+- `examples/admin_live.tscn` (`tools/check.sh` only; needs the packs in `dist/`): the real `TmcHost` and shell over a socket, the menu walked, a confirmed `changelevel`, the loading screen up and down, and each game's fun commands against its real tools.
+- **Client tests must not reach the internet**: adopting a document prefetches, so suites use `127.0.0.1:9` for anything they do not serve.
+- `tools/progress_shot.gd --stage admin|admin_info|loading` draws the views under `xvfb-run` (not `--headless`, which saves empty frames). Every page is a fixed 360 px with ellipsised rows, because a frame showed the panel jumping width between pages.
+- **Not verified**: audio heard in a real browser (headless cannot say); Ogg, MP3 and WebP fed a real file (only WAV, PNG and JPEG were).
