@@ -49,6 +49,7 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first; this file is what is specifi
 ./server                      # start it;  ./server check  boots, loads the game, exits 0
 tools/check.sh                # parse, every suite, a real boot
 tools/check_boot_failures.sh  # ./server check must refuse a game that cannot compile
+tools/voice_all_games.sh      # voice between two real clients, in every delivered game
 tools/package_check.sh        # the shipped (vendored) shape
 node tools/browser_check.mjs  # the only check that sees a browser
 ```
@@ -58,6 +59,8 @@ Exit codes: `2` usage, `3` no runtime, `4` no project (`install-games`: addons b
 ## Rules that bite
 
 **Delivery**
+
+- The shell's `project.godot` must keep `audio/driver/enable_input=true`: it is read when the driver starts, so no delivered game can open a microphone without it. The loader's iframe carries `allow="... microphone"`, and a parent page must delegate `microphone` to the game's origin in its own `Permissions-Policy`. [dot-voice design](../dot-voice/docs/design.md#the-device-layer-and-the-browser)
 
 - A delivered game references its own files by relative path; no `class_name`, and every `res://` string through `<Game>Paths.rebase()`. [delivery](docs/delivery-constraint.md#rules-that-follow)
 - `rebase()` is one line over `rebase_onto(path, root)`, so a suite can test with a mount prefix; tested against `res://` it passes with the bug in. [delivery](docs/delivery-constraint.md#rules-that-follow)

@@ -28,6 +28,10 @@ run/main_scene="res://client/boot.tscn"
 ; feature tags, so this renames TMC server.app to TMC.app and nothing else.
 config/name.macos="TMC"
 
+[audio]
+
+driver/enable_input=true
+
 [display]
 
 window/size/viewport_width=1280

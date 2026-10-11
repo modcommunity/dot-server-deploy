@@ -348,7 +348,12 @@
     'sandbox',
     'allow-scripts allow-same-origin allow-pointer-lock allow-downloads'
   );
-  frame.setAttribute('allow', 'autoplay; gamepad; fullscreen; cross-origin-isolated');
+  /*
+   * `microphone`, for voice chat: a framed page may not call getUserMedia unless the frame
+   * is allowed it here AND the parent's own Permissions-Policy delegates it to the game's
+   * origin. The engine asks only when the player first presses the talk key.
+   */
+  frame.setAttribute('allow', 'autoplay; gamepad; fullscreen; cross-origin-isolated; microphone');
   frame.setAttribute('allowfullscreen', 'true');
 
   frame.onerror = function () {

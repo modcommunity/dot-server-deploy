@@ -15,6 +15,11 @@
 #         g2g_example: "1"
 #         mp_teammate_passthrough: "2"   a game with teams: 0 a team-mate is hit and blocks,
 #                                        1 a shot passes one at the muzzle, 2 passes every one
+#         sv_voice_enable: "0"           voice chat off in this game (1, the default, on); every
+#                                        game reads it, the server stops relaying and clients
+#                                        hide their talk key
+#         sv_voice_mode: "1"             who hears a speaker: 0 the game decides, 1 everybody,
+#                                        2 the speaker's team, 3 players nearby
 #       metadata:                merged key by key into the game's metadata:, e.g.
 #         map_vote:              its map vote and rotation (dot-vote's settings)
 #           duration_sec: 1800
