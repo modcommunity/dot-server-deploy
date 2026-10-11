@@ -43,6 +43,9 @@ const CONFIG := "res://examples/fixtures/game_vote_rounds"
 
 ## The server in a World3D of its own, away from the client in this process. See the helper.
 const ServerWorld := preload("res://examples/server_world.gd")
+
+## The engine's "RPC to a node this end does not have" errors, counted for the whole run.
+const RpcPathWatch := preload("res://examples/rpc_path_watch.gd")
 const CONTENT := "res://content"
 const DATA := "user://tmc_game_vote_rounds"
 const SHELL := "res://client/shell.tscn"
@@ -60,8 +63,8 @@ const PROTECT := ["buses"]
 ## Checks per game section, whichever branch it takes.
 const PER_GAME := 10
 
-## Every check this suite runs: booting (3), each game, the way back (2), the two totals.
-const CHECKS := 3 + PER_GAME * 3 + 2 + 2
+## Every check this suite runs: booting (3), each game, the way back (2), the RPC watch and the two totals.
+const CHECKS := 3 + PER_GAME * 3 + 2 + 3
 
 ## dot-match's `State.LIVE`: the round is being played.
 const LIVE := DotMatch.State.LIVE
@@ -104,6 +107,10 @@ func _run() -> void:
 
 	DotPaths.remove_tree(DATA)
 
+	# For the whole run: a game change is where a game's RPC node used to be renamed.
+	var rpc_watch := RpcPathWatch.new()
+	OS.add_logger(rpc_watch)
+
 	if await _boot():
 		for i in ORDER.size():
 			await _test_game(ORDER[i], ORDER[(i + 1) % ORDER.size()])
@@ -112,8 +119,17 @@ func _run() -> void:
 
 	await _teardown()
 	DotPaths.remove_tree(DATA)
+	OS.remove_logger(rpc_watch)
 
 	print("")
+	# Godot drops an RPC whose node path the receiver lacks with three C++ errors and nothing
+	# else; the old game's link, left under `Server` on both ends, renamed the same game's next
+	# link to `@Node@<n>` and every request after a return to a game went nowhere.
+	_check(
+		rpc_watch.count() == 0,
+		"no RPC was addressed to a node the other end does not have (%d)" % rpc_watch.count(),
+		rpc_watch.summary()
+	)
 	_check(
 		_completed == _entered,
 		"every section ran to its last line (%d of %d)" % [_completed, _entered]
