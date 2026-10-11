@@ -190,6 +190,18 @@ func show_ballot(topic: StringName, data: Dictionary) -> void:
 		# Arrived mid-ballot or not, what was already cast is not news.
 		panel.snap_avatars()
 		_give_numbers_to(panel)
+		_dismiss_results_except(panel)
+
+
+## Takes down every ballot that is only showing its result, other than [param keep]. A
+## closed ballot holds "X won" for a few seconds, and a game's own ballot often opens inside
+## them, right after the game vote keeps the game: the two panels then stacked down the
+## column to y~650 at 1280x720, over the bottom-right HUD of three games. The result is
+## news only until something else asks a question.
+func _dismiss_results_except(keep: DotBallotPanel) -> void:
+	for other: DotBallotPanel in _ballots.values():
+		if other != keep and not other.is_open() and other.visible:
+			other.dismiss()
 
 
 func ballot(topic: StringName) -> DotBallotPanel:
@@ -215,7 +227,7 @@ func restore_numbers() -> void:
 func _make_ballot(topic: StringName) -> DotBallotPanel:
 	var panel := DotBallotPanel.new()
 	panel.name = "Ballot_%s" % String(topic)
-	panel.ui_theme = DotUiTheme.space()
+	panel.ui_theme = ballot_theme()
 	panel.panel_width = column_width(_frame_width())
 	panel.avatar_fn = _avatar_texture
 	panel.chosen.connect(func(index: int, _id: String, command: String) -> void:
@@ -231,6 +243,15 @@ func _make_ballot(topic: StringName) -> DotBallotPanel:
 	_ballot_box.add_child(panel)
 	_ballots[topic] = panel
 	return panel
+
+
+## The ballots' theme: the shell's, with an opaque background. The theme's 0.92 is right for
+## a panel over a 3D world, but a ballot is drawn over whatever HUD a game has, and over a
+## menu of bright text (a lot screen's prices) that text read through it, under the result.
+static func ballot_theme() -> DotUiTheme:
+	var t := DotUiTheme.space()
+	t.background.a = 1.0
+	return t
 
 
 func _give_numbers_to(owner: DotBallotPanel) -> void:

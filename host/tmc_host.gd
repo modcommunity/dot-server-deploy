@@ -1293,6 +1293,17 @@ func _build_cloud() -> void:
 	if DirAccess.dir_exists_absolute(published):
 		searched.append(published)
 
+	# [b]And `dist/maps/`, where owned map packs land[/b] (`<owner>/<map>`, the layout
+	# game-g2gfast's tools/publish_maps.sh writes under its `dist/maps` and the origin serves
+	# under `content/`). A map is asked for as `gamemann/surf_mesa`, so with `dist/` alone
+	# this looked for `dist/gamemann/surf_mesa` and never found the 26 maps sitting in
+	# `dist/maps/gamemann/`: offline, g2gfast could not load its first map, while the export
+	# check (`tools/server.in`) counted those same maps as published.
+	var published_maps := published.path_join("maps")
+
+	if DirAccess.dir_exists_absolute(published_maps):
+		searched.append(published_maps)
+
 	# [b]And the manifests `install-games` kept, which is what makes a restart survive an
 	# origin outage.[/b] dot-cloud resolves a manifest before it looks at what the store
 	# already holds, and a manifest is fetched over the network every time -- so a server

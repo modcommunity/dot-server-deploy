@@ -14,6 +14,9 @@ extends Node
 ## time — and comes down when the new game has spawned.
 
 const CONFIG := "res://examples/fixtures/admin_live"
+
+## The server in a World3D of its own, away from the client in this process. See the helper.
+const ServerWorld := preload("res://examples/server_world.gd")
 const CONTENT := "res://content"
 const DATA := "user://tmc_admin_live"
 const SHELL := "res://client/shell.tscn"
@@ -183,7 +186,7 @@ func _boot() -> bool:
 	_host = (packed as PackedScene).instantiate()
 	_host.name = "Host"
 	_host.auto_start = false
-	add_child(_host)
+	ServerWorld.add(self, _host)
 
 	var started: DotResult = await _host.start(CONFIG, CONTENT, DATA)
 	if not _check(started.ok, "the host boots", str(started.error) if not started.ok else ""):
@@ -221,7 +224,7 @@ func _teardown() -> void:
 	if _host != null and is_instance_valid(_host):
 		if _host.server != null and is_instance_valid(_host.server):
 			_host.server.shutdown("done")
-		remove_child(_host)
+		ServerWorld.remove(_host)
 		_host.free()
 		_host = null
 		await get_tree().physics_frame

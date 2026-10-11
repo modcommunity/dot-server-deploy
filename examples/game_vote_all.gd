@@ -33,6 +33,9 @@ extends Node
 ## The last game votes the first one back, so every game is both switched into and out of.
 
 const CONFIG := "res://examples/fixtures/game_vote_all"
+
+## The server in a World3D of its own, away from the client in this process. See the helper.
+const ServerWorld := preload("res://examples/server_world.gd")
 const CONTENT := "res://content"
 const DATA := "user://tmc_game_vote_all"
 const SHELL := "res://client/shell.tscn"
@@ -47,9 +50,10 @@ const ORDER := [
 ## Checks per game section, whichever branch it takes.
 const PER_GAME := 16
 
-## Every check this suite runs: booting (3), each game, the way back to the first (3), the
-## two totals.
-const CHECKS := 3 + PER_GAME * 13 + 3 + 2
+## The games this run plays: [constant ORDER], or `-- --order=arena,smash,wipeout`. The first
+## is always ORDER's first, because the fixture boots into it (`sv_game`); an order without it
+## has it put in front.
+var _order: Array = ORDER.duplicate()
 
 var _passed := 0
 var _failed := 0
@@ -70,29 +74,56 @@ var _rows: Array[Dictionary] = []
 var _previous_modules := {}
 
 
-## `-- --shot=<png>`: render the first game's drawn ballot over the game and stop. Run under
-## xvfb-run without --headless (a null renderer saves an empty frame):
+## `-- --shot=<dir>`: while the suite runs, save `<dir>/<game>_game.png` once the game ballot is
+## drawn over each game, and `<dir>/<game>_own.png` once the game's own ballot is voting (waited
+## for up to 10 s; a game with nothing of its own to vote on has no second frame). The run goes
+## on and is checked as usual. Under xvfb-run without --headless (a null renderer saves an empty
+## frame), and with `--order` to look at a few games:
 ##
-##   xvfb-run -a godot --path . --resolution 1280x720 res://examples/game_vote_all.tscn -- --shot=screenshots/game_ballot.png
-var _shot_path := ""
+##   xvfb-run -a godot --path . --resolution 1280x720 res://examples/game_vote_all.tscn -- --shot=/tmp/ballots --order=arena,smash,wipeout
+##
+## Until 2026-10-11 a shot rendered the first game only and quit from inside the first game's
+## section, and the next section then ran against a torn-down host ("'games' on Nil").
+var _shot_dir := ""
+
+## Frames saved, for the summary.
+var _shots := PackedStringArray()
 
 
-func _save_shot() -> void:
+func _save_shot(shot_name: String) -> void:
 	# A few frames, so the panel has laid itself out and the game behind it has drawn.
 	for i in 30:
 		await get_tree().process_frame
 
+	var path := _shot_dir.path_join("%s.png" % shot_name)
 	var image := get_viewport().get_texture().get_image()
-	var saved := image.save_png(_shot_path)
-	print("shot %s: %s (%dx%d)" % [_shot_path, error_string(saved), image.get_width(), image.get_height()])
-	await _teardown()
-	get_tree().quit(0 if saved == OK else 1)
+	var saved := image.save_png(path)
+	print("  shot  %s: %s (%dx%d)" % [path, error_string(saved), image.get_width(), image.get_height()])
+	if saved == OK:
+		_shots.append(path)
+
+
+## Every check this suite runs: booting (3), each game, the way back to the first (3), the
+## two totals.
+func _expected_checks() -> int:
+	return 3 + PER_GAME * _order.size() + 3 + 2
 
 
 func _ready() -> void:
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--shot="):
-			_shot_path = arg.trim_prefix("--shot=")
+			_shot_dir = arg.trim_prefix("--shot=")
+			DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(_shot_dir))
+		elif arg.begins_with("--order="):
+			_order.clear()
+			for id in arg.trim_prefix("--order=").split(",", false):
+				if not ORDER.has(id.strip_edges()):
+					push_error("game_vote_all: --order names %s, which is not in ORDER" % id)
+					continue
+				if not _order.has(id.strip_edges()):
+					_order.append(id.strip_edges())
+			_order.erase(ORDER[0])
+			_order.push_front(ORDER[0])
 
 	DotLog.set_level(
 		DotLog.Level.DEBUG if "--verbose" in OS.get_cmdline_user_args() else DotLog.Level.ERROR
@@ -111,9 +142,11 @@ func _run() -> void:
 	DotPaths.remove_tree(DATA)
 
 	if await _boot():
-		for i in ORDER.size():
-			var here: String = ORDER[i]
-			var next: String = ORDER[(i + 1) % ORDER.size()]
+		for i in _order.size():
+			if _server() == null:
+				break
+			var here: String = _order[i]
+			var next: String = _order[(i + 1) % _order.size()]
 			await _test_game(here, next)
 
 		await _test_back_at_the_start()
@@ -123,14 +156,18 @@ func _run() -> void:
 
 	_print_table()
 
+	if not _shots.is_empty():
+		print("")
+		print("%d frames in %s" % [_shots.size(), _shot_dir])
+
 	print("")
 	_check(
 		_completed == _entered,
 		"every section ran to its last line (%d of %d)" % [_completed, _entered]
 	)
 	_check(
-		_passed + _failed + 1 == CHECKS,
-		"every check ran (%d of %d)" % [_passed + _failed + 1, CHECKS],
+		_passed + _failed + 1 == _expected_checks(),
+		"every check ran (%d of %d)" % [_passed + _failed + 1, _expected_checks()],
 		"a section that aborted part-way stops adding checks, and only a total can show it"
 	)
 
@@ -280,7 +317,7 @@ func _boot() -> bool:
 	_host = (packed as PackedScene).instantiate()
 	_host.name = "Host"
 	_host.auto_start = false
-	add_child(_host)
+	ServerWorld.add(self, _host)
 
 	var started: DotResult = await _host.start(CONFIG, CONTENT, DATA)
 
@@ -300,8 +337,11 @@ func _boot() -> bool:
 
 	# Content from this project's own `dist/`, as `shell_notice` does.
 	_shell._ensure_cloud()
+	# And `dist/maps`, where owned map packs are published (`gamemann/surf_mesa`): the host
+	# searches it too. Without it g2gfast sat on "Joining..." for its whole section.
 	_shell._cloud.http_base_urls = PackedStringArray([
-		ProjectSettings.globalize_path("res://dist")
+		ProjectSettings.globalize_path("res://dist"),
+		ProjectSettings.globalize_path("res://dist/maps"),
 	])
 
 	# Every sound ends the moment it starts; see `shell_notice`.
@@ -315,7 +355,7 @@ func _boot() -> bool:
 
 	_shell._connect_to("127.0.0.1:%d" % int(_host.config.server.port))
 
-	var first: String = ORDER[0]
+	var first: String = _order[0]
 	_check(
 		await _until(func() -> bool: return _at_game(first) and _client_in(first), 60.0),
 		"a real shell joins %s" % first,
@@ -342,7 +382,7 @@ func _teardown() -> void:
 		if _host.server != null and is_instance_valid(_host.server):
 			_host.server.shutdown("test over")
 
-		remove_child(_host)
+		ServerWorld.remove(_host)
 		_host.free()
 		_host = null
 
@@ -411,9 +451,15 @@ func _test_game(game_id: String, next: String) -> void:
 	var own := _own()
 	row["own"] = "none" if own == null else ("ballot" if own.has_alternatives() else "one choice")
 
-	var rounds := false
-	for d in _votes().game_directors():
-		rounds = rounds or d.round_based
+	# Within a rescan: a game may decide it has rounds only once its first map is in (g2gfast
+	# fetches its map after it is running), and TmcVote looks again every RESCAN_SEC.
+	var rounds_now := func() -> bool:
+		var any := false
+		for d in _votes().game_directors():
+			any = any or d.round_based
+		return any
+	await _until(func() -> bool: return _director().round_based == bool(rounds_now.call()), TmcVote.RESCAN_SEC + 1.0)
+	var rounds: bool = rounds_now.call()
 	row["rounds"] = rounds
 	_check(
 		_director().round_based == rounds,
@@ -430,9 +476,8 @@ func _test_game(game_id: String, next: String) -> void:
 	var drawn := await _until(func() -> bool: return _panel_index(DotVoteBallot.KEEP) >= 0, 5.0)
 	_check(drawn, "drawn on the shell's HUD, with \"don't change\" on it")
 
-	if _shot_path != "":
-		await _save_shot()
-		return
+	if _shot_dir != "":
+		await _save_shot("%s_game" % game_id)
 
 	# The game asks for its own ballot while the game ballot is up.
 	var refused := true
@@ -470,6 +515,11 @@ func _test_game(game_id: String, next: String) -> void:
 			if own != null and own.has_alternatives() else "(nothing of its own to follow)",
 		"refused for the game ballot and dropped: that round's map ballot never came"
 	)
+
+	# The frame that showed the game ballot's result stacked over this one.
+	if _shot_dir != "" and follows and own != null and own.has_alternatives():
+		await _until(func() -> bool: return own.is_voting(), 10.0)
+		await _save_shot("%s_own" % game_id)
 
 	# --- The time limit falls due while the game's own ballot is up, and waits for it.
 	var due_and_waiting := true
@@ -558,7 +608,7 @@ func _elected(next: String) -> bool:
 
 
 func _test_back_at_the_start() -> void:
-	var first: String = ORDER[0]
+	var first: String = _order[0]
 	_section("back to %s" % first)
 
 	_check(await _until(func() -> bool: return _at_game(first), 60.0), "the server is running %s again" % first)
@@ -568,7 +618,7 @@ func _test_back_at_the_start() -> void:
 	)
 	_check(
 		_server().state == DotServer.State.RUNNING and _server().sessions().size() == 1,
-		"after %d game changes the server is still serving its one player" % ORDER.size()
+		"after %d game changes the server is still serving its one player" % _order.size()
 	)
 	_done()
 

@@ -23,6 +23,9 @@ extends Node
 ## document, and an activator's press crosses the socket.
 
 const CONFIG := "res://examples/fixtures/deathrun"
+
+## The server in a World3D of its own, away from the client in this process. See the helper.
+const ServerWorld := preload("res://examples/server_world.gd")
 const CONTENT := "res://content"
 const DATA := "user://tmc_deathrun_client"
 
@@ -178,7 +181,7 @@ func _boot() -> bool:
 	var packed: Variant = load("res://host/host.tscn")
 	_host = (packed as PackedScene).instantiate()
 	_host.auto_start = false
-	add_child(_host)
+	ServerWorld.add(self, _host)
 
 	var started: DotResult = await _host.start(CONFIG, CONTENT, DATA)
 
@@ -223,7 +226,7 @@ func _teardown() -> void:
 		if _host.server != null and is_instance_valid(_host.server):
 			_host.server.shutdown("test over")
 
-		remove_child(_host)
+		ServerWorld.remove(_host)
 		_host.queue_free()
 		_host = null
 

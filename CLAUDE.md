@@ -109,7 +109,7 @@ Exit codes: `2` usage, `3` no runtime, `4` no project (`install-games`: addons b
 
 - `host/` is not in the client build: anything both sides need (vote cue ids, `is_safe_url`) is written twice and a suite checks the copies agree. [vote](docs/game-vote.md#on-the-hud), [admin](docs/admin-menu.md#the-loading-screen-covers-a-change-never-the-first-join)
 - The game vote's commands keep the `game_` prefix and its director `register_service = false`; one game on offer means no game vote. [vote](docs/game-vote.md)
-- The notice overlay draws nothing at the top centre (every game's second line is there): lines then ballots in one right-hand column, a third of the frame wide; a ballot hides the line it names (`data["line"]`). [vote](docs/game-vote.md#on-the-hud)
+- The notice overlay draws nothing at the top centre (every game's second line is there): lines then ballots in one right-hand column, a third of the frame wide; a ballot hides the line it names (`data["line"]`); a ballot opening takes down another's held result; ballots are opaque. [vote](docs/game-vote.md#on-the-hud)
 - The game vote and a game's own vote never show a ballot together: `TmcVote` finds every game `DotVoteDirector` in the tree and chains each `busy_fn`; one ballot entry per content id. [vote](docs/game-vote.md#the-games-own-vote-and-this-one-take-turns)
 - A module's unload runs AFTER its game's scene is freed: guard every world reference in `_module_unload` with `is_instance_valid` (g2gfast segfaulted the server). `game_vote_all` switches out of every game with a client attached. [vote](docs/game-vote.md#the-games-own-vote-and-this-one-take-turns)
 - An admin menu leaf is a console line run with the admin's context; never act directly. Notice payloads are measured in bytes with `var_to_bytes`. [admin](docs/admin-menu.md#the-menu-is-a-way-of-typing-a-command)
@@ -124,7 +124,7 @@ Exit codes: `2` usage, `3` no runtime, `4` no project (`install-games`: addons b
 
 - A delivered-client suite is the only proof a delivery change works; a game's own suites cannot see the mount. [testing](docs/testing.md#a-real-client-in-a-delivered-game)
 - `template_client` packages the template's HEAD: commit it first. [testing](docs/testing.md#a-real-client-in-a-delivered-game)
-- A suite with a server and a shell in one process shares one World3D unless the server is given its own (`game_vote_rounds` puts it in a SubViewport): the client's copies of physics bodies collide with the server's. [testing](docs/testing.md#server-side-suites)
+- A suite with a server and a client in one process puts the server in its own World3D (`ServerWorld.add`, `examples/server_world.gd`), or the client's copies of physics bodies collide with the server's; `DotRegistry` is still shared. A scratch copy of the project needs its own user folder and port. [testing](docs/testing.md#server-side-suites)
 - Arm every new check, and read the exit code even when every check passed. [testing](docs/testing.md#arming)
 
 ## Ports and transports

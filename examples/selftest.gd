@@ -14,7 +14,7 @@ extends Node
 
 const CFG := "res://examples/fixtures"
 
-const CHECKS := 272
+const CHECKS := 274
 
 var _passed := 0
 var _failed := 0
@@ -1641,8 +1641,25 @@ func _test_vote_notices() -> void:
 	)
 	overlay.show_notice(DotNotice.make(&"", "Restarting soon", 30.0, &"restart"))
 	_check(overlay.is_line_shown(&"restart"), "and only that line: another one is drawn")
-	overlay.show_notice(DotNotice.make(&"", "", -1.0, &"game_ballot", {"open": false}))
+	overlay.show_notice(DotNotice.make(&"", "", -1.0, &"game_ballot", {"open": false, "winner": "A"}))
 	_check(overlay.is_line_shown(&"game_vote"), "and once the ballot closes the line is back")
+	# A closed ballot holds its result for a few seconds, and a game's own ballot opening in
+	# them used to stack under it, down over the bottom-right HUD.
+	var result_up := overlay.ballot(&"game_ballot").visible
+	overlay.show_notice(DotNotice.make(&"", "", 20.0, &"map_ballot", {
+		"open": true, "title": "Vote for the next map", "command": "votefor", "seconds": 20.0,
+		"options": [{"id": "x", "label": "X"}, {"id": "y", "label": "Y"}],
+	}))
+	_check(
+		result_up and not overlay.ballot(&"game_ballot").visible and overlay.ballot(&"map_ballot").visible,
+		"a closed ballot's result comes down when another ballot opens",
+		"'Don't change won' stayed above a game's own ballot, and the two covered its HUD"
+	)
+	_check(
+		overlay.ballot(&"map_ballot").ui_theme.background.a == 1.0,
+		"and a ballot's background is opaque, so a game's HUD does not read through it"
+	)
+	overlay.show_notice(DotNotice.make(&"", "", -1.0, &"map_ballot", {"open": false}))
 	# A headless viewport is 64 x 64, so the width is checked as the function it is.
 	_check(
 		TmcNoticeOverlay.column_width(1280.0) == 360.0 and TmcNoticeOverlay.column_width(854.0) < 300.0

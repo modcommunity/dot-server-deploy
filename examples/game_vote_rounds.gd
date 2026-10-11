@@ -40,6 +40,9 @@ extends Node
 ## A deployed server and its clients never share a process.
 
 const CONFIG := "res://examples/fixtures/game_vote_rounds"
+
+## The server in a World3D of its own, away from the client in this process. See the helper.
+const ServerWorld := preload("res://examples/server_world.gd")
 const CONTENT := "res://content"
 const DATA := "user://tmc_game_vote_rounds"
 const SHELL := "res://client/shell.tscn"
@@ -300,12 +303,7 @@ func _boot() -> bool:
 	_host.auto_start = false
 
 	# Its own World3D, so the server's physics space holds the server's bodies only. See the top.
-	var world := SubViewport.new()
-	world.name = "ServerWorld"
-	world.own_world_3d = true
-	world.render_target_update_mode = SubViewport.UPDATE_DISABLED
-	add_child(world)
-	world.add_child(_host)
+	ServerWorld.add(self, _host)
 
 	var started: DotResult = await _host.start(CONFIG, CONTENT, DATA)
 
@@ -367,7 +365,7 @@ func _teardown() -> void:
 		if _host.server != null and is_instance_valid(_host.server):
 			_host.server.shutdown("test over")
 
-		_host.get_parent().remove_child(_host)
+		ServerWorld.remove(_host)
 		_host.free()
 		_host = null
 

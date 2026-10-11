@@ -28,6 +28,9 @@ extends Node
 ## once and `multigame` connects nothing — which is why nothing caught it.
 
 const CONFIG := "res://examples/fixtures/reconnect"
+
+## The server in a World3D of its own, away from the client in this process. See the helper.
+const ServerWorld := preload("res://examples/server_world.gd")
 const CONTENT := "res://content"
 const DATA := "user://tmc_reconnect"
 const SHELL := "res://client/shell.tscn"
@@ -214,7 +217,7 @@ func _start_host(node_name: String) -> bool:
 	_host = (packed as PackedScene).instantiate()
 	_host.name = node_name
 	_host.auto_start = false
-	add_child(_host)
+	ServerWorld.add(self, _host)
 
 	var started: DotResult = await _host.start(CONFIG, CONTENT, DATA)
 
@@ -233,7 +236,7 @@ func _stop_host() -> void:
 	if _host.server != null and is_instance_valid(_host.server):
 		_host.server.shutdown("restarting")
 
-	remove_child(_host)
+	ServerWorld.remove(_host)
 	_host.free()
 	_host = null
 

@@ -6,6 +6,9 @@ extends Node
 
 const Installer := preload("res://tools/install_games.gd")
 
+## The server in a World3D of its own, away from the client in this process. See the helper.
+const ServerWorld := preload("res://examples/server_world.gd")
+
 ## A game made from dot-game-template, delivered the way a third-party developer's is.
 ##
 ## [codeblock]
@@ -206,7 +209,7 @@ func _boot() -> bool:
 
 	_host = (load("res://host/host.tscn") as PackedScene).instantiate()
 	_host.auto_start = false
-	add_child(_host)
+	ServerWorld.add(self, _host)
 
 	var started: DotResult = await _host.start(ROOT.path_join("cfg"), ROOT.path_join("content"), ROOT.path_join("data"))
 	if not _check(started.ok, "the host boots", str(started.error)):
@@ -349,7 +352,7 @@ func _teardown() -> void:
 	if _host != null:
 		if _host.server != null:
 			_host.server.shutdown("test over")
-		remove_child(_host)
+		ServerWorld.remove(_host)
 		_host.queue_free()
 	await get_tree().process_frame
 
