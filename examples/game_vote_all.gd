@@ -616,9 +616,17 @@ func _test_game(game_id: String, next: String) -> void:
 
 
 ## The vote went to [param next]: decided, under way, or done.
+##
+## [b]The game manager's pending game counts[/b], and it is set before the server fetches the
+## new game's content. Phase stays IDLE through that fetch, and mounting zombiezone's 1293
+## files on this server took 9.3 s of the 10 the click is given: a client drawing a few
+## more chat lines per frame (dot-game's box drawing the server's own lines, 2026-10-11)
+## made it 9.9 and failed the check three runs in three with the vote long since won.
 func _elected(next: String) -> bool:
+	var pending := _server().games.pending()
 	return (
 		_at_game(next) or _director().pending_id() == StringName(next)
+		or (pending != null and pending.game_id == next)
 		or _server().games.phase != DotGameManager.Phase.IDLE
 	)
 
