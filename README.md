@@ -278,6 +278,9 @@ games:
         - gamemann/bhop_grove@1.2.0
       remove:
         - gamemann/bhop_pit       # a map the game itself lists that you do not want
+  mg-prop-hunt:
+    cvars:
+      mp_teammate_passthrough: "2"  # shots pass through team-mates (0 hit and blocked, 1 only at the muzzle)
 ```
 
 The order is the game's `game.yml`, then `defaults:`, then the game's own section. Cvars and metadata merge key by key, so changing one `map_vote` setting keeps the rest of the game's. What makes a game the game it is (`scene`, `client_scene`, `module`, `kind`, `content_id`, `version`, its dependencies) cannot be set here, and the server refuses to start if you try. A misspelt key is refused too, with its name, rather than ignored.

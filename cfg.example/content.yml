@@ -13,6 +13,8 @@
 #       max_players: 24
 #       cvars:                   any cvar the game reads; see its game.yml for its own
 #         g2g_example: "1"
+#         mp_teammate_passthrough: "2"   a game with teams: 0 a team-mate is hit and blocks,
+#                                        1 a shot passes one at the muzzle, 2 passes every one
 #       metadata:                merged key by key into the game's metadata:, e.g.
 #         map_vote:              its map vote and rotation (dot-vote's settings)
 #           duration_sec: 1800
