@@ -123,6 +123,9 @@ var _operator_excluded: Array[StringName] = []
 ## The game director whose round ends this vote hears, or null.
 var _rounds_from: DotVoteDirector = null
 
+## The running game's match, found beside [member _rounds_from]. See [method round_in_progress].
+var _match_ref: WeakRef = null
+
 ## Whether clients have been told a line is up, so it is taken down exactly once.
 var _notice_live := false
 
@@ -310,6 +313,11 @@ func _wire() -> void:
 	# chained onto the game's director in _rescan().
 	director.busy_fn = func() -> bool:
 		return (server.votes != null and server.votes.is_active()) or game_ballot_up()
+
+	# `round_based` says the game HAS rounds; this says one is being played. Without it a
+	# game in warmup or waiting for players held a `finish_round` change for the whole
+	# `finish_round_max_sec` (for ever at 0) for a round that had not started.
+	director.round_in_progress_fn = round_in_progress
 
 	director.is_spectator_fn = func(voter: StringName) -> bool:
 		var session := _session_for(voter)
@@ -615,6 +623,7 @@ func _rescan() -> void:
 			_rounds_from.clock.round_ended.disconnect(_on_game_round_ended)
 
 		_rounds_from = rounds
+		_match_ref = null
 
 		if rounds != null:
 			rounds.clock.round_ended.connect(_on_game_round_ended)
@@ -624,6 +633,54 @@ func _rescan() -> void:
 
 func _on_game_round_ended(_played: int, _limit: int) -> void:
 	var _over := director.note_round_end()
+
+
+## Whether the loaded game is playing a round right now: its dot-match match is LIVE.
+##
+## Asked by the director under [code]time_up: finish_round[/code] once the clock has run out.
+## A game whose rounds this vote hears but which keeps no [DotMatch] beside its director is
+## answered true, so it keeps the hold it had before this existed.
+##
+## [b]Searched from the game's own director upwards, and never past the server.[/b] A suite
+## that runs a shell in the same process has a second, client-side match in the tree, and
+## the nearest one to the server's director is the server's.
+func round_in_progress() -> bool:
+	var found := _rounds_match()
+	return found == null or found.state == DotMatch.State.LIVE
+
+
+func _rounds_match() -> DotMatch:
+	if _match_ref != null:
+		var cached := _match_ref.get_ref() as DotMatch
+		if cached != null and is_instance_valid(cached) and cached.is_inside_tree():
+			return cached
+		_match_ref = null
+
+	# A game change frees the old game's director before the next periodic scan finds the
+	# new one, and a freed director has no match beside it: scan now rather than answer for
+	# a game that is gone.
+	if _rounds_from != null and not is_instance_valid(_rounds_from):
+		_rescan()
+
+	if _rounds_from == null or not is_instance_valid(_rounds_from):
+		return null
+
+	var node: Node = _rounds_from
+
+	while node != null:
+		var matches := node.find_children("*", "DotMatch", true, false)
+
+		if not matches.is_empty():
+			var found := matches[0] as DotMatch
+			_match_ref = weakref(found)
+			return found
+
+		if node == server or node == get_tree().root:
+			break
+
+		node = node.get_parent()
+
+	return null
 
 
 ## Forgets a player who left.
@@ -643,6 +700,12 @@ func describe_lines() -> PackedStringArray:
 	out.append("game's own votes %d%s" % [
 		game_directors().size(), ", its ballot is up" if game_ballot_up() else "",
 	])
+	if director.round_based:
+		var found := _rounds_match()
+		out.append("its round  %s" % (
+			"no match to ask (counted as live)" if found == null
+			else DotMatch.State.keys()[found.state].to_lower()
+		))
 	return out
 
 

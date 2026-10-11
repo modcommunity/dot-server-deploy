@@ -3,15 +3,15 @@ extends Node
 # delivered packs; each one's match is reached through the module's `game` and its
 # `match_node`, a dot-match DotMatch, which this build does carry.
 
-## The game vote's `time_up: finish_round`, through REAL round ends in two delivered games.
+## The game vote's `time_up: finish_round`, through REAL round ends in three delivered games.
 ##
 ## [codeblock]
 ## godot --headless --path . res://examples/game_vote_rounds.tscn
 ## [/codeblock]
 ##
-## Exits non-zero on any failure. Needs `dist/tmc/smash`, `dist/tmc/prophunt` and
-## `dist/tmc/prophunt_maps` (`./server pack <id> --source games/<repo>`); says "skipped"
-## without them.
+## Exits non-zero on any failure. Needs `dist/tmc/smash`, `dist/tmc/prophunt`,
+## `dist/tmc/prophunt_maps` and `dist/tmc/buses` (`./server pack <id> --source games/<repo>`);
+## says "skipped" without them.
 ##
 ## [b]Why this exists.[/b] `game_vote_all` asserts that the game vote knows whether each game
 ## reports rounds, and `multigame` that the rule reads right, but neither ever lets the game
@@ -23,27 +23,42 @@ extends Node
 ## from the expiry: the server stays on the game until its match ends the round, and changes
 ## after that.
 ##
-## [b]Two round shapes.[/b] Smash Copter is a survival phase, a short warning and then a
+## [b]Three round shapes.[/b] Smash Copter is a survival phase, a short warning and then a
 ## showdown, ending when one side is left or the showdown runs out; Prop Hunt is a hiding
-## phase, then a hunt that ends when the props are found or its own clock runs out. Smash
-## votes Prop Hunt in, and Prop Hunt votes Smash back, so both are switched into and out of
-## under `finish_round`.
+## phase, then a hunt that ends when the props are found or its own clock runs out; Buses
+## from Hell is two bot-driven buses against the one person on foot, ending on the round
+## clock. Smash votes Prop Hunt in, Prop Hunt votes Buses, and Buses votes Smash back, so each
+## is switched into and out of under `finish_round`.
+##
+## [b]Each game is asked whether a round is live[/b] (`TmcVote.round_in_progress`, from the
+## game's own match): `round_based` alone held a change through a warmup for nothing.
+##
+## [b]The server runs in its own World3D[/b] (a SubViewport), because the shell's copy of a
+## delivered game is built in this same process. Sharing the root's world put the client's
+## bodies in the server's physics space: Buses' server bus collided with the client's copy
+## of itself and the bowl, was thrown out of the bowl and fell for ever (y=-2120 at 30 s).
+## A deployed server and its clients never share a process.
 
 const CONFIG := "res://examples/fixtures/game_vote_rounds"
 const CONTENT := "res://content"
 const DATA := "user://tmc_game_vote_rounds"
 const SHELL := "res://client/shell.tscn"
 
-const ORDER := ["smash", "prophunt"]
+const ORDER := ["smash", "prophunt", "buses"]
 
-## The packs both games need, prophunt's maps among them.
-const NEEDS := ["tmc/smash", "tmc/prophunt", "tmc/prophunt_maps"]
+## The packs the games need, prophunt's maps among them.
+const NEEDS := ["tmc/smash", "tmc/prophunt", "tmc/prophunt_maps", "tmc/buses"]
+
+## Games whose one person is the hunted and would end a round early by being caught: given an
+## admin's god (`DotHealth.invulnerable`, which carries across rounds) so the round runs to
+## its clock and the vote's clock runs out inside it. Buses' bots drive straight at them.
+const PROTECT := ["buses"]
 
 ## Checks per game section, whichever branch it takes.
-const PER_GAME := 9
+const PER_GAME := 10
 
 ## Every check this suite runs: booting (3), each game, the way back (2), the two totals.
-const CHECKS := 3 + PER_GAME * 2 + 2 + 2
+const CHECKS := 3 + PER_GAME * 3 + 2 + 2
 
 ## dot-match's `State.LIVE`: the round is being played.
 const LIVE := DotMatch.State.LIVE
@@ -80,6 +95,7 @@ func _run() -> void:
 			print("  ./server pack smash --source games/mg-smash-copter")
 			print("  ./server pack prophunt_maps --source games/mg-prop-hunt-maps")
 			print("  ./server pack prophunt --source games/mg-prop-hunt")
+			print("  ./server pack buses --source games/mg-buses-from-hell")
 			get_tree().quit(0)
 			return
 
@@ -213,6 +229,31 @@ func _find_match() -> DotMatch:
 	return null
 
 
+## Makes every person in the running game invulnerable, as an admin's god does. See [constant PROTECT].
+func _protect_people() -> int:
+	var protected := 0
+
+	for name in _server().modules.loaded_names():
+		var module := _server().modules.get_module(name)
+		var world: Variant = module.get("game") if module != null else null
+		var players: Variant = (world as Object).get("players") if world is Object else null
+
+		if not (players is Dictionary):
+			continue
+
+		for player: Variant in (players as Dictionary).values():
+			if not (player is Object) or bool((player as Object).get("is_bot")):
+				continue
+
+			var health: Variant = (player as Object).get("health")
+
+			if health is DotHealth:
+				(health as DotHealth).invulnerable = true
+				protected += 1
+
+	return protected
+
+
 ## The running game's own account of itself, for a failure's detail.
 func _world_says() -> String:
 	for name in _server().modules.loaded_names():
@@ -257,7 +298,14 @@ func _boot() -> bool:
 	_host = (packed as PackedScene).instantiate()
 	_host.name = "Host"
 	_host.auto_start = false
-	add_child(_host)
+
+	# Its own World3D, so the server's physics space holds the server's bodies only. See the top.
+	var world := SubViewport.new()
+	world.name = "ServerWorld"
+	world.own_world_3d = true
+	world.render_target_update_mode = SubViewport.UPDATE_DISABLED
+	add_child(world)
+	world.add_child(_host)
 
 	var started: DotResult = await _host.start(CONFIG, CONTENT, DATA)
 
@@ -319,7 +367,7 @@ func _teardown() -> void:
 		if _host.server != null and is_instance_valid(_host.server):
 			_host.server.shutdown("test over")
 
-		remove_child(_host)
+		_host.get_parent().remove_child(_host)
 		_host.free()
 		_host = null
 
@@ -347,9 +395,26 @@ func _test_game(game_id: String, next: String) -> void:
 	_check(_match != null, "its match is found (%s)" % _match_state())
 
 	# Let TmcVote's tree scan find the game's own vote and hear its rounds.
-	await _until(func() -> bool: return _director().round_based, 3.0)
+	# The director it hears must be this game's: the last game's is freed by the change, and
+	# round_based stays true from it until the next periodic scan.
+	await _until(func() -> bool:
+		return _director().round_based and _votes()._rounds_from != null \
+			and is_instance_valid(_votes()._rounds_from), 3.0)
 	_check(_director().round_based, "the game vote hears %s's rounds" % game_id,
 		"round_based is off: finish_round has no round to wait for")
+
+	# And asks whether one is being played, which the match answers here too.
+	var asked := _director().round_in_progress_fn
+	var live_now := _match != null and is_instance_valid(_match) and _match.state == LIVE
+	_check(
+		asked.is_valid() and bool(asked.call()) == live_now,
+		"the game vote asks %s whether a round is live (%s)" % [game_id, _match_state()],
+		"unasked, a warmup holds a finish_round change for finish_round_max_sec" if not asked.is_valid()
+			else "it answered %s" % bool(asked.call())
+	)
+
+	if game_id in PROTECT:
+		await _until(func() -> bool: return _protect_people() > 0, 5.0)
 
 	# The time-limit ballot; the player puts the next game on it and clicks it.
 	_link().send_chat("/%snominate %s" % [TmcVote.COMMAND_PREFIX, next])

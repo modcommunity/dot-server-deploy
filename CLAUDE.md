@@ -124,6 +124,7 @@ Exit codes: `2` usage, `3` no runtime, `4` no project (`install-games`: addons b
 
 - A delivered-client suite is the only proof a delivery change works; a game's own suites cannot see the mount. [testing](docs/testing.md#a-real-client-in-a-delivered-game)
 - `template_client` packages the template's HEAD: commit it first. [testing](docs/testing.md#a-real-client-in-a-delivered-game)
+- A suite with a server and a shell in one process shares one World3D unless the server is given its own (`game_vote_rounds` puts it in a SubViewport): the client's copies of physics bodies collide with the server's. [testing](docs/testing.md#server-side-suites)
 - Arm every new check, and read the exit code even when every check passed. [testing](docs/testing.md#arming)
 
 ## Ports and transports
