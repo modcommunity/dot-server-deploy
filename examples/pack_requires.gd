@@ -168,7 +168,9 @@ func _read_manifest(path: String) -> Dictionary:
 	if not outer is Dictionary:
 		return {}
 	var payload := str((outer as Dictionary).get("payload", ""))
-	var inner: Variant = JSON.parse_string(Marshalls.base64_to_utf8(payload)) if payload != "" else outer
+	# base64url without padding (dot-cloud's envelope), not Marshalls' base64: decoded as base64 it
+	# parsed only when the manifest's length was a multiple of three, which lookatme's stopped being.
+	var inner: Variant = JSON.parse_string(DotHash.base64url_decode(payload).get_string_from_utf8()) if payload != "" else outer
 	return inner if inner is Dictionary else {}
 
 
