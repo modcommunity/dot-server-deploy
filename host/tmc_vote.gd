@@ -208,6 +208,11 @@ static func install(
 	votes.commands.director = votes.director
 	votes.commands.prefix = COMMAND_PREFIX
 	votes.commands.names = COMMAND_NAMES
+	# The server's vote is over GAMES, and the map menu (M) is the game's own director's: a
+	# second `mapmenu` here would offer the game list as maps. By name, because a dot-vote
+	# older than API 5 has no such property.
+	if "with_map_menu" in votes.commands:
+		votes.commands.set(&"with_map_menu", false)
 
 	var bound := votes.commands.bind(p_server.console)
 
