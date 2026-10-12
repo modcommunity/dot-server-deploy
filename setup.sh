@@ -1549,6 +1549,7 @@ ADDONS_CLONE_DEST="${ADDONS_DIR:-$ADDONS_REPOS}"
 addon_repo() {
     case "$1" in
         zee_weapons) printf 'zee-dot-weapons\n' ;;
+        zed_weapons) printf 'zed-dot-weapons\n' ;;
         *)           printf '%s\n' "${1//_/-}" ;;
     esac
 }

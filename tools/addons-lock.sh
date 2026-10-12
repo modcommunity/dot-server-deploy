@@ -22,8 +22,8 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LOCK="$ROOT/addons.lock"
 
 mapfile -t REPOS < <(
-    sed -n '/^ADDONS_ALL=(/,/)/p' "$ROOT/setup.sh" | grep -oE '(dot|zee)_[a-z0-9_]+' \
-        | sed 's/^zee_weapons$/zee-dot-weapons/' | tr '_' '-' | sort -u
+    sed -n '/^ADDONS_ALL=(/,/)/p' "$ROOT/setup.sh" | grep -oE '(dot|zee|zed)_[a-z0-9_]+' \
+        | sed 's/^zee_weapons$/zee-dot-weapons/; s/^zed_weapons$/zed-dot-weapons/' | tr '_' '-' | sort -u
 )
 
 [ ${#REPOS[@]} -gt 0 ] || { echo "could not read ADDONS_ALL out of setup.sh" >&2; exit 2; }
@@ -87,6 +87,7 @@ cmd_check() {
         ref="$(awk -v r="$repo" '$1 == r { print $2 }' "$LOCK")"
         name="${repo//-/_}"
         [ "$repo" = "zee-dot-weapons" ] && name="zee_weapons"
+        [ "$repo" = "zed-dot-weapons" ] && name="zed_weapons"
         dir="$ROOT/addons/$name"
 
         if [ -z "$ref" ]; then

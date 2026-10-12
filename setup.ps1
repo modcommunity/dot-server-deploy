@@ -223,11 +223,13 @@ $addons = @('dot_core','dot_log','dot_net','dot_game','dot_entity','dot_server',
             'dot_locale','dot_replay','dot_friends','dot_sql','dot_menu')
 
 # The repository an addon lives in: setup.sh's addon_repo(), exception for exception (also
-# compared by tools/check_lists.sh). zee_weapons -> zee-dot-weapons is the one name that is
-# not itself with hyphens; the bare -replace this used to be would have looked for zee-weapons.
+# compared by tools/check_lists.sh). The weapons packs (zee_weapons -> zee-dot-weapons,
+# zed_weapons -> zed-dot-weapons) are the names that are not themselves with hyphens; the bare
+# -replace this used to be would have looked for zee-weapons.
 function Get-AddonRepo([string]$name) {
     switch ($name) {
         'zee_weapons' { return 'zee-dot-weapons' }
+        'zed_weapons' { return 'zed-dot-weapons' }
         default       { return ($name -replace '_', '-') }
     }
 }
