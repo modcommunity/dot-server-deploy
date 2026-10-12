@@ -14,13 +14,13 @@ extends Node
 ##
 ## Needs mg-look-at-me (the smallest first-party game) and game-arena (the one with a
 ## requires.floor.json) in games/ or beside this project, imported, with their addons
-## linked. Armed by making RequiresPublisher add nothing (the pack then fails to publish,
-## "published without its requires.json"), and by deleting requires_file from it (the pack
-## then publishes without one and the second check below fails).
+## linked. Armed by making `Pack.publisher_for` add nothing (the pack then fails to publish,
+## "published without its requires.json"), and by passing it "" (the pack then publishes
+## without one and the second check below fails).
 
 const Pack := preload("res://tools/pack.gd")
 
-const CHECKS := 12
+const CHECKS := 13
 const GAME := "lookatme"
 const GAME_REPO := "mg-look-at-me"
 const FLOORED_REPO := "game-arena"
@@ -68,6 +68,19 @@ func _source(repo: String) -> String:
 
 func _test_published() -> void:
 	_section("./server pack --source: a first-party game's pack carries requires.json")
+
+	# The public seam when the linked dot-cloud has it (API 2), the legacy override only
+	# below that. Vacuous on an older dot-cloud, and says so.
+	var public := "extra_files" in DotCloudPublisher.new()
+	var chosen := Pack.publisher_for("/derived/requires.json")
+	_check(
+		not public or (
+			chosen.get_script() == DotCloudPublisher
+			and (chosen.get("extra_files") as Dictionary).get(DotAddonApi.REQUIREMENTS_FILE, "") == "/derived/requires.json"
+		),
+		"requires.json goes through dot-cloud's public extra_files, not the private override",
+		"" if public else "the linked dot-cloud is below API 2; the legacy override is in use"
+	)
 
 	var source := _source(GAME_REPO)
 	if not _check(source != "", "%s is here to publish" % GAME_REPO):

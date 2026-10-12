@@ -83,13 +83,30 @@ const REQUIRES_TIMEOUT_S := 600
 ## a developer box a link to a checkout other people are working in. Writing requires.json
 ## into it for the length of a publish would leave an untracked file in their tree whenever
 ## a run is killed, and it is not this tool's tree. So the derived file is handed to the
-## publisher the way an imported output already is: as a pack path mapped to a file
-## elsewhere. `_imported_outputs_for` is dot-cloud's own seam for "files that are in the pack
-## but not under the source" and its result is that mapping; this adds one entry to it.
-## It is not public API, so [method _publish_one] reads the written manifest back and fails
-## the pack when requires.json is not in it: a dot-cloud that renamed the seam fails here,
-## at the publish, not as a game every older host tries to compile.
-class RequiresPublisher:
+## publisher as a pack path mapped to a file elsewhere: dot-cloud's public
+## `DotCloudPublisher.extra_files` (dot-cloud API 2).
+##
+## A dot-cloud older than API 2 (the lock's v0.1.6 is one) has no public seam, and gets
+## [LegacyRequiresPublisher] instead. Either way [method _publish_one] reads the written
+## manifest back and fails the pack when requires.json is not in it.
+static func publisher_for(requires_file: String) -> DotCloudPublisher:
+	var pub := DotCloudPublisher.new()
+
+	if "extra_files" in pub:
+		if requires_file != "":
+			pub.set("extra_files", {DotAddonApi.REQUIREMENTS_FILE: requires_file})
+		return pub
+
+	var legacy := LegacyRequiresPublisher.new()
+	legacy.requires_file = requires_file
+	return legacy
+
+
+## [b]Only for a dot-cloud below API 2; delete it once addons.lock's dot-cloud has
+## `extra_files`.[/b] Overrides the publisher's non-public `_imported_outputs_for`, the one
+## seam an older dot-cloud has for "a file in the pack that is not under the source". It is
+## not API, which is why the manifest read-back in [method _publish_one] exists.
+class LegacyRequiresPublisher:
 	extends DotCloudPublisher
 
 	## Absolute path of the derived requires.json, or "" to add nothing.
@@ -327,8 +344,7 @@ func _publish_one(
 
 	var requires_file := str(requires.value)
 
-	var pub := RequiresPublisher.new()
-	pub.requires_file = requires_file
+	var pub := publisher_for(requires_file)
 	pub.content_id = str(meta["id"])
 	pub.version = str(meta["version"])
 	pub.display_name = str(meta["name"])
@@ -395,7 +411,7 @@ func _publish_one(
 			DotError.CODE_STATE,
 			"%s was published without its requires.json" % meta["id"],
 			"the file was derived but dot-cloud's publisher did not take it "
-			+ "(RequiresPublisher in tools/pack.gd adds it through _imported_outputs_for)"
+			+ "(tools/pack.gd's publisher_for hands it over as extra_files)"
 		)
 
 	return published

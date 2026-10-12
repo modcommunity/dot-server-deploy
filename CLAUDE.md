@@ -67,7 +67,7 @@ Exit codes: `2` usage, `3` no runtime, `4` no project (`install-games`: addons b
 - `rebase()` is one line over `rebase_onto(path, root)`, so a suite can test with a mount prefix; tested against `res://` it passes with the bug in. [delivery](docs/delivery-constraint.md#rules-that-follow)
 - A form of the mount constraint is closed when every game closes it. [delivery](docs/delivery-constraint.md#rules-that-follow)
 - A pack is named for its content id; packs are imported (`--import`) before publishing; `pack.json`'s `exclude_dirs` matches at any depth. [delivery](docs/delivery-constraint.md#publishing-a-pack)
-- `tools/pack.gd` derives `requires.json` in the source project (dot-core's `dot_requires.gd`, floors applied) and adds it without touching the checkout; `RequiresPublisher` uses dot-cloud's non-public `_imported_outputs_for`, so the manifest is read back. [delivery](docs/delivery-constraint.md#publishing-a-pack)
+- `tools/pack.gd` derives `requires.json` in the source project (dot-core's `dot_requires.gd`, floors applied) and adds it without touching the checkout through dot-cloud's `extra_files` (API 2; `publisher_for` falls back to `LegacyRequiresPublisher`'s private override below that, to delete once `addons.lock` has it); the manifest is read back either way. [delivery](docs/delivery-constraint.md#publishing-a-pack)
 - A delivered module may only name base classes this build carries. [delivery](docs/delivery-constraint.md#rules-that-follow)
 
 **Configuration**
