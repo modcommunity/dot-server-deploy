@@ -29,10 +29,11 @@ cvars:
   wo_course_seconds: "360"
   wo_finale_seconds: "100"
   # Stand-ins, so one person on an empty server has somebody to beat to the line and a
-  # final death can happen at all: nine players (bot_quota 9), the person and eight
-  # stand-ins, as solo has.
+  # final death can happen at all: nine players, the person and eight stand-ins, as solo
+  # has. The count is dot-server's bot_quota, as in mg-wipeout's own game.yml;
+  # wo_min_players is its deprecated spelling and only forwards to it.
   wo_bots: "1"
-  wo_min_players: "9"
+  bot_quota: "9"
 
 # The courses are small documents the server sends, so they are fetched before the game
 # loads rather than on a change: no player is ever admitted to a server playing only the
