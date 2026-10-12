@@ -24,14 +24,15 @@ module: game/wo_module.gd
 cvars:
   # Solo by default: everybody is their own side, and two finishers make a final death.
   wo_teams: "0"
-  # The most a course stays open; the longest course asks for five minutes itself and is
-  # capped here.
-  wo_course_seconds: "210"
+  # The most a course stays open: the courses run four to six minutes of clock now, so the
+  # cap is six.
+  wo_course_seconds: "360"
   wo_finale_seconds: "100"
   # Stand-ins, so one person on an empty server has somebody to beat to the line and a
-  # final death can happen at all.
+  # final death can happen at all: nine players (bot_quota 9), the person and eight
+  # stand-ins, as solo has.
   wo_bots: "1"
-  wo_min_players: "3"
+  wo_min_players: "9"
 
 # The courses are small documents the server sends, so they are fetched before the game
 # loads rather than on a change: no player is ever admitted to a server playing only the
