@@ -33,8 +33,8 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first; this file is what is specifi
 | `client/` | the shell: `boot.tscn` (main scene; mounts an addon overlay), `shell.tscn`/`shell.gd`, `notice_overlay.gd`, `admin_menu_panel.gd`, `loading_screen.gd`, `tmc_friends.gd`, `locales/`, `auth.json` + `content.json` (shipped, gitignored) |
 | `cfg.example/` | the tracked config templates; `cfg/` is written from them once and gitignored |
 | `content/<id>/` | descriptors (`game.yml`, `pack.json`) for first-party games and map packs; installed games land in `content/<owner>/<name>/` |
-| `tools/` | `server.in` (generates `./server`), `server.ps1.in`, `install_games.gd`, `index.gd`, `pack.gd`, `check.sh`, `check_lists.sh`, `check_boot_failures.sh`, `package_check.sh`, `browser_check.mjs`, `addons-lock.sh`, `fetch-godot.sh`, `fetch-export-templates.sh`, `game_source.sh`, `rcon.mjs`, `progress_shot.gd` |
-| `examples/` | every suite: `selftest`, `multigame`, `game_vote_all`, `game_vote_rounds`, `live_switch`, `reconnect`, `return_to_game`, `shell_notice`, `party_live`, `pack_requires`, `admin_*`, and one `*_client` per delivered game |
+| `tools/` | `server.in` (generates `./server`), `server.ps1.in`, `install_games.gd`, `index.gd`, `pack.gd`, `check.sh`, `check_lists.sh`, `check_boot_failures.sh`, `enet_relay_all_games.sh`, `package_check.sh`, `browser_check.mjs`, `addons-lock.sh`, `fetch-godot.sh`, `fetch-export-templates.sh`, `game_source.sh`, `rcon.mjs`, `progress_shot.gd` |
+| `examples/` | every suite: `selftest`, `multigame`, `game_vote_all`, `game_vote_rounds`, `live_switch`, `reconnect`, `return_to_game`, `shell_notice`, `party_live`, `pack_requires`, `admin_*`, `enet_relay` (every game), and one `*_client` per delivered game |
 | `addons/`, `addons.lock` | linked addons (`addons/.repos/` holds clones) and the tag each is locked to |
 | `games/` | game repositories (links on a developer box), `.gdignore`d |
 | `dist/`, `data/`, `keys/` | published packs, runtime state, the signing key (all gitignored) |
@@ -47,7 +47,7 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first; this file is what is specifi
 ```bash
 ./setup.sh                    # runtime, addons, games, packs, ./server
 ./server                      # start it;  ./server check  boots, loads the game, exits 0
-tools/check.sh                # parse, every suite, a real boot
+tools/check.sh                # parse, every suite, a real boot;  --long  adds every game on ENet through a lossy relay
 tools/check_boot_failures.sh  # ./server check must refuse a game that cannot compile
 tools/voice_all_games.sh      # voice between two real clients, in every delivered game
 tools/package_check.sh        # the shipped (vendored) shape
@@ -133,6 +133,7 @@ Exit codes: `2` usage, `3` no runtime, `4` no project (`install-games`: addons b
 - A suite with a server and a client in one process puts the server in its own World3D (`ServerWorld.add`, `examples/server_world.gd`), or the client's copies of physics bodies collide with the server's; `DotRegistry` is still shared. A scratch copy of the project needs its own user folder and port. [testing](docs/testing.md#server-side-suites)
 - A client "in" a game is not its netcode working: after a game change, probe the game's own link (`return_to_game`: inputs and snapshots counted on both ends, for a fresh joiner too). [testing](docs/testing.md#server-side-suites)
 - Arm every new check, and read the exit code even when every check passed. [testing](docs/testing.md#arming)
+- ENet's packet throttle must stay at 32 at both ends of every game's client; `enet_relay -- --stock-throttle` is the control and must fail. [testing](docs/testing.md#a-real-client-in-a-delivered-game)
 
 ## Ports and transports
 

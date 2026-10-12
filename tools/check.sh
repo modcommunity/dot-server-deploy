@@ -4,6 +4,7 @@
 #
 #   tools/check.sh            everything
 #   tools/check.sh --parse    the parse pass on its own
+#   tools/check.sh --long     everything, then the long suites (about 16 more minutes)
 #
 # The --import pass registers class_name globals. Without it every cross-file type
 # reference fails and it looks like dozens of unrelated errors — and after adding any
@@ -41,7 +42,7 @@ done < <(find host client examples -name '*.gd' 2>/dev/null | sort)
 
 echo
 echo "shell scripts"
-for f in setup.sh tools/server.in docker-entrypoint.sh docker-healthcheck.sh tools/check.sh tools/check_boot_failures.sh tools/check_lists.sh; do
+for f in setup.sh tools/server.in docker-entrypoint.sh docker-healthcheck.sh tools/check.sh tools/check_boot_failures.sh tools/check_lists.sh tools/enet_relay_all_games.sh; do
     [ -f "$f" ] || continue
     if bash -n "$f" 2>/dev/null; then
         printf '  %sok%s   %s\n' "$GRN" "$OFF" "$f"
@@ -481,6 +482,15 @@ if [ -x ./server ]; then
     echo
     echo "boots that must fail"
     tools/check_boot_failures.sh || fails=$((fails + 1))
+fi
+
+# The long suites: one process per delivered game, too slow for every run. A real client on ENet
+# through dot-net's lossy relay in every game, then each game again with ENet's stock packet
+# throttle, which must fail (docs/testing.md). Armed: see that script's suite.
+if [ "${1:-}" = "--long" ]; then
+    echo
+    echo "every delivered game on ENet through a lossy relay, and the stock-throttle control"
+    tools/enet_relay_all_games.sh || fails=$((fails + 1))
 fi
 
 echo
