@@ -66,5 +66,15 @@ backbone_url: "https://moddingcommunity.com"
 # different guest.
 allow_guests: true
 
+# Report this server's roster to the issuer, so a player who leaves is released at once
+# instead of being held for the issuer's lease (5 minutes) and locked out of every other
+# server until it runs out. Needs `server_id`, and the key the publisher hands you with the
+# public key -- in a FILE, relative to this directory: a secret is never read from this YAML,
+# the environment or the command line. A server stopped with the console's `quit` sends the
+# empty roster on the way out; a killed one leaves its players held until the lease ends.
+# session_report_url: "https://moddingcommunity.com"
+# session_report_key_file: "session_report.key"
+# session_report_interval_sec: 60
+
 # Accounts file for `local`, relative to this directory.
 # local_accounts_file: "accounts.json"

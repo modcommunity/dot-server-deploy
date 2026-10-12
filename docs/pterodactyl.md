@@ -31,6 +31,10 @@ Pterodactyl installs with the volume at `/mnt/server` and RUNS with it at `/home
 - The egg's `done` string is `server   ready`, three spaces: dot-log pads the channel to eight columns and Pterodactyl matches a substring.
 - On a panel the derived ports (RCON at game port plus one, both query ports at the game port) are wrong for an allocation-based host, so the egg offers each as a variable (`TMC_RCON_PORT`, `TMC_QUERY_PORT`, `TMC_A2S_PORT`).
 
+## The stop is the console's `quit`, not ^C
+
+The egg's stop command is `quit`, typed into the server's console (wings attaches a terminal, which dot-server's stdin console reads). ^C (SIGINT) and `docker stop` (SIGTERM) end headless Godot 4.7.2 without running any shutdown: no goodbye to the issuer, so with `session_report_url` set in `auth.yml` every player on the box stays held for the issuer's lease (300 s) and is locked out of every other server. `quit` runs `DotServer.shutdown`, which reports the empty roster before the process ends. Measured 2026-10-12: ^C exits 130 with no shutdown logged; `quit` logs the shutdown and the reporter's last roster, then exits 139 on a terminal (dot-server's stdin reader is still blocked in a read the engine cannot cancel when the process ends; queued as dot-server-stdin-exit-1). A stop that hangs is still the panel's Kill.
+
 ## What the egg installs
 
 `setup.sh --no-games` (a box that installs its games at runtime must build none: [installing-games.md](installing-games.md#a-server-that-installs-its-games-must-build-none-of-them)), then `--update` on reinstall, which moves the addons to `addons.lock`. "Update addons automatically" is `TMC_AUTO_UPDATE` ([releases.md](releases.md#a-game-that-needs-newer-addons)), and "Web loader version" is `TMC_WEB_LOADER`.

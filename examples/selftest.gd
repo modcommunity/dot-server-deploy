@@ -17,7 +17,7 @@ const CFG := "res://examples/fixtures"
 ## A loaded game with rounds and no match the game vote can find. See the section that uses it.
 const RoundsWithoutMatch := preload("res://examples/fixtures/rounds_without_match.gd")
 
-const CHECKS := 279
+const CHECKS := 283
 
 var _passed := 0
 var _failed := 0
@@ -1895,6 +1895,44 @@ func _test_auth() -> void:
 	)
 	if legacy_introspect.ok:
 		(legacy_introspect.value as Node).free()
+
+	# [b]The roster report[/b]: the URL from the YAML, the key from a file beside it, and a
+	# key written inline refused by name, because a secret in the YAML is a secret in every
+	# paste of the configuration.
+	DotPaths.write_text(work.path_join("report.key"), "s3cret-report-key\n")
+	var reporting := TmcAuth.build({
+		"enabled": true, "strategy": "ticket", "server_id": "eu-1",
+		"issuer_public_key_file": "issuer.pub.pem",
+		"session_report_url": "https://issuer.example", "session_report_key_file": "report.key",
+		"session_report_interval_sec": 30,
+	}, work)
+	var reporting_cfg: DotAuthConfig = (reporting.value as Node).get("config") if reporting.ok else null
+	_check(
+		reporting_cfg != null and reporting_cfg.session_report_url == "https://issuer.example"
+			and reporting_cfg.session_report_key == "s3cret-report-key"
+			and is_equal_approx(reporting_cfg.session_report_interval_sec, 30.0),
+		"session reporting is configured from auth.yml, the key read from its file",
+		str(reporting.error)
+	)
+	if reporting.ok:
+		(reporting.value as Node).free()
+	var inline_key := TmcAuth.build({
+		"enabled": true, "strategy": "ticket", "server_id": "eu-1",
+		"issuer_public_key_file": "issuer.pub.pem",
+		"session_report_url": "https://issuer.example", "session_report_key": "pasted",
+	}, work)
+	_check(not inline_key.ok, "a report key written into the YAML is refused")
+	var no_key := TmcAuth.build({
+		"enabled": true, "strategy": "ticket", "server_id": "eu-1",
+		"issuer_public_key_file": "issuer.pub.pem", "session_report_url": "https://issuer.example",
+	}, work)
+	_check(not no_key.ok, "a report URL with no key is refused (anyone could report anyone)")
+	var lost_key := TmcAuth.build({
+		"enabled": true, "strategy": "ticket", "server_id": "eu-1",
+		"issuer_public_key_file": "issuer.pub.pem",
+		"session_report_url": "https://issuer.example", "session_report_key_file": "gone.key",
+	}, work)
+	_check(not lost_key.ok, "and a key file that is not there names the path")
 
 	DotPaths.remove_tree(work)
 	_done()
