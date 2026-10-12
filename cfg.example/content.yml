@@ -20,6 +20,12 @@
 #                                        hide their talk key
 #         sv_voice_mode: "1"             who hears a speaker: 0 the game decides, 1 everybody,
 #                                        2 the speaker's team, 3 players nearby
+#         sv_map_menu_flag: "generic"    who changes the map at once from the M map menu: an
+#                                        admin flag (generic, the default, is every staff group
+#                                        from moderator up; changemap narrows it to admins; ""
+#                                        lets anybody). Everybody else's choice is a vote
+#                                        (nominate, then rock the vote). Under defaults: for
+#                                        every game; a game's own section wins
 #       metadata:                merged key by key into the game's metadata:, e.g.
 #         map_vote:              its map vote and rotation (dot-vote's settings)
 #           duration_sec: 1800
