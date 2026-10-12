@@ -28,6 +28,20 @@ var burst_seconds: float = 0.05
 ## Bytes carried towards the client so far.
 var bytes_down: int = 0
 
+## The most carried towards the client inside any [member peak_window_usec] (a browser's frame:
+## its WebSocket peer holds what arrives between two frames in a 64 KiB buffer), and in any one
+## [method poll], since [method reset_peaks]. Measured with [member rate_down] unlimited
+## ([constant UNLIMITED]) these are what the server sent in a burst; see examples/burst_probe.gd.
+var peak_window_usec: int = 16667
+var peak_window: int = 0
+var peak_poll: int = 0
+
+## A [member rate_down] that never holds anything back.
+const UNLIMITED := 1.0e12
+
+var _arrivals: Array = []
+var _arrival_sum: int = 0
+
 var _listener := TCPServer.new()
 var _target_port := 0
 var _pairs: Array = []
@@ -56,6 +70,7 @@ func poll(delta: float) -> void:
 		_pairs.append([downstream, upstream])
 
 	_budget = minf(_budget + rate_down * delta, rate_down * burst_seconds)
+	var polled := 0
 
 	for pair: Array in _pairs:
 		var downstream: StreamPeerTCP = pair[0]
@@ -63,7 +78,10 @@ func poll(delta: float) -> void:
 		downstream.poll()
 		upstream.poll()
 
-		if upstream.get_status() != StreamPeerTCP.STATUS_CONNECTED:
+		# Either end gone (a client that disconnected): nothing to carry, and asking a closed
+		# socket for its bytes is an engine error.
+		if upstream.get_status() != StreamPeerTCP.STATUS_CONNECTED \
+				or downstream.get_status() != StreamPeerTCP.STATUS_CONNECTED:
 			continue
 
 		var up := downstream.get_available_bytes()
@@ -77,6 +95,30 @@ func poll(delta: float) -> void:
 			downstream.put_data(upstream.get_data(down)[1])
 			_budget -= down
 			bytes_down += down
+			polled += down
+
+	if polled > 0:
+		_note_arrival(polled)
+
+
+func reset_peaks() -> void:
+	peak_window = 0
+	peak_poll = 0
+	_arrivals.clear()
+	_arrival_sum = 0
+
+
+func _note_arrival(bytes: int) -> void:
+	var now := Time.get_ticks_usec()
+	_arrivals.append([now, bytes])
+	_arrival_sum += bytes
+
+	while not _arrivals.is_empty() and int(_arrivals[0][0]) <= now - peak_window_usec:
+		_arrival_sum -= int(_arrivals[0][1])
+		_arrivals.pop_front()
+
+	peak_window = maxi(peak_window, _arrival_sum)
+	peak_poll = maxi(peak_poll, bytes)
 
 
 func stop() -> void:
