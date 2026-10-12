@@ -70,6 +70,37 @@ const STAGING := "user://pack_staging"
 ## thing a server delivers rather than bakes in -- so it is deliberately not here.
 const NEVER := ["cache", "tmp"]
 
+## dot-core's deriver, run inside the SOURCE project (its own addons, its own class list).
+const REQUIRES_TOOL := "res://addons/dot_core/tools/dot_requires.gd"
+
+## How long one run of the deriver, or the source's import, may take before it is killed.
+const REQUIRES_TIMEOUT_S := 600
+
+
+## [b]A publisher that adds one file the source tree does not have: requires.json.[/b]
+##
+## `DotCloudPublisher` publishes a directory, and a game's directory is its repository -- on
+## a developer box a link to a checkout other people are working in. Writing requires.json
+## into it for the length of a publish would leave an untracked file in their tree whenever
+## a run is killed, and it is not this tool's tree. So the derived file is handed to the
+## publisher the way an imported output already is: as a pack path mapped to a file
+## elsewhere. `_imported_outputs_for` is dot-cloud's own seam for "files that are in the pack
+## but not under the source" and its result is that mapping; this adds one entry to it.
+## It is not public API, so [method _publish_one] reads the written manifest back and fails
+## the pack when requires.json is not in it: a dot-cloud that renamed the seam fails here,
+## at the publish, not as a game every older host tries to compile.
+class RequiresPublisher:
+	extends DotCloudPublisher
+
+	## Absolute path of the derived requires.json, or "" to add nothing.
+	var requires_file: String = ""
+
+	func _imported_outputs_for(source_dir: String, relatives: PackedStringArray) -> Dictionary:
+		var out: Dictionary = super(source_dir, relatives)
+		if requires_file != "":
+			(out["files"] as Dictionary)[DotAddonApi.REQUIREMENTS_FILE] = requires_file
+		return out
+
 
 func _initialize() -> void:
 	DotLog.timestamps = false
@@ -284,7 +315,20 @@ func _publish_one(
 			"an empty pack mounts and contains nothing, which reads as a broken upload"
 		)
 
-	var pub := DotCloudPublisher.new()
+	# [b]What the pack needs of the host's addons, as requires.json at its root.[/b] dot-ci's
+	# `package.sh --pack` has always written it; this path never did, so every pack a box
+	# published for itself (setup.sh, `./server pack --source`) carried none, and a host or
+	# client with older addons could not refuse it with "needs dot-x API level N" -- it
+	# mounted it and failed to compile it instead. Derived the way package.sh derives it.
+	var requires := derive_requires(source, STAGING.path_join("requires").path_join(str(meta["id"]).replace("/", "_") + ".json"))
+
+	if not requires.ok:
+		return requires
+
+	var requires_file := str(requires.value)
+
+	var pub := RequiresPublisher.new()
+	pub.requires_file = requires_file
 	pub.content_id = str(meta["id"])
 	pub.version = str(meta["version"])
 	pub.display_name = str(meta["name"])
@@ -344,7 +388,131 @@ func _publish_one(
 		out_dir.path_join(out_name),
 	])
 
-	return pub.publish(source, out_dir.path_join(out_name))
+	var published := pub.publish(source, out_dir.path_join(out_name))
+
+	if published.ok and requires_file != "" and not _lists(published.value, DotAddonApi.REQUIREMENTS_FILE):
+		return DotResult.fail(
+			DotError.CODE_STATE,
+			"%s was published without its requires.json" % meta["id"],
+			"the file was derived but dot-cloud's publisher did not take it "
+			+ "(RequiresPublisher in tools/pack.gd adds it through _imported_outputs_for)"
+		)
+
+	return published
+
+
+## Whether the manifest a publish returned lists [param path].
+static func _lists(result: Variant, path: String) -> bool:
+	var manifest: Variant = (result as Dictionary).get("manifest") if result is Dictionary else null
+
+	if not manifest is DotCloudManifest:
+		return false
+
+	for f: Variant in (manifest as DotCloudManifest).files:
+		if str(f.path) == path:
+			return true
+
+	return false
+
+
+# --- requires.json -------------------------------------------------------------
+
+## Derive [param source]'s requires.json into [param out_path], the way dot-ci's
+## `package.sh --pack` does: dot-core's `tools/dot_requires.gd`, run with `--path` the source
+## project, so the levels are those of the addons the game was built against (its own
+## linked addons) and its `requires.floor.json` is applied.
+##
+## Success carries the absolute path written, or "" when there is nothing to add:
+##
+## - the source is not a Godot project (an avatar set, a map directory): nothing compiles;
+## - its dot-core has no deriver (pinned from before it existed): said, not failed, as
+##   package.sh says it, because the pack is exactly what it was the day before;
+## - it commits its own requires.json, which then rides in the pack as one of its files,
+##   and is audited instead: used-and-undeclared or declared-above-the-build fails.
+##
+## The source must have been imported (an empty class list derives nothing, which the tool
+## refuses); a source that was not is imported once and asked again. Static so a suite can
+## run the same derivation on a game it does not publish.
+static func derive_requires(source: String, out_path: String) -> DotResult:
+	var src := ProjectSettings.globalize_path(source)
+
+	if not FileAccess.file_exists(src.path_join("project.godot")):
+		return DotResult.success("")
+
+	if not FileAccess.file_exists(src.path_join("addons/dot_core/tools/dot_requires.gd")):
+		print("  note: %s has no addons/dot_core/tools/dot_requires.gd; the pack ships without requires.json" % src)
+		return DotResult.success("")
+
+	if FileAccess.file_exists(src.path_join(DotAddonApi.REQUIREMENTS_FILE)):
+		var audit := _run_requires(src, ["--check", DotAddonApi.REQUIREMENTS_FILE])
+
+		if int(audit["code"]) != 0:
+			return DotResult.fail(
+				DotError.CODE_INVALID,
+				"%s/requires.json does not cover what the game uses" % src,
+				str(audit["output"]).strip_edges()
+			)
+
+		return DotResult.success("")
+
+	var out_abs := ProjectSettings.globalize_path(out_path)
+	DirAccess.make_dir_recursive_absolute(out_abs.get_base_dir())
+	DirAccess.remove_absolute(out_abs)
+
+	var run := _run_requires(src, ["--out", out_abs])
+
+	if int(run["code"]) == 2 and str(run["output"]).contains("import the project first"):
+		_godot(["--headless", "--path", src, "--import"])
+		run = _run_requires(src, ["--out", out_abs])
+
+	if int(run["code"]) != 0:
+		return DotResult.fail(
+			DotError.CODE_STATE,
+			"could not derive requires.json for %s" % src,
+			str(run["output"]).strip_edges()
+		)
+
+	var parsed := DotAddonApi.parse(FileAccess.get_file_as_string(out_abs))
+
+	# Empty is allowed, as package.sh allows it: a map repository that is a project and names
+	# no addon class needs nothing, and saying so is still a file.
+	if not parsed.ok:
+		return DotResult.fail(
+			DotError.CODE_STATE,
+			"requires.json for %s came out unreadable" % src,
+			str(run["output"]).strip_edges()
+		)
+
+	var said := PackedStringArray()
+	for addon: String in (parsed.value as Dictionary):
+		said.append("%s %d" % [addon, int((parsed.value as Dictionary)[addon])])
+	said.sort()
+	print("  requires.json: %s" % ", ".join(said))
+	return DotResult.success(out_abs)
+
+
+static func _run_requires(src: String, args: Array) -> Dictionary:
+	return _godot(["--headless", "--path", src, "--script", REQUIRES_TOOL, "--"] + args)
+
+
+## Runs this same engine, capped by `timeout` where there is one, and returns
+## {code, output} with stderr folded in.
+static func _godot(args: Array) -> Dictionary:
+	var exe := OS.get_executable_path()
+	var argv := PackedStringArray()
+	var program := exe
+
+	if OS.get_name() != "Windows" and FileAccess.file_exists("/usr/bin/timeout"):
+		program = "/usr/bin/timeout"
+		argv.append(str(REQUIRES_TIMEOUT_S))
+		argv.append(exe)
+
+	for a: Variant in args:
+		argv.append(str(a))
+
+	var output := []
+	var code := OS.execute(program, argv, output, true)
+	return {"code": code, "output": "\n".join(PackedStringArray(output))}
 
 
 # --- The descriptor ---------------------------------------------------------

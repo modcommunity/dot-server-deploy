@@ -209,17 +209,35 @@ Ok "$exe ($version)"
 
 # --- 2. The addons ---------------------------------------------------------
 
-$addons = @('dot_core','dot_net','dot_server','dot_server_query','dot_server_security','dot_2d','dot_ui','dot_auth',
-            'dot_cloud','dot_user','dot_user_avatar','dot_platform',
-            'dot_loadout','dot_match','dot_party','dot_matchmaking','dot_locale',
-            'dot_replay','dot_friends')
+# setup.sh's ADDONS_ALL, name for name and in its order. It is written out rather than read
+# from setup.sh because nothing here has ever run under PowerShell to prove a parser of a
+# bash array; tools/check_lists.sh fails when the two differ, which is how this copy ended
+# at dot_friends, nineteen names long, while setup.sh's kept growing.
+$addons = @('dot_core','dot_log','dot_net','dot_game','dot_entity','dot_server','dot_server_query','dot_server_security',
+            'dot_2d','dot_ui','dot_auth','dot_cloud','dot_user','dot_user_avatar','dot_platform','dot_loadout',
+            'dot_match','dot_player_controller','dot_timer','dot_map','dot_leaderboard','dot_stats','dot_props','dot_vote',
+            'dot_combat','dot_chat','dot_voice','dot_moderation','dot_browser','dot_npc','dot_npc_ai','dot_npc_ai_director',
+            'dot_vehicle','dot_achievements','dot_objective','dot_effects','dot_spectate','dot_economy','dot_settings','dot_console',
+            'dot_audio','dot_fx','dot_lighting','dot_procedural_generation','dot_inventory','dot_peer_to_peer','dot_weapon','dot_physics',
+            'dot_spawn','dot_team','dot_player','dot_player_class','dot_player_char','zee_weapons','dot_party','dot_matchmaking',
+            'dot_locale','dot_replay','dot_friends','dot_sql','dot_menu')
+
+# The repository an addon lives in: setup.sh's addon_repo(), exception for exception (also
+# compared by tools/check_lists.sh). zee_weapons -> zee-dot-weapons is the one name that is
+# not itself with hyphens; the bare -replace this used to be would have looked for zee-weapons.
+function Get-AddonRepo([string]$name) {
+    switch ($name) {
+        'zee_weapons' { return 'zee-dot-weapons' }
+        default       { return ($name -replace '_', '-') }
+    }
+}
 
 Step "dot-* addons"
 New-Item -ItemType Directory -Force -Path 'addons' | Out-Null
 
 $missing = @()
 foreach ($name in $addons) {
-    $repo   = $name -replace '_', '-'
+    $repo   = Get-AddonRepo $name
     $source = Join-Path $Root "..\$repo\addons\$name"
     $link   = Join-Path $Root "addons\$name"
 

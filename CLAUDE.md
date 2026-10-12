@@ -33,8 +33,8 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first; this file is what is specifi
 | `client/` | the shell: `boot.tscn` (main scene; mounts an addon overlay), `shell.tscn`/`shell.gd`, `notice_overlay.gd`, `admin_menu_panel.gd`, `loading_screen.gd`, `tmc_friends.gd`, `locales/`, `auth.json` + `content.json` (shipped, gitignored) |
 | `cfg.example/` | the tracked config templates; `cfg/` is written from them once and gitignored |
 | `content/<id>/` | descriptors (`game.yml`, `pack.json`) for first-party games and map packs; installed games land in `content/<owner>/<name>/` |
-| `tools/` | `server.in` (generates `./server`), `server.ps1.in`, `install_games.gd`, `index.gd`, `pack.gd`, `check.sh`, `check_boot_failures.sh`, `package_check.sh`, `browser_check.mjs`, `addons-lock.sh`, `fetch-godot.sh`, `fetch-export-templates.sh`, `game_source.sh`, `rcon.mjs`, `progress_shot.gd` |
-| `examples/` | every suite: `selftest`, `multigame`, `game_vote_all`, `game_vote_rounds`, `live_switch`, `reconnect`, `return_to_game`, `shell_notice`, `party_live`, `admin_*`, and one `*_client` per delivered game |
+| `tools/` | `server.in` (generates `./server`), `server.ps1.in`, `install_games.gd`, `index.gd`, `pack.gd`, `check.sh`, `check_lists.sh`, `check_boot_failures.sh`, `package_check.sh`, `browser_check.mjs`, `addons-lock.sh`, `fetch-godot.sh`, `fetch-export-templates.sh`, `game_source.sh`, `rcon.mjs`, `progress_shot.gd` |
+| `examples/` | every suite: `selftest`, `multigame`, `game_vote_all`, `game_vote_rounds`, `live_switch`, `reconnect`, `return_to_game`, `shell_notice`, `party_live`, `pack_requires`, `admin_*`, and one `*_client` per delivered game |
 | `addons/`, `addons.lock` | linked addons (`addons/.repos/` holds clones) and the tag each is locked to |
 | `games/` | game repositories (links on a developer box), `.gdignore`d |
 | `dist/`, `data/`, `keys/` | published packs, runtime state, the signing key (all gitignored) |
@@ -67,6 +67,7 @@ Exit codes: `2` usage, `3` no runtime, `4` no project (`install-games`: addons b
 - `rebase()` is one line over `rebase_onto(path, root)`, so a suite can test with a mount prefix; tested against `res://` it passes with the bug in. [delivery](docs/delivery-constraint.md#rules-that-follow)
 - A form of the mount constraint is closed when every game closes it. [delivery](docs/delivery-constraint.md#rules-that-follow)
 - A pack is named for its content id; packs are imported (`--import`) before publishing; `pack.json`'s `exclude_dirs` matches at any depth. [delivery](docs/delivery-constraint.md#publishing-a-pack)
+- `tools/pack.gd` derives `requires.json` in the source project (dot-core's `dot_requires.gd`, floors applied) and adds it without touching the checkout; `RequiresPublisher` uses dot-cloud's non-public `_imported_outputs_for`, so the manifest is read back. [delivery](docs/delivery-constraint.md#publishing-a-pack)
 - A delivered module may only name base classes this build carries. [delivery](docs/delivery-constraint.md#rules-that-follow)
 
 **Configuration**
@@ -91,6 +92,7 @@ Exit codes: `2` usage, `3` no runtime, `4` no project (`install-games`: addons b
 **Setup and the egg**
 
 - One fact, one place: `GAMES`, `ADDONS_ALL`, `addon_repo()`, `repo_url()`, `tools/game_source.sh`. Other scripts read them; never copy a list. [setup](docs/setup.md#one-fact-one-place)
+- `setup.ps1`'s addon list and `Get-AddonRepo`, and the zee exception in `addons-lock.sh`/`package_check.sh`, are copies: change them with `ADDONS_ALL`/`addon_repo()`; `tools/check_lists.sh` fails when they drift. [setup](docs/setup.md#one-fact-one-place)
 - `./server` is generated from `tools/server.in`: re-run `setup.sh` after editing the template. [setup](docs/setup.md)
 - No git, unzip or other tool this project drives may prompt: `GIT_TERMINAL_PROMPT=0`, `GIT_ASKPASS`, `BatchMode`, `< /dev/null`, `timeout`. [egg](docs/pterodactyl.md#no-git-may-ask-anything)
 - `safe.directory '*'` belongs in the egg's install script only, never in `setup.sh`. [egg](docs/pterodactyl.md#a-reinstall-is-root-looking-at-somebody-elses-checkout)

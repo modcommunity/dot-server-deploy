@@ -41,7 +41,7 @@ done < <(find host client examples -name '*.gd' 2>/dev/null | sort)
 
 echo
 echo "shell scripts"
-for f in setup.sh tools/server.in docker-entrypoint.sh docker-healthcheck.sh tools/check.sh tools/check_boot_failures.sh; do
+for f in setup.sh tools/server.in docker-entrypoint.sh docker-healthcheck.sh tools/check.sh tools/check_boot_failures.sh tools/check_lists.sh; do
     [ -f "$f" ] || continue
     if bash -n "$f" 2>/dev/null; then
         printf '  %sok%s   %s\n' "$GRN" "$OFF" "$f"
@@ -50,6 +50,11 @@ for f in setup.sh tools/server.in docker-entrypoint.sh docker-healthcheck.sh too
         fails=$((fails + 1))
     fi
 done
+
+echo
+echo "the lists written down twice"
+# setup.ps1's addon list and every copy of addon_repo()'s exceptions against setup.sh.
+bash tools/check_lists.sh || fails=$((fails + 1))
 
 echo
 echo "the published games"
@@ -343,6 +348,8 @@ echo "a game published from its own repository"
 # The installer stamps a pack's own game.yml with the id and version it verified, and
 # every game repository's descriptor must agree with the one under content/ here.
 "$GODOT" --headless --path . res://examples/install_descriptor.tscn || fails=$((fails + 1))
+echo "a pack this box publishes for itself carries requires.json"
+timeout 900 "$GODOT" --headless --path . res://examples/pack_requires.tscn || fails=$((fails + 1))
 
 # The other suite: a real DotServer, and an admin changing the game under it. It is the
 # only place the module swap runs -- dot-server changes the scene and tells the modules
