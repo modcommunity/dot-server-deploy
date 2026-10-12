@@ -838,8 +838,14 @@ func _build_menu() -> void:
 
 	# Focused after it is in the tree. Grabbing focus on a node that is not yet there is a
 	# menu that opens with nothing focused — unusable with a gamepad and invisible with a
-	# mouse. game-arena shipped exactly that.
-	_join.grab_focus.call_deferred()
+	# mouse. game-arena shipped exactly that. Guarded, because a shell told to join at once
+	# (a link, a suite) has taken the panel down again by the time the deferred call runs, and
+	# grab_focus out of the tree is an engine error (shell_notice printed one every run).
+	var join := _join
+	(func() -> void:
+		if is_instance_valid(join) and join.is_inside_tree():
+			join.grab_focus()
+	).call_deferred()
 
 
 ## A small label over a field. Two words each, and they are what stops the panel reading as

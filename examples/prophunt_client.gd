@@ -38,7 +38,7 @@ const MAPS_KEY := "tmc/prophunt_maps@0.1.0"
 const MODULE := "prophunt"
 
 ## Every check this suite runs, including the one that compares against it.
-const CHECKS := 25
+const CHECKS := 34
 
 var _passed := 0
 var _failed := 0
@@ -80,6 +80,8 @@ func _run() -> void:
 			await _test_the_packs_mounted()
 			await _test_the_maps_arrived()
 			await _test_the_client_builds_the_map()
+			await _test_a_broken_prop_reaches_the_client()
+			await _test_a_leant_prop_is_drawn_on_the_floor()
 			await _test_teammate_cvar_reaches_the_client()
 			_test_still_serving()
 
@@ -343,6 +345,156 @@ func _test_the_client_builds_the_map() -> void:
 	_check(catalogue == null or int((catalogue as Object).get("maps").size()) <= 1,
 		"and no delivered map files of its own")
 	_check(_refused[0] == "", "and the client is still connected", _refused[0])
+	_done()
+
+
+## [b]The BROKEN event, which a shell parses only if it has the game's newest event table.[/b]
+## A prop the server breaks is broken on the delivered client and throws its pieces there. The
+## server end is the two lines the game's own shot path runs (`break_prop`, then
+## `prop_broken`), so what is measured is the bridge's broadcast and the client's decoding of
+## an event appended last to `PhEvents.Kind`; the game's own suites never see it cross a mount.
+func _test_a_broken_prop_reaches_the_client() -> void:
+	_section("a prop the server breaks is broken on the delivered client")
+
+	var server_game := _world()
+	var client_game := _client_world()
+	var server_map: Object = server_game.get("map") if server_game != null else null
+	var client_map: Object = client_game.get("map") if client_game != null else null
+	var catalogue: Object = server_game.get("props_catalogue") if server_game != null else null
+	var index := -1
+
+	if server_map != null and catalogue != null:
+		var props: Array = server_map.get("props")
+		for i in range(props.size()):
+			var prop: Dictionary = props[i]
+			if not bool(prop["broken"]) and float(catalogue.call("breaks", prop["id"])) > 0.0:
+				index = i
+				break
+
+	if not _check(index >= 0 and client_map != null, "the running map has a prop that breaks"):
+		_done()
+		return
+
+	var _broke: bool = server_map.call("break_prop", index)
+	server_game.emit_signal("prop_broken", index, Vector3.FORWARD)
+
+	var seen := await _until(
+		func() -> bool:
+			var props: Array = client_map.get("props")
+			return index < props.size() and bool((props[index] as Dictionary)["broken"]),
+		10.0
+	)
+	_check(seen, "and the client has it broken too", "prop %d (%s)" % [index, server_map.call("prop_id", index)])
+	_check(client_game.get_node_or_null(NodePath("Debris_%d" % index)) != null,
+		"and throws its pieces where it stood")
+	_done()
+
+
+## [b]dot-props API level 4, drawn by the delivered client.[/b] A stand-in hides as the
+## tallest Food or Survival kit piece (models whose texture is an external `Textures/colormap.png`
+## beside them, which must load from inside the mount) and is turned on its nose, twelve steps of
+## fifteen degrees. The client must draw the model, not the box stand-in for one that would not
+## load, with its texture, upside down, its lowest point on the floor: turned about its foot, as
+## the first version did, the whole bottle was under it.
+func _test_a_leant_prop_is_drawn_on_the_floor() -> void:
+	_section("a leant prop is drawn on the floor by the delivered client")
+
+	var server_game := _world()
+	var client_game := _client_world()
+	var catalogue: Object = server_game.get("props_catalogue") if server_game != null else null
+	var rules: Variant = server_game.get("rules") if server_game != null else null
+	var kit := &""
+	var tallest := 0.0
+
+	if catalogue != null and rules is DotPropDisguiseRules:
+		for key: Variant in (catalogue.get("props") as Dictionary).keys():
+			var id := StringName(str(key))
+			var name := String(id)
+			if not (name.begins_with("food_") or name.begins_with("survival_")):
+				continue
+			var size: Vector3 = catalogue.call("size_of", id)
+			if bool(catalogue.call("may_disguise", id)) and size.y > tallest \
+					and DotPropDisguise.may_take(size, rules as DotPropDisguiseRules).ok:
+				kit = id
+				tallest = size.y
+
+	# A hunter's client is told nothing of what anybody became while the props hide (the
+	# bridge holds every DISGUISE back until the seek), and this client may be a hunter. So the
+	# lean is put on once the hunters are let go, when every client is told.
+	var seeking := await _until(func() -> bool: return int(server_game.get("phase")) == 2, 45.0)  # Phase.SEEK
+
+	var who := &""
+	var players: Dictionary = server_game.get("players") if server_game != null else {}
+
+	for key: Variant in players.keys():
+		var id := StringName(str(key))
+		var player: Object = players[key]
+		if int(server_game.call("team_of", id)) == 1 and bool(player.get("is_bot")) and bool(player.call("is_alive")):
+			who = id
+			break
+
+	if not _check(seeking and kit != &"" and who != &"" and client_game != null,
+			"the seek begins, with a kit piece to hide as and a stand-in on the props",
+			"seeking %s, kit %s, stand-in %s" % [seeking, kit, who]):
+		_done()
+		return
+
+	var worn: bool = server_game.call("disguise_as", who, kit)
+	for _step in range(12):
+		var _turned: bool = server_game.call("turn", who, 1)  # Turn.TILT_FORWARD
+
+	var leant: DotPropDisguise = (players[who] as Object).get("disguise") if players.has(who) \
+		else DotPropDisguise.new()
+	_check(worn and absf(absf(leant.pitch) - 180.0) < 0.5, "the server dresses it and turns it on its nose",
+		"worn %s, pitch %.1f" % [worn, leant.pitch])
+
+	# Sampled in the frame the client shows it leant: a stand-in's own brain may straighten it
+	# later, and the drawing is only checked against the lean it was drawn with.
+	var sample := {}
+	var drawn := await _until(
+		func() -> bool:
+			var mine: Object = (client_game.get("players") as Dictionary).get(who)
+			if mine == null:
+				sample["seen"] = "no such player on the client: %s" % [(client_game.get("players") as Dictionary).keys()]
+				return false
+			var d: DotPropDisguise = mine.get("disguise")
+			var model: Node3D = mine.get("prop_model")
+			sample["seen"] = "%s pitch %.0f, model %s" % [d.prop_id if d != null else &"-",
+				d.pitch if d != null else 0.0, "none" if model == null else "shown" if model.visible else "hidden"]
+			if d == null or d.prop_id != kit or absf(d.pitch) < 90.0 or model == null \
+					or not model.is_inside_tree() or not model.visible:
+				return false
+			sample["floor"] = float((mine.get("controller") as Object).get("state").get("position").y)
+			sample["low"] = INF
+			sample["high"] = -INF
+			sample["boxes"] = 0
+			sample["textured"] = 0
+			for node in model.find_children("*", "MeshInstance3D", true, false):
+				var mesh := (node as MeshInstance3D).mesh
+				if mesh == null:
+					continue
+				if mesh is BoxMesh:
+					sample["boxes"] = int(sample["boxes"]) + 1
+				var box := (node as MeshInstance3D).global_transform * mesh.get_aabb()
+				sample["low"] = minf(float(sample["low"]), box.position.y)
+				sample["high"] = maxf(float(sample["high"]), box.end.y)
+				for surface in range(mesh.get_surface_count()):
+					var material := (node as MeshInstance3D).get_active_material(surface) as BaseMaterial3D
+					if material != null and material.albedo_texture != null:
+						sample["textured"] = int(sample["textured"]) + 1
+			return float(sample["high"]) > float(sample["low"]),
+		15.0
+	)
+
+	_check(drawn, "the client draws the stand-in as that piece, leant", str(sample))
+
+	var low := float(sample.get("low", INF)) - float(sample.get("floor", 0.0))
+	var high := float(sample.get("high", -INF)) - float(sample.get("floor", 0.0))
+	_check(drawn and absf(low) < 0.05 and high > tallest * 0.8,
+		"with its lowest point on the floor and the rest of it above", "low %+.3f, high %+.3f of %.3f" % [low, high, tallest])
+	_check(drawn and int(sample.get("boxes", 1)) == 0, "as the model, not the box that stands in for one that would not load")
+	_check(drawn and int(sample.get("textured", 0)) > 0,
+		"with the kit's external texture, loaded from inside the mount")
 	_done()
 
 

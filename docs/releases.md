@@ -69,3 +69,7 @@ Names a version of the site's shared web game loader (the JavaScript that frames
 ## Pending: `zed_weapons`
 
 `addons/zed_weapons` (zed-dot-weapons, the second weapon pack, needed by Zombie Zone) is linked by hand in the development checkout and is **not yet in `ADDONS_ALL`, `setup.ps1` or `addons.lock`**, because the repository has not been published and listing it would make every production reinstall fail to clone it. When it is published: add `zed_weapons` to both lists and to `addon_repo` (the zee exception again, also in `tools/addons-lock.sh` and `tools/package_check.sh`), lock zee-dot-weapons at a tag with `ZeeWeaponPack.add_source` and zed at its first tag, and export a shell. `zombiezone_client` says "skipped" without the link.
+
+## Pending: `dot_bot`
+
+`addons/dot_bot` (dot-bot, the player bots) is linked by hand in the development checkout and is **not yet in `ADDONS_ALL`, `setup.ps1` or `addons.lock`**, for the same reason as `zed_weapons`: `modcommunity/dot-bot` does not exist on GitHub yet, and listing it would make every reinstall fail to clone it. Arena, Deathrun, Hide & Seek, Prop Hunt, Wipeout and Zombie Zone name `DotBot*` classes at their HEADs, so none of them may be tagged for delivery before a shell carries the addon: a pack naming a class the shell lacks does not compile, and its `requires.json` asks for `dot_bot`. When the repository is published and tagged: add `dot_bot` to both lists (`addon_repo` needs no exception), lock it, export a shell, then tag those games. Every delivered-client suite needs the link to pass.
