@@ -23,6 +23,7 @@ An addon release reaches players by a server restart ([addon-packs.md](addon-pac
 - the shell's own `client/` code (the admin menu, loading screen, notice overlay, party and friends UI);
 - a dot-server signon revision change (an older shell is refused with "This server needs a different build of the game client");
 - an addon release that adds or changes files outside its own `addons/<dir>/` (the weapons pack's art is in `res://assets/`).
+- a change to the page the engine runs in (`web/embed.html`, or an addon's page script such as dot-audio's `web/dot_audio_ceiling.js`, which `export-web` copies beside the build): an overlay lays files under `res://`, never next to `index.html`.
 
 An older shell ignores notice topics and `data` it does not know, so a server ahead of the shell degrades rather than breaks for the HUD features; the signon revision is the hard line.
 

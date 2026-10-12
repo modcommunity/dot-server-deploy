@@ -848,6 +848,26 @@ ensure_lock_exported() {
     printf '  export_presets.cfg now exports addons.lock (a copy older than the tracked presets)\n'
 }
 
+install_ceiling() {
+    local build="$1" js="$PROJECT/addons/dot_audio/web/dot_audio_ceiling.js" page
+    if [ ! -f "$js" ]; then
+        # Warned, not refused: a shell is sometimes exported in a hurry, and one that clips on
+        # a pile-up is better than none. The release order tags dot-audio before the shell.
+        warn "addons/dot_audio/web/dot_audio_ceiling.js is missing (dot-audio older than the browser's limiter): this web build has no ceiling and a pile-up of sounds will clip"
+        return 0
+    fi
+    cp "$js" "$build/dot_audio_ceiling.js"
+    for page in "$build/index.html" "$build/embed.html"; do
+        [ -f "$page" ] || continue
+        if ! grep -qF 'dot_audio_ceiling.js' "$page"; then
+            # Into <head>, ahead of the engine's own script tag.
+            sed -i 's#<head>#<head>\n<script src="dot_audio_ceiling.js"></script>#' "$page"
+        fi
+        grep -qF 'src="dot_audio_ceiling.js"' "$page" \
+            || die "$page does not load dot_audio_ceiling.js, so its sound has no ceiling" 3
+    done
+}
+
 ## The export holds `addons.lock`. Checked in the artifact, like the maps, because a filter
 ## that stopped working is otherwise a shell that never takes a newer addon.
 check_lock_exported() {
@@ -1114,6 +1134,14 @@ case "$COMMAND" in
 
         # The standalone page, which takes ?server= from the URL.
         [ -f "$PROJECT/web/embed.html" ] && cp "$PROJECT/web/embed.html" "$PROJECT/web/build/embed.html"
+
+        # The browser's limiter, beside the engine and in both pages, before index.js. A web
+        # build in sample playback runs no bus effects, so dot-audio's Master limiter never
+        # ran in a browser: a game measured +3.4 dBFS with 187 clipped samples in 40 s
+        # (dot-audio docs/loudness.md, "The browser's ceiling"). The file is dot-audio's;
+        # embed.html names it in its source, index.html gets it here because the presets
+        # are each box's own copy.
+        install_ceiling "$PROJECT/web/build"
 
         # And the loader website-city uploads, with the engine's location baked in.
         # It HAS to be baked: the site serves that file out of its own upload store,
