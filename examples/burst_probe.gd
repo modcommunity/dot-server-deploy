@@ -585,17 +585,18 @@ func _maps() -> void:
 
 
 ## The map menu as a player uses it (dot-menu's M, over dot-vote's DotVoteMapMenu): `/mapmenu` in
-## chat, the list back in notices, then `/mapmenu <id>` for each map. The owner's flag emptied,
-## so this guest may change the map rather than start a vote for it.
+## chat, the list back in notices, then `/mapmenu <id>` for a row. The owner's flag emptied, so
+## this guest may change the map rather than start a vote for it.
+##
+## [b]The list is asked for again after every change, as M asks on every press.[/b] Walking a
+## list fetched once chose rows that the change before had taken off: arena's team modes, listed
+## on dm_box and refused after a change to dm_pit, which has no team spawns. So the next row is
+## the first not yet chosen in the list as it is NOW, and any row of that list refused is a
+## failure of the same check: the menu offered something it would not do.
 func _maps_by_menu() -> void:
 	var flag := _console("sv_map_menu_flag \"\"")
-	_menu_rows.clear()
-	_menu_results.clear()
-	_menu_parts[0] = 0
-	_menu_parts[1] = 0
 	var before := _open_window()
-	_link.send_chat("/mapmenu")
-	var listed := await _until(func() -> bool: return _menu_parts[1] > 0 and _menu_parts[0] == _menu_parts[1], 10.0)
+	var listed := await _fetch_menu_rows()
 	await _seconds(1.0)
 	var worst := {"frame": _relay.peak_window, "poll": _relay.peak_poll, "bytes": _relay.bytes_down - before,
 		"map": "(the list)", "visited": 0, "how": "client map menu", "rows": _menu_rows.size()}
@@ -603,32 +604,57 @@ func _maps_by_menu() -> void:
 		_menu_rows.size(), _menu_parts[1], _relay.peak_window, _relay.peak_poll])
 	if not listed:
 		_result["maps"] = worst
-		_check(false, "every map change through the client's map menu stays under the limit in every frame",
+		_check(false, "every map change through the client's map menu stays under the limit in every frame, and every row it lists is accepted",
 			"no map_menu list came back to /mapmenu (sv_map_menu_flag: %s)" % flag)
 		return
 	var how := ""
-	for row: Dictionary in _menu_rows:
-		if bool(row.get("current", false)) or int(worst["visited"]) >= MAX_MAPS:
-			continue
+	var chosen := {}
+	var refused := PackedStringArray()
+	while int(worst["visited"]) < MAX_MAPS:
+		var id := ""
+		for row: Dictionary in _menu_rows:
+			var candidate := str(row.get("id", ""))
+			if not bool(row.get("current", false)) and candidate != "" and not chosen.has(candidate):
+				id = candidate
+				break
+		if id == "":
+			break
+		chosen[id] = true
 		var results := _menu_results.size()
 		var from := _open_window()
-		_link.send_chat("/mapmenu %s" % str(row.get("id", "")))
+		_link.send_chat("/mapmenu %s" % id)
 		await _seconds(MAP_SECONDS)
 		var answer: Dictionary = _menu_results[results] if _menu_results.size() > results else {}
 		how = "%s (%s)" % [str(answer.get("how", "no answer")), str(answer.get("text", ""))]
+		if str(answer.get("how", "")) == "refused":
+			refused.append("%s: %s" % [id, str(answer.get("text", ""))])
 		worst["visited"] = int(worst["visited"]) + 1
 		if maxi(_relay.peak_window, _relay.peak_poll) > maxi(int(worst["frame"]), int(worst["poll"])):
 			worst["frame"] = _relay.peak_window
 			worst["poll"] = _relay.peak_poll
 			worst["bytes"] = _relay.bytes_down - from
-			worst["map"] = str(row.get("id", ""))
+			worst["map"] = id
 		print("  note  %s: %s; most in a frame %d, in a poll %d, %d bytes, longest frame %d ms" % [
-			str(row.get("id", "")), how, _relay.peak_window, _relay.peak_poll, _relay.bytes_down - from, _longest_frame / 1000])
+			id, how, _relay.peak_window, _relay.peak_poll, _relay.bytes_down - from, _longest_frame / 1000])
+		if not await _fetch_menu_rows():
+			refused.append("(no list came back after %s)" % id)
+			break
 	worst["answer"] = how
+	worst["refused"] = Array(refused)
 	_result["maps"] = worst
-	_check(int(worst["visited"]) > 0 and maxi(int(worst["frame"]), int(worst["poll"])) <= _limit,
-		"every map change through the client's map menu stays under the limit in every frame",
-		"worst %s: %d bytes in one 16.7 ms, %d visited, the last answer '%s'" % [worst["map"], int(worst["frame"]), int(worst["visited"]), how])
+	_check(int(worst["visited"]) > 0 and maxi(int(worst["frame"]), int(worst["poll"])) <= _limit and refused.is_empty(),
+		"every map change through the client's map menu stays under the limit in every frame, and every row it lists is accepted",
+		"worst %s: %d bytes in one 16.7 ms, %d visited, the last answer '%s'; refused: %s" % [
+			worst["map"], int(worst["frame"]), int(worst["visited"]), how, "; ".join(refused) if not refused.is_empty() else "none"])
+
+
+## `/mapmenu` and the whole list back, every part of it, in [member _menu_rows].
+func _fetch_menu_rows() -> bool:
+	_menu_rows.clear()
+	_menu_parts[0] = 0
+	_menu_parts[1] = 0
+	_link.send_chat("/mapmenu")
+	return await _until(func() -> bool: return _menu_parts[1] > 0 and _menu_parts[0] == _menu_parts[1], 10.0)
 
 
 func _teardown() -> void:
