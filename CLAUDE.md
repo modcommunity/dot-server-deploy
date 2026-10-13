@@ -40,6 +40,7 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first; this file is what is specifi
 | `dist/`, `data/`, `keys/` | published packs, runtime state, the signing key (all gitignored) |
 | `web/` | `README.md` (publishing), `embed.html`, `tmc-loader.js`, `shell-build` (tracked) |
 | `deploy/` | `pterodactyl-egg.json`, TLS and nginx scripts, systemd, S3 publish |
+| `games.list` | every game and maps pack `setup.sh` publishes, `<repository> <content directory>` |
 | `setup.sh`, `setup.ps1`, `Dockerfile`, `demo.sh`, `play.sh`, `upgrade.sh` | installers and front doors |
 
 ## Running and testing
@@ -92,8 +93,8 @@ Exit codes: `2` usage, `3` no runtime, `4` no project (`install-games`: addons b
 
 **Setup and the egg**
 
-- One fact, one place: `GAMES`, `ADDONS_ALL`, `addon_repo()`, `repo_url()`, `tools/game_source.sh`. Other scripts read them; never copy a list. [setup](docs/setup.md#one-fact-one-place)
-- `setup.ps1`'s addon list and `Get-AddonRepo`, and the zee exception in `addons-lock.sh`/`package_check.sh`, are copies; `tools/check_lists.sh` fails when they drift. [setup](docs/setup.md#one-fact-one-place)
+- One fact, one place: `games.list` (every game and maps pack; `setup.sh` builds `GAMES` from it), `ADDONS_ALL`, `addon_repo()`, `repo_url()`, `tools/game_source.sh`. Other scripts read them; never copy a list. [setup](docs/setup.md#one-fact-one-place)
+- `setup.ps1`'s addon list and `Get-AddonRepo`, and the zee exception in `addons-lock.sh`/`package_check.sh`, are copies; `tools/check_lists.sh` fails when they drift or a game has no `games.list` line. [setup](docs/setup.md#one-fact-one-place)
 - `./server` is generated from `tools/server.in`: re-run `setup.sh` after editing the template. [setup](docs/setup.md)
 - No git, unzip or other tool this project drives may prompt: `GIT_TERMINAL_PROMPT=0`, `GIT_ASKPASS`, `BatchMode`, `< /dev/null`, `timeout`. [egg](docs/pterodactyl.md#no-git-may-ask-anything)
 - `safe.directory '*'` belongs in the egg's install script only, never in `setup.sh`. [egg](docs/pterodactyl.md#a-reinstall-is-root-looking-at-somebody-elses-checkout)

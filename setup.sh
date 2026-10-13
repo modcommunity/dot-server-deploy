@@ -1028,34 +1028,26 @@ clone_repos() {
 
 step "games"
 
-# repository:content id
+# repository:content id, read from games.list -- THE list of what this project publishes.
 #
-# The repository name is the DIRECTORY beside this one and it is not the game's name:
-# `dot-2d-hungry` was renamed to `game-hungario` and this list was not, so every run
-# skipped it. A stale name here is a hard failure rather than a warning: "skipping a
-# game" scrolls past and a server with no games does not.
+# It used to be an array written out here, and six games were finished, packed and tested
+# while it still named seven: a game missing from a hand-kept list is a game a fresh box
+# never builds, with nothing saying so. games.list is one file every script reads (this
+# one, tools/game_source.sh's `game_entries`, tools/package_check.sh), and
+# tools/check_lists.sh fails when a content/<dir>/pack.json or a game repository beside
+# this one has no line in it. Its own header says what the two fields mean.
 #
-# The second field is the CONTENT directory whose `game.yml` and `pack.json` describe
-# the pack -- which is not always the pack's name, and deliberately: hungario is three
-# game ids over one `content_id: hungry`, so any one of its three directories publishes
-# the one pack. What each pack excludes is in its `pack.json`, beside the game.yml,
-# because that is a property of the game rather than of this script.
-GAMES=(
-    "game-hungario:hungry_classic"
-    "game-g2gfast:g2gfast"
-    "game-playground:playground"
-    "game-arena:arena"
-    "mg-buses-from-hell:buses"
-    "mg-smash-copter:smash"
-    "mg-wipeout:wipeout"
-    # Not a game: the courses mg-wipeout mounts on the server (its server_dependencies).
-    # Here because this list is what publishes from a repository, and a data pack is
-    # published exactly as a game is.
-    "mg-wipeout-maps:wipeout_maps"
-    # Not a game either: game-playground's custom maps, which every playground CLIENT
-    # mounts too (content/playground/game.yml's `dependencies`).
-    "game-playground-maps:playground_maps"
-)
+# A stale repository name is a hard failure rather than a warning: "skipping a game"
+# scrolls past and a server with no games does not.
+GAMES=()
+[ -f "$ROOT/games.list" ] || die "games.list is missing: it is the list of games this project publishes" 4
+while read -r _repo _dir _rest; do
+    case "$_repo" in ''|'#'*) continue ;; esac
+    [ -n "$_dir" ] && [ -z "$_rest" ] \
+        || die "games.list: '$_repo $_dir $_rest' is not '<repository> <content directory>'" 5
+    GAMES+=("$_repo:$_dir")
+done < "$ROOT/games.list"
+[ ${#GAMES[@]} -gt 0 ] || die "games.list names no games" 5
 
 # --- Or none of them -------------------------------------------------------
 #

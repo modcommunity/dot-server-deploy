@@ -31,7 +31,11 @@
 #
 # `game/` rather than the directory itself: an empty directory left behind by an
 # interrupted clone is not a game, and reporting it as one produces a publish failure
-# three steps later that names the publisher.
+# three steps later that names the publisher. A DATA pack's repository (a game's maps or
+# courses) has no `game/`; its `project.godot` is the same proof that a checkout is there.
+# Testing for `game/` alone made every maps repository in games.list "missing", so
+# setup.sh published nothing on a developer box ("keeping the packs in dist/") and died
+# on a fresh one ("nowhere this run looked") from the day mg-wipeout-maps was listed.
 
 # The project root, from this file rather than from the caller's cwd -- play.sh runs
 # from the root, tools/check.sh cds to it, and a sourced file that trusted either would
@@ -56,7 +60,7 @@ game_source() {
     GAME_SRC=""; GAME_KIND=""
 
     for dir in ${GAMES_DIR:+"$GAMES_DIR"} "$GAMES_REPOS" "$TMC_ROOT/.."; do
-        [ -d "$dir/$repo/game" ] || continue
+        [ -d "$dir/$repo/game" ] || [ -f "$dir/$repo/project.godot" ] || continue
         # Resolved, so games/<repo> -> ../../<repo> and the sibling itself are one
         # answer rather than two. A caller comparing timestamps or greping for a
         # class_name against both would otherwise do it twice.
@@ -72,11 +76,14 @@ game_source() {
     return 1
 }
 
-## The `repo:content directory` list, read out of setup.sh.
+## The `repo:content directory` list, read out of games.list.
 ##
-## [b]setup.sh is the one place that knows what this project is made of.[/b] Three
-## hand-kept copies of this list have drifted here already; this is the same read
-## tools/check.sh was doing, moved next to the search order it goes with.
+## [b]games.list is the one place that says which games this project publishes.[/b]
+## Three hand-kept copies of this list have drifted here already, and then the one in
+## setup.sh drifted from the games themselves; setup.sh, this function and
+## tools/package_check.sh all read the file, and tools/check_lists.sh checks it against
+## content/ and the repositories beside this one.
 game_entries() {
-    sed -n '/^GAMES=(/,/^)/p' "$TMC_ROOT/setup.sh" | grep -oE '"[^"]+"' | tr -d '"'
+    [ -f "$TMC_ROOT/games.list" ] || return 1
+    awk '!/^[[:space:]]*(#|$)/ { print $1 ":" $2 }' "$TMC_ROOT/games.list"
 }

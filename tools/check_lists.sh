@@ -17,7 +17,15 @@
 # addon whose name does not start the way the others do cannot silently fall out of the
 # lock and the staged tree.
 #
-# Arm it by deleting a name from setup.ps1's list, or the zee line from Get-AddonRepo.
+# And games.list, the list of games setup.sh publishes, against what it describes: every
+# content/<dir>/pack.json is published by a line (directly, or by a directory sharing its
+# content id, as hungario's do), every line names a content directory with a pack.json,
+# and every game repository beside this one (a zees-games line in dot-bootstrap's
+# projects.tsv whose checkout has a game.yml) has a line. Six finished games were missing
+# from the old hand-written array, which nothing could see.
+#
+# Arm it by deleting a name from setup.ps1's list, the zee line from Get-AddonRepo, or a
+# game's line from games.list.
 set -uo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
@@ -67,6 +75,61 @@ else
         [ -z "$missed" ] && good "$f's read of ADDONS_ALL ('$pat') picks up every name" \
             || bad "$f's read of ADDONS_ALL ('$pat') misses:$missed"
     done
+fi
+
+# --- games.list -------------------------------------------------------------
+# The pack id a content directory publishes: a game's game.yml content_id, else a data
+# pack's pack.json id.
+pack_id() {
+    local d="content/$1" id=""
+    [ -f "$d/game.yml" ] && id=$(sed -nE 's/^content_id:[[:space:]]*"?([^"#[:space:]]+).*/\1/p' "$d/game.yml" | head -1)
+    [ -z "$id" ] && [ -f "$d/pack.json" ] && id=$(grep -oE '"id"[[:space:]]*:[[:space:]]*"[^"]+"' "$d/pack.json" | head -1 | sed -E 's/.*"([^"]+)"$/\1/')
+    printf '%s\n' "$id"
+}
+
+if [ ! -f games.list ]; then
+    bad "games.list is missing"
+else
+    mapfile -t GL_REPOS < <(awk '!/^[[:space:]]*(#|$)/ { print $1 }' games.list)
+    mapfile -t GL_DIRS < <(awk '!/^[[:space:]]*(#|$)/ { print $2 }' games.list)
+    bad_lines=$(awk '!/^[[:space:]]*(#|$)/ && NF != 2' games.list)
+    [ -z "$bad_lines" ] || bad "games.list lines that are not '<repository> <content directory>': $bad_lines"
+
+    listed_ids=" "; nodesc=""
+    for d in "${GL_DIRS[@]}"; do
+        if [ -f "content/$d/pack.json" ]; then listed_ids="$listed_ids$(pack_id "$d") "
+        else nodesc="$nodesc $d"; fi
+    done
+    [ -z "$nodesc" ] && good "every games.list line names a content directory with a pack.json (${#GL_DIRS[@]})" \
+        || bad "games.list names content directories with no pack.json:$nodesc"
+
+    unlisted=""
+    for f in content/*/pack.json; do
+        d=$(basename "$(dirname "$f")"); id=$(pack_id "$d")
+        case "$listed_ids" in *" $id "*) ;; *) unlisted="$unlisted $d(${id:-no id})" ;; esac
+    done
+    [ -z "$unlisted" ] && good "every content/<dir>/pack.json is published by a games.list line" \
+        || bad "content directories no games.list line publishes:$unlisted"
+
+    TSV=../dot-bootstrap/projects.tsv
+    if [ -f "$TSV" ]; then
+        missing=""; strange=""
+        while IFS=$'\t' read -r repo url; do
+            case "$repo" in ''|'#'*) continue ;; esac
+            case "$url" in *zees-games/*) ;; *) continue ;; esac
+            [ -f "../$repo/game.yml" ] || continue
+            printf '%s\n' "${GL_REPOS[@]}" | grep -qxF "$repo" || missing="$missing $repo"
+        done < "$TSV"
+        for repo in "${GL_REPOS[@]}"; do
+            grep -qE "^$repo"$'\t' "$TSV" || strange="$strange $repo"
+        done
+        [ -z "$missing" ] && good "every game repository in projects.tsv with a game.yml is in games.list" \
+            || bad "game repositories with a game.yml that games.list does not name:$missing"
+        [ -z "$strange" ] && good "every games.list repository is in dot-bootstrap's projects.tsv" \
+            || bad "games.list names repositories projects.tsv does not:$strange"
+    else
+        echo "  --   no ../dot-bootstrap/projects.tsv: game repositories not compared"
+    fi
 fi
 
 exit $((fails > 0))

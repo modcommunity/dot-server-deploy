@@ -79,7 +79,8 @@ echo "staging"
 # of the same knowledge and it had drifted like the other two: it still named
 # a renamed game, and it was missing every addon added since — so the staged tree was
 # vendored without them and the packaged check passed on a build the real one could not
-# make. setup.sh is the one place that knows what this project is made of.
+# make. setup.sh is the one place that knows what this project is made of, and games.list
+# (which setup.sh reads) the one place that names its games.
 #
 # [b]And it read an array that no longer exists.[/b] `ADDONS=(` became `ADDONS_ALL=(` when
 # the list became derivable, this pattern matched nothing, and not one addon was staged:
@@ -93,7 +94,7 @@ mapfile -t STAGE_REPOS < <(
     {
         sed -n '/^ADDONS_ALL=(/,/)/p' "$ROOT/setup.sh" | grep -oE '(dot|zee|zed)_[a-z0-9_]+' \
             | sed 's/^zee_weapons$/zee-dot-weapons/; s/^zed_weapons$/zed-dot-weapons/' | tr '_' '-'
-        sed -n '/^GAMES=(/,/^)/p' "$ROOT/setup.sh" | grep -oE '"[^"]+"' | tr -d '"' | cut -d: -f1
+        awk '!/^[[:space:]]*(#|$)/ { print $1 }' "$ROOT/games.list"
     } | sort -u
 )
 

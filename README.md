@@ -373,7 +373,7 @@ A game can be **in the build** or **delivered**. Built in is the default and is 
    games        game loaded scene=res://dot_cloud/arena/0.1.0/scenes/arena_server.tscn
    ```
 
-5. **Take it out of the build**, once it is delivered: drop its entry from `BUILTIN_CLIENTS` in `client/shell.gd` and its row from `GAMES` in `setup.sh`.
+5. **Take it out of the build**, once it is delivered: drop its entry from `BUILTIN_CLIENTS` in `client/shell.gd` and its line from `games.list`.
 
 ### The five, as published
 

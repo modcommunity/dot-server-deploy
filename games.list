@@ -1,0 +1,38 @@
+# Every game and data pack this project publishes from a repository: THE list.
+#
+#   <repository>  <content directory>
+#
+# setup.sh builds its GAMES from this file, and tools/game_source.sh (`game_entries`),
+# tools/check.sh, tools/package_check.sh and play.sh read it through that. Nothing else
+# writes a copy. tools/check_lists.sh fails when a content/<dir>/pack.json is published by
+# no line here, when a line names a content directory with no pack.json, or when a game
+# repository beside this one (dot-bootstrap's projects.tsv, a repo with a game.yml) has no
+# line -- so a new game cannot be forgotten the way six were.
+#
+# The repository is the DIRECTORY name and the GitHub name (repo_url() in setup.sh decides
+# the owner). The content directory is the one whose game.yml and pack.json describe the
+# pack, which is not always the pack's name: hungario is several game ids over one
+# `content_id: hungry`, so one of its directories publishes the one pack.
+#
+# A data pack (a game's maps or courses) comes BEFORE the game that names it in its
+# dependencies or server_dependencies, the order the content origin needs them in.
+
+game-hungario           hungry_classic
+game-g2gfast            g2gfast
+game-playground-maps    playground_maps
+game-playground         playground
+game-arena              arena
+mg-buses-from-hell      buses
+mg-smash-copter         smash
+mg-wipeout-maps         wipeout_maps
+mg-wipeout              wipeout
+mg-deathrun-maps        deathrun_maps
+mg-deathrun             deathrun
+mg-dangerous-delivery   delivery
+mg-look-at-me           lookatme
+mg-prop-hunt-maps       prophunt_maps
+mg-prop-hunt            prophunt
+hide-n-seek-maps        hideseek_maps
+game-hide-n-seek        hideseek
+zombie-zone-maps        zombiezone_maps
+game-zombie-zone        zombiezone

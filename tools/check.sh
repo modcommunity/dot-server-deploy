@@ -82,7 +82,7 @@ echo "the published games"
 mapfile -t GAME_ENTRIES < <(game_entries)
 
 if [ ${#GAME_ENTRIES[@]} -eq 0 ]; then
-    printf '  %sFAIL%s could not read the GAMES list out of setup.sh\n' "$RED" "$OFF"
+    printf '  %sFAIL%s could not read the games list out of games.list\n' "$RED" "$OFF"
     fails=$((fails + 1))
 fi
 
@@ -135,7 +135,13 @@ for entry in "${GAME_ENTRIES[@]}"; do
     checked_any=1
 
     yml="content/$dir/game.yml"
-    if [ ! -f "$yml" ]; then
+    # A data pack (maps, courses) has a pack.json and no game.yml; its id is in the
+    # pack.json. Only staleness applies to it.
+    if [ ! -f "$yml" ] && [ -f "content/$dir/pack.json" ]; then
+        cid="$(grep -oE '"id"[[:space:]]*:[[:space:]]*"[^"]+"' "content/$dir/pack.json" | head -1 \
+            | sed -E 's/.*"([^"]+)"$/\1/')"
+        [ -n "$cid" ] || cid="$dir"
+    elif [ ! -f "$yml" ]; then
         printf '  %sFAIL%s setup.sh publishes %s but there is no %s\n' \
             "$RED" "$OFF" "$dir" "$yml"
         drift=$((drift + 1))
@@ -143,7 +149,7 @@ for entry in "${GAME_ENTRIES[@]}"; do
     fi
 
     # Delivered, or the pack is beside the point.
-    if ! grep -qE '^kind: pack$' "$yml"; then
+    if [ -f "$yml" ] && ! grep -qE '^kind: pack$' "$yml"; then
         printf '  %sFAIL%s %s is not kind: pack, but setup.sh publishes it\n' \
             "$RED" "$OFF" "$yml"
         drift=$((drift + 1))
@@ -151,7 +157,7 @@ for entry in "${GAME_ENTRIES[@]}"; do
     fi
 
     # The pack's name, from the descriptor rather than from the directory.
-    cid="$(grep -E '^content_id:' "$yml" | head -1 | sed -E 's/^content_id:[[:space:]]*//' \
+    [ -f "$yml" ] && cid="$(grep -E '^content_id:' "$yml" | head -1 | sed -E 's/^content_id:[[:space:]]*//' \
         | sed -E 's/[[:space:]]*#.*$//' | tr -d '"')"
     [ -n "$cid" ] || cid="$dir"
 

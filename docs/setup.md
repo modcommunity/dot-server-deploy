@@ -8,7 +8,7 @@ This project's most repeated bug is one fact written down twice, and it has ship
 
 | Fact | The one place | Readers |
 | --- | --- | --- |
-| which games to build | `GAMES` in `setup.sh` | `tools/check.sh`, `tools/package_check.sh`, `play.sh` read it out of `setup.sh` |
+| which games to build | `games.list` (`setup.sh` builds `GAMES` from it) | `tools/check.sh`, `tools/package_check.sh`, `play.sh` read it through `game_entries`; `tools/check_lists.sh` fails when a `content/<dir>/pack.json` or a game repository in dot-bootstrap's `projects.tsv` has no line |
 | which addons exist | `ADDONS_ALL` in `setup.sh` | `tools/package_check.sh`, `tools/addons-lock.sh` read it by the `^ADDONS_ALL=(` pattern; `setup.ps1`'s `$addons` is a copy (no PowerShell here to prove a parser of a bash array), and `tools/check_lists.sh` (run by `check.sh`) fails when it differs in a name or the order |
 | addon name to repository | `addon_repo()` (underscores to hyphens, except `zee_weapons` → `zee-dot-weapons`) | the same exception is repeated in `tools/addons-lock.sh`, `tools/package_check.sh` and `setup.ps1`'s `Get-AddonRepo`; `tools/check_lists.sh` compares all three, and checks that the two scripts' `grep -oE` read of `ADDONS_ALL` picks up every name (theirs matches only `dot_` and `zee_`) |
 | repository to owner | `repo_url()`: `dot-*` from `$GIT_BASE` (the organisation), everything else from the games owner | the family rule in [game-dev/CLAUDE.md](../../../CLAUDE.md#repositories-owners-and-pushing) |
