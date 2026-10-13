@@ -31,7 +31,7 @@ const CONTENT_ID := "tmc/delivery"
 const MODULE := "delivery"
 
 ## Every check this suite runs, including the one that compares against it.
-const CHECKS := 20
+const CHECKS := 21
 
 var _passed := 0
 var _failed := 0
@@ -295,9 +295,21 @@ func _test_driving_across_the_socket() -> void:
 		_done()
 		return
 
+	# The game's real way onto a route, both steps across the socket: the panel's button
+	# ("start") drives the client's truck to the route's gate, and the route begins only when
+	# the delivery is accepted there ("accept", the E at the barrier). Not `quick_start`, which
+	# would test a shortcut no player takes.
 	client.call("_act", "start", {"route": "dd_foothills"})
 	var key := StringName(str(client.get("bridge").get("local_key")))
 	var world := _world()
+	var at_gate := await _until(func() -> bool:
+		var driver: Variant = (world.get("drivers") as Dictionary).get(key)
+		var truck: Variant = (driver as Object).get("truck") if driver != null else null
+		var gate: Variant = world.call("gate_at", (truck as Node3D).global_position) if truck is Node3D else null
+		return gate != null and StringName(str((gate as Object).get("route_id"))) == &"dd_foothills", 15.0)
+	_check(at_gate, "the server drove the client's truck to the route's gate", String(key))
+
+	client.call("_act", "accept", {})
 	var on_road := await _until(func() -> bool:
 		var driver: Variant = (world.get("drivers") as Dictionary).get(key)
 		return driver != null and (driver as Object).call("on_road"), 15.0)
