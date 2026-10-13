@@ -165,7 +165,21 @@ func _boot() -> bool:
 	return _check(reached, "and reaches the delivered game")
 
 
+## The house's own key for a player is the account in two games (look-at-me, delivery), and both
+## clients in this process are one guest (one device id per install), so Bea's join took Ada's
+## player and kicked her ("You joined from another tab or window"): both games failed here with
+## a voice manager freed under the check. Keyed by session, as two people on two machines are
+## (burst_probe and lookatme_client do the same).
+func _key_by_session() -> void:
+	for name in _server().modules.loaded_names():
+		var module: DotModule = _server().modules.get_module(name)
+		var bridge: Variant = module.get("bridge") if module != null else null
+		if bridge is Object and "key_fn" in (bridge as Object):
+			(bridge as Object).set("key_fn", Callable())
+
+
 func _connect_both() -> bool:
+	_key_by_session()
 	for i in range(2):
 		var side := Node.new()
 		side.name = "ClientSide%d" % i
