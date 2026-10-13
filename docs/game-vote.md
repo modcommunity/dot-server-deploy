@@ -40,6 +40,8 @@ Every game in the family has a vote of its own (map, mode, layout, course or mou
 
 `examples/game_vote_all.tscn` plays all of this through every game with a real shell: rock the vote, "don't change", the game's own ballot refused and then following, the time limit waiting for it, one entry per game, never two ballots in any physics frame, and a click on the next game played.
 
+- **A module's unload runs AFTER its game's scene is freed**, so every world reference in `_module_unload` is guarded with `is_instance_valid`: g2gfast's touched its freed world and segfaulted the server ([history](history.md)). `game_vote_all` switches out of every game with a client attached.
+
 ## On the HUD
 
 The ballot, countdown and result reach chat through `announce_fn`, and also go out as dot-server `DotNotice`s that the shell's `TmcNoticeOverlay` (`client/notice_overlay.gd`) draws and plays. The shell talks to a server only through `DotClientLink` and `DotClientChat`, and a loaded game's wire is the game's, so a generic notice pair in dot-server was the way in. That pair moved the signon revision: every shell built before it is refused by a server built after it.

@@ -1,6 +1,6 @@
 # dot-server-deploy
 
-TMC's server tool: a Godot project that boots a dot-server from `cfg/` and `content/`, installs and serves games as signed dot-cloud packs, and exports the client shell for the browser (`export-web`) and the desktop (`export-native`). **It ships no game**: every game is a pack downloaded on connect. It is also the release machinery: `addons.lock`, the shell builds, `setup.sh`, the Pterodactyl egg.
+TMC's server tool: boots a dot-server from `cfg/` and `content/`, serves games as signed dot-cloud packs, and exports the client shell for the browser and the desktop. **It ships no game.** It is also the release machinery: `addons.lock`, the shell builds, `setup.sh`, the Pterodactyl egg.
 
 Read the family [CLAUDE.md](../../CLAUDE.md) first; this file is what is specific to here. The operator's view of every feature is the [README](README.md); the reasoning is in [docs/](docs/README.md).
 
@@ -8,7 +8,6 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first; this file is what is specifi
 
 | Read | Before |
 | --- | --- |
-| [docs/README.md](docs/README.md) | the index |
 | [docs/delivery-constraint.md](docs/delivery-constraint.md) | anything about how a game is packed, mounted or referenced; a new game in `content/` |
 | [docs/configuration.md](docs/configuration.md) | `cfg.example/`, a new setting, `TmcConfig`, `TmcAdmins`, `cfg/content.yml` |
 | [docs/installing-games.md](docs/installing-games.md) | `install-games`, `index`, `TmcContent`, `TmcGameRef`, a game's pack lists |
@@ -24,17 +23,18 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first; this file is what is specifi
 | [docs/enrollment.md](docs/enrollment.md) | `host/tmc_enroll.gd`, `data/listing.json` |
 | [docs/testing.md](docs/testing.md) | adding or trusting a suite |
 | [docs/history.md](docs/history.md) | a deployment bug that "cannot be happening" |
+| [docs/not-yet.md](docs/not-yet.md) | planning: what is not built, published or verified yet |
 
 ## Layout
 
 | Path | What |
 | --- | --- |
-| `host/` | the server: `tmc_host.gd` (boot, game loading, cvars), `tmc_config.gd` + `tmc_yaml.gd` (cfg), `tmc_content.gd` + `tmc_game_ref.gd` + `tmc_game_config.gd` (games), `tmc_admins.gd`, `tmc_vote.gd`, `tmc_party.gd`, `tmc_replay.gd`, `tmc_admin_menu.gd`, `tmc_loading.gd`, `tmc_enroll.gd`, `tmc_report.gd` (site listing), `tmc_script_watch.gd`. **Not in the client build** |
-| `client/` | the shell: `boot.tscn` (main scene; mounts an addon overlay), `shell.tscn`/`shell.gd`, `notice_overlay.gd`, `admin_menu_panel.gd`, `loading_screen.gd`, `tmc_friends.gd`, `locales/`, `auth.json` + `content.json` (shipped, gitignored) |
+| `host/` | the server: boot, cfg, content, the game vote, admin menu, enrollment and the rest. **Not in the client build**. [files](docs/README.md#where-the-code-is) |
+| `client/` | the shell: `boot.tscn` (main scene; mounts an addon overlay), `shell.gd`, the notice overlay, admin menu, loading screen, friends, `locales/` |
 | `cfg.example/` | the tracked config templates; `cfg/` is written from them once and gitignored |
 | `content/<id>/` | descriptors (`game.yml`, `pack.json`) for first-party games and map packs; installed games land in `content/<owner>/<name>/` |
-| `tools/` | `server.in` (generates `./server`), `server.ps1.in`, `install_games.gd`, `index.gd`, `pack.gd`, `check.sh`, `check_lists.sh`, `check_boot_failures.sh`, `enet_relay_all_games.sh`, `burst_all_games.sh`, `package_check.sh`, `browser_check.mjs`, `addons-lock.sh`, `fetch-godot.sh`, `fetch-export-templates.sh`, `game_source.sh`, `rcon.mjs`, `progress_shot.gd` |
-| `examples/` | every suite: `selftest`, `multigame`, `game_vote_all`, `game_vote_rounds`, `live_switch`, `reconnect`, `return_to_game`, `shell_notice`, `party_live`, `pack_requires`, `admin_*`, `enet_relay` and `burst_probe` (every game), and one `*_client` per delivered game |
+| `tools/` | `server.in` (generates `./server`), the installer, indexer and packer, the check scripts, `addons-lock.sh`, the runtime fetchers |
+| `examples/` | every suite, `enet_relay` and `burst_probe` (every game), and one `*_client` per delivered game |
 | `addons/`, `addons.lock` | linked addons (`addons/.repos/` holds clones) and the tag each is locked to |
 | `games/` | game repositories (links on a developer box), `.gdignore`d |
 | `dist/`, `data/`, `keys/` | published packs, runtime state, the signing key (all gitignored) |
@@ -60,22 +60,22 @@ Exit codes: `2` usage, `3` no runtime, `4` no project (`install-games`: addons b
 
 **Delivery**
 
-- The shell's `project.godot` must keep `audio/driver/enable_input=true`: it is read when the driver starts, so no delivered game can open a microphone without it. The loader's iframe carries `allow="... microphone"`, and a parent page must delegate `microphone` to the game's origin in its own `Permissions-Policy`. [dot-voice design](../dot-voice/docs/design.md#the-device-layer-and-the-browser)
-- The shell's `project.godot` carries no comments: the editor drops them, and default-valued keys, the first time it saves the file, so a checkout would show it modified. Its reasons live here: the main scene is `client/boot.tscn` because this project, double-clicked, is the client shell (an operator runs `./server`, which names the host scene), and boot names no addon class because a script compiled before the overlay is mounted keeps its old code for the life of the process ([addon packs](docs/addon-packs.md)); the renderer is `gl_compatibility` because the browser is the whole point of the shell; the two macOS settings are in [native client](docs/native-client.md#two-engine-facts-set-in-projectgodot).
+- The shell's `project.godot` keeps `audio/driver/enable_input=true`, or no delivered game can open a microphone. [web](docs/web-client.md#the-shells-projectgodot)
+- The shell's `project.godot` carries no comments (the editor drops them); its reasons are in [web](docs/web-client.md#the-shells-projectgodot).
 
-- Both web pages load dot-audio's `dot_audio_ceiling.js` before `index.js` (`export-web`'s `install_ceiling`): the browser runs no bus effects, so it is the only limiter a browser player has. A change to it needs a new shell. [web](docs/web-client.md#the-browsers-audio-ceiling)
+- Both web pages load dot-audio's `dot_audio_ceiling.js` before `index.js`, the browser player's only limiter; a change needs a new shell. [web](docs/web-client.md#the-browsers-audio-ceiling)
 - A delivered game references its own files by relative path; no `class_name`, and every `res://` string through `<Game>Paths.rebase()`. [delivery](docs/delivery-constraint.md#rules-that-follow)
 - `rebase()` is one line over `rebase_onto(path, root)`, so a suite can test with a mount prefix; tested against `res://` it passes with the bug in. [delivery](docs/delivery-constraint.md#rules-that-follow)
 - A form of the mount constraint is closed when every game closes it. [delivery](docs/delivery-constraint.md#rules-that-follow)
 - A pack is named for its content id; packs are imported (`--import`) before publishing; `pack.json`'s `exclude_dirs` matches at any depth. [delivery](docs/delivery-constraint.md#publishing-a-pack)
-- `tools/pack.gd` derives `requires.json` in the source project (dot-core's `dot_requires.gd`, floors applied) and adds it without touching the checkout through dot-cloud's `extra_files` (API 2; `publisher_for` falls back to `LegacyRequiresPublisher`'s private override below that, to delete once `addons.lock` has it); the manifest is read back either way. [delivery](docs/delivery-constraint.md#publishing-a-pack)
+- `tools/pack.gd` derives `requires.json` in the source project and adds it without touching the checkout. [delivery](docs/delivery-constraint.md#publishing-a-pack)
 - A delivered module may only name base classes this build carries. [delivery](docs/delivery-constraint.md#rules-that-follow)
 
 **Configuration**
 
 - `cfg/` is never overwritten and never tracked; change a default in `cfg.example/`, and remember existing boxes keep their copy. [config](docs/configuration.md#cfg-is-written-by-setup-cfgexample-is-tracked)
 - Layers: defaults < `cfg/*.yml` < `DOT_SERVER_*` < argv. `TMC_*` become arguments, so they outrank the YAML. [config](docs/configuration.md#layers)
-- `cfg/*.yml` reaches dot-server as console lines in `startup_config`; a setting whose cvar or command does not exist yet at that point (`sv_map`, `sv_game`, `sv_query_app`, `sv_web_loader`) must be a config field the host applies. [config](docs/configuration.md#the-configuration-is-a-surface-not-a-second-parser)
+- `cfg/*.yml` reaches dot-server as console lines; a setting whose cvar does not exist yet at that point is a config field the host applies. [config](docs/configuration.md#the-configuration-is-a-surface-not-a-second-parser)
 - `TmcYaml` reads `on`/`off` as bools; a word-valued setting must accept a bool. [config](docs/configuration.md#the-configuration-is-a-surface-not-a-second-parser)
 - The game vote's prefix is `DOT_GAME_VOTE_*`, never `DOT_VOTE_*` (the loaded game's map vote). [config](docs/configuration.md#prefixes-that-keep-two-copies-of-an-addon-apart)
 - `cfg/content.yml` refuses identity keys and unknown keys by name; unpinned maps resolve per start into `data/content-maps.json`, never per join. [config](docs/configuration.md#a-server-owners-settings-per-game-cfgcontentyml)
@@ -93,7 +93,7 @@ Exit codes: `2` usage, `3` no runtime, `4` no project (`install-games`: addons b
 **Setup and the egg**
 
 - One fact, one place: `GAMES`, `ADDONS_ALL`, `addon_repo()`, `repo_url()`, `tools/game_source.sh`. Other scripts read them; never copy a list. [setup](docs/setup.md#one-fact-one-place)
-- `setup.ps1`'s addon list and `Get-AddonRepo`, and the zee exception in `addons-lock.sh`/`package_check.sh`, are copies: change them with `ADDONS_ALL`/`addon_repo()`; `tools/check_lists.sh` fails when they drift. [setup](docs/setup.md#one-fact-one-place)
+- `setup.ps1`'s addon list and `Get-AddonRepo`, and the zee exception in `addons-lock.sh`/`package_check.sh`, are copies; `tools/check_lists.sh` fails when they drift. [setup](docs/setup.md#one-fact-one-place)
 - `./server` is generated from `tools/server.in`: re-run `setup.sh` after editing the template. [setup](docs/setup.md)
 - No git, unzip or other tool this project drives may prompt: `GIT_TERMINAL_PROMPT=0`, `GIT_ASKPASS`, `BatchMode`, `< /dev/null`, `timeout`. [egg](docs/pterodactyl.md#no-git-may-ask-anything)
 - `safe.directory '*'` belongs in the egg's install script only, never in `setup.sh`. [egg](docs/pterodactyl.md#a-reinstall-is-root-looking-at-somebody-elses-checkout)
@@ -105,7 +105,7 @@ Exit codes: `2` usage, `3` no runtime, `4` no project (`install-games`: addons b
 
 - Addon release: tag → site publishes the pack → `tools/addons-lock.sh write`, push → restart. Push the lock only after the packs are on the origin. [releases](docs/releases.md#the-release-orders)
 - Game release: tag the addons → lock here → release this repo → tag the game. [releases](docs/releases.md#the-release-orders)
-- A new shell is needed for the engine, the boot stage, `client/` code, a signon revision change, or addon files outside `addons/<dir>/`. Order: lock, export, upload, register in Admin → Game, write `web/shell-build`, tag. [releases](docs/releases.md#what-needs-a-new-shell)
+- A new shell is needed for the engine, the boot stage, `client/` code, a signon change, or addon files outside `addons/<dir>/`. [releases](docs/releases.md#what-needs-a-new-shell)
 - `tools/addons-lock.sh check` before any export; check against the tags, not the sibling checkouts. [releases](docs/releases.md#addonslock)
 - `setup.sh` moves only its own clones to the lock, never a developer's checkout. [releases](docs/releases.md#addonslock)
 - `web/shell-build` must name a build that is uploaded and registered, or players get the shared build. [releases](docs/releases.md#webshell-build-and-sv_web_build)
@@ -114,11 +114,11 @@ Exit codes: `2` usage, `3` no runtime, `4` no project (`install-games`: addons b
 
 **Host and shell**
 
-- `host/` is not in the client build: anything both sides need (vote cue ids, `is_safe_url`) is written twice and a suite checks the copies agree. [vote](docs/game-vote.md#on-the-hud), [admin](docs/admin-menu.md#the-loading-screen-covers-a-change-never-the-first-join)
+- `host/` is not in the client build: what both sides need is written twice, and a suite checks the copies agree. [vote](docs/game-vote.md#on-the-hud), [admin](docs/admin-menu.md#the-loading-screen-covers-a-change-never-the-first-join)
 - The game vote's commands keep the `game_` prefix and its director `register_service = false`; one game on offer means no game vote. [vote](docs/game-vote.md)
-- The notice overlay draws nothing at the top centre (every game's second line is there): lines then ballots in one right-hand column, a third of the frame wide; a ballot hides the line it names (`data["line"]`); a ballot opening takes down another's held result; ballots are opaque. [vote](docs/game-vote.md#on-the-hud)
-- The game vote and a game's own vote never show a ballot together: `TmcVote` finds every game `DotVoteDirector` in the tree and chains each `busy_fn`; one ballot entry per content id. [vote](docs/game-vote.md#the-games-own-vote-and-this-one-take-turns)
-- A module's unload runs AFTER its game's scene is freed: guard every world reference in `_module_unload` with `is_instance_valid` (g2gfast segfaulted the server). `game_vote_all` switches out of every game with a client attached. [vote](docs/game-vote.md#the-games-own-vote-and-this-one-take-turns)
+- The notice overlay draws nothing at the top centre: lines then ballots in one right-hand column; a ballot hides the line it names; ballots are opaque. [vote](docs/game-vote.md#on-the-hud)
+- The game vote and a game's own vote never show a ballot together (`TmcVote` chains every director's `busy_fn`). [vote](docs/game-vote.md#the-games-own-vote-and-this-one-take-turns)
+- A module's unload runs AFTER its game's scene is freed: guard every world reference in `_module_unload` with `is_instance_valid`. [vote](docs/game-vote.md#the-games-own-vote-and-this-one-take-turns)
 - An admin menu leaf is a console line run with the admin's context; never act directly. Notice payloads are measured in bytes with `var_to_bytes`. [admin](docs/admin-menu.md#the-menu-is-a-way-of-typing-a-command)
 - A new client-to-server feature is a new envelope kind, not chat (chat has a flood limit) and not a handshake key (a signon change). [admin](docs/admin-menu.md#the-menu-is-a-way-of-typing-a-command)
 - The shell signs in only by `try_web_handoff()`; `client/auth.json` names the site origin, never the game origin. [web](docs/web-client.md#what-the-web-player-signs-in-against)
@@ -126,33 +126,20 @@ Exit codes: `2` usage, `3` no runtime, `4` no project (`install-games`: addons b
 - An addon in the list is not an addon in use: something must construct it. [services](docs/operator-services.md)
 - The security guard ships in dry run with movement thresholds at 0. [services](docs/operator-services.md#the-guard-dot-server-security)
 - Only a command-line boot enrolls with the site; suites never do. [enrollment](docs/enrollment.md#rules)
+- One game port for WebSocket and ENet (A2S and DQP on its UDP), RCON one up; behind TLS the game binds 127.0.0.1; on a panel set every port. [web](docs/web-client.md#ports-and-transports)
 
 **Testing**
 
 - A delivered-client suite is the only proof a delivery change works; a game's own suites cannot see the mount. [testing](docs/testing.md#a-real-client-in-a-delivered-game)
 - `template_client` packages the template's HEAD: commit it first. [testing](docs/testing.md#a-real-client-in-a-delivered-game)
-- A suite with a server and a client in one process puts the server in its own World3D (`ServerWorld.add`, `examples/server_world.gd`), or the client's copies of physics bodies collide with the server's; `DotRegistry` is still shared. A scratch copy of the project needs its own user folder and port. [testing](docs/testing.md#server-side-suites)
-- A client "in" a game is not its netcode working: after a game change, probe the game's own link (`return_to_game`: inputs and snapshots counted on both ends, for a fresh joiner too). [testing](docs/testing.md#server-side-suites)
+- A server and a client in one process: the server gets its own World3D (`ServerWorld.add`); a scratch copy of the project its own user folder and port. [testing](docs/testing.md#server-side-suites)
+- A client "in" a game is not its netcode working: after a game change, probe the game's own link (`return_to_game`). [testing](docs/testing.md#server-side-suites)
 - Arm every new check, and read the exit code even when every check passed. [testing](docs/testing.md#arming)
 - ENet's packet throttle must stay at 32 at both ends of every game's client; `enet_relay -- --stock-throttle` is the control and must fail. [testing](docs/testing.md#a-real-client-in-a-delivered-game)
-- No game may send a browser more than 48 KiB in one frame (its WebSocket peer drops what overflows 64 KiB between frames); `tools/burst_all_games.sh` measures the join, play, seven more joining, eight avatars at once, a full scoreboard, the map vote and map changes (client-side menus too) of every game. [testing](docs/testing.md#a-real-client-in-a-delivered-game)
-
-## Ports and transports
-
-The game listens on `net_port` (6064 in the template) with `net_transport: dual`: browsers on WebSocket/TCP, native clients on ENet/UDP at the same number (`net_enet_port: 0`), with A2S and DQP sharing the UDP port. RCON defaults to the game port plus one. nginx does not carry UDP, so behind TLS the game binds 127.0.0.1 and the ENet port is reached directly. On a panel set every port explicitly. [web](docs/web-client.md#tls), [egg](docs/pterodactyl.md#the-startup-command)
+- No game may send a browser more than 48 KiB in one frame (its WebSocket peer drops what overflows 64 KiB); `tools/burst_all_games.sh` measures every game. [testing](docs/testing.md#a-real-client-in-a-delivered-game)
 
 ## Deliberately not here
 
 - **A package** (.deb/.rpm): `./setup.sh --full` is the installer, because the engine is pinned per checkout and two servers on a box should be two clones.
 - **A server browser**: dot-server-query answers both query protocols; nothing here asks. `sv_query_app` is display only.
 - **TLS in the host or client**: it is deployment, in `deploy/`.
-
-## Open items
-
-- `zed_weapons` is not in `ADDONS_ALL`, `setup.ps1`, `addon_repo` or `addons.lock` until zed-dot-weapons is published; zee-dot-weapons needs a tag with `ZeeWeaponPack.add_source`. [releases](docs/releases.md#pending-zed_weapons)
-- `dot_bot` is not in `ADDONS_ALL`, `setup.ps1` or `addons.lock` until modcommunity/dot-bot is published and tagged; six games need it at their HEADs. [releases](docs/releases.md#pending-dot_bot)
-- Not in `setup.sh`'s `GAMES` (unreleased): deathrun, delivery, lookatme, prophunt, hideseek, zombiezone and their map packs.
-- Server enrollment is not verified on production (site deploy, `prisma db push`, box reinstalls). [enrollment](docs/enrollment.md#verified-and-what-is-not)
-- The site's party booking feed and player party routes are not known to be deployed. [services](docs/operator-services.md#party-matchmaking-and-locale)
-- The PowerShell launcher lacks the bash `pack` and is untested on Windows. [setup](docs/setup.md#windows)
-- Audio in a real browser is unheard; Ogg, MP3 and WebP loading-screen media never fed a real file. [admin](docs/admin-menu.md#testing-it)

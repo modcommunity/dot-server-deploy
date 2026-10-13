@@ -19,3 +19,15 @@ The reasoning behind [../CLAUDE.md](../CLAUDE.md)'s rules. The operator's view o
 | [enrollment.md](enrollment.md) | A server proving its address to get its own site credential |
 | [testing.md](testing.md) | The check scripts, every suite, the delivered-client suites, arming |
 | [history.md](history.md) | Bug stories worth keeping |
+| [not-yet.md](not-yet.md) | What is not built, published or verified yet |
+
+## Where the code is
+
+The files of [CLAUDE.md](../CLAUDE.md)'s layout table, one by one.
+
+| Path | What |
+| --- | --- |
+| `host/` | the server: `tmc_host.gd` (boot, game loading, cvars), `tmc_config.gd` + `tmc_yaml.gd` (cfg), `tmc_content.gd` + `tmc_game_ref.gd` + `tmc_game_config.gd` (games), `tmc_admins.gd`, `tmc_vote.gd`, `tmc_party.gd`, `tmc_replay.gd`, `tmc_admin_menu.gd`, `tmc_loading.gd`, `tmc_enroll.gd`, `tmc_report.gd` (site listing), `tmc_script_watch.gd`. **Not in the client build** |
+| `client/` | the shell: `boot.tscn` (main scene; mounts an addon overlay), `shell.tscn`/`shell.gd`, `notice_overlay.gd`, `admin_menu_panel.gd`, `loading_screen.gd`, `tmc_friends.gd`, `locales/`, `auth.json` + `content.json` (shipped, gitignored) |
+| `tools/` | `server.in` (generates `./server`), `server.ps1.in`, `install_games.gd`, `index.gd`, `pack.gd`, `check.sh`, `check_lists.sh`, `check_boot_failures.sh`, `enet_relay_all_games.sh`, `burst_all_games.sh`, `package_check.sh`, `browser_check.mjs`, `addons-lock.sh`, `fetch-godot.sh`, `fetch-export-templates.sh`, `game_source.sh`, `rcon.mjs`, `progress_shot.gd` |
+| `examples/` | every suite: `selftest`, `multigame`, `game_vote_all`, `game_vote_rounds`, `live_switch`, `reconnect`, `return_to_game`, `shell_notice`, `party_live`, `pack_requires`, `admin_*`, `enet_relay` and `burst_probe` (every game), and one `*_client` per delivered game |

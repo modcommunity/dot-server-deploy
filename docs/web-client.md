@@ -33,6 +33,12 @@ A mounted pack cannot be unmounted, so a client holding something wrong (a cache
 - **`set_anchors_preset` does not set offsets.** A `Control` built in code keeps the zero size it was created with until something resizes it, so a whole interface can be invisible while correctly configured.
 - **A shell feature is a `client/` change**, and `host/` is not in the client build: anything both sides need (cue ids, URL safety) is written twice and a suite checks the copies agree.
 
+## The shell's project.godot
+
+The shell's `project.godot` must keep `audio/driver/enable_input=true`: it is read when the driver starts, so no delivered game can open a microphone without it. The loader's iframe carries `allow="... microphone"`, and a parent page must delegate `microphone` to the game's origin in its own `Permissions-Policy`. [dot-voice design](../../dot-voice/docs/design.md#the-device-layer-and-the-browser)
+
+The shell's `project.godot` carries no comments: the editor drops them, and default-valued keys, the first time it saves the file, so a checkout would show it modified. Its reasons live here: the main scene is `client/boot.tscn` because this project, double-clicked, is the client shell (an operator runs `./server`, which names the host scene), and boot names no addon class because a script compiled before the overlay is mounted keeps its old code for the life of the process ([addon packs](addon-packs.md)); the renderer is `gl_compatibility` because the browser is the whole point of the shell; the two macOS settings are in [native client](native-client.md#two-engine-facts-set-in-projectgodot).
+
 ## TLS
 
 A page on HTTPS cannot open `ws://`. Certificates and the reverse proxy are deployment and live in `deploy/`: `issue-letsencrypt.sh` (HTTP-01 out of a webroot, out of nginx, or standalone; DNS-01 through a certbot plugin, the only method that issues a wildcard) and `install-server-tls.sh`. `setup.sh --full` asks whether to do both, and **binds the game to 127.0.0.1 when the answer is yes**: left on 0.0.0.0 the game port stays open beside the TLS one and a client that finds it connects in plaintext. nginx does not carry UDP, so the ENet port (`net_enet_port`, by default the game port number over UDP, shared with A2S and DQP) is reached directly and needs no certificate.
@@ -40,3 +46,7 @@ A page on HTTPS cannot open `ws://`. Certificates and the reverse proxy are depl
 ## The browser's audio ceiling
 
 A web build in sample playback runs no bus effects, so dot-audio's Master limiter never runs in a browser, and a pile-up of sounds clipped at the speakers (+3.4 dBFS, 187 clipped samples in 40 s of arena). `export-web` copies dot-audio's `addons/dot_audio/web/dot_audio_ceiling.js` into `web/build/` and makes sure both pages load it before `index.js`: `embed.html` names it in its source, and `install_ceiling` puts the tag into the exported `index.html` (the presets are each box's own copy, so a head include there would reach only new boxes). The script wraps the page's `AudioContext` so the engine's `destination` is a limiter; the measurements are in dot-audio's [docs/loudness.md](../../dot-audio/docs/loudness.md#the-browsers-ceiling). A dot-audio older than the file makes `export-web` warn and build without it.
+
+## Ports and transports
+
+The game listens on `net_port` (6064 in the template) with `net_transport: dual`: browsers on WebSocket/TCP, native clients on ENet/UDP at the same number (`net_enet_port: 0`), with A2S and DQP sharing the UDP port. RCON defaults to the game port plus one. nginx does not carry UDP, so behind TLS the game binds 127.0.0.1 and the ENet port is reached directly. On a panel set every port explicitly. [TLS](#tls), [egg](pterodactyl.md#the-startup-command)
