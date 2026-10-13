@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# The most a browser is sent in one frame, in every delivered game: the join, play, map changes.
+# The most a browser is sent in one frame, in every delivered game: the join, play, seven more
+# players joining, eight avatars at once, a full scoreboard, the map vote, map changes.
 #
 #   tools/burst_all_games.sh [game ...]
 #
@@ -7,7 +8,7 @@
 # prints the table. A browser's WebSocket peer drops what overflows its 64 KiB inbound buffer
 # between two frames; every window must stay at or under 48 KiB in any 16.7 ms. Needs each game's
 # pack in dist/ (./server pack <id> --source games/<repo>); a game without one is listed as skipped.
-# Exit 0 when every game that ran held, 1 otherwise. About 40 s a game.
+# Exit 0 when every game that ran held, 1 otherwise. About 90 s a game.
 set -uo pipefail
 cd "$(dirname "$0")/.."
 games=("$@")
@@ -25,16 +26,17 @@ def w(k):
     x = d.get(k)
     if not x: return "-"
     if x.get("frame", 0) < 0: return "-"
-    extra = (" " + x["map"]) if x.get("map") else ""
-    return "%6d/frame %7d total%s" % (x["frame"], x["bytes"], extra)
-print("join %s | play %s | maps %s" % (w("join"), w("play"), w("maps")))
+    return "%6d" % max(x["frame"], x.get("poll", 0))
+m = d.get("maps") or {}
+where = (" (%s, %s)" % (m.get("how", ""), m.get("map", ""))) if m.get("frame", -1) >= 0 else ""
+print(" | ".join(w(k) for k in ("join", "play", "crowd", "avatars", "board", "vote", "maps")) + where)
 ' "$1"
 }
 
-printf '%-15s %-6s %s\n' game result "most in one 16.7 ms, and bytes in the window"
+printf '%-15s %-6s %s\n' game result "most bytes in one 16.7 ms: join | play | crowd | avatars | board | vote | maps (how, worst)"
 for g in "${games[@]}"; do
     log=".godot/test-logs/burst_probe_$g.log"
-    timeout 300 godot --headless --path . res://examples/burst_probe.tscn -- --game "$g" >"$log" 2>&1
+    timeout 480 godot --headless --path . res://examples/burst_probe.tscn -- --game "$g" >"$log" 2>&1
     rc=$?
     line=$(grep '^BURST ' "$log" | tail -1 | cut -c7-)
     case $rc in

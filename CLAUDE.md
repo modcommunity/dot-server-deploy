@@ -135,7 +135,7 @@ Exit codes: `2` usage, `3` no runtime, `4` no project (`install-games`: addons b
 - A client "in" a game is not its netcode working: after a game change, probe the game's own link (`return_to_game`: inputs and snapshots counted on both ends, for a fresh joiner too). [testing](docs/testing.md#server-side-suites)
 - Arm every new check, and read the exit code even when every check passed. [testing](docs/testing.md#arming)
 - ENet's packet throttle must stay at 32 at both ends of every game's client; `enet_relay -- --stock-throttle` is the control and must fail. [testing](docs/testing.md#a-real-client-in-a-delivered-game)
-- No game may send a browser more than 48 KiB in one frame (its WebSocket peer drops what overflows 64 KiB between frames); `tools/burst_all_games.sh` measures the join, play and map changes of every game. [testing](docs/testing.md#a-real-client-in-a-delivered-game)
+- No game may send a browser more than 48 KiB in one frame (its WebSocket peer drops what overflows 64 KiB between frames); `tools/burst_all_games.sh` measures the join, play, seven more joining, eight avatars at once, a full scoreboard, the map vote and map changes (client-side menus too) of every game. [testing](docs/testing.md#a-real-client-in-a-delivered-game)
 
 ## Ports and transports
 
