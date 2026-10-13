@@ -41,7 +41,7 @@ const CONTENT_ID := "tmc/lookatme"
 const MODULE := "lookatme"
 
 ## Every check this suite runs, including the one that compares against it.
-const CHECKS := 22
+const CHECKS := 26
 
 var _passed := 0
 var _failed := 0
@@ -85,6 +85,7 @@ func _run() -> void:
 			await _test_a_second_over_a_slow_websocket()
 			await _test_a_command_in_chat()
 			_test_still_serving()
+			await _test_the_same_guest_in_a_second_tab()
 
 	await _teardown()
 	DotPaths.remove_tree(DATA)
@@ -346,8 +347,9 @@ func _test_a_second_over_a_slow_websocket() -> void:
 	var bridge: Object = _server().modules.get_module(MODULE).get("bridge")
 	var window := BROWSER_INBOUND / 2
 	# Both clients in this process are one guest (dot-server's device id is per install), and the
-	# house keys progress by account, so the second would take over the first's player. Keyed by
-	# session for the second's join, as two people on two machines would be.
+	# house keys progress by account, so the second would take the player and the first would be
+	# dropped (that is _test_the_same_guest_in_a_second_tab). Keyed by session for the second's
+	# join, as two people on two machines would be.
 	var key_fn: Callable = bridge.get("key_fn")
 	bridge.set("key_fn", Callable())
 	_relay = SlowTcpRelay.new()
@@ -431,6 +433,39 @@ func _client_scene() -> Node:
 			return child
 
 	return null
+
+
+## Two browser tabs of one guest share a device id, so one account. The newest connection wins:
+## it is given the player and the house, and the first is disconnected with a sentence it shows,
+## never left connected with keys that move nothing. Last, because it ends the first client.
+func _test_the_same_guest_in_a_second_tab() -> void:
+	_section("the same guest in a second tab: the newest wins, the first is told")
+	var side := Node.new()
+	side.name = "SecondTab"
+	add_child(side)
+	get_tree().set_multiplayer(MultiplayerAPI.create_default_interface(), side.get_path())
+	var tab := DotClientLink.new()
+	tab.name = "Server"
+	tab.player_name = "Driver"
+	side.add_child(tab)
+	var first_key := StringName(str(_client_scene().get("bridge").get("local_key")))
+	var connecting: DotResult = await tab.connect_to_server("127.0.0.1:%d" % _host.config.server.port)
+	var built := connecting.ok and await _until(func() -> bool: return int(_says(_client_world(tab)).get("levels", 0)) == 32, 60.0)
+	var told := await _until(func() -> bool: return _refused[0] != "", 10.0)
+	_check(String(first_key).begins_with("uid:"), "the house keys the first tab by its account", String(first_key))
+	_check(built, "the second tab is sent the house")
+	_check(told and _refused[0] == "You joined from another tab or window",
+		"and the first tab is disconnected with a reason it can show", _refused[0])
+	var bridge: Object = _server().modules.get_module(MODULE).get("bridge")
+	var players := _world().get("players") as Dictionary
+	var peer := tab.multiplayer.get_unique_id() if tab.multiplayer.has_multiplayer_peer() else 0
+	_check(players.size() == 1 and int(bridge.call("peer_of", first_key)) == peer,
+		"and the one player is the second tab's", "%d players, held by %d, tab %d" % [players.size(), int(bridge.call("peer_of", first_key)), peer])
+	tab.disconnect_from_server("test over")
+	await get_tree().process_frame
+	remove_child(side)
+	side.queue_free()
+	_done()
 
 
 func _test_still_serving() -> void:
