@@ -893,7 +893,23 @@ update_repos() {
 
         [ -d "$dir/.git" ] || continue
 
-        if [ -n "$(git -C "$dir" status --porcelain 2>/dev/null)" ]; then
+        # [b]A clone this script made is not somebody's working tree.[/b] Under
+        # addons/.repos/ a mode the panel daemon re-applied, or a file Godot's import left
+        # beside a script, used to count as "local changes" and the clone was left on the
+        # tag it was installed at -- every reinstall, for good (2026-10-14). So for our own
+        # clones: modes are ignored, untracked files are not changes, and a real edit to a
+        # tracked file is set aside with `git stash` (recoverable) instead of blocking the
+        # lock. Anyone else's checkout is still left exactly as it is.
+        if [ -n "${ADDONS_REPOS:-}" ] && [ "${dir#"$ADDONS_REPOS"/}" != "$dir" ]; then
+            git -C "$dir" config core.fileMode false 2>/dev/null
+            if [ -n "$(git -C "$dir" status --porcelain --untracked-files=no 2>/dev/null)" ]; then
+                printf '    %s..%s   %s (local changes set aside: git stash list)\n' "$YLW" "$OFF" "$repo"
+                git -C "$dir" stash push --quiet -m "setup --update $(date -u +%Y-%m-%dT%H:%MZ 2>/dev/null)" 2>/dev/null || {
+                    printf '    %s..%s   %s (local changes; could not set aside; left alone)\n' "$YLW" "$OFF" "$repo"
+                    continue
+                }
+            fi
+        elif [ -n "$(git -C "$dir" status --porcelain 2>/dev/null)" ]; then
             printf '    %s..%s   %s (local changes; left alone)\n' "$YLW" "$OFF" "$repo"
             continue
         fi

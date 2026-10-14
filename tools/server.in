@@ -1214,6 +1214,36 @@ esac
 # Only on a checkout that is a deployment: a shallow clone (what the egg and setup make),
 # or one whose HEAD is already contained in origin's branch. A developer's checkout with
 # commits of its own is never reset -- that is somebody's work -- and is told to pull.
+## Make a deployment checkout resettable, and say what was in the way.
+##
+## [b]Every panel box refused its own update.[/b] The daemon re-applies file ownership and
+## permissions on each start, git counts a changed mode as a local change, and the update
+## then declined with "tracked files here have local changes" -- so no box ever moved past
+## the addons it was installed with (2026-10-14). A deployment is this script's, not
+## somebody's working tree: modes are ignored, and a real edit to a tracked file is set
+## aside with `git stash` (named, recoverable with `git stash list`) rather than either
+## blocking the update or being thrown away.
+clear_for_update() {
+    local dir="$1" what="$2"
+    git -C "$dir" config core.fileMode false 2>/dev/null
+    # The panel's install script deletes the built-in descriptors under content/ that are
+    # not in TMC_GAMES -- tracked files, so the checkout it leaves is "dirty" from then
+    # on. Those deletions are the installer's own pruning (and TMC_GAMES_MODE hides the
+    # games anyway), so they are put back rather than stashed on every start.
+    if [ "$dir" = "$PROJECT" ] && [ -n "$(git -C "$dir" ls-files --deleted -- content 2>/dev/null)" ]; then
+        git -C "$dir" checkout --quiet -- $(git -C "$dir" ls-files --deleted -- content) 2>/dev/null \
+            && note "put back the built-in game descriptors the installer had pruned from content/"
+    fi
+    local dirty
+    dirty="$(git -C "$dir" status --porcelain --untracked-files=no 2>/dev/null)"
+    [ -z "$dirty" ] && return 0
+    warn "TMC_AUTO_UPDATE: $what had local changes to tracked files; setting them aside:"
+    printf '%s\n' "$dirty" | head -n 20 | while IFS= read -r line; do warn "    $line"; done
+    git -C "$dir" stash push --quiet -m "tmc auto-update $(date -u +%Y-%m-%dT%H:%MZ 2>/dev/null)" 2>/dev/null \
+        || { warn "TMC_AUTO_UPDATE: could not set them aside; not touching $what"; return 1; }
+    note "kept in git stash (git -C $dir stash list)"
+}
+
 self_update() {
     command -v git >/dev/null 2>&1 \
         || { warn "TMC_AUTO_UPDATE: git is not installed here; reinstall the server to update its addons"; return 1; }
@@ -1235,10 +1265,7 @@ self_update() {
         return 1
     fi
 
-    if [ -n "$(git -C "$PROJECT" status --porcelain --untracked-files=no)" ]; then
-        warn "TMC_AUTO_UPDATE: tracked files here have local changes; not resetting them"
-        return 1
-    fi
+    clear_for_update "$PROJECT" "this checkout" || return 1
 
     git -C "$PROJECT" reset --quiet --hard "origin/$branch" || return 1
     (cd "$PROJECT" && ./setup.sh --no-games --update) || { warn "TMC_AUTO_UPDATE: setup.sh --update failed"; return 1; }
@@ -1275,7 +1302,9 @@ lock_moved() {
     local branch
     branch="$(git -C "$PROJECT" rev-parse --abbrev-ref HEAD 2>/dev/null)"
     [ -n "$branch" ] && [ "$branch" != "HEAD" ] || return 1
-    [ -z "$(git -C "$PROJECT" status --porcelain --untracked-files=no)" ] || return 1
+    # Local changes are self_update's to set aside, not a reason to never look: this line
+    # used to answer "no" for a dirty checkout, silently, on every start.
+    git -C "$PROJECT" config core.fileMode false 2>/dev/null
 
     local fetch=(git -C "$PROJECT" fetch --quiet --depth 1 origin "$branch")
     command -v timeout >/dev/null 2>&1 && fetch=(timeout 20 "${fetch[@]}")
@@ -1336,8 +1365,8 @@ if [ -z "$NO_INSTALL" ] && { [ -n "$OPT_GAMES" ] || has_owner_maps; } \
                 warn "even the newest addons this checkout locks are too old for a game above;"
                 warn "it stays on the version that runs until a server release catches up"
             else
-                warn "a game needs newer addons than this server has; it stays on the version"
-                warn "that runs. Reinstall, or set TMC_AUTO_UPDATE=when-needed, to update them"
+                warn "a game needs newer addons than this server has, and the update above did"
+                warn "not happen (its reason is printed above); it stays on the version that runs"
             fi
             ;;
         *) warn "no games could be installed from the content origin" ;;
