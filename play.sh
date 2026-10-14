@@ -238,6 +238,11 @@ elif port_busy "$GAME_PORT"; then
 else
     args=(--port "$GAME_PORT" --bind 127.0.0.1)
     [ -n "$GAME" ] && args+=(--game "$GAME")
+    # The person running this is the owner, and only this machine can reach a server bound to
+    # 127.0.0.1, so M changes the map for whoever plays here. Never on a public server: there
+    # a TLS proxy makes every browser arrive from loopback, which is why this is said here and
+    # not inferred from the address.
+    args+=(-- +sv_map_menu_flag anyone)
 
     ./server "${args[@]}" >"$LOG_DIR/server.log" 2>&1 &
     echo $! > "$RUN_DIR/server.pid"

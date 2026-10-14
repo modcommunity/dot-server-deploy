@@ -22,10 +22,18 @@
 #                                        2 the speaker's team, 3 players nearby
 #         sv_map_menu_flag: "generic"    who changes the map at once from the M map menu: an
 #                                        admin flag (generic, the default, is every staff group
-#                                        from moderator up; changemap narrows it to admins; ""
-#                                        lets anybody). Everybody else's choice is a vote
-#                                        (nominate, then rock the vote). Under defaults: for
-#                                        every game; a game's own section wins
+#                                        from moderator up; changemap narrows it to admins;
+#                                        "anyone" lets everybody). Empty or missing is staff
+#                                        only, never everybody. Everybody else's choice is a
+#                                        vote (nominate, then rock the vote). Under defaults:
+#                                        for every game; a game's own section wins
+#         sv_map_menu_alone: "1"         1 (the default): the only human playing may change the
+#                                        map from M at once, with nobody to ask; a second human
+#                                        makes it a vote again. 0: staff only, plus votes. Bots
+#                                        never count
+#         sv_map_menu_vote_min: "2"      humans playing before an M choice rocks the vote (2,
+#                                        never fewer); below it the choice only nominates, and
+#                                        a rock never passes on fewer than most of the humans
 #       metadata:                merged key by key into the game's metadata:, e.g.
 #         map_vote:              its map vote and rotation (dot-vote's settings)
 #           duration_sec: 1800
