@@ -220,7 +220,7 @@ $addons = @('dot_core','dot_log','dot_net','dot_game','dot_entity','dot_server',
             'dot_vehicle','dot_achievements','dot_objective','dot_effects','dot_spectate','dot_economy','dot_settings','dot_console',
             'dot_audio','dot_fx','dot_lighting','dot_procedural_generation','dot_inventory','dot_peer_to_peer','dot_weapon','dot_physics',
             'dot_spawn','dot_team','dot_player','dot_player_class','dot_player_char','zee_weapons','dot_party','dot_matchmaking',
-            'dot_locale','dot_replay','dot_friends','dot_sql','dot_menu')
+            'dot_locale','dot_replay','dot_friends','dot_sql','dot_menu','dot_bot','zed_weapons')
 
 # The repository an addon lives in: setup.sh's addon_repo(), exception for exception (also
 # compared by tools/check_lists.sh). The weapons packs (zee_weapons -> zee-dot-weapons,

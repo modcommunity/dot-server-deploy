@@ -1381,7 +1381,7 @@ ADDONS_ALL=(dot_core dot_log dot_net dot_game dot_entity dot_server dot_server_q
         dot_procedural_generation dot_inventory dot_peer_to_peer dot_weapon
         dot_physics dot_spawn dot_team dot_player dot_player_class
         dot_player_char zee_weapons dot_party dot_matchmaking dot_locale
-        dot_replay dot_friends dot_sql dot_menu)
+        dot_replay dot_friends dot_sql dot_menu dot_bot zed_weapons)
 
 # What THIS project's own scripts name, whatever games it carries.
 #
