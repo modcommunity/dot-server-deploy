@@ -122,6 +122,7 @@ Exit codes: `2` usage, `3` no runtime, `4` no project (`install-games`: addons b
 - A module's unload runs AFTER its game's scene is freed: guard every world reference in `_module_unload` with `is_instance_valid`. [vote](docs/game-vote.md#the-games-own-vote-and-this-one-take-turns)
 - An admin menu leaf is a console line run with the admin's context; never act directly. Notice payloads are measured in bytes with `var_to_bytes`. [admin](docs/admin-menu.md#the-menu-is-a-way-of-typing-a-command)
 - A new client-to-server feature is a new envelope kind, not chat (chat has a flood limit) and not a handshake key (a signon change). [admin](docs/admin-menu.md#the-menu-is-a-way-of-typing-a-command)
+- Solo (`--solo`, `?solo=`) mounts a pack as a join does and starts its `client_scene` with NO client link; a game reads its solo map packs from `DotRegistry` `dot_solo` by name, and `client/solo.json` must match `cfg.example/content.yml`. [web](docs/web-client.md#solo-play)
 - The shell signs in only by `try_web_handoff()`; `client/auth.json` names the site origin, never the game origin. [web](docs/web-client.md#what-the-web-player-signs-in-against)
 - Anything chained onto a `DotRegistry` service a game registers must re-chain after every game change (registry is last-wins). [services](docs/operator-services.md#party-matchmaking-and-locale)
 - An addon in the list is not an addon in use: something must construct it. [services](docs/operator-services.md)

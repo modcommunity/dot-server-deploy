@@ -62,6 +62,13 @@ var _content_failed: PanelContainer = null
 var _content_failed_text: Label = null
 var _mouse_before_prompt: Input.MouseMode = Input.MOUSE_MODE_VISIBLE
 
+## Solo play (see [TmcSolo]): the pack this shell was asked to run with no server, the
+## version it resolved to, and the session object a game and its menu find in [DotRegistry].
+var _solo_id: String = ""
+var _solo_version: String = ""
+var _solo_button: Button = null
+var _solo_session: TmcSoloSession = null
+
 ## What restarting looks like, for a suite: called instead of reloading the page or
 ## re-executing the process. Unset in a real client.
 var restart_fn: Callable = Callable()
@@ -190,6 +197,18 @@ func _ready() -> void:
 	var resumed := _take_resume()
 
 	await _sign_in(resumed)
+
+	# Solo: the page (the site's direct Play) or the command line named a game to run here,
+	# with no server. See [TmcSolo]. Checked before the server, because `embed.html` sends
+	# one or the other and a solo launch has no address to dial.
+	var solo := TmcSolo.requested()
+
+	if solo.has("refused"):
+		_say("'%s' is not a game this client can start." % str(solo["refused"]))
+
+	if str(solo["id"]) != "":
+		_start_solo(str(solo["id"]), str(solo["version"]))
+		return
 
 	var wanted := _requested_server()
 
@@ -782,6 +801,16 @@ func _build_menu() -> void:
 	_primary(_join)
 	box.add_child(_join)
 
+	# Play the game this shell was opened for, here, with no server. Hidden until there is
+	# one: a solo launch names its game, and a shell opened cold has no way to know which
+	# games exist. After Leave it is how the player goes again without reloading the page.
+	_solo_button = Button.new()
+	_solo_button.text = "Play solo"
+	_solo_button.custom_minimum_size = Vector2(0.0, 40.0)
+	_solo_button.visible = false
+	_solo_button.pressed.connect(func() -> void: _start_solo(_solo_id, _solo_version))
+	box.add_child(_solo_button)
+
 	# THE LOADING BAR. Hidden until something is actually loading, because a bar sitting at
 	# zero on a menu is a progress indicator for nothing.
 	_progress = ProgressBar.new()
@@ -1232,6 +1261,12 @@ func _connect_to(address: String) -> void:
 	_status.text = "Connecting to %s…" % target
 	_set_busy(true)
 
+	# Off a solo game first: a server's game goes under the same root, and a solo session
+	# left registered would hand the server's game the solo maps and the menu's Leave.
+	if _solo_session != null:
+		_end_solo_session()
+		_clear_game()
+
 	# Before a new one is built, never after: see [method _drop_link]. Every path that
 	# ends a connection drops it too, so this is belt and braces -- except for the one
 	# path that does not, which is a signon that failed after the socket came up
@@ -1543,6 +1578,234 @@ func _restart() -> bool:
 ## is an entry for a game that is also published: the built-in copy would win for players
 ## on this build and the delivered one for everybody else, and the two would drift.
 const BUILTIN_CLIENTS := {}
+
+
+## Runs [param content_id] here, with no server: fetch, verify and mount it as a join does,
+## then start its client scene, which finds no link and plays offline. See [TmcSolo].
+func _start_solo(content_id: String, version: String = "") -> void:
+	if content_id == "" or not TmcSolo.valid_id(content_id):
+		return
+
+	_drop_link()
+	_end_solo_session()
+	_clear_game()
+	_leave_game_ui()
+
+	_solo_id = content_id
+	_solo_version = version
+	_set_busy(true)
+	_join.text = "Connect"
+	if _solo_button != null:
+		_solo_button.visible = true
+		_solo_button.disabled = true
+	_say("Finding %s…" % content_id)
+
+	_ensure_cloud()
+	_adopt_content_url_arg()
+
+	var started := await _load_solo(content_id, version)
+
+	if _solo_button != null:
+		_solo_button.disabled = false
+
+	if not started.ok:
+		_end_solo_session()
+		_fail(_text("shell.solo.failed", {"reason": _explain(started.error)},
+			"Could not start %s: %s" % [content_id, _explain(started.error)]))
+		return
+
+
+## Everything [method _start_solo] does that can fail, so it has one way out.
+func _load_solo(content_id: String, version: String) -> DotResult:
+	var wanted := version
+
+	if wanted == "":
+		var latest: DotResult = await TmcSolo.resolve_latest(self, content_id, _cloud.http_base_urls)
+		if not latest.ok:
+			return latest
+		wanted = str(latest.value)
+
+	_solo_version = wanted
+	DotLog.info(CHANNEL, "starting solo", {"content": content_id, "version": wanted})
+
+	var got: DotResult = await _cloud.ensure(StringName(content_id), wanted)
+	if not got.ok:
+		return got
+
+	var mount := DotCloudClient.mount_prefix_for(StringName(content_id), wanted)
+	var read := TmcSolo.read_descriptor(mount)
+	if not read.ok:
+		return read
+
+	var desc: Dictionary = read.value
+	var scene_rel := str(desc.get("client_scene", ""))
+
+	if scene_rel == "":
+		return DotResult.fail(DotError.CODE_INVALID,
+			"This game names no client scene, so it cannot be played here.", mount)
+
+	var safe := DotPaths.safe_relative(scene_rel)
+	if not safe.ok:
+		return DotResult.fail(DotError.CODE_INVALID, "This game's client scene is not a safe path.", scene_rel)
+
+	# The packs the game needs beside its own, by the rule a join fetches them: a key with
+	# no version is not one a server would send, and here it is resolved to the newest
+	# rather than refused, because nobody pinned it.
+	for key in (desc["dependencies"] as PackedStringArray) + (desc["server_dependencies"] as PackedStringArray):
+		var dep := await _ensure_solo_pack(key)
+		if not dep.ok:
+			return DotResult.fail(dep.error.code,
+				"This game needs %s, which could not be downloaded." % key, str(dep.error))
+
+	var session := TmcSoloSession.new()
+	session.name = "Solo"
+	session.content_id = content_id
+	session.version = wanted
+	session.mount_root = mount
+	session.display_name = str(desc.get("name", ""))
+	session.leave_fn = _leave_solo
+
+	# The map packs a server owner would name, from the stock list. One that will not
+	# fetch is a map nobody can change to, not a game that will not start.
+	for key in TmcSolo.map_packs(content_id):
+		_say("Fetching maps: %s…" % key)
+		var maps := await _ensure_solo_pack(key)
+		if not maps.ok:
+			DotLog.warn(CHANNEL, "a solo map pack could not be fetched", {
+				"pack": key, "why": str(maps.error),
+			})
+			continue
+		session.map_keys.append(str(maps.value))
+		var parts := TmcSolo.split_key(str(maps.value))
+		session.map_roots.append(DotCloudClient.mount_prefix_for(StringName(parts["id"]), parts["version"]))
+
+	var path := mount.path_join(safe.value)
+	var packed: Variant = load(path)
+
+	if not (packed is PackedScene):
+		return DotResult.fail(DotError.CODE_IO, "The game's client scene would not load.", path)
+
+	add_child(session)
+	_solo_session = session
+	DotRegistry.register(TmcSolo.MAPS_SERVICE, session)
+
+	if not get_tree().node_added.is_connected(_on_solo_node_added):
+		get_tree().node_added.connect(_on_solo_node_added)
+
+	var instance := (packed as PackedScene).instantiate()
+
+	# A client that announces Leave rather than acting on it (`leave_requested`: "what leave
+	# means belongs to whatever loaded this client") is answered here, as a server's game is
+	# answered by its disconnect.
+	if instance.has_signal(&"leave_requested"):
+		instance.connect(&"leave_requested", _leave_solo, CONNECT_DEFERRED)
+
+	_game_root.add_child(instance)
+
+	_set_busy(false)
+	_menu.visible = false
+	_has_spawned = true
+	loading.end(TmcLoadingScreen.REASON_GAME)
+	loading.end(TmcLoadingScreen.REASON_CONTENT)
+	_say("")
+
+	var shown := session.display_name if session.display_name != "" else content_id
+	if _solo_button != null:
+		_solo_button.text = "Play %s solo" % shown
+	if _friends != null:
+		_friends.on_game_changed(shown, "")
+
+	DotLog.info(CHANNEL, "solo game started", {
+		"content": "%s@%s" % [content_id, wanted], "scene": path, "maps": session.map_keys.size(),
+	})
+	return DotResult.success(instance)
+
+
+## Fetches and mounts one pack by `<id>[@<version>]`, resolving a missing version to the
+## newest. The value is the `<id>@<version>` that was mounted.
+func _ensure_solo_pack(key: String) -> DotResult:
+	var parts := TmcSolo.split_key(key)
+	var id := str(parts["id"])
+	var version := str(parts["version"])
+
+	if not TmcSolo.valid_id(id) or not TmcSolo.valid_version(version):
+		return DotResult.fail(DotError.CODE_INVALID, "Not a pack id.", key)
+
+	if version == "":
+		var latest: DotResult = await TmcSolo.resolve_latest(self, id, _cloud.http_base_urls)
+		if not latest.ok:
+			return latest
+		version = str(latest.value)
+
+	var got: DotResult = await _cloud.ensure(StringName(id), version)
+	if not got.ok:
+		return got
+
+	return DotResult.success("%s@%s" % [id, version])
+
+
+## `--content-url <base>` on a desktop launch: one more place to ask for packs, after the
+## ones `content.json` names. Only an address -- every manifest still has to verify against
+## this build's key -- and never read from the page, whose solo launch uses the page's own
+## `/content` as a join does.
+func _adopt_content_url_arg() -> void:
+	var url := _user_arg("--content-url").strip_edges()
+	if url == "" or _cloud == null:
+		return
+	var bases := _cloud.http_base_urls
+	if not bases.has(url):
+		bases.insert(0, url)
+		_cloud.http_base_urls = bases
+
+
+## Every menu a solo game builds leaves to the shell rather than doing nothing.
+##
+## dot-menu's stock Leave disconnects its `leave_link` when that reports itself connected,
+## and offline in a browser it hides itself (a page cannot close its tab). Pointed at the
+## session, it reads "Back to menu" and comes here. Watched with `node_added` because each
+## game builds its menu when it likes, some of them deferred.
+func _on_solo_node_added(node: Node) -> void:
+	if _solo_session == null or not (node is DotMenu) or not _game_root.is_ancestor_of(node):
+		return
+	var menu := node as DotMenu
+	menu.leave_link = _solo_session
+	menu.leave_on_its_own = true
+	(func() -> void:
+		if is_instance_valid(menu):
+			menu.apply_server_rules({"leave_text": "Back to menu"})
+	).call_deferred()
+
+
+## Leave in a solo game: the game comes down and the menu comes back, with Play solo on it.
+func _leave_solo() -> void:
+	_clear_game()
+	_end_solo_session()
+	_leave_game_ui()
+	_set_busy(false)
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	_menu.visible = true
+	if _friends != null:
+		_friends.on_disconnected()
+	_say("")
+	if _solo_button != null and is_instance_valid(_solo_button):
+		_solo_button.grab_focus.call_deferred()
+
+
+func _end_solo_session() -> void:
+	if get_tree().node_added.is_connected(_on_solo_node_added):
+		get_tree().node_added.disconnect(_on_solo_node_added)
+	if _solo_session == null:
+		return
+	DotRegistry.unregister_instance(TmcSolo.MAPS_SERVICE, _solo_session)
+	if is_instance_valid(_solo_session):
+		remove_child(_solo_session)
+		_solo_session.queue_free()
+	_solo_session = null
+
+
+## Whether a solo game is on screen. For a suite.
+func is_solo() -> bool:
+	return _solo_session != null
 
 
 ## The server told us which game it is running. Fires on the first load and on every

@@ -224,9 +224,27 @@
 
   var server = serverFromQuery();
 
+  // SOLO: `?solo=<owner>/<repo>` (and `&solo_version=`) names a game pack to run in this
+  // tab with no server -- the site's direct Play, through the loader. Forwarded to the shell
+  // as `--solo`, which fetches, verifies and mounts it as a join does and starts the game's
+  // offline mode. The same shape the shell checks: anything else is not a pack id, and an
+  // id is never trusted -- the pack must verify against the key built into the shell.
+  function soloFromQuery() {
+    var q = new URLSearchParams(location.search);
+    var id = q.get("solo") || "";
+    if (!/^[a-z0-9][a-z0-9_-]{0,63}\/[a-z0-9][a-z0-9_-]{0,63}$/.test(id)) return null;
+    var version = q.get("solo_version") || "";
+    if (version && (!/^[0-9A-Za-z][0-9A-Za-z._+-]{0,63}$/.test(version) || version.indexOf("..") >= 0))
+      version = "";
+    return { id: id, version: version };
+  }
+
+  // A named server wins: a page that was given both meant to join somebody.
+  var solo = new URLSearchParams(location.search).get("server") ? null : soloFromQuery();
+
   // A page served over HTTPS may not open an insecure WebSocket. The browser blocks it as
   // mixed content and reports a generic connection failure, so say it here instead.
-  if (location.protocol === "https:" && server.indexOf("ws://") === 0) {
+  if (!solo && location.protocol === "https:" && server.indexOf("ws://") === 0) {
     message.textContent = "This server cannot be reached from a secure page.";
     detail.className = "error";
     detail.textContent =
@@ -256,7 +274,9 @@
     canvasResizePolicy: 0,          // this page owns the size; see resize() above
     // The launcher reads the query string first in a browser, so this pair is a
     // belt-and-braces for a host that serves the export without this page.
-    args: ["--", "--connect", server],
+    args: solo
+      ? ["--", "--solo", solo.id].concat(solo.version ? ["--solo-version", solo.version] : [])
+      : ["--", "--connect", server],
     focusCanvas: true,
   });
 

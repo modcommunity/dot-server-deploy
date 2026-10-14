@@ -169,6 +169,25 @@
   }
 
   /*
+   * `solo=<owner>/<repo>[&solo_version=<v>]`, or '' when the descriptor names no
+   * solo game or names one that is not a pack id.
+   */
+  function soloParams() {
+    var s = boot.solo;
+    if (!s || typeof s !== 'object') return '';
+
+    var id = typeof s.contentId === 'string' ? s.contentId : '';
+    if (!/^[a-z0-9][a-z0-9_-]{0,63}\/[a-z0-9][a-z0-9_-]{0,63}$/.test(id)) return '';
+
+    var out = 'solo=' + encodeURIComponent(id);
+    var version = typeof s.version === 'string' ? s.version : '';
+    if (version && /^[0-9A-Za-z][0-9A-Za-z._+-]{0,63}$/.test(version) && version.indexOf('..') < 0)
+      out += '&solo_version=' + encodeURIComponent(version);
+
+    return out;
+  }
+
+  /*
    * Where the engine is served from.
    *
    * Two sources, in this order: `boot.game` if the site published one, otherwise the
@@ -309,8 +328,22 @@
 
   var address = serverAddress(entry.protocol);
   var src = entry.href;
-  if (address)
+  if (address) {
     src += (entry.search ? '&' : '?') + 'server=' + encodeURIComponent(address);
+  } else {
+    /*
+     * SOLO: no server, and the site named the game to run in the tab
+     * (`boot.solo`, set by website-city only when `boot.server` is null and the
+     * app's content is a published game pack). The shell fetches, verifies and
+     * mounts that pack exactly as a join does and starts the game's offline
+     * mode. Checked for shape here as well as in the shell: an id is a path
+     * component in a mount path, and anything else is not one this page passes.
+     * Nothing about it is trusted -- the pack must still verify against the key
+     * built into the shell.
+     */
+    var solo = soloParams();
+    if (solo) src += (entry.search ? '&' : '?') + solo;
+  }
 
   var frame = document.createElement('iframe');
   frame.src = src;
