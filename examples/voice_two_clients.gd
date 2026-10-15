@@ -258,7 +258,12 @@ func _probe() -> void:
 	var arrived := await _until(func() -> bool: return b.frames_received > 20, 10.0)
 	_result["heard_all"] = b.frames_received
 	_check(arrived, "B receives A's speech through the server (%d frames, %d relayed)" % [b.frames_received, router.relayed_packets])
-	var speakers := b.describe_lines()
+	# Arrival is not playback: the jitter buffer pops on a real-time accumulator, so a burst of
+	# frames after a slow frame can push frames_received past 20 before the sink has been
+	# written once (seen ~1 run in 4, 'silence (0.000 rms)'). Wait for the sink itself.
+	_result["written_at_arrival"] = heard.frames_written
+	var played := await _until(func() -> bool: return heard.frames_written > 10, 10.0)
+	_check(played, "B's sink is written from the jitter buffer (%d frames written, %d at arrival)" % [heard.frames_written, _result["written_at_arrival"]])
 	_check(b.active_speakers().has(a_peer) or heard.frames_written > 0, "as A's peer id (%d)" % a_peer)
 	_check(heard.rms() > 0.1, "and it plays the tone, not silence (%.3f rms)" % heard.rms())
 	_result["rms"] = snappedf(heard.rms(), 0.001)
