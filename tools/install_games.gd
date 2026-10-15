@@ -223,6 +223,16 @@ func _init() -> void:
 			origin = str(catalogue.get("base", ""))
 
 	for want in wants:
+		# A retired id installs as the id it moved to (its directory is the id, so the
+		# game lands under its new name). If the origin cannot say, carry on unchanged.
+		if want["from_origin"] and str(want["version"]) == "":
+			var pointer := await _resolve_pointer(str(want["id"]), bases)
+
+			if pointer.ok and str(pointer.value["moved_from"]) != "":
+				var moved_ref := TmcGameRef.parse(str(pointer.value["id"]))
+				moved_ref["raw"] = str(want["raw"])
+				want = moved_ref
+
 		var id := str(want["dir"])
 		var path := _descriptor_path(content_dir, id)
 		var have := FileAccess.file_exists(path)
@@ -1012,12 +1022,15 @@ func _resolve_dependencies(
 		var version := str(ref["version"])
 
 		if version == "":
-			var latest := await _resolve_latest(str(ref["id"]), bases)
+			var latest := await _resolve_pointer(str(ref["id"]), bases)
 
 			if not latest.ok:
 				return latest.wrap("could not resolve %s from %s:" % [ref["id"], field])
 
-			version = str(latest.value)
+			# A retired id pins as the id it moved to, so the descriptor stops naming it.
+			ref = ref.duplicate()
+			ref["id"] = str(latest.value["id"])
+			version = str(latest.value["version"])
 
 		out.append("%s@%s" % [ref["id"], version])
 
@@ -1125,10 +1138,12 @@ func _resolve_owner_maps(config_dir: String, data_dir: String, bases: PackedStri
 			continue
 
 		var id := str(ref["id"])
-		var latest := await _resolve_latest(id, bases)
+		var latest := await _resolve_pointer(id, bases)
 
-		if latest.ok:
-			out[id] = str(latest.value)
+		# A moved map is kept at its pinned version: the answer is the new id's version,
+		# and this table is keyed by the id the descriptor names.
+		if latest.ok and str(latest.value["moved_from"]) == "":
+			out[id] = str(latest.value["version"])
 		elif owner_maps.resolved.has(id):
 			out[id] = owner_maps.resolved[id]
 			kept += 1
@@ -1169,6 +1184,49 @@ func _resolve_owner_maps(config_dir: String, data_dir: String, bases: PackedStri
 ## nothing to guess from, and with listing there would be a sort over version strings,
 ## which is how `0.10.0` ends up older than `0.9.0`.
 func _resolve_latest(content_id: String, bases: PackedStringArray) -> DotResult:
+	var pointer := await _resolve_pointer(content_id, bases)
+
+	if not pointer.ok:
+		return pointer
+
+	return DotResult.success(str((pointer.value as Dictionary)["version"]))
+
+
+## [method _resolve_latest] plus the id the answer belongs to: `{id, version, moved_from}`.
+##
+## [b]A renamed repository's old id is retired, not deleted.[/b] website-city rebuilds the
+## packs under the new id and leaves the old tree in the bucket, with `moved_to` written
+## into the old `latest.json` whose version stays the last one published before the
+## rename. Reading only `version` therefore installs that stale build forever. One hop is
+## followed, never more: city does not chain them, so a second hop is a bug somewhere and
+## is refused (see [method follow_pointer]).
+func _resolve_pointer(content_id: String, bases: PackedStringArray) -> DotResult:
+	var first := await _fetch_pointer(content_id, bases, 0)
+
+	if not first.ok:
+		return first
+
+	var got := first.value as Dictionary
+
+	if str(got["moved_to"]) == "":
+		return DotResult.success({"id": content_id, "version": got["version"], "moved_from": ""})
+
+	var new_id := str(got["moved_to"])
+	DotLog.warn(CHANNEL, "the config names a retired content id; change it", {
+		"retired": content_id, "change_to": new_id,
+	})
+	var second := await _fetch_pointer(new_id, bases, 1)
+
+	if not second.ok:
+		return second.wrap("could not follow %s to %s:" % [content_id, new_id])
+
+	return DotResult.success({
+		"id": new_id, "version": (second.value as Dictionary)["version"], "moved_from": content_id,
+	})
+
+
+## Reads one id's `latest.json` from the first base that answers.
+func _fetch_pointer(content_id: String, bases: PackedStringArray, hop: int) -> DotResult:
 	var http := DotHttp.new()
 	http.name = "LatestHttp"
 	root.add_child(http)
@@ -1183,17 +1241,21 @@ func _resolve_latest(content_id: String, bases: PackedStringArray) -> DotResult:
 			last = str(res.error)
 			continue
 
-		var body: Variant = res.value
+		var followed := follow_pointer(content_id, res.value, hop)
 
-		if body is Dictionary and str((body as Dictionary).get("version", "")) != "":
-			var v := str((body as Dictionary)["version"])
+		# A refusal is the document's answer, not an origin outage: another base
+		# carries the same document, so asking it would only repeat the refusal.
+		if followed.ok or followed.error.code != DotError.CODE_IO:
 			http.queue_free()
-			DotLog.debug(CHANNEL, "resolved the newest version", {
-				"content": content_id, "version": v, "from": url,
-			})
-			return DotResult.success(v)
 
-		last = "%s named no version" % url
+			if followed.ok:
+				DotLog.debug(CHANNEL, "resolved the newest version", {
+					"content": content_id, "version": followed.value["version"], "from": url,
+				})
+
+			return followed
+
+		last = "%s: %s" % [url, followed.error.message]
 
 	http.queue_free()
 
@@ -1203,6 +1265,43 @@ func _resolve_latest(content_id: String, bases: PackedStringArray) -> DotResult:
 		("name one explicitly -- %s@1.0.0 -- or publish %s beside its versions. %s"
 			% [content_id, LATEST_FILE, last])
 	)
+
+
+## Reads one `latest.json` body: `{version, moved_to}`. Pure, so the selftest drives it.
+##
+## [param hop] is how many `moved_to` links were already followed. A body that moves on
+## when [code]hop >= 1[/code] is a chain or a loop (`a -> b -> a`) and is refused with
+## [constant DotError.CODE_STATE] rather than followed: nothing writes a chain, and a
+## loop would never end. `moved_to` pointing at the id itself is refused the same way.
+static func follow_pointer(content_id: String, body: Variant, hop: int) -> DotResult:
+	if not body is Dictionary:
+		return DotResult.fail(DotError.CODE_IO, "%s is not an object" % LATEST_FILE)
+
+	var dict := body as Dictionary
+	var moved := str(dict.get("moved_to", "")).strip_edges()
+
+	if moved != "":
+		if moved == content_id or hop >= 1:
+			return DotResult.fail(
+				DotError.CODE_STATE,
+				"%s moved to %s, which is a %s." % [content_id, moved,
+					"loop" if moved == content_id else "second hop"],
+				"%s is followed one hop only; republish the pack under its real id" % LATEST_FILE
+			)
+
+		if not moved.contains("/") or moved.contains("..") or moved.contains(" "):
+			return DotResult.fail(
+				DotError.CODE_INVALID, "%s names a moved_to that is not <owner>/<name>: %s" % [content_id, moved]
+			)
+
+		return DotResult.success({"version": "", "moved_to": moved})
+
+	var version := str(dict.get("version", ""))
+
+	if version == "":
+		return DotResult.fail(DotError.CODE_IO, "%s named no version" % content_id)
+
+	return DotResult.success({"version": version, "moved_to": ""})
 
 
 ## Where one published version lives, under a base.

@@ -17,7 +17,7 @@ const CFG := "res://examples/fixtures"
 ## A loaded game with rounds and no match the game vote can find. See the section that uses it.
 const RoundsWithoutMatch := preload("res://examples/fixtures/rounds_without_match.gd")
 
-const CHECKS := 285
+const CHECKS := 291
 
 var _passed := 0
 var _failed := 0
@@ -1065,6 +1065,25 @@ func _test_game_refs() -> void:
 	bare["dependencies"] = ["surf_mesa"]
 	_check(not TmcContent.new()._build("demo", bare).ok,
 		"a dependency with no owner is refused")
+
+	# A renamed repository's old latest.json carries moved_to; exactly one hop is followed.
+	var plain: DotResult = installer.follow_pointer("a/old", {"version": "1.0.0"}, 0)
+	_check(plain.ok and plain.value["version"] == "1.0.0" and plain.value["moved_to"] == "",
+		"a latest.json with no moved_to resolves to its own version", str(plain))
+	var moved: DotResult = installer.follow_pointer("a/old", {"version": "1.0.0", "moved_to": "a/new"}, 0)
+	_check(moved.ok and moved.value["moved_to"] == "a/new" and moved.value["version"] == "",
+		"a moved_to is handed back for the caller to follow, not the stale version", str(moved))
+	var landed: DotResult = installer.follow_pointer("a/new", {"version": "2.0.0"}, 1)
+	_check(landed.ok and landed.value["version"] == "2.0.0",
+		"the new id's latest.json after one hop resolves normally", str(landed))
+	var chained: DotResult = installer.follow_pointer("a/new", {"version": "2.0.0", "moved_to": "a/newer"}, 1)
+	_check(not chained.ok and chained.error.code == DotError.CODE_STATE,
+		"a second hop is refused with an error", str(chained))
+	var looped: DotResult = installer.follow_pointer("a/old", {"moved_to": "a/old"}, 0)
+	_check(not looped.ok and looped.error.code == DotError.CODE_STATE,
+		"a moved_to naming the id itself is refused as a loop", str(looped))
+	var bad_target: DotResult = installer.follow_pointer("a/old", {"moved_to": "nonsense"}, 0)
+	_check(not bad_target.ok, "a moved_to that is not <owner>/<name> is refused", str(bad_target))
 
 	# The server-only packs and the delivered maps: the same pinning, their own fields.
 	var maps_yml := "name: X\nmaps:\n  - gamemann/surf_mesa\n  - gamemann/bhop_aztec@latest\nscene: s.tscn\n"

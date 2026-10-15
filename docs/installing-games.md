@@ -21,7 +21,7 @@ The pack is the game: scenes, scripts, art, signed, mounted at `res://dot_cloud/
 
 dot-cloud's default template is `{base}/{id}/{version}/manifest.json`, which is what the site publishes. `DotCloudClient.manifest_url_fallbacks` adds the flat `{base}/{id}/manifest.json` as a fallback per base, because an origin holds both (older map packs were published flat) and re-publishing everything is not a precondition for starting a server. S3 answers 403 for a missing key the caller may not list.
 
-**`@latest` is a FILE**, `content/<id>/latest.json`, because a bucket behind a CDN cannot answer a question and listing is not public. Not derived by sorting (that is how `0.10.0` ends up older than `0.9.0`). It is written last, after every object and the manifest, because it is the only mutable document in an otherwise immutable tree.
+**`@latest` is a FILE**, `content/<id>/latest.json`, because a bucket behind a CDN cannot answer a question and listing is not public. Not derived by sorting (that is how `0.10.0` ends up older than `0.9.0`). It is written last, after every object and the manifest, because it is the only mutable document in an otherwise immutable tree. A renamed repository leaves `{"moved_to": "<new id>"}` in the old id's `latest.json`: the installer follows it exactly one hop (a second hop or a loop is an error), logs a WARN naming the id to change to, and installs under the new id and directory.
 
 ## Three lists of packs beside the game's own
 
