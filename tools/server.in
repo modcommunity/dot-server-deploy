@@ -1161,11 +1161,20 @@ case "$COMMAND" in
             ZIP_PATH="$PROJECT/web/build.zip"
             rm -f "$ZIP_PATH"
 
+            # [b]Top-level files only.[/b] An export is flat, and web/build is gitignored, so
+            # anything else in it is a leftover nobody tracks: a stray `content/` of old
+            # packs turned a 17 MB upload into 407 MB (2026-10-15). Skipped loudly, not
+            # silently, in case a future export does start writing a subdirectory.
+            for extra in "$PROJECT/web/build"/*/; do
+                [ -d "$extra" ] && printf '  not zipped (not part of an export): %s\n' "$extra"
+            done
+
             # Zipped from INSIDE the build directory, so entries are `index.wasm` rather
             # than `build/index.wasm`. The extractor rejects a path it did not expect and
             # the publisher would look at a perfectly good archive and find no entry point.
             if command -v zip >/dev/null 2>&1; then
-                ( cd "$PROJECT/web/build" && zip -qr "$ZIP_PATH" . ) || die "zip failed" 3
+                ( cd "$PROJECT/web/build" && find . -maxdepth 1 -type f ! -name '*.import' -print0 \
+                    | xargs -0 zip -q "$ZIP_PATH" ) || die "zip failed" 3
             elif command -v python3 >/dev/null 2>&1; then
                 # No `zip` on a machine that has Godot on it is ordinary enough to handle
                 # rather than to fail on.
@@ -1173,10 +1182,10 @@ case "$COMMAND" in
 import os, sys, zipfile
 src, out = sys.argv[1], sys.argv[2]
 with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
-    for root, _dirs, files in os.walk(src):
-        for name in files:
-            full = os.path.join(root, name)
-            z.write(full, os.path.relpath(full, src))
+    for name in sorted(os.listdir(src)):
+        full = os.path.join(src, name)
+        if os.path.isfile(full) and not name.endswith(".import"):
+            z.write(full, name)
 PY
             else
                 die "need zip or python3 to build the archive; web/build is ready if you would rather make it yourself" 3
