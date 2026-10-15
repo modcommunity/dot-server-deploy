@@ -212,8 +212,8 @@ usage() {
                         spelling every other dedicated server uses. A game that
                         has no maps, or has not got this one, says so and boots
                         on its default anyway.
-    --auto-update MODE  when-needed (default): if the addon lock on this checkout's
-                        branch has moved, or a game this server installs needs
+    --auto-update MODE  when-needed (default): if the addon lock or the pinned web
+                        shell on this checkout's branch has moved, or a game this server installs needs
                         newer addons than it has, pull this checkout and move the
                         addons to its lock (what a reinstall does), then start.
                         always: do that on every start. never: keep the installed
@@ -1315,7 +1315,10 @@ lock_moved() {
         return 1
     fi
 
-    ! git -C "$PROJECT" diff --quiet HEAD "origin/$branch" -- addons.lock 2>/dev/null
+    # web/shell-build too: it is what this server reports as sv_web_build, so a new shell
+    # pinned on the branch without a lock bump used to reach no box until a reinstall,
+    # and its players stayed on the previous shell.
+    ! git -C "$PROJECT" diff --quiet HEAD "origin/$branch" -- addons.lock web/shell-build 2>/dev/null
 }
 
 case "$AUTO_UPDATE" in
