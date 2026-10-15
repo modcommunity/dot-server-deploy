@@ -17,6 +17,11 @@ services:
     container_name: tmc-server
     restart: unless-stopped
 
+    # `docker stop` waits 10 s by default before SIGKILL. The entrypoint turns SIGTERM into
+    # `quit`, so the server says goodbye to the session issuer (a closing POST) -- give it
+    # room to finish that and its other shutdown work.
+    stop_grace_period: 30s
+
     # Host networking is NOT used, deliberately. It works and it makes the container
     # able to reach everything on the host's network, which for a process that accepts
     # connections from strangers is the wrong default. Publish the two ports instead.

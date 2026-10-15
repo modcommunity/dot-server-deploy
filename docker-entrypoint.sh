@@ -34,4 +34,40 @@ ARGS=()
 [ -n "${TMC_MAX_PLAYERS:-}" ] && ARGS+=(--max-players "$TMC_MAX_PLAYERS")
 [ -n "${TMC_GAME:-}" ]        && ARGS+=(--game "$TMC_GAME")
 
-exec ./server "$@" "${ARGS[@]}"
+# --- Saying goodbye on `docker stop` -------------------------------------------------
+#
+# `docker stop` sends SIGTERM, and headless Godot answers it by dying: DotServer.shutdown
+# never runs, so session reporting (auth.yml session_report_url) never posts its closing
+# report and the issuer holds every player for the lease. The container has no stdin for
+# the `quit` console command to arrive on, so this script makes one: a FIFO this shell
+# holds open for writing (fd 3, read-write so opening it cannot block), fed to the server
+# as stdin with sv_stdin_console_pipes on. TERM/INT become `quit` down it.
+#
+# fd 3 is CLOSED straight after the `quit`. A pipe reader that is never woken makes the
+# process hang inside its own exit (see dot_stdin_console.gd, read_pipes); closing the
+# last writer is what ends the read. The server is a child here, not exec'd, so this
+# script is PID 1 and forwards the signal -- and returns the server's own status.
+FIFO=$(mktemp -u /tmp/tmc-stdin.XXXXXX)
+mkfifo "$FIFO" || exec ./server "$@" "${ARGS[@]}"
+exec 3<>"$FIFO"
+
+# The environment layer of DotServerConfig, not a `+sv_stdin_console_pipes` console line:
+# the line runs after the stdin reader has already decided, and it is too late. Exported
+# only for the child, and only on this path (see the mkfifo fallback above).
+DOT_SERVER_STDIN_CONSOLE_PIPES=1 ./server "$@" "${ARGS[@]}" <"$FIFO" 3>&- &
+CHILD=$!
+
+goodbye() {
+    printf 'quit\n' >&3
+    exec 3>&-
+}
+trap goodbye TERM INT
+
+# wait returns early (128+signal) when the trap fires, so loop until the child is gone.
+STATUS=0
+while kill -0 "$CHILD" 2>/dev/null; do
+    wait "$CHILD"
+    STATUS=$?
+done
+rm -f "$FIFO"
+exit "$STATUS"
