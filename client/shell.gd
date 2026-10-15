@@ -196,6 +196,16 @@ func _ready() -> void:
 	# sign-in needs that (see [method _sign_in]).
 	var resumed := _take_resume()
 
+	# The box shows where this start is going BEFORE the sign-in is awaited: the sign-in
+	# can take a round trip or two (more after an update restart, where the page's spent
+	# code is refused before the stored session is tried), and for all of it the box
+	# showed the scene's localhost placeholder, then jumped.
+	var going := _requested_server()
+	if going == "":
+		going = str(resumed.get("server", ""))
+	if going != "":
+		_address.text = going
+
 	await _sign_in(resumed)
 
 	# Solo: the page (the site's direct Play) or the command line named a game to run here,
@@ -342,6 +352,11 @@ func _sign_in(resumed: Dictionary = {}) -> void:
 		return
 
 	var identity := res.value as DotAuthIdentity
+
+	# Said once per start with the member's uid, because "is this player still the same
+	# member after the addon restart" is the question an operator asks and the one
+	# tools/browser_update_check.mjs asserts on; the label is drawn, not logged.
+	DotLog.info(CHANNEL, "signed in", {"member": identity.uid, "name": identity.display_name})
 
 	_name.text = identity.display_name
 	# Read-only rather than hidden: somebody signed in should be able to SEE who
@@ -1423,7 +1438,16 @@ func _update_addons(addons: DotCloudAddonSet, wanted: Dictionary, target: String
 	_say(_text("shell.addons.restarting", {}, "Restarting to finish the update…"))
 	_note_update_attempt(attempt)
 
-	if not await _restart():
+	# What the next start reads: the plan (where to come back to, who was signed in), the
+	# overlay it mounts, and the stored session that keeps the player signed in.
+	var keep := PackedStringArray([DotCloudAddonSet.PLAN, str((built.value as Dictionary)["pack"])])
+	if resume.has("member"):
+		var tokens := _auth.config.token_store_path
+		for path in [tokens, tokens + ".salt"]:
+			if FileAccess.file_exists(path):
+				keep.append(path)
+
+	if not await _restart(keep):
 		# A platform that cannot restart itself: the overlay applies on the next launch,
 		# and this one plays on what it has.
 		_addons_updating = false
@@ -1435,6 +1459,11 @@ func _update_addons(addons: DotCloudAddonSet, wanted: Dictionary, target: String
 
 ## Restarts for one server's addons before giving up on them for the session.
 const MAX_UPDATE_RESTARTS := 2
+
+## How long a browser restart waits for IndexedDB to hold the files the next start reads.
+## A sync walks the whole of `user://`, so a player with a large cache waits longer; past
+## this the update is left for the next start rather than reloading into nothing.
+const PERSIST_TIMEOUT_SEC := 60.0
 
 ## The `sessionStorage` key restarts are counted under.
 const UPDATE_ATTEMPTS_KEY := "tmc.addon_updates"
@@ -1498,10 +1527,10 @@ func _take_resume() -> Dictionary:
 ## Restarts this client, by its platform's means. False when it cannot.
 ##
 ## A browser reloads its page and a desktop build relaunches itself with the same
-## arguments; [member restart_fn] stands in for both under test. The reload waits a second
-## after asking IndexedDB to flush, because `FS.syncfs` reports no completion and the
-## restart is pointless if what was written before it is not there after.
-func _restart() -> bool:
+## arguments; [member restart_fn] stands in for both under test. [param keep] is what the
+## next start has to find: a browser reloads only once each of those files is in
+## IndexedDB, and does not reload at all when they cannot get there.
+func _restart(keep: PackedStringArray = PackedStringArray()) -> bool:
 	if restart_fn.is_valid():
 		restart_fn.call()
 		return true
@@ -1510,16 +1539,28 @@ func _restart() -> bool:
 		return false
 
 	if DotPlatform.is_web():
-		# [b]Asked four times, not once.[/b] The engine DROPS a sync requested while one is
-		# running rather than queueing it, and dot-cloud asks for one after every object it
-		# stores -- so the request made after the last write was routinely the one dropped,
-		# and the reload lost the plan, the overlay and the last few objects (measured: the
-		# same eight re-downloaded on every load of a reload loop). Repeating it means one
-		# starts after the last write, and the waits let it finish. A sync of what changed
-		# is small; three seconds against a restart the player has just been told about.
-		for i in 4:
-			DotWeb.sync_filesystem()
-			await get_tree().create_timer(0.75).timeout
+		# [b]Waits for IndexedDB to hold what the next load reads, by reading it back.[/b]
+		# This was four sync requests 0.75 s apart and then the reload, on the belief that
+		# the engine dropped a sync asked for during another. It does not (it runs the next
+		# one when the current ends), and the real loss was the clock: one `FS.syncfs` walks
+		# every file in `user://`, so it takes seconds and grows with the player's cache,
+		# and a reload inside it loses it. Measured in headless Chromium with an exported
+		# shell: syncs of 1-5 s under 1 MiB cached, and a reload 2.9 s after the plan was
+		# written that came back without the plan, the overlay or the last two addons'
+		# files -- downloaded again, restarted again, and the player joined on the old
+		# addons as a guest at the third load. A sync can also fail outright (the console
+		# says "Failed to save IDB file system"), and the next one carries the change, so
+		# no count of requests is right: reading the store back is.
+		# See [method DotCloudAddonSet.persisted].
+		var kept: DotResult = await DotCloudAddonSet.persisted(keep, PERSIST_TIMEOUT_SEC)
+		if not kept.ok:
+			# A reload now would come back without them: no plan is no overlay and no
+			# sign-in, and the same update again. Play on, and the next start takes it if
+			# the browser got there by then.
+			DotLog.warn(CHANNEL, "not restarting: the browser has not saved what the next start needs", {
+				"why": str(kept.error),
+			})
+			return false
 		# Through the location object rather than `eval`, which a page with a strict
 		# Content-Security-Policy refuses; see `DotWeb.get_global`.
 		#
@@ -2120,9 +2161,9 @@ func _ask_clear() -> void:
 ##
 ## [b]In a browser the marker has to reach IndexedDB before the reload.[/b] `user://` is
 ## an in-memory mirror there, flushed by an asynchronous `FS.syncfs` that reports nothing
-## back to GDScript, so the reload waits a second after asking for the flush: one small
-## file. A marker that did not land costs nothing but a second press -- the old content
-## is still there, and still correct to delete.
+## back to GDScript, so the reload waits until the marker reads back from IndexedDB
+## ([method _restart]). A marker that did not land costs nothing but a second press -- the
+## old content is still there, and still correct to delete.
 func request_clear() -> void:
 	DotPaths.write_text(CLEAR_PENDING, Time.get_datetime_string_from_system(true))
 	# The addon overlay is downloaded content too. Forgotten now, so the restart below
@@ -2141,7 +2182,7 @@ func request_clear() -> void:
 		# Not `_set_busy`, which says "Connecting".
 		_join.disabled = true
 
-	if not await _restart():
+	if not await _restart(PackedStringArray([CLEAR_PENDING])):
 		_join.disabled = false
 		_say("Reload the page to finish clearing downloaded content.")
 

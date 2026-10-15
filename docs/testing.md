@@ -6,6 +6,7 @@ tools/check.sh --long         # the same, then the long suites (tools/enet_relay
 tools/check_boot_failures.sh  # two boots whose game cannot compile; ./server check must refuse both
 tools/package_check.sh        # the same in the shape an operator unpacks
 node tools/browser_check.mjs  # the export in a real Chromium against a real server
+node tools/browser_update_check.mjs --build <old-lock export>  # the addon update restart, signed in
 ```
 
 ## What each layer proves
@@ -14,7 +15,7 @@ node tools/browser_check.mjs  # the export in a real Chromium against a real ser
 - **`./server check`**: a real `DotServer`, a real listener, the default game loaded and its module in it. It also asserts the operator's console (`log`, `sec_status`, `sec_why`, `party_status`, `mm_status`, `replay`), runs `party_status`, fails if the replay ring is not recording, and checks `sv_web_build` and `sv_web_loader` are NOTIFY. An absent command is invisible otherwise: nothing errors until an admin types it during an incident.
 - **`./server check` fails on any script error** (exit 7). `TmcScriptWatch` is a `Logger` on the engine's log for the length of a selftest and fails on `Parse Error` / `Could not find base class` / `Failed to load script`, which also catches a broken script that is not the module. dot-server's `load_module` refuses a script that cannot instantiate. A script that fails to parse takes no exit path in Godot, which is how `selftest ok` once printed over a module that never compiled. It cannot catch a parse failure in `host/tmc_host.gd` itself (the scene then never quits), which is why `check_boot_failures.sh` caps each case with `timeout`.
 - **`tools/package_check.sh`** exports the tracked files only, runs `setup.sh --vendor`, moves the result away from the siblings, and checks nothing points out of the tree, `addons/` holds real directories, and it boots. It reaches the branch of `check.sh` a developer checkout cannot: no sibling to compare against, so the staleness check reports `--` and must still pass. It does not build the container (needs a Docker daemon).
-- **`tools/browser_check.mjs` is the only one that can see the browser**: WebSocket, console and a screenshot. Several of this project's bugs were reachable no other way. A local page cannot fetch game content from the CDN (CORS); see the family notes on local browser testing.
+- **`tools/browser_check.mjs` is the only one that can see the browser**: WebSocket, console and a screenshot. Several of this project's bugs were reachable no other way. A local page cannot fetch game content from the CDN (CORS); see the family notes on local browser testing. `tools/browser_update_check.mjs` serves `/content` through its own proxy, so it reaches a join; it covers the addon update restart and is described in [addon-packs.md](addon-packs.md#the-end-to-end-proof).
 
 ## Server-side suites
 
