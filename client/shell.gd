@@ -885,10 +885,15 @@ func _build_menu() -> void:
 	# mouse. game-arena shipped exactly that. Guarded, because a shell told to join at once
 	# (a link, a suite) has taken the panel down again by the time the deferred call runs, and
 	# grab_focus out of the tree is an engine error (shell_notice printed one every run).
-	var join := _join
+	_focus_when_shown(_join)
+
+
+## Deferred grab_focus that re-checks at call time: by then the control may be freed or out
+## of the tree (a shell told to join at once), and grab_focus out of the tree is an engine error.
+func _focus_when_shown(control: Control) -> void:
 	(func() -> void:
-		if is_instance_valid(join) and join.is_inside_tree():
-			join.grab_focus()
+		if is_instance_valid(control) and control.is_visible_in_tree():
+			control.grab_focus()
 	).call_deferred()
 
 
@@ -1829,7 +1834,7 @@ func _leave_solo() -> void:
 		_friends.on_disconnected()
 	_say("")
 	if _solo_button != null and is_instance_valid(_solo_button):
-		_solo_button.grab_focus.call_deferred()
+		_focus_when_shown(_solo_button)
 
 
 func _end_solo_session() -> void:
