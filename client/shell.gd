@@ -1669,8 +1669,11 @@ func _load_solo(content_id: String, version: String) -> DotResult:
 		var latest: DotResult = await TmcSolo.resolve_latest(self, content_id, _cloud.http_base_urls)
 		if not latest.ok:
 			return latest
-		wanted = str(latest.value)
+		# A retired id resolves to the one it moved to; use that from here on.
+		content_id = str(latest.value["id"])
+		wanted = str(latest.value["version"])
 
+	_solo_id = content_id
 	_solo_version = wanted
 	DotLog.info(CHANNEL, "starting solo", {"content": content_id, "version": wanted})
 
@@ -1781,7 +1784,8 @@ func _ensure_solo_pack(key: String) -> DotResult:
 		var latest: DotResult = await TmcSolo.resolve_latest(self, id, _cloud.http_base_urls)
 		if not latest.ok:
 			return latest
-		version = str(latest.value)
+		id = str(latest.value["id"])
+		version = str(latest.value["version"])
 
 	var got: DotResult = await _cloud.ensure(StringName(id), version)
 	if not got.ok:

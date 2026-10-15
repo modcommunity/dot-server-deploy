@@ -109,8 +109,70 @@ static func _arg(args: PackedStringArray, name: String) -> String:
 	return ""
 
 
-## The newest published version of [param id], from `latest.json` under each base in turn.
+## Reads one `latest.json` body: `{version, moved_to}`. Pure, so the selftest drives it.
+##
+## [param hop] is how many `moved_to` links were already followed. A body that moves on
+## when [code]hop >= 1[/code] is a chain or a loop (`a -> b -> a`) and is refused with
+## [constant DotError.CODE_STATE] rather than followed: nothing writes a chain, and a
+## loop would never end. `moved_to` pointing at the id itself is refused the same way.
+static func follow_pointer(content_id: String, body: Variant, hop: int) -> DotResult:
+	if not body is Dictionary:
+		return DotResult.fail(DotError.CODE_IO, "%s is not an object" % LATEST_FILE)
+
+	var dict := body as Dictionary
+	var moved := str(dict.get("moved_to", "")).strip_edges()
+
+	if moved != "":
+		if moved == content_id or hop >= 1:
+			return DotResult.fail(
+				DotError.CODE_STATE,
+				"%s moved to %s, which is a %s." % [content_id, moved,
+					"loop" if moved == content_id else "second hop"],
+				"%s is followed one hop only; republish the pack under its real id" % LATEST_FILE
+			)
+
+		if not moved.contains("/") or moved.contains("..") or moved.contains(" "):
+			return DotResult.fail(
+				DotError.CODE_INVALID, "%s names a moved_to that is not <owner>/<name>: %s" % [content_id, moved]
+			)
+
+		return DotResult.success({"version": "", "moved_to": moved})
+
+	var version := str(dict.get("version", ""))
+
+	if version == "":
+		return DotResult.fail(DotError.CODE_IO, "%s named no version" % content_id)
+
+	return DotResult.success({"version": version, "moved_to": ""})
+
+
+## The newest published version of [param id], from `latest.json` under each base in turn:
+## `{id, version}`. [b]The id may differ from the one asked for[/b]: a renamed repository's
+## old `latest.json` says `moved_to`, followed one hop, and everything after resolution
+## must use the returned id.
 static func resolve_latest(host: Node, id: String, bases: PackedStringArray) -> DotResult:
+	var first := await _fetch_pointer(host, id, bases, 0)
+
+	if not first.ok:
+		return first
+
+	var moved := str((first.value as Dictionary)["moved_to"])
+
+	if moved == "":
+		return DotResult.success({"id": id, "version": first.value["version"]})
+
+	DotLog.warn(CHANNEL, "the config names a retired content id; change it", {
+		"retired": id, "change_to": moved,
+	})
+	var second := await _fetch_pointer(host, moved, bases, 1)
+
+	if not second.ok:
+		return second.wrap("could not follow %s to %s:" % [id, moved])
+
+	return DotResult.success({"id": moved, "version": second.value["version"]})
+
+
+static func _fetch_pointer(host: Node, id: String, bases: PackedStringArray, hop: int) -> DotResult:
 	var http := DotHttp.new()
 	http.name = "SoloLatest"
 	host.add_child(http)
@@ -125,14 +187,17 @@ static func resolve_latest(host: Node, id: String, bases: PackedStringArray) -> 
 			last = "%s: %s" % [url, str(res.error)]
 			continue
 
-		var body: Variant = res.value
-		var version := str((body as Dictionary).get("version", "")) if body is Dictionary else ""
+		var followed := follow_pointer(id, res.value, hop)
 
-		if version != "" and valid_version(version):
+		if followed.ok and str(followed.value["moved_to"]) == "" and not valid_version(str(followed.value["version"])):
+			last = "%s named no usable version" % url
+			continue
+
+		if followed.ok or followed.error.code != DotError.CODE_IO:
 			http.queue_free()
-			return DotResult.success(version)
+			return followed
 
-		last = "%s named no version" % url
+		last = "%s: %s" % [url, followed.error.message]
 
 	http.queue_free()
 

@@ -10,12 +10,12 @@ extends Node
 ## running the shell: `godot --headless --path . res://client/boot.tscn -- --solo
 ## gamemann/game-arena --content-url <origin>/content` (docs/web-client.md#solo-play).
 ##
-## Armed by: letting `valid_id` accept an upper-case or three-segment id (the refusals
+## Armed by: making `follow_pointer` ignore `moved_to` (the hop checks fail); letting `valid_id` accept an upper-case or three-segment id (the refusals
 ## fail); dropping the `_strip_comment` call in `parse_descriptor` (every game.yml with a
 ## trailing comment on a read field disagrees with TmcYaml); and deleting a game from
 ## `client/solo.json` (the drift check names it).
 
-const CHECKS := 25
+const CHECKS := 27
 
 ## Every game repository, beside this project or in games/: `games.list`'s first column.
 const GAMES_LIST := "res://games.list"
@@ -68,6 +68,12 @@ func _test_ids() -> void:
 	_check(not TmcSolo.valid_id("../x"), "a path is refused")
 	_check(not TmcSolo.valid_id("gamemann"), "an id with no repo is refused")
 	_check(TmcSolo.valid_version("") and TmcSolo.valid_version("0.1.12"), "an empty or dotted version is accepted")
+	var hop: DotResult = TmcSolo.follow_pointer("a/old", {"version": "1.0.0", "moved_to": "a/new"}, 0)
+	_check(hop.ok and hop.value["moved_to"] == "a/new" and hop.value["version"] == "",
+		"a latest.json with moved_to hands back the new id, not the stale version")
+	_check(not TmcSolo.follow_pointer("a/new", {"moved_to": "a/x"}, 1).ok
+			and not TmcSolo.follow_pointer("a/old", {"moved_to": "a/old"}, 0).ok,
+		"a second hop and a loop are refused")
 	_check(not TmcSolo.valid_version("0.1/../..") and not TmcSolo.valid_version(".."), "a version that climbs is refused")
 
 	var split := TmcSolo.split_key("gamemann/surf_mesa@1.2.2")

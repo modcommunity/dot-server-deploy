@@ -1267,41 +1267,10 @@ func _fetch_pointer(content_id: String, bases: PackedStringArray, hop: int) -> D
 	)
 
 
-## Reads one `latest.json` body: `{version, moved_to}`. Pure, so the selftest drives it.
-##
-## [param hop] is how many `moved_to` links were already followed. A body that moves on
-## when [code]hop >= 1[/code] is a chain or a loop (`a -> b -> a`) and is refused with
-## [constant DotError.CODE_STATE] rather than followed: nothing writes a chain, and a
-## loop would never end. `moved_to` pointing at the id itself is refused the same way.
+## Reads one `latest.json` body; the logic lives in [TmcSolo] because the client build
+## (which has no `tools/`) follows `moved_to` too.
 static func follow_pointer(content_id: String, body: Variant, hop: int) -> DotResult:
-	if not body is Dictionary:
-		return DotResult.fail(DotError.CODE_IO, "%s is not an object" % LATEST_FILE)
-
-	var dict := body as Dictionary
-	var moved := str(dict.get("moved_to", "")).strip_edges()
-
-	if moved != "":
-		if moved == content_id or hop >= 1:
-			return DotResult.fail(
-				DotError.CODE_STATE,
-				"%s moved to %s, which is a %s." % [content_id, moved,
-					"loop" if moved == content_id else "second hop"],
-				"%s is followed one hop only; republish the pack under its real id" % LATEST_FILE
-			)
-
-		if not moved.contains("/") or moved.contains("..") or moved.contains(" "):
-			return DotResult.fail(
-				DotError.CODE_INVALID, "%s names a moved_to that is not <owner>/<name>: %s" % [content_id, moved]
-			)
-
-		return DotResult.success({"version": "", "moved_to": moved})
-
-	var version := str(dict.get("version", ""))
-
-	if version == "":
-		return DotResult.fail(DotError.CODE_IO, "%s named no version" % content_id)
-
-	return DotResult.success({"version": version, "moved_to": ""})
+	return TmcSolo.follow_pointer(content_id, body, hop)
 
 
 ## Where one published version lives, under a base.
