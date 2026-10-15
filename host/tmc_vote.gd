@@ -479,11 +479,44 @@ func _physics_process(delta: float) -> void:
 		_rescan()
 
 	if director != null:
-		director.advance(delta)
+		_advance_director(delta)
 		_sync_notice()
 
 		if feed != null:
 			feed.poll()
+
+
+## Set by a suite that has no server to ask; the answer to [method change_under_way] when valid.
+var change_under_way_fn: Callable = Callable()
+
+
+## Whether a game change is being made right now: the manager is fetching, syncing or swapping,
+## or the director has handed one to it and is waiting for the answer.
+func change_under_way() -> bool:
+	if change_under_way_fn.is_valid():
+		return bool(change_under_way_fn.call())
+
+	if director != null and director.state == DotVoteDirector.State.APPLYING:
+		return true
+
+	return server != null and server.games != null \
+		and server.games.phase != DotGameManager.Phase.IDLE
+
+
+## Ticks the director, except while a change it (or anybody) started is landing.
+##
+## [b]The clock stands still for that long.[/b] A change takes seconds (the server fetches, every
+## client downloads, the swap happens) and during it the player count falls to 0 as clients
+## drop out to follow. A limit that ran out then found an empty server with nothing under way,
+## drew a game at random and changed away from the one just elected (`game_vote_all`, 2026-10-11:
+## arena elected, buses drawn, "the server is running arena again" failed). Held rather than
+## dropped: the change's own `begin()` restarts the clock for the game that lands, and a change
+## that fails leaves the clock where it was to expire on the next tick.
+func _advance_director(delta: float) -> void:
+	if change_under_way():
+		return
+
+	director.advance(delta)
 
 
 func _on_game_loaded(_content_key: String) -> void:

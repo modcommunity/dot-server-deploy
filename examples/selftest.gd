@@ -17,7 +17,7 @@ const CFG := "res://examples/fixtures"
 ## A loaded game with rounds and no match the game vote can find. See the section that uses it.
 const RoundsWithoutMatch := preload("res://examples/fixtures/rounds_without_match.gd")
 
-const CHECKS := 283
+const CHECKS := 285
 
 var _passed := 0
 var _failed := 0
@@ -48,6 +48,7 @@ func _run() -> void:
 	_test_vote()
 	_test_vote_layers_reach_a_ballot()
 	_test_vote_rounds_without_a_match()
+	_test_vote_limit_waits_for_a_change()
 	_test_vote_notices()
 	_test_auth()
 	_test_logging()
@@ -1617,6 +1618,70 @@ func _test_vote_rounds_without_a_match() -> void:
 
 	votes.free()
 	game.free()
+	_done()
+
+
+## A limit that runs out while a game change is landing must not draw a game for the empty
+## server it sees (`game_vote_all` 2026-10-11: the way back to the first game flaked).
+##
+## Forced rather than waited for: the change is declared under way by hand, nobody is on the
+## server, and the clock is run well past its limit. Without TmcVote's hold the director
+## draws a game at random and announces a second change.
+func _test_vote_limit_waits_for_a_change() -> void:
+	_section("the game vote's limit waits for a change under way")
+
+	var rules := DotVoteRules.new()
+	rules.enabled = true
+	rules.duration_sec = 10.0
+	rules.empty_choice = DotVoteRules.EmptyChoice.RANDOM
+
+	var votes := TmcVote.new()
+	votes.name = "LimitVotes"
+	votes.director = DotVoteDirector.new()
+	votes.director.name = "Director"
+	votes.director.rules = rules
+	votes.director.source = DotVoteListSource.of_ids(["standin", "next"])
+	votes.director.register_service = false
+	votes.director.begin_on_apply = false
+	votes.director.auto_apply = false
+	votes._wire()
+	# After _wire, which points the count at the server there is not.
+	votes.director.player_count_fn = func() -> int: return 0
+	votes.director.busy_fn = func() -> bool: return false
+	votes.set_physics_process(false)
+	add_child(votes)
+	votes.add_child(votes.director)
+
+	var under_way := [true]
+	votes.change_under_way_fn = func() -> bool: return under_way[0]
+
+	var due: Array[StringName] = []
+	votes.director.change_due.connect(
+		func(id: StringName, _choice: DotVoteChoice) -> void: due.append(id)
+	)
+
+	votes.director.begin(&"standin")
+
+	for i in 120:
+		votes._advance_director(1.0 / 6.0)
+
+	_check(
+		due.is_empty() and not votes.director.clock.is_expired(),
+		"twenty seconds of a ten second limit pass with a change under way and nothing is drawn (%s)" % [due],
+		"the limit fired on an empty server mid-change and changed the game away from the one elected"
+	)
+
+	under_way[0] = false
+
+	for i in 120:
+		votes._advance_director(1.0 / 6.0)
+
+	_check(
+		due.size() == 1,
+		"and once it has landed the limit is the limit again (%s)" % [due]
+	)
+
+	votes.free()
 	_done()
 
 
