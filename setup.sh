@@ -827,6 +827,10 @@ repo_url() {
         case "$repo" in
             # The addons, and this project. Falls through to $GIT_BASE below.
             dot-*) ;;
+            # Renamed on GitHub while the directory (and the pack id) kept the old
+            # name; GitHub redirects the old URL, but a redirect is not a contract.
+            mg-deathrun)  printf '%s/game-deathrun.git\n' "$GAMES_GIT_BASE"; return ;;
+            mg-prop-hunt) printf '%s/game-prop-hunt.git\n' "$GAMES_GIT_BASE"; return ;;
             # Everything else is a game: game-*, mg-*, and the weapons pack, which
             # `addon_source` derives into `zee-dot-weapons` before it reaches here.
             *)  printf '%s/%s.git\n' "$GAMES_GIT_BASE" "$repo"; return ;;
