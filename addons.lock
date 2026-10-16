@@ -10,7 +10,7 @@ dot-chat	v0.1.4
 dot-cloud	v0.1.8
 dot-combat	v0.1.6
 dot-console	v0.1.5
-dot-core	v0.1.8
+dot-core	v0.1.9
 dot-economy	v0.1.4
 dot-effects	v0.1.5
 dot-entity	v0.1.5
@@ -26,9 +26,9 @@ dot-log	v0.1.3
 dot-map	v0.1.8
 dot-match	v0.1.3
 dot-matchmaking	v0.1.5
-dot-menu	v0.1.2
+dot-menu	v0.1.3
 dot-moderation	v0.1.4
-dot-net	v0.1.10
+dot-net	v0.1.11
 dot-npc	v0.1.4
 dot-npc-ai	v0.1.5
 dot-npc-ai-director	v0.1.4
@@ -62,4 +62,4 @@ dot-voice	v0.1.6
 dot-vote	v0.1.8
 dot-weapon	v0.1.4
 zed-dot-weapons	v0.1.1
-zee-dot-weapons	v0.1.6
+zee-dot-weapons	v0.1.7
