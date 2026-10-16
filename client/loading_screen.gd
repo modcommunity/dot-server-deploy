@@ -17,7 +17,9 @@ extends CanvasLayer
 ##
 ## The screen is up while either is. Neither on the first connect: the shell's own menu
 ## (or the page that launched the player) has that, and the shell only calls [method begin]
-## once a game has spawned.
+## once a game has spawned. The shell menu carries the same corner line naming the shell
+## build ([TmcShellVersion]), so the first screen a player sees and this one both say which
+## client it is.
 ##
 ## [b]Media is fetched ahead of time and kept for the session.[/b] When a document arrives
 ## every URL in it is queued, one request at a time, while the player is still playing —
@@ -130,6 +132,9 @@ var _step: Dictionary = {}
 var last_refusal := ""
 
 var _root: Control = null
+
+## The corner line naming the shell build, or null for an unstamped run.
+var _version: Label = null
 var _backdrop: ColorRect = null
 var _image: TextureRect = null
 var _title: Label = null
@@ -974,6 +979,9 @@ func _build_view() -> void:
 	_root.add_child(_hint)
 	_update_hint()
 
+	# Which client this is, for a bug report that says "the loading screen" and nothing else.
+	_version = TmcShellVersion.add_corner_label(_root)
+
 	_music = AudioStreamPlayer.new()
 	_music.name = "Music"
 	_music.bus = &"Master"
@@ -1020,4 +1028,5 @@ func describe() -> Dictionary:
 		"refused_oversized": refused_oversized,
 		"last_refusal": last_refusal,
 		"image": _image.texture != null if _image != null else false,
+		"shell_version": _version.text if _version != null else "",
 	}

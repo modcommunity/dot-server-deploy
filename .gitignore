@@ -62,6 +62,11 @@
 # cfg/content.json is generated from client/content.json and is covered by this too.
 /cfg/
 
+# Written by `./server export-web` and `export-native` just before exporting: the commit the
+# shell is exported from, shown on its first screens (client/shell_version.gd).
+/client/build_stamp.gd
+/client/build_stamp.gd.uid
+
 # Exports
 /web/build/
 /build/

@@ -12,7 +12,7 @@ extends Node
 ## a socket this suite serves itself, because the fetch is the half most likely to be
 ## wrong and least likely to be noticed.
 
-const CHECKS := 149
+const CHECKS := 155
 
 var _passed := 0
 var _failed := 0
@@ -55,6 +55,7 @@ func _run() -> void:
 	_test_panel()
 	_test_loading_server()
 	_test_loading_client()
+	_test_shell_version()
 	await _test_loading_fetch()
 
 	print("")
@@ -1007,6 +1008,32 @@ func _test_loading_client() -> void:
 	again.free()
 
 	screen.free()
+	_done()
+
+
+## The corner line naming the client. The id is only ever read from a URL path, so what
+## the path parser accepts is what can reach a player's screen.
+func _test_shell_version() -> void:
+	_section("the shell's version line")
+
+	_check(TmcShellVersion.id_from_path("/game/tmc/20261016-0230/index.html") == "20261016-0230",
+		"the build id is found in a publisher path")
+	_check(TmcShellVersion.id_from_path("/godot/20261016-0230/") == "20261016-0230",
+		"and in the shell's own folder")
+	_check(TmcShellVersion.id_from_path("/game/tmc/20261016-0230x/index.html") == "",
+		"an id with anything after it is not one")
+	_check(TmcShellVersion.id_from_path("/game/tmc/<b>20261016-0230/") == "",
+		"markup is not an id")
+
+	var screen := TmcLoadingScreen.new()
+	add_child(screen)
+	var line := str(screen.describe().get("shell_version", "x"))
+	_check(line == TmcShellVersion.label_text(),
+		"the loading screen reports the line it shows", line)
+	screen.free()
+
+	_check(TmcShellVersion.label_text() == "" or TmcShellVersion.label_text().begins_with("shell "),
+		"the line is empty or starts with shell")
 	_done()
 
 

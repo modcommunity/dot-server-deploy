@@ -61,3 +61,7 @@ A web build in sample playback runs no bus effects, so dot-audio's Master limite
 ## Ports and transports
 
 The game listens on `net_port` (6064 in the template) with `net_transport: dual`: browsers on WebSocket/TCP, native clients on ENet/UDP at the same number (`net_enet_port: 0`), with A2S and DQP sharing the UDP port. RCON defaults to the game port plus one. nginx does not carry UDP, so behind TLS the game binds 127.0.0.1 and the ENet port is reached directly. On a panel set every port explicitly. [TLS](#tls), [egg](pterodactyl.md#the-startup-command)
+
+## Which shell a player is running
+
+The shell's menu, the loading screen and the standalone page each carry a small dim line in the bottom-right corner: `shell 20261016-0230 · c09533b`. The commit is stamped by `export-web` and `export-native` into `client/build_stamp.gd` (generated, git-ignored; `-dirty` when the tree had changes). The build id cannot be stamped, because it is chosen at upload after the export: on the web it is read back from the page's path (`/game/<app>/<id>/`, `/godot/<id>/`) and only an exact `YYYYMMDD-HHMM` segment is accepted. Native builds show the commit alone, and a run from source shows nothing. See `client/shell_version.gd`.

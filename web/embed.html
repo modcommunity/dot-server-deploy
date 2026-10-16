@@ -107,6 +107,11 @@
   @keyframes sweep {
     0% { margin-left: -40% } 100% { margin-left: 100% }
   }
+  /* Which client this is, in the corner like the engine's own label that replaces it. */
+  #version {
+    position: absolute; right: 10px; bottom: 6px; z-index: 1;
+    font-size: 12px; color: rgba(255,255,255,.45); pointer-events: none;
+  }
   .dim { color: #8b919b; font-size: 13px; margin-top: 12px; }
   .error { color: #ff6b63; max-width: 40ch; }
 </style>
@@ -121,6 +126,7 @@
     <div id="bar"><div></div></div>
     <div class="dim" id="detail"></div>
   </div>
+  <div id="version"></div>
 </div>
 
 <!-- Before index.js: the browser has no limiter of the engine's (sample playback runs no bus
@@ -223,6 +229,19 @@
   }
 
   var server = serverFromQuery();
+
+  // The build id is the folder this page is served from (`/game/<app>/<id>/`, `/godot/<id>/`):
+  // chosen at upload, after the export, so nothing in the files can name it. Exactly the
+  // id's shape or nothing, because the path is whatever the URL says.
+  (function () {
+    var parts = location.pathname.split("/");
+    for (var i = 0; i < parts.length; i++) {
+      if (/^[0-9]{8}-[0-9]{4}$/.test(parts[i])) {
+        document.getElementById("version").textContent = "shell " + parts[i];
+        return;
+      }
+    }
+  })();
 
   // SOLO: `?solo=<owner>/<repo>` (and `&solo_version=`) names a game pack to run in this
   // tab with no server -- the site's direct Play, through the loader. Forwarded to the shell

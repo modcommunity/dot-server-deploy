@@ -717,6 +717,9 @@ func _build_menu() -> void:
 
 	_menu.add_child(MenuBackdrop.new())
 
+	# Which client this is: the first screen a player sees after the page's own progress.
+	TmcShellVersion.add_corner_label(_menu)
+
 	# CENTRED BY A CONTAINER, not by an offset from the middle. The menu used to be a box
 	# placed at (-180, -100) from centre with a fixed width, which is centred at exactly one
 	# window size and hangs off the top of a short one — and the browser player is a panel
