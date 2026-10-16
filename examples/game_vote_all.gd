@@ -93,7 +93,27 @@ var _shot_dir := ""
 var _shots := PackedStringArray()
 
 
+## The delivered game's client node that owns a lot panel (`garage` and `_show_garage`), or null.
+## Duck-typed, because nothing of a game is preloaded here.
+func _find_lot_client() -> Node:
+	var stack: Array[Node] = [get_tree().root]
+	while not stack.is_empty():
+		var node: Node = stack.pop_back()
+		if node.has_method("_show_garage") and "garage" in node:
+			return node
+		stack.append_array(node.get_children())
+	return null
+
+
 func _save_shot(shot_name: String) -> void:
+	# The shell's loading cover first: the suite counts the client as playing at the link's
+	# phase, which comes before the delivered game has mounted its content and built its world,
+	# and the first game of a run (a cold shader and map cache) is the slow one. A frame taken
+	# then is the cover, not the game.
+	var loading = _shell.get("loading")
+	if loading != null:
+		await _until(func() -> bool: return not loading.is_showing(), 30.0)
+
 	# A few frames, so the panel has laid itself out and the game behind it has drawn.
 	for i in 30:
 		await get_tree().process_frame
@@ -494,6 +514,13 @@ func _test_game(game_id: String, next: String) -> void:
 
 	if _shot_dir != "":
 		await _save_shot("%s_game" % game_id)
+		# A game with a full-width panel of its own (delivery's lot) is looked at with it open:
+		# the case a ballot column can hide most of.
+		var lot := _find_lot_client()
+		if lot != null:
+			lot.call("_show_garage", true)
+			await _save_shot("%s_lot" % game_id)
+			lot.call("_show_garage", false)
 
 	# The game asks for its own ballot while the game ballot is up.
 	var refused := true
