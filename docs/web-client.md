@@ -21,6 +21,15 @@ The shell runs one game in the tab with no server: `--solo <owner>/<repo>` (and 
 - **Leave goes back to the shell's menu.** Every `DotMenu` built under the game gets the session as its `leave_link` ("Back to menu"), and a client root's `leave_requested` signal is answered the same way. The menu then offers "Play <game> solo" to go again. A game that leaves its own way and hides Leave offline in a browser (g2gfast's `menu_leave_label`) has no in-game way back yet; the site's player close button still works.
 - **Testing it.** Natively: `godot --headless --path . res://client/boot.tscn -- --solo gamemann/game-arena --content-url https://dotgames.org/content`. In a browser: serve `web/build` with a `/content` that answers on the same origin and open `embed.html?solo=gamemann/game-arena` (`tools/browser_check.mjs` shows the shape).
 
+## Shaders compile under the loading screen
+
+A material's shader compiles the first time something using it is drawn, and under the Compatibility renderer (every browser) the compile and the program link block the one thread: a map's first frame, the first shot and the first kill each stalled for hundreds of milliseconds to seconds. The shell covers it with a duck-typed contract a game's root may offer, so a pack built against any shell can use it:
+
+- `signal ready_to_show` with `func is_ready_to_show() -> bool`: the game is on screen at spawn, but its level arrives later (a map sent after signon). The shell puts its loading screen up at once (reason `warm`, no fade-in) and waits up to `WARM_WAIT_SEC` (20 s) for the signal.
+- `func warm_up_items() -> Array`: materials and meshes the game will draw later that are not in the tree yet (game-arena returns every weapon model's).
+
+When the game is ready the shell hangs a dot-core `DotRenderWarmup` under the current camera, which draws every material and mesh in the game's tree plus those items once, millimetre-sized just past the near plane (culling is by bounds, so the draw and the compile happen; nobody sees it), for two frames, and then lifts the screen. Each later `ready_to_show` (a map change) warms again without the screen. A game with neither member is shown at spawn, as before. Variants that depend on what lights a surface (a muzzle flash's light) or on skinning are not all reached; the log line `drew the game's materials once under the loading screen` says how many items and how long.
+
 ## Refusals the shell says in words
 
 - `CODE_VERSION` in a disconnect is a kinds or message-types mismatch between two builds that share a signon revision; the shell shows the server's sentence ("This server needs a newer game client.") rather than the build-mismatch message.

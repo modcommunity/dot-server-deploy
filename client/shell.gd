@@ -1513,6 +1513,10 @@ const MAX_UPDATE_RESTARTS := 2
 ## this the update is left for the next start rather than reloading into nothing.
 const PERSIST_TIMEOUT_SEC := 60.0
 
+## Seconds a game that declared `ready_to_show` has, after it is on screen, to say so before
+## the loading screen lifts anyway. See [method _watch_game_ready].
+const WARM_WAIT_SEC := 20.0
+
 ## The `sessionStorage` key restarts are counted under.
 const UPDATE_ATTEMPTS_KEY := "tmc.addon_updates"
 
@@ -1800,6 +1804,7 @@ func _load_solo(content_id: String, version: String) -> DotResult:
 	loading.end(TmcLoadingScreen.REASON_GAME)
 	loading.end(TmcLoadingScreen.REASON_CONTENT)
 	_say("")
+	_watch_game_ready()
 
 	var shown := session.display_name if session.display_name != "" else content_id
 	if _solo_button != null:
@@ -1946,6 +1951,7 @@ func _on_spawned() -> void:
 	if _game_root.get_child_count() > 0:
 		# The server named a scene and the link built it out of downloaded content.
 		_say("")
+		_watch_game_ready()
 		return
 
 	var content_id := link.server_content_id
@@ -1996,6 +2002,78 @@ func _on_spawned() -> void:
 
 	_game_root.add_child(instance)
 	_say("")
+	_watch_game_ready()
+
+
+## Holds the loading screen over a game that says it is not ready to be seen yet, and draws
+## its materials once under it when it is.
+##
+## [b]The contract is duck-typed, so a game built against any shell can offer it[/b]: a
+## game's root may declare [code]signal ready_to_show[/code] with
+## [code]func is_ready_to_show() -> bool[/code] (its level and camera are built: a game
+## whose map arrives after signon is not ready at spawn), and
+## [code]func warm_up_items() -> Array[/code] (materials and meshes it will draw later and
+## that are not in the tree yet: weapons, effects, other players). A game with neither is
+## shown at spawn, as before.
+##
+## [b]Why the shell does it.[/b] A material's shader compiles the first time it is drawn,
+## synchronously under the Compatibility renderer, so a browser stalled for a second or more
+## after the map appeared and again at the first shot and the first kill. The loading screen
+## is the shell's, and it is the only thing that can cover those frames; [DotRenderWarmup]
+## draws each material once just past the camera's near plane, under the cover.
+##
+## Each later [code]ready_to_show[/code] (a map change) warms again without the cover:
+## the content screen has usually just lifted, and a second screen over a two-frame warmup
+## would be a flash.
+func _watch_game_ready() -> void:
+	for game in _game_root.get_children():
+		if not game.has_signal(&"ready_to_show") or game.has_meta(&"tmc_warm_watched"):
+			continue
+		game.set_meta(&"tmc_warm_watched", true)
+		game.connect(&"ready_to_show", _on_game_ready_to_show.bind(game))
+		var ready := game.has_method(&"is_ready_to_show") and bool(game.call(&"is_ready_to_show"))
+		if ready:
+			_warm_up(game, true)
+		else:
+			loading.begin(TmcLoadingScreen.REASON_WARM, "", "", true)
+			# A game that never says so must not leave the player behind a picture. The
+			# loading screen's own staleness check is 90 s; this is the game's budget.
+			get_tree().create_timer(WARM_WAIT_SEC).timeout.connect(_warm_wait_over.bind(game))
+
+
+func _warm_wait_over(game: Node) -> void:
+	if is_instance_valid(game) and not game.has_meta(&"tmc_warmed"):
+		DotLog.warn(CHANNEL, "the game did not say it was ready to show in time; showing it", {"seconds": WARM_WAIT_SEC})
+		loading.end(TmcLoadingScreen.REASON_WARM)
+
+
+func _on_game_ready_to_show(game: Node) -> void:
+	_warm_up(game, not game.has_meta(&"tmc_warmed"))
+
+
+func _warm_up(game: Node, covered: bool) -> void:
+	game.set_meta(&"tmc_warmed", true)
+	var cam := get_viewport().get_camera_3d()
+	if cam == null or not is_instance_valid(game):
+		loading.end(TmcLoadingScreen.REASON_WARM)
+		return
+	if covered:
+		loading.begin(TmcLoadingScreen.REASON_WARM, "", "", true)
+	var warm := DotRenderWarmup.new()
+	warm.name = "Warmup"
+	warm.add_items(DotRenderWarmup.collect(game))
+	if game.has_method(&"warm_up_items"):
+		var extra: Variant = game.call(&"warm_up_items")
+		if extra is Array:
+			warm.add_items(extra)
+	var count := warm.item_count()
+	var started := Time.get_ticks_msec()
+	cam.add_child(warm)
+	warm.start()
+	var _n: int = await warm.finished
+	DotLog.info(CHANNEL, "drew the game's materials once under the loading screen", {
+		"items": count, "ms": Time.get_ticks_msec() - started, "covered": covered})
+	loading.end(TmcLoadingScreen.REASON_WARM)
 
 
 ## Takes the current game off screen, whoever built it.

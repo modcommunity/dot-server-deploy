@@ -12,7 +12,7 @@ extends Node
 ## a socket this suite serves itself, because the fetch is the half most likely to be
 ## wrong and least likely to be noticed.
 
-const CHECKS := 155
+const CHECKS := 158
 
 var _passed := 0
 var _failed := 0
@@ -959,6 +959,15 @@ func _test_loading_client() -> void:
 	_check(screen.is_showing(), "and while a game change is also under way it stays")
 	screen.adopt({"cancel": true})
 	_check(not screen.is_showing(), "until the server says the change was abandoned")
+
+	screen.begin(TmcLoadingScreen.REASON_WARM, "", "", true)
+	_check(screen.is_showing() and screen._root.modulate.a == 1.0 and screen._root.visible,
+		"a game not ready to be seen is covered at once, not faded in over")
+	screen.begin(TmcLoadingScreen.REASON_GAME)
+	screen.end(TmcLoadingScreen.REASON_WARM)
+	_check(screen.is_showing(), "the warm-up ending leaves a game change's screen up")
+	screen.end(TmcLoadingScreen.REASON_GAME)
+	_check(not screen.is_showing(), "and both over takes it down")
 
 	screen.adopt({"next": {"game": "arena", "entry": {}}, "show": true})
 	_check(screen.is_showing() and screen.describe()["next"]["game"] == "arena",

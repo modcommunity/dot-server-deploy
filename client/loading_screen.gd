@@ -5,7 +5,7 @@ extends CanvasLayer
 ## the download's own progress on top. Configured by `cfg/loading.yml` on the server and
 ## sent by `TmcLoading`; see that file for what the document holds and why it is URLs.
 ##
-## [b]It covers two things, and they end differently.[/b]
+## [b]It covers three things, and they end differently.[/b]
 ##
 ## - [code]game[/code]: a changelevel. Starts when the server says one is coming (or the
 ##   link starts downloading or loading a game) and ends when the new game has spawned.
@@ -14,8 +14,12 @@ extends CanvasLayer
 ## - [code]content[/code]: anything the content client fetches while a game is running —
 ##   in practice a map. Starts when a fetch has been going for [member show_delay_sec],
 ##   so a map already on the disk does not flash a screen, and ends when it is mounted.
+## - [code]warm[/code]: a game on screen that declared it is not ready to be seen (its map
+##   arrives after signon) and then the frames in which its materials are drawn once, so
+##   their shaders compile under this screen and not at the first shot. Shown at once, not
+##   faded in.
 ##
-## The screen is up while either is. Neither on the first connect: the shell's own menu
+## The screen is up while any is. None of them on the first connect before spawn: the shell's own menu
 ## (or the page that launched the player) has that, and the shell only calls [method begin]
 ## once a game has spawned. The shell menu carries the same corner line naming the shell
 ## build ([TmcShellVersion]), so the first screen a player sees and this one both say which
@@ -82,6 +86,10 @@ const PREFS := "user://tmc_loading.cfg"
 ## Reasons a screen is up. See the class notes.
 const REASON_GAME := &"game"
 const REASON_CONTENT := &"content"
+## A game on screen that is not ready to be seen: its map is still being built, or its
+## materials are being drawn once so their shaders compile here rather than in play. The
+## shell's `_watch_game_ready`.
+const REASON_WARM := &"warm"
 
 ## `func() -> bool`: whether a game is on screen at all. The shell answers "has spawned
 ## and the menu is hidden"; without it, a screen never goes up.
@@ -224,7 +232,10 @@ func has_document() -> bool:
 
 ## Something started that the screen should cover. [param game_id] and [param game_name]
 ## name what is loading, when that is known.
-func begin(reason: StringName, game_id: String = "", game_name: String = "") -> void:
+##
+## [param instant] shows it at full opacity in this frame rather than fading in: over a game
+## that has just been put on screen, a fade is a quarter of a second of the thing it covers.
+func begin(reason: StringName, game_id: String = "", game_name: String = "", instant: bool = false) -> void:
 	if not _in_game() and not _visible:
 		return
 	if game_id != "":
@@ -246,6 +257,11 @@ func begin(reason: StringName, game_id: String = "", game_name: String = "") -> 
 
 	_reasons[reason] = true
 	_show()
+	if instant and _visible:
+		if _fade != null and _fade.is_valid():
+			_fade.kill()
+		_root.modulate.a = 1.0
+		_root.visible = true
 
 
 ## Something the screen was covering finished.
