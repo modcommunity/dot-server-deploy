@@ -1081,6 +1081,7 @@ func _ensure_cloud() -> void:
 	# shell owns this node, so it can read the richer signal without widening anything
 	# in the addon.
 	_cloud.phase_changed.connect(_on_cloud_phase)
+	_cloud.failed.connect(_on_cloud_failed)
 	_cloud.progress_changed.connect(_on_cloud_progress_detail)
 
 	add_child(_cloud)
@@ -1092,6 +1093,45 @@ func _ensure_cloud() -> void:
 ## looks identical to a hang, and "Verifying" is the phase that takes the longest with
 ## nothing moving on the network -- a bar that sits at 100% through it is how a
 ## finished download reads as a freeze.
+## A pack this client is too old to run (CODE_VERSION), told plainly and passed to the page.
+##
+## [b]Branches on the code, never the sentence.[/b] From dot-cloud API level 3 the refusal
+## comes before the pack is downloaded; on an older addon it comes after, and the player
+## has already waited. Either way the fix is the same -- a newer client -- so the page is
+## told in both cases and `early` only decides whether the loader may say nothing was
+## downloaded.
+func _on_cloud_failed(error: DotError) -> void:
+	if error == null or error.code != DotError.CODE_VERSION:
+		return
+	_report_client_behind(error.message)
+
+
+func _report_client_behind(sentence: String) -> void:
+	var early := DotAddonApi.build_level("dot_cloud") >= 3
+
+	DotLog.warn(CHANNEL, "this client is older than the game it was asked to run", {
+		"why": sentence, "early": early,
+	})
+
+	_say(sentence)
+	if _menu != null and not _menu.visible:
+		show_content_failed(sentence)
+
+	if not DotPlatform.is_web():
+		return
+
+	var payload := JSON.stringify({
+		"type": "tmc.build.mismatch",
+		"reason": "client_behind",
+		"message": sentence,
+		"early": early,
+	})
+	DotWeb.eval(
+		"window.parent && window.parent.postMessage(%s, '*')" % JSON.stringify(payload),
+		true
+	)
+
+
 func _on_cloud_phase(phase: int, text: String) -> void:
 	if _status != null and text != "":
 		_status.text = text

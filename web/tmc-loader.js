@@ -474,12 +474,47 @@
   });
 
   /*
+   * The game asked for newer addons than this client has. The shell sends the sentence
+   * (`message`) and the loader says what to do about it: if the site lists a build newer
+   * than the one running (`boot.builds[0]`, newest first), offer to reload into it;
+   * otherwise there is nothing to offer and the sentence stands. `data.early` is true when
+   * the refusal came before the game was downloaded, so the panel may say so.
+   */
+  function clientBehind(data) {
+    var builds = boot && Array.isArray(boot.builds) ? boot.builds : [];
+    var newest = builds.length && builds[0] && builds[0].url ? builds[0] : null;
+    var running = String(frame.src || '');
+    var newer = newest && running.indexOf(String(newest.url)) !== 0;
+
+    var box = panel(
+      'This game needs a newer version of the client.',
+      String(data.message || '') +
+        (data.early ? ' Nothing was downloaded.' : '')
+    );
+
+    if (newer) {
+      box.appendChild(
+        button('Reload for the new client', function () {
+          location.href = newest.url;
+        })
+      );
+    }
+
+    mount.appendChild(box);
+  }
+
+  /*
    * Shown OVER a frame that is alive, which is why it does not go through
    * `replaceOverlay`: that one is the "nothing ever arrived" path and refuses to draw
    * once the frame has spoken. This is the opposite case -- the game loaded, ran, and
    * told us it cannot join.
    */
   function buildMismatch(data) {
+    if (data.reason === 'client_behind') {
+      clientBehind(data);
+      return;
+    }
+
     var wanted = String(data.server_signon || '');
     var have = String(data.client_signon || '');
 

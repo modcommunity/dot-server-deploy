@@ -66,3 +66,4 @@ Rules these suites taught:
 ## Arming
 
 Every check added here is armed: the bug is put back and the check must fail, and fail alone. Several first versions passed with the bug in place (comparing two identical clips, a patched PNG failing its own checksum, a CJK name too short to cross the limit). If arming means removing a registration, remove the one the code actually consults.
+- `node tools/loader_check.mjs` (set `CHROMIUM` and `PLAYWRIGHT_CORE` off dev01): the loader's "client behind" panel against a stub game origin, with and without a newer build in `boot.builds`. Armed by dispatching on a different `reason`.

@@ -24,6 +24,7 @@ The shell runs one game in the tab with no server: `--solo <owner>/<repo>` (and 
 ## Refusals the shell says in words
 
 - `CODE_VERSION` in a disconnect is a kinds or message-types mismatch between two builds that share a signon revision; the shell shows the server's sentence ("This server needs a newer game client.") rather than the build-mismatch message.
+- A pack the client is too old to run (`DotCloudClient.failed` with `CODE_VERSION`, from dot-cloud API level 3 before any pack download) is told plainly by `_report_client_behind`, which posts `tmc.build.mismatch` with `reason: "client_behind"`; the loader offers "Reload for the new client" when `boot.builds[0]` is not the running build. Checked in headless Chromium by `tools/loader_check.mjs` (loader half only; the joined path needs the release that bumps `addons.lock`).
 - `_cloud.host_role` is `"client"` in the shell and `"server"` in `TmcHost` and `install-games`, so a pack whose `requires.json` asks for more than a build has says which side is behind.
 
 ## The notice overlay and other shell views
