@@ -74,7 +74,7 @@ Serve everything from one origin if you possibly can — then none of this matte
 Access-Control-Allow-Origin: https://your-page-origin
 Cross-Origin-Resource-Policy: cross-origin
 Content-Type: application/wasm          # for index.wasm, or the browser refuses to stream it
-Content-Encoding: gzip                  # if you pre-compress; the .pck is the big one
+Content-Encoding: br                    # precompress: index.wasm 39.5 MB -> 6.9 MB (gzip -9: 10.1 MB), index.pck 8.7 -> 7.4 MB. S3 and CloudFront compress nothing this size, so an unencoded shell is the full 48 MB
 ```
 
 **The preset excludes `maps/imported/*`, and that is the opposite of what it used to do.** An imported map is a `.json` manifest *and* a `.bin` of vertices, and only one of the two is a Godot resource: `all_resources` exports every file the engine has a *loader* for, Godot 4 loads `.json` and nothing loads `.bin`. So the manifests shipped and the geometry did not, and a browser client built that map's spawn point, zone set, start line and pit over nothing at all — it connected, signed on, spawned and drew sky. The fix then was `include_filter="maps/*.bin"`, and what it made was a 105 MB download in which 66 MB was eight maps so that a player could play one. The same eight are published as signed dot-cloud packs and fetched from the content origin on join, so the preset excludes them and `./server export-web` checks the two things that then have to be true: nothing carried twice, and nothing published nowhere. A map in neither place is the same black sky, reported a day later. `./server export-native` runs the same check over the native build, which excludes the same directory for the same reason.
@@ -180,3 +180,7 @@ The game origin is not the only thing behind TLS, and the failures elsewhere are
 ```
 
 Neither belongs in production. Use a real certificate there.
+
+## Loading cost, measured 2026-10-16
+
+The live shell (`game/godot/20261016-0230`) was served with no `Content-Encoding`: `index.wasm` 39,514,754 bytes, `index.pck` 8,682,768, `index.js` 279,815, about 48.5 MB before a pack. Brotli q11 gives 6.9 MB, 7.4 MB and 60 KB (14.3 MB, 71% less). `deploy/publish-web-s3.sh --brotli` and the root `deploy-web-shell.sh` upload that way, with the real Content-Type and `Content-Encoding: br`; the site's own publisher has to do the same for an upload through App -> Party. `export-web` also writes the engine files' byte counts into `embed.html` (`fileSizes`), because the engine never reads `Content-Length` and without them the loading bar can only sweep.

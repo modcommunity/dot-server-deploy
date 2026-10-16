@@ -18,7 +18,7 @@
 #     or `WebAssembly.instantiateStreaming` refuses the response and the game
 #     never starts; `.pck` is unknown to every tool and has to be named. S3
 #     stores whatever you tell it and infers nothing.
-#   * Optionally pre-compresses (`--gzip`). S3 does not compress on the fly, and
+#   * Optionally pre-compresses (`--brotli`, smaller, preferred; or `--gzip`). S3 does not compress on the fly, and
 #     an uncompressed Godot `.wasm` is several times the size it needs to be. A
 #     CDN in front can do this instead -- pick one, not both.
 #   * Warns when the loader's baked engine base does not match where you are
@@ -82,6 +82,7 @@ CONTENT_MODE="${TMC_S3_CONTENT:+1}"
 # Publish a directory with no assumption about its shape. See the guard.
 RAW_MODE="${TMC_S3_RAW:+1}"
 GZIP="${TMC_S3_GZIP:+1}"
+BROTLI="${TMC_S3_BROTLI:+1}"
 USE_CLI="${TMC_S3_USE_CLI:+1}"
 # --dry-run is deliberately NOT an environment variable. It is the flag a person types to
 # find out what would happen, and a deployment that had it set by accident would report
@@ -98,6 +99,7 @@ while [ $# -gt 0 ]; do
         --cache)       CACHE_CONTROL="${2:?--cache needs a value}"; shift 2 ;;
         --source)      SOURCE="${2:?--source needs a value}"; shift 2 ;;
         --gzip)        GZIP=1; shift ;;
+        --brotli)      BROTLI=1; shift ;;
         --use-cli)     USE_CLI=1; shift ;;
         --content)     CONTENT_MODE=1; shift ;;
         --raw)         RAW_MODE=1; shift ;;
@@ -200,6 +202,22 @@ compressible() {
         *.wasm|*.js|*.html|*.json|*.css|*.svg) return 0 ;;
         *) return 1 ;;
     esac
+}
+
+# brotli IN OUT at the top quality. On the engine's wasm it is 39.5 MB -> 6.9 MB where
+# gzip -9 gives 10.1 MB, and the upload is paid for once. Every browser that can run the
+# engine at all sends `br` over HTTPS. The CLI, then Python's module, then Node's zlib,
+# because a deploy box has at least one of them and none is guaranteed.
+brotli_file() {
+    if command -v brotli >/dev/null 2>&1; then
+        brotli -q 11 -c "$1" > "$2"
+    elif python3 -c 'import brotli' >/dev/null 2>&1; then
+        python3 -I -c 'import brotli,sys;open(sys.argv[2],"wb").write(brotli.compress(open(sys.argv[1],"rb").read(),quality=11,lgwin=24))' "$1" "$2"
+    elif command -v node >/dev/null 2>&1; then
+        node -e 'const z=require("zlib"),f=require("fs");f.writeFileSync(process.argv[2],z.brotliCompressSync(f.readFileSync(process.argv[1]),{params:{[z.constants.BROTLI_PARAM_QUALITY]:11,[z.constants.BROTLI_PARAM_LGWIN]:24,[z.constants.BROTLI_PARAM_SIZE_HINT]:f.statSync(process.argv[1]).size}}))' "$1" "$2"
+    else
+        return 1
+    fi
 }
 
 # ------------------------------------------------------------------- signing
@@ -378,7 +396,13 @@ while IFS= read -r file <&3; do
     body="$file"
     encoding=""
 
-    if [ -n "$GZIP" ] && compressible "$name"; then
+    if [ -n "${BROTLI:-}" ] && { compressible "$name" || [ "${name##*.}" = pck ]; } \
+        && tmp="$(mktemp)" && brotli_file "$file" "$tmp"; then
+        # A .pck is mostly compressed already and still loses about 15%; the .wasm is
+        # where the bytes are. Wins over --gzip when both are given.
+        body="$tmp"
+        encoding="br"
+    elif [ -n "$GZIP" ] && compressible "$name"; then
         tmp="$(mktemp)"
         gzip -9 -c "$file" > "$tmp"
         body="$tmp"
@@ -389,7 +413,7 @@ while IFS= read -r file <&3; do
 
     if [ -n "$DRY_RUN" ]; then
         printf '  would put  %-34s %-38s %8s bytes%s\n' \
-            "$key" "$ctype" "$size" "${encoding:+ (gzip)}"
+            "$key" "$ctype" "$size" "${encoding:+ ($encoding)}"
         count=$((count + 1))
         [ -n "$tmp" ] && { rm -f "$tmp"; tmp=""; }
         continue
@@ -405,7 +429,7 @@ while IFS= read -r file <&3; do
 
     case "$code" in
         200|201)
-            ok "$(printf '%-34s %-30s %8s bytes%s' "$key" "$ctype" "$size" "${encoding:+ gzip}")"
+            ok "$(printf '%-34s %-30s %8s bytes%s' "$key" "$ctype" "$size" "${encoding:+ $encoding}")"
             count=$((count + 1))
             ;;
         *)

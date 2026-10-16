@@ -874,6 +874,17 @@ stamp_shell_version() {
     printf '  stamped the shell as %s%s\n' "$short" "$dirty"
 }
 
+## embed.html's `fileSizes` placeholder, filled from the index.html Godot wrote beside it.
+## Skipped quietly when either is missing or the table is unreadable: an empty table is a
+## bar that sweeps, which is the old behaviour and not worth failing an export over.
+stamp_file_sizes() {
+    local build="$1" sizes
+    [ -f "$build/index.html" ] && [ -f "$build/embed.html" ] || return 0
+    sizes=$(grep -o '"fileSizes":{[^}]*}' "$build/index.html" | head -1 | sed 's/^"fileSizes"://')
+    [ -n "$sizes" ] || return 0
+    sed -i "s#/\*FILE_SIZES\*/{}#$sizes#" "$build/embed.html"
+}
+
 install_ceiling() {
     local build="$1" js="$PROJECT/addons/dot_audio/web/dot_audio_ceiling.js" page
     if [ ! -f "$js" ]; then
@@ -1170,6 +1181,10 @@ case "$COMMAND" in
         # embed.html names it in its source, index.html gets it here because the presets
         # are each box's own copy.
         install_ceiling "$PROJECT/web/build"
+
+        # The byte counts of the engine files, from the index.html Godot just wrote, into
+        # embed.html: the engine's progress callback only has a total when it is given one.
+        stamp_file_sizes "$PROJECT/web/build"
 
         # And the loader website-city uploads, with the engine's location baked in.
         # It HAS to be baked: the site serves that file out of its own upload store,

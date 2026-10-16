@@ -290,6 +290,12 @@
     // sits there for ever with no error the page can see. It has to match the export
     // path's basename; `./server export-web` writes index.html, so it is "index".
     executable: "index",
+    // Real byte counts, so the bar is a percentage. The engine never reads Content-Length
+    // (it only trusts this table), and with a precompressed upload the header would be the
+    // compressed size anyway, which is not what the reader counts. `export-web` replaces
+    // the empty table with the sizes Godot wrote into index.html; served without that step
+    // it stays empty and the bar sweeps.
+    fileSizes: /*FILE_SIZES*/{},
     canvasResizePolicy: 0,          // this page owns the size; see resize() above
     // The launcher reads the query string first in a browser, so this pair is a
     // belt-and-braces for a host that serves the export without this page.
