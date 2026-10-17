@@ -28,7 +28,7 @@ dot-match	v0.1.3
 dot-matchmaking	v0.1.5
 dot-menu	v0.1.3
 dot-moderation	v0.1.4
-dot-net	v0.1.12
+dot-net	v0.1.13
 dot-npc	v0.1.4
 dot-npc-ai	v0.1.5
 dot-npc-ai-director	v0.1.4
@@ -59,7 +59,7 @@ dot-user	v0.1.4
 dot-user-avatar	v0.1.5
 dot-vehicle	v0.1.3
 dot-voice	v0.1.6
-dot-vote	v0.1.8
+dot-vote	v0.1.9
 dot-weapon	v0.1.4
 zed-dot-weapons	v0.1.1
 zee-dot-weapons	v0.1.9
