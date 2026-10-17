@@ -86,37 +86,13 @@ const REQUIRES_TIMEOUT_S := 600
 ## publisher as a pack path mapped to a file elsewhere: dot-cloud's public
 ## `DotCloudPublisher.extra_files` (dot-cloud API 2).
 ##
-## A dot-cloud older than API 2 (the lock's v0.1.6 is one) has no public seam, and gets
-## [LegacyRequiresPublisher] instead. Either way [method _publish_one] reads the written
-## manifest back and fails the pack when requires.json is not in it.
+## [method _publish_one] reads the written manifest back and fails the pack when
+## requires.json is not in it.
 static func publisher_for(requires_file: String) -> DotCloudPublisher:
 	var pub := DotCloudPublisher.new()
-
-	if "extra_files" in pub:
-		if requires_file != "":
-			pub.set("extra_files", {DotAddonApi.REQUIREMENTS_FILE: requires_file})
-		return pub
-
-	var legacy := LegacyRequiresPublisher.new()
-	legacy.requires_file = requires_file
-	return legacy
-
-
-## [b]Only for a dot-cloud below API 2; delete it once addons.lock's dot-cloud has
-## `extra_files`.[/b] Overrides the publisher's non-public `_imported_outputs_for`, the one
-## seam an older dot-cloud has for "a file in the pack that is not under the source". It is
-## not API, which is why the manifest read-back in [method _publish_one] exists.
-class LegacyRequiresPublisher:
-	extends DotCloudPublisher
-
-	## Absolute path of the derived requires.json, or "" to add nothing.
-	var requires_file: String = ""
-
-	func _imported_outputs_for(source_dir: String, relatives: PackedStringArray) -> Dictionary:
-		var out: Dictionary = super(source_dir, relatives)
-		if requires_file != "":
-			(out["files"] as Dictionary)[DotAddonApi.REQUIREMENTS_FILE] = requires_file
-		return out
+	if requires_file != "":
+		pub.extra_files = {DotAddonApi.REQUIREMENTS_FILE: requires_file}
+	return pub
 
 
 func _initialize() -> void:
