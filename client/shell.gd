@@ -2077,11 +2077,6 @@ func _warm_up(game: Node, covered: bool) -> void:
 	loading.end(TmcLoadingScreen.REASON_WARM)
 
 
-## Takes the current game off screen, whoever built it.
-##
-## `free()`, not `queue_free()`: the next game is added in the same frame, and two games in
-## the tree at once means two netcode managers, two input handlers and two cameras — for a
-## frame, which is long enough to send a packet from the wrong one.
 ## Starts the client side of the extra packs this server added to the game (`cfg/addons.yml`),
 ## which the link reports as `content_extra` and the content client has already mounted.
 ## Children of the game root, so [method _clear_game] frees them with the game. Once per game:
@@ -2101,6 +2096,11 @@ func _start_addon_entries() -> void:
 	TmcAddonEntry.attach(_game_root, _cloud, link.content_extra, "client")
 
 
+## Takes the current game off screen, whoever built it.
+##
+## `free()`, not `queue_free()`: the next game is added in the same frame, and two games in
+## the tree at once means two netcode managers, two input handlers and two cameras — for a
+## frame, which is long enough to send a packet from the wrong one.
 func _clear_game() -> void:
 	for child in _game_root.get_children():
 		_game_root.remove_child(child)

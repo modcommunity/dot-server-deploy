@@ -223,6 +223,12 @@ func _run() -> void:
 		_die(EXIT_CONTENT, str(overrides.error))
 		return
 
+	var extras := _apply_addons_config()
+
+	if not extras.ok:
+		_die(EXIT_CONFIG, str(extras.error))
+		return
+
 	if "--list-games" in args:
 		for line in content.describe_lines():
 			print(line)
@@ -452,6 +458,11 @@ func start(
 	if not overrides.ok:
 		return overrides
 
+	var extras := _apply_addons_config()
+
+	if not extras.ok:
+		return extras
+
 	var built: bool = await _boot()
 
 	if not built:
@@ -645,6 +656,24 @@ func _apply_game_config() -> DotResult:
 		)
 
 	return DotResult.success(overrides)
+
+
+## The server owner's extra packs (`cfg/addons.yml`), appended to each game's dependencies
+## AFTER the game's own settings are applied, so a `remove:` there cannot be undone here. A
+## malformed file is a configuration error (exit 5), not a content one: the content is fine.
+func _apply_addons_config() -> DotResult:
+	var loaded := TmcAddonsConfig.load_from(_config_dir, _absolute(_data_dir))
+
+	if not loaded.ok:
+		return loaded
+
+	var extras := loaded.value as TmcAddonsConfig
+	extras.apply_all(content)
+
+	for line in extras.warnings:
+		DotLog.warn(CHANNEL, line)
+
+	return DotResult.success(extras)
 
 
 func _boot() -> bool:
@@ -1419,6 +1448,35 @@ func _on_content_ready(manifest: DotCloudManifest, mount_prefix: String) -> void
 
 
 func _on_game_loaded(_content_key: String) -> void:
+	if server == null or server.games == null:
+		return
+
+	await _load_game_module()
+	_attach_addon_entries()
+
+
+## Starts the extra packs that run on the server, as children of the DotServer node (the
+## game's own root is private to DotGameManager, which frees whatever sits under the server
+## node when the game changes, so they go with the game). After the module, because an
+## entry may look for the game's services.
+func _attach_addon_entries() -> void:
+	var current := server.games.current()
+
+	if current == null:
+		return
+
+	var descriptor := content.find(current.game_id)
+	var cloud := DotRegistry.get_service(&"dot_cloud_client")
+
+	if descriptor == null or cloud == null:
+		return
+
+	var keys := PackedStringArray(descriptor.dependencies)
+	keys.append_array(descriptor.server_dependencies)
+	TmcAddonEntry.attach(server, cloud, keys, "server")
+
+
+func _load_game_module() -> void:
 	if server == null or server.games == null:
 		return
 

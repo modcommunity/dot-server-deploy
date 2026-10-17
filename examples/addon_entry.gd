@@ -15,7 +15,7 @@ extends Node
 ## Armed by making `TmcAddonEntry.attach` ignore `side` (the server run then also starts the
 ## client pack and the counts fail), and by making `TmcAddonsConfig.apply` append nothing.
 
-const CHECKS := 25
+const CHECKS := 23
 const FIXTURE := "res://examples/fixtures/addon_pack"
 const SCRATCH := "user://addon_entry"
 const PACKS := ["extra", "clientside", "plain", "broken"]
@@ -124,6 +124,10 @@ func _mount_and_attach(pair: DotResult) -> void:
 	cloud.config.cache_dir = scratch.path_join("cache")
 	cloud.config_file = cfg.path_join("content.json")
 	cloud.local_search_dirs = PackedStringArray([scratch.path_join("dist")])
+	# The shapes TmcHost, install-games and the shell all set: pack.gd writes the flat one,
+	# and without it every versioned ask misses the scratch dist/.
+	cloud.manifest_url_template = "{base}/{id}/{version}/manifest.json"
+	cloud.manifest_url_fallbacks = PackedStringArray(["{base}/{id}/manifest.json"])
 	add_child(cloud)
 
 	var loaded := TmcAddonsConfig.load_from(cfg, data)

@@ -355,6 +355,8 @@ echo "a game published from its own repository"
 # The installer stamps a pack's own game.yml with the id and version it verified, and
 # every game repository's descriptor must agree with the one under content/ here.
 "$GODOT" --headless --path . res://examples/install_descriptor.tscn || fails=$((fails + 1))
+echo "a server owner's extra packs (cfg/addons.yml) mount and start their entry"
+timeout 300 "$GODOT" --headless --path . res://examples/addon_entry.tscn || fails=$((fails + 1))
 echo "a pack this box publishes for itself carries requires.json"
 timeout 900 "$GODOT" --headless --path . res://examples/pack_requires.tscn || fails=$((fails + 1))
 

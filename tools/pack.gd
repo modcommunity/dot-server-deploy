@@ -345,6 +345,9 @@ func _publish_one(
 	for prefix in (meta["optional"] as Array):
 		pub.optional_prefixes.append(str(prefix))
 
+	for key in (meta["addon"] as Dictionary):
+		pub.metadata[key] = str(meta["addon"][key])
+
 	for prefix in (meta["groups"] as Dictionary):
 		pub.group_rules[prefix] = str((meta["groups"] as Dictionary)[prefix])
 
@@ -523,6 +526,11 @@ func _read_spec(dir: String, id: String) -> DotResult:
 		"optional": [],
 		"groups": {},
 		"mirrors": [],
+		# A server-owner extra pack that starts something: {"entry": "scene.tscn", "side":
+		# "server|client|both"}. It rides in the manifest's signed metadata rather than in
+		# `entry` (the manifest's entry scene), because that one names a GAME's scene and a
+		# map pack's, and a pack with both would be instantiated as a game by accident.
+		"addon": {},
 	}
 
 	# Not a pack.json key: it is the GAME's nature, and a pack descriptor claiming to be
@@ -595,6 +603,24 @@ func _read_spec(dir: String, id: String) -> DotResult:
 	if not (meta["groups"] is Dictionary):
 		return DotResult.fail(
 			DotError.CODE_INVALID, "%s: 'groups' must be an object" % pack_json
+		)
+
+	if not (meta["addon"] is Dictionary):
+		return DotResult.fail(
+			DotError.CODE_INVALID, "%s: 'addon' must be an object" % pack_json
+		)
+
+	for key in (meta["addon"] as Dictionary):
+		if not key in ["entry", "side"]:
+			return DotResult.fail(
+				DotError.CODE_INVALID, "%s: addon: unknown key '%s'" % [pack_json, key],
+				"expected entry and side"
+			)
+
+	if (meta["addon"] as Dictionary).has("side") \
+			and not str(meta["addon"]["side"]) in ["server", "client", "both"]:
+		return DotResult.fail(
+			DotError.CODE_INVALID, "%s: addon: side must be server, client or both" % pack_json
 		)
 
 	meta["kind"] = kind

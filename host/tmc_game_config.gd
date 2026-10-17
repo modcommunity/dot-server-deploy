@@ -718,9 +718,16 @@ func _members_of(wildcard: String) -> PackedStringArray:
 
 ## The section for a descriptor: by its whole id, by its content id, then by its name half.
 func _section_for(descriptor: DotGameDescriptor) -> Dictionary:
+	return section_in(games, descriptor)
+
+
+## [method _section_for] over any `games:` map, because `cfg/addons.yml` keys its games the
+## same way and a second copy of the lookup would let the two files disagree about which
+## game `g2gfast` means.
+static func section_in(sections: Dictionary, descriptor: DotGameDescriptor) -> Dictionary:
 	for key in [descriptor.game_id, descriptor.content_id, _name_half(descriptor.game_id)]:
-		if key != "" and games.has(key):
-			return games[key]
+		if key != "" and sections.has(key):
+			return sections[key]
 
 	return {}
 
@@ -733,6 +740,15 @@ func _matching(content: TmcContent, key: String) -> Array:
 			out.append(descriptor)
 
 	return out
+
+
+## Whether a `games:` key names any game on this server, by the same three spellings.
+static func key_matches_any(key: String, content: TmcContent) -> bool:
+	for descriptor in content.games:
+		if key in [descriptor.game_id, descriptor.content_id, _name_half(descriptor.game_id)]:
+			return true
+
+	return false
 
 
 static func _name_half(id: String) -> String:

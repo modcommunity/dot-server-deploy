@@ -382,6 +382,7 @@ func _init() -> void:
 	_write_state(data_dir, state)
 
 	await _resolve_owner_maps(config_dir, data_dir, bases, content_dir, TmcGameRef.dirs_in(",".join(wanted)))
+	await _resolve_addon_packs(config_dir, data_dir, bases, content_dir, TmcGameRef.dirs_in(",".join(wanted)), cloud)
 
 	print("")
 	print("  games    : %s" % ", ".join(present))
@@ -1220,6 +1221,110 @@ func _resolve_owner_maps(
 	if not failed.is_empty():
 		print("  NO MAP   : %s" % ", ".join(failed))
 		print("             not on the origin; left out until it is")
+
+
+## Pins, prefetches and vets the extra packs in `cfg/addons.yml`, and writes the answers to
+## `data/content-addons.json`, which TmcAddonsConfig reads at boot.
+##
+## [b]Pinned here for the reason maps are.[/b] A dependency has to name one version, or two
+## players of one game would be handed two packs. An unpinned entry resolves to the origin's
+## newest on every start, so a new upload reaches the server without anyone editing a file;
+## an origin that cannot answer keeps the version the cache had.
+##
+## [b]Prefetched and refused here, not at the first join.[/b] The pack is downloaded into the
+## store the server reads, and `ensure` checks its `requires.json` against the addons THIS
+## build carries. A pack they cannot run (too new an API level, an addon this box lacks) is
+## left out of the file with a message naming it, instead of failing the game change that
+## would otherwise need it: a game change with a missing dependency is abandoned whole.
+func _resolve_addon_packs(
+	config_dir: String, data_dir: String, bases: PackedStringArray, content_dir: String,
+	allow_dirs: PackedStringArray, cloud: DotCloudClient
+) -> void:
+	var loaded := TmcAddonsConfig.load_from(config_dir, data_dir)
+
+	if not loaded.ok:
+		DotLog.error(CHANNEL, "could not read the server's extra packs", {"why": str(loaded.error)})
+		print("  BAD ADDONS: %s" % str(loaded.error))
+		return
+
+	var addons := loaded.value as TmcAddonsConfig
+	var scanned := TmcContent.scan(content_dir, allow_dirs)
+	var entries := addons.all_entries(scanned.value if scanned.ok else null)
+
+	if entries.is_empty() and addons.resolved.is_empty():
+		return
+
+	var out := {}
+	var kept := 0
+	var failed := PackedStringArray()
+	var refused := PackedStringArray()
+
+	for entry in entries:
+		var ref := TmcGameRef.parse(entry)
+		var id := str(ref["id"])
+		var version := str(ref["version"])
+
+		if version == "":
+			var latest := await _resolve_pointer(id, bases)
+
+			if latest.ok and str(latest.value["moved_from"]) == "":
+				version = str(latest.value["version"])
+			elif addons.resolved.has(id):
+				version = str(addons.resolved[id])
+				kept += 1
+			else:
+				failed.append(id)
+				continue
+
+		if cloud != null:
+			print("  fetching %s@%s" % [id, version])
+			var res: DotResult = await cloud.ensure(StringName(id), version)
+
+			if not res.ok and res.error.code == DotError.CODE_VERSION:
+				# This build's addons cannot run it: leave it out so no game depends on it.
+				refused.append("%s@%s (%s)" % [id, version, res.error.message])
+				DotLog.error(CHANNEL, "an extra pack needs more than this server has", {
+					"pack": id, "version": version, "why": str(res.error),
+				})
+				continue
+
+			if not res.ok:
+				# Not fatal, as a prefetch never is: the pin stands and the pack is fetched
+				# when the game is next changed to.
+				DotLog.warn(CHANNEL, "could not prefetch an extra pack", {
+					"pack": id, "version": version, "why": str(res.error),
+				})
+			else:
+				await _cache_manifest(id, version, data_dir, bases)
+
+		out[id] = version
+
+	DirAccess.make_dir_recursive_absolute(data_dir)
+	var file := FileAccess.open("%s/%s" % [data_dir.rstrip("/"), TmcAddonsConfig.RESOLVED_FILE], FileAccess.WRITE)
+
+	if file == null:
+		DotLog.error(CHANNEL, "could not write the resolved extra pack versions", {
+			"why": error_string(FileAccess.get_open_error()),
+		})
+		return
+
+	file.store_string(JSON.stringify({"packs": out}, "\t") + "\n")
+	file.close()
+
+	print("  addons   : %d from cfg/%s" % [out.size(), TmcAddonsConfig.FILE])
+
+	if kept > 0:
+		print("             %d kept at the version they had; the origin did not answer" % kept)
+
+	if not failed.is_empty():
+		print("  NO PACK  : %s" % ", ".join(failed))
+		print("             not on the origin; left out until it is")
+
+	for line in refused:
+		print("  REFUSED  : %s" % line)
+
+	if not refused.is_empty():
+		print("             left out of this server; update the addons or drop the entry")
 
 
 ## Expands each collection id in [param wanted] (`owner/collection`) with [param fetch], a
