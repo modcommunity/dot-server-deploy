@@ -45,12 +45,17 @@
 #         add:                   maps to offer on top
 #           - owner/map          the newest on the content origin, checked every start
 #           - owner/map@1.2.0    held at that version until you change it here
+#           - owner/collection/*  every map the collection (a map repository) publishes,
+#                                expanded every start; e.g. gamemann/g2gfast-maps/*. Exactly
+#                                this shape (no partial globs, no @version): pin a map
+#                                beside it (owner/map@1.2.0 wins) or take one out in remove:
 #           - surf_mesa          a bare name works too: its owner is map_owner: (the game's,
 #                                then defaults:), else the game's own sv_map_content_owner
 #                                cvar, else the owner of the game's own id. If none of those
 #                                says, the server refuses to start and names the entry
 #         remove:                maps the game lists that this server does not want
 #           - owner/map          (a bare name matches the same map as its owner/map spelling)
+#           - owner/collection/*  takes the whole collection out of an earlier list
 #
 # Order: the game's game.yml < defaults < games: <game>. Cvars and metadata merge key by
 # key; a list replaces a list. What makes a game the game it is -- scene, client_scene,

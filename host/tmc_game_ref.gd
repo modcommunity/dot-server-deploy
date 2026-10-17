@@ -102,22 +102,52 @@ static func dirs_in(raw: String) -> PackedStringArray:
 ## [b]The one place a bare map name becomes an id.[/b] `install-games` pins versions under
 ## the id this returns and the host looks them up under the same one; two spellings of
 ## "surf_mesa" resolved in two places is the drift this file exists to prevent. Returns
-## `{"ok": bool, "id": "<owner>/<map>", "version": "", "why": ""}`. Three segments
-## (`a/b/c`) and an empty name are refused, never guessed at; a bare name with no
+## `{"ok": bool, "id": "<owner>/<map>", "version": "", "why": ""}`. `<owner>/<collection>/*` is a whole
+## collection (`wildcard: true`, `collection` the two-segment id; the installer expands it).
+## Any other three segments and an empty name are refused, never guessed at; a bare name with no
 ## [param owner] is refused too, because the caller is the one who can name the entry.
 static func qualify_map(raw: String, owner: String) -> Dictionary:
+	var trimmed := raw.strip_edges()
+
+	# A whole collection: `<owner>/<collection>/*`, exactly. Nothing is guessed about a
+	# partial glob (`a/b/bhop_*`, `a/*/*`, `*`): the site publishes one list per collection
+	# and a pattern over it would be a second query language to keep in step. A pin is
+	# refused too, because a collection is "whatever it publishes now", and a version of it
+	# is not a version of any map in it; pin the maps you need beside it instead.
+	if trimmed.contains("*"):
+		var parts := trimmed.split("/")
+
+		if "@" in trimmed:
+			return {"ok": false, "id": "", "version": "", "wildcard": false,
+				"why": "pins a wildcard; a collection cannot take @version (pin a map beside it: owner/map@1.0.0)"}
+
+		if parts.size() != 3 or parts[2] != "*" or parts[0] == "" or parts[1] == "" \
+				or parts[0].contains("*") or parts[1].contains("*"):
+			return {"ok": false, "id": "", "version": "", "wildcard": false,
+				"why": "is not a map or exactly <owner>/<collection>/*"}
+
+		return {"ok": true, "id": trimmed, "version": "", "wildcard": true, "why": "",
+			"collection": "%s/%s" % [parts[0], parts[1]]}
+
 	var ref := parse(raw)
 	var id := str(ref["id"])
 	var segments := id.split("/")
 
 	if id == "" or segments.size() > 2 or "" in segments:
-		return {"ok": false, "id": "", "version": "", "why": "is not <map> or <owner>/<map>"}
+		return {"ok": false, "id": "", "version": "", "wildcard": false,
+			"why": "is not <map>, <owner>/<map> or <owner>/<collection>/*"}
 
 	if segments.size() == 2:
-		return {"ok": true, "id": id, "version": str(ref["version"]), "why": ""}
+		return {"ok": true, "id": id, "version": str(ref["version"]), "wildcard": false, "why": ""}
 
 	if owner == "":
-		return {"ok": false, "id": "", "version": "",
+		return {"ok": false, "id": "", "version": "", "wildcard": false,
 			"why": "has no owner: set map_owner: for the game or in defaults:"}
 
-	return {"ok": true, "id": "%s/%s" % [owner, id], "version": str(ref["version"]), "why": ""}
+	return {"ok": true, "id": "%s/%s" % [owner, id], "version": str(ref["version"]),
+		"wildcard": false, "why": ""}
+
+
+## Whether [param entry] (an `add` or `remove` spelling) names a whole collection.
+static func is_wildcard(entry: String) -> bool:
+	return entry.strip_edges().ends_with("/*")

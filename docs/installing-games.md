@@ -38,6 +38,7 @@ Each entry is `<owner>/<name>` with optional `@<version>`/`@latest`. **`install-
 - **A game whose dependency cannot be fetched is not loaded at all** (`DotGameManager._acquire_content` abandons the change). So publish a maps pack BEFORE a game whose `game.yml` names it. A clone that fails in `setup.sh`'s `GAMES` is only a warning, which is how a game naming an unpublished pack would reach a box.
 - A shell exported before dot-server sent `content_extra` ignores the field and joins without the packs.
 - An owner's extra packs for a game (`cfg/addons.yml`) are a fourth list, appended to `dependencies` after the game's own: `TmcAddonsConfig` reads the pins `install-games` writes to `data/content-addons.json` (`_resolve_addon_packs`: newest version for an unpinned entry, prefetch, `requires.json` refusal). A refused pack is left out of that file with a `REFUSED` line. See [configuration.md](configuration.md#extra-packs-for-a-game-cfgaddonsyml).
+- A map entry in `cfg/content.yml` may be `owner/collection/*`: `_resolve_owner_maps` reads `<base>/owner/collection/collection.json` every start (bases tried in order, like `latest.json`), resolves every member, and keeps the last good expansion in `data/content-maps.json` for an outage. See [configuration.md](configuration.md#a-server-owners-settings-per-game-cfgcontentyml).
 - Map lists are now an owner's setting in `cfg/content.yml` ([configuration.md](configuration.md#a-server-owners-settings-per-game-cfgcontentyml)).
 
 ## Rules of the installer

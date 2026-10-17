@@ -71,6 +71,9 @@ const FILE := "content.yml"
 ## `{"maps": {"<owner>/<map>": "<version>"}}`.
 const RESOLVED_FILE := "content-maps.json"
 
+## The newest `collection.json` format this build reads.
+const COLLECTION_FORMAT := 1
+
 ## Keys a game section may carry.
 const KEYS: PackedStringArray = ["name", "max_players", "cvars", "metadata", "maps", "map_owner"]
 
@@ -92,6 +95,12 @@ var games: Dictionary = {}
 
 ## `<owner>/<map>` -> version, from the installer's cache.
 var resolved: Dictionary = {}
+
+## `owner/collection` -> the `owner/map` ids it published when the installer last reached the
+## origin (`data/content-maps.json`, key `collections`); what an `owner/collection/*` entry in
+## `maps:` expands to. The last good expansion is kept, so a start during an outage still
+## has the maps it had.
+var collections: Dictionary = {}
 
 ## Problems found while applying, for the boot report.
 var warnings: PackedStringArray = PackedStringArray()
@@ -130,6 +139,9 @@ static func load_from(config_dir: String, data_dir: String) -> DotResult:
 
 		if body is Dictionary and (body as Dictionary).get("maps") is Dictionary:
 			out.resolved = (body as Dictionary)["maps"]
+
+		if body is Dictionary and (body as Dictionary).get("collections") is Dictionary:
+			out.collections = (body as Dictionary)["collections"]
 
 	return DotResult.success(out)
 
@@ -202,6 +214,43 @@ func all_map_entries(content: TmcContent = null) -> PackedStringArray:
 				out.append(_spelled(entry, ""))
 
 	return out
+
+
+## The maps of one collection from its published `collection.json` body:
+## `{"format": 1, "id": "<owner>/<collection>", "version": "...", "packs": ["<owner>/<map>"]}`.
+## Returns a DotResult of a PackedStringArray of `owner/map` ids. A `format` newer than this
+## build reads is an error naming the collection (guessing at a newer shape would offer the
+## wrong maps), as is a body for another id or a pack that is not exactly `owner/map`.
+static func parse_collection(collection: String, body: Variant) -> DotResult:
+	if not (body is Dictionary):
+		return DotResult.fail(DotError.CODE_INVALID, "collection %s: collection.json is not an object." % collection)
+
+	var doc := body as Dictionary
+	var format := int(doc.get("format", 0)) if (doc.get("format") is int or doc.get("format") is float) else 0
+
+	if format < 1 or format > COLLECTION_FORMAT:
+		return DotResult.fail(
+			DotError.CODE_INVALID, "collection %s: collection.json format %s is not one this build reads." % [collection, str(doc.get("format"))],
+			"this build reads format %d; update the server" % COLLECTION_FORMAT)
+
+	if str(doc.get("id", collection)) != collection:
+		return DotResult.fail(DotError.CODE_INVALID, "collection %s: collection.json says it is %s." % [collection, str(doc.get("id"))])
+
+	if not (doc.get("packs") is Array):
+		return DotResult.fail(DotError.CODE_INVALID, "collection %s: collection.json has no packs list." % collection)
+
+	var out := PackedStringArray()
+
+	for pack in (doc["packs"] as Array):
+		var parts := str(pack).split("/")
+
+		if not (pack is String) or parts.size() != 2 or "" in parts or str(pack).contains("@") or str(pack).contains("*"):
+			return DotResult.fail(DotError.CODE_INVALID, "collection %s: '%s' is not an owner/map pack id." % [collection, str(pack)])
+
+		if not out.has(str(pack)):
+			out.append(str(pack))
+
+	return DotResult.success(out)
 
 
 ## Who a bare map name belongs to for [param descriptor]; "" when nothing says. The order
@@ -567,7 +616,18 @@ func _maps(descriptor: DotGameDescriptor, rule: Dictionary) -> PackedStringArray
 			by_id[id] = key
 			order.append(id)
 
+	# A wildcard in `remove` is every map its collection published; one map in `remove`
+	# takes that map out of a wildcard in `add` (below) the same way.
+	var removed := PackedStringArray()
+
 	for entry in (rule["remove"] as PackedStringArray):
+		if TmcGameRef.is_wildcard(entry):
+			for member in _members_of(entry):
+				removed.append(member)
+		else:
+			removed.append(entry)
+
+	for entry in removed:
 		var id := _content_id(entry)
 
 		# A bare name that no owner could be found for matches every map of that name.
@@ -586,7 +646,36 @@ func _maps(descriptor: DotGameDescriptor, rule: Dictionary) -> PackedStringArray
 			if at >= 0:
 				order.remove_at(at)
 
+	# What `add` means once collections are expanded: an explicit entry always wins over
+	# the same map arriving through a wildcard (it carries the pin), and `remove` takes a
+	# map out of a wildcard but never out of an explicit entry. Explicit entries are
+	# collected first so a wildcard before them cannot claim their ids.
+	var explicit := {}
+
 	for entry in (rule["add"] as PackedStringArray):
+		if not TmcGameRef.is_wildcard(entry):
+			explicit[str(TmcGameRef.parse(entry)["id"])] = true
+
+	var adds := PackedStringArray()
+
+	for entry in (rule["add"] as PackedStringArray):
+		if not TmcGameRef.is_wildcard(entry):
+			adds.append(entry)
+			continue
+
+		var members := _members_of(entry)
+
+		if members.is_empty():
+			warnings.append(
+				"%s: the collection %s has no maps yet; ./server install-games resolves it"
+				% [descriptor.game_id, entry.trim_suffix("/*")]
+			)
+
+		for member in members:
+			if not explicit.has(member) and not removed.has(member) and not adds.has(member):
+				adds.append(member)
+
+	for entry in adds:
 		var ref := TmcGameRef.parse(entry)
 		var id := str(ref["id"])
 		var version := str(ref["version"])
@@ -614,6 +703,17 @@ func _maps(descriptor: DotGameDescriptor, rule: Dictionary) -> PackedStringArray
 			maps.append(by_id[id])
 
 	return maps
+
+
+## The `owner/map` ids an `owner/collection/*` entry last expanded to; empty until the
+## installer has reached the origin once.
+func _members_of(wildcard: String) -> PackedStringArray:
+	var out := PackedStringArray()
+
+	for member in (collections.get(wildcard.trim_suffix("/*"), []) as Array):
+		out.append(str(member))
+
+	return out
 
 
 ## The section for a descriptor: by its whole id, by its content id, then by its name half.

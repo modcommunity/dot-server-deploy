@@ -85,6 +85,7 @@ const PACK_LISTS: PackedStringArray = ["dependencies", "server_dependencies", "m
 
 ## The pointer a publish writes beside a pack's versions, naming the newest.
 const LATEST_FILE := "latest.json"
+const COLLECTION_FILE := "collection.json"
 
 
 func _init() -> void:
@@ -1136,8 +1137,42 @@ func _resolve_owner_maps(
 		DotLog.error(CHANNEL, "a map in the server's map list cannot be used", {"entry": line})
 		print("  BAD MAP  : %s" % line)
 
-	if entries.is_empty() and owner_maps.resolved.is_empty():
+	if entries.is_empty() and owner_maps.resolved.is_empty() and owner_maps.collections.is_empty():
 		return
+
+	# `owner/collection/*` entries become the maps the collection publishes now, each then
+	# resolved to its newest version like any unpinned `owner/map`. A collection the origin
+	# does not answer keeps its last expansion (see resolve_collections).
+	var wild := PackedStringArray()
+	var plain := PackedStringArray()
+
+	for entry in entries:
+		if TmcGameRef.is_wildcard(entry):
+			wild.append(entry.trim_suffix("/*"))
+		else:
+			plain.append(entry)
+
+	var expanded := await resolve_collections(wild, _fetch_collection.bind(bases), owner_maps.collections)
+	var collections := expanded["collections"] as Dictionary
+
+	for line in (expanded["failed"] as PackedStringArray):
+		DotLog.error(CHANNEL, "a collection in the server's map list cannot be expanded", {"why": line})
+		print("  NO COLLECTION: %s" % line)
+
+	# An id the file also names on its own (a pin, or a plain add) is looked up as that
+	# entry, never twice and never over its pin.
+	var named := {}
+
+	for entry in plain:
+		named[str(TmcGameRef.parse(entry)["id"])] = true
+
+	for collection: String in collections:
+		for member: String in (collections[collection] as Array):
+			if not named.has(member):
+				named[member] = true
+				plain.append(member)
+
+	entries = plain
 
 	var out := {}
 	var kept := 0
@@ -1171,10 +1206,13 @@ func _resolve_owner_maps(
 		})
 		return
 
-	file.store_string(JSON.stringify({"maps": out}, "\t") + "\n")
+	file.store_string(JSON.stringify({"maps": out, "collections": collections}, "\t") + "\n")
 	file.close()
 
 	print("  maps     : %d from cfg/%s" % [out.size(), TmcGameConfig.FILE])
+
+	if not collections.is_empty():
+		print("  collections: %s" % ", ".join(PackedStringArray(collections.keys())))
 
 	if kept > 0:
 		print("             %d kept at the version they had; the origin did not answer" % kept)
@@ -1182,6 +1220,62 @@ func _resolve_owner_maps(
 	if not failed.is_empty():
 		print("  NO MAP   : %s" % ", ".join(failed))
 		print("             not on the origin; left out until it is")
+
+
+## Expands each collection id in [param wanted] (`owner/collection`) with [param fetch], a
+## Callable `(collection) -> DotResult` of its `owner/map` ids ([method _fetch_collection];
+## a suite passes a fake origin). Returns `{"collections": {id: [ids]}, "failed": [lines]}`.
+##
+## [b]An answer the origin cannot give keeps the expansion [param cached] already had[/b], the
+## same rule as a map's version: a restart during an outage must not take maps away. A
+## collection with no cache and no answer is simply absent (and reported in `failed`).
+## An answer that is refused (a newer `format`) does not fall back to the cache silently
+## either: it is reported, and the cache keeps the maps running.
+static func resolve_collections(wanted: PackedStringArray, fetch: Callable, cached: Dictionary) -> Dictionary:
+	var out := {}
+	var failed := PackedStringArray()
+
+	for collection in wanted:
+		var got: DotResult = await fetch.call(collection)
+
+		if got.ok:
+			out[collection] = Array(got.value as PackedStringArray)
+		elif cached.has(collection):
+			out[collection] = cached[collection]
+			failed.append("%s: %s (kept the %d maps it had)" % [collection, str(got.error), (cached[collection] as Array).size()])
+		else:
+			failed.append("%s: %s" % [collection, str(got.error)])
+
+	return {"collections": out, "failed": failed}
+
+
+## Reads one collection's `collection.json` from the first base that answers.
+func _fetch_collection(collection: String, bases: PackedStringArray) -> DotResult:
+	var http := DotHttp.new()
+	http.name = "CollectionHttp"
+	root.add_child(http)
+
+	var last := ""
+
+	for base in bases:
+		var url := "%s/%s/%s" % [base.rstrip("/"), collection, COLLECTION_FILE]
+		var res: DotResult = await http.get_json(url)
+
+		if not res.ok:
+			last = str(res.error)
+			continue
+
+		# A refused document is the origin's answer, as with latest.json: asking another
+		# base for the same document would repeat it.
+		http.queue_free()
+		return TmcGameConfig.parse_collection(collection, res.value)
+
+	http.queue_free()
+
+	return DotResult.fail(
+		DotError.CODE_IO, "Could not read the collection %s." % collection,
+		"publish %s/%s beside its maps. %s" % [collection, COLLECTION_FILE, last]
+	)
 
 
 ## The newest published version of a pack, from the pointer beside its versions.

@@ -17,7 +17,7 @@ const CFG := "res://examples/fixtures"
 ## A loaded game with rounds and no match the game vote can find. See the section that uses it.
 const RoundsWithoutMatch := preload("res://examples/fixtures/rounds_without_match.gd")
 
-const CHECKS := 291
+const CHECKS := 331
 
 var _passed := 0
 var _failed := 0
@@ -44,6 +44,7 @@ func _run() -> void:
 	_test_admins()
 	_test_content()
 	_test_owner_maps()
+	await _test_map_collections()
 	_test_game_refs()
 	_test_vote()
 	_test_vote_layers_reach_a_ballot()
@@ -1301,6 +1302,138 @@ defaults:
 			"the template offers g2gfast's 26 courses (%d) and every other game's maps pack" % g2g_adds.size())
 
 	_done()
+
+
+func _test_map_collections() -> void:
+	_section("owner/collection/* in maps")
+
+	# --- parsing: exactly owner/collection/*, never a partial glob or a pin -----------
+	var whole := TmcGameRef.qualify_map("gamemann/g2gfast-maps/*", "")
+	_check(bool(whole["ok"]) and bool(whole["wildcard"]) and whole["collection"] == "gamemann/g2gfast-maps",
+		"a whole collection parses (and needs no map_owner)", str(whole))
+	for bad in ["gamemann/g2gfast-maps/bhop_*", "gamemann/*/*", "*", "g2gfast-maps/*", "gamemann/g2gfast-maps/*/x",
+			"*/g2gfast-maps/*", "gamemann//*", "gamemann/g2gfast-maps/a"]:
+		_check(not bool(TmcGameRef.qualify_map(bad, "me")["ok"]), "'%s' is refused" % bad)
+	var pinned := TmcGameRef.qualify_map("gamemann/g2gfast-maps/*@1.4.0", "")
+	_check(not bool(pinned["ok"]) and str(pinned["why"]).contains("@version"),
+		"a pin on a wildcard is refused with a clear reason", str(pinned))
+	_check(_game_config("games:\n  game-x:\n    maps:\n      - gamemann/g2gfast-maps/*@1.4.0\n") == null,
+		"and the file that holds one does not load")
+	_check(_game_config("games:\n  game-x:\n    maps:\n      add:\n        - gamemann/g2gfast-maps/*\n      remove:\n        - gamemann/g2gfast-maps/*\n") != null,
+		"a wildcard is read in add and in remove")
+	_check(_game_config("games:\n  game-x:\n    maps:\n      - gamemann/g2gfast-maps/bhop_*\n") == null,
+		"a partial glob is refused when the file is read")
+
+	# --- collection.json ------------------------------------------------------------
+	var doc := {"format": 1, "id": "o/c", "version": "1.0.0", "packs": ["o/m1", "o/m2", "o/m1"]}
+	var parsed := TmcGameConfig.parse_collection("o/c", doc)
+	_check(parsed.ok and parsed.value == PackedStringArray(["o/m1", "o/m2"]),
+		"collection.json lists its packs (duplicates dropped)", str(parsed))
+	var future := TmcGameConfig.parse_collection("o/c", {"format": 2, "packs": []})
+	_check(not future.ok and str(future.error).contains("o/c") and str(future.error).contains("format"),
+		"a newer format is an error naming the collection", str(future))
+	_check(not TmcGameConfig.parse_collection("o/c", {"packs": []}).ok, "no format is refused")
+	_check(not TmcGameConfig.parse_collection("o/c", {"format": 1, "id": "o/other", "packs": []}).ok,
+		"a document for another collection is refused")
+	_check(not TmcGameConfig.parse_collection("o/c", {"format": 1, "packs": ["o/m@1"]}).ok
+		and not TmcGameConfig.parse_collection("o/c", {"format": 1, "packs": ["bare"]}).ok
+		and not TmcGameConfig.parse_collection("o/c", "nope").ok,
+		"a pack that is not owner/map, and a body that is not an object, are refused")
+
+	# --- merge: wildcard + explicit pin + remove --------------------------------------
+	var merged := _game_config("""games:
+  game-x:
+    maps:
+      add:
+        - o/c/*
+        - o/m2@9.9.9
+      remove:
+        - o/m3
+""")
+	merged.collections = {"o/c": ["o/m1", "o/m2", "o/m3"]}
+	merged.resolved = {"o/m1": "1.0.0", "o/m2": "2.0.0", "o/m3": "3.0.0"}
+	var wild_game := _owner_game("owner/game-x", PackedStringArray(["me/a@1"]))
+	merged.apply_all(_content_of(wild_game))
+	_check(wild_game.maps == PackedStringArray(["me/a@1", "o/m1@1.0.0", "o/m2@9.9.9"]),
+		"a wildcard adds every member; an explicit pin beside it wins; remove subtracts one",
+		str(wild_game.maps))
+
+	var wipe := _game_config("games:\n  game-x:\n    maps:\n      add:\n        - o/c/*\n      remove:\n        - o/c/*\n        - me/a\n")
+	wipe.collections = {"o/c": ["o/m1"]}
+	wipe.resolved = {"o/m1": "1.0.0"}
+	var wiped := _owner_game("owner/game-x", PackedStringArray(["me/a@1", "me/b@1"]))
+	wipe.apply_all(_content_of(wiped))
+	_check(wiped.maps == PackedStringArray(["me/b@1"]),
+		"a wildcard in remove takes the collection out (and wins over a wildcard add of it)", str(wiped.maps))
+
+	var layered := _game_config("""defaults:
+  maps:
+    add:
+      - o/c/*
+games:
+  game-x:
+    maps:
+      remove:
+        - o/m1
+""")
+	layered.collections = {"o/c": ["o/m1", "o/m2"]}
+	layered.resolved = {"o/m1": "1.0.0", "o/m2": "2.0.0"}
+	var layered_game := _owner_game("owner/game-x", PackedStringArray())
+	layered.apply_all(_content_of(layered_game))
+	_check(layered_game.maps == PackedStringArray(["o/m2@2.0.0"]),
+		"a game's remove takes one map out of a default wildcard", str(layered_game.maps))
+
+	var unknown := _game_config("games:\n  game-x:\n    maps:\n      - o/c/*\n")
+	var unknown_game := _owner_game("owner/game-x", PackedStringArray())
+	unknown.apply_all(_content_of(unknown_game))
+	_check(unknown_game.maps.is_empty() and unknown.warnings.size() == 1 and unknown.errors.is_empty(),
+		"a collection never expanded offers nothing and warns once (not an error)", str(unknown.warnings))
+	_check(merged.all_map_entries(_content_of(wild_game)).has("o/c/*"),
+		"the installer sees the wildcard entry to expand", str(merged.all_map_entries(_content_of(wild_game))))
+
+	# --- expansion against a fake origin, and the outage rule ---------------------------
+	var origin := {"o/c": {"format": 1, "id": "o/c", "version": "1.0.0", "packs": ["o/m1", "o/m2"]},
+		"o/new": {"format": 2, "packs": []}}
+	var origin_state := {"up": true}
+	var fetch := func(id: String) -> DotResult:
+		if not origin_state["up"] or not origin.has(id):
+			return DotResult.fail(DotError.CODE_IO, "origin down: " + id)
+		return TmcGameConfig.parse_collection(id, origin[id])
+	var installer := preload("res://tools/install_games.gd")
+	var first: Dictionary = await installer.resolve_collections(PackedStringArray(["o/c"]), fetch, {})
+	_check(first["collections"] == {"o/c": ["o/m1", "o/m2"]} and (first["failed"] as PackedStringArray).is_empty(),
+		"a start expands the collection from the origin", str(first))
+	origin_state["up"] = false
+	var outage: Dictionary = await installer.resolve_collections(PackedStringArray(["o/c"]), fetch, first["collections"])
+	_check(outage["collections"] == first["collections"] and (outage["failed"] as PackedStringArray).size() == 1,
+		"an outage keeps the last good expansion and says so", str(outage))
+	var cold: Dictionary = await installer.resolve_collections(PackedStringArray(["o/c"]), fetch, {})
+	_check((cold["collections"] as Dictionary).is_empty() and (cold["failed"] as PackedStringArray).size() == 1,
+		"an outage with nothing cached leaves the collection out and says so", str(cold))
+	origin_state["up"] = true
+	var refused: Dictionary = await installer.resolve_collections(PackedStringArray(["o/new"]), fetch, {"o/new": ["o/old"]})
+	_check(refused["collections"] == {"o/new": ["o/old"]} and str((refused["failed"] as PackedStringArray)[0]).contains("o/new"),
+		"a newer format is reported by collection and keeps the cache", str(refused))
+
+	# The cache round trip the host reads at boot.
+	var dir := "user://selftest_collections"
+	DirAccess.make_dir_recursive_absolute(dir)
+	var cache := FileAccess.open(dir + "/" + TmcGameConfig.RESOLVED_FILE, FileAccess.WRITE)
+	cache.store_string(JSON.stringify({"maps": {"o/m1": "1.0.0"}, "collections": first["collections"]}))
+	cache.close()
+	var reloaded := TmcGameConfig.load_from("res://examples/fixtures/nothing", dir)
+	_check(reloaded.ok and (reloaded.value as TmcGameConfig).collections == first["collections"],
+		"the host reads the expansion back from data/content-maps.json")
+	DirAccess.remove_absolute(dir + "/" + TmcGameConfig.RESOLVED_FILE)
+	DirAccess.remove_absolute(dir)
+
+	_done()
+
+
+func _content_of(game: DotGameDescriptor) -> TmcContent:
+	var content := TmcContent.new()
+	content.games.append(game)
+	return content
 
 
 func _test_content() -> void:
