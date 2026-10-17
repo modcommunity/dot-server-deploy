@@ -1951,6 +1951,7 @@ func _on_spawned() -> void:
 	if _game_root.get_child_count() > 0:
 		# The server named a scene and the link built it out of downloaded content.
 		_say("")
+		_start_addon_entries()
 		_watch_game_ready()
 		return
 
@@ -2081,6 +2082,25 @@ func _warm_up(game: Node, covered: bool) -> void:
 ## `free()`, not `queue_free()`: the next game is added in the same frame, and two games in
 ## the tree at once means two netcode managers, two input handlers and two cameras — for a
 ## frame, which is long enough to send a packet from the wrong one.
+## Starts the client side of the extra packs this server added to the game (`cfg/addons.yml`),
+## which the link reports as `content_extra` and the content client has already mounted.
+## Children of the game root, so [method _clear_game] frees them with the game. Once per game:
+## `spawned` fires again for a game change on the same connection, but by then the old
+## children are gone, and a second call for the same game finds its own and stops.
+##
+## [b]Only a shell exported after this existed does it.[/b] A player on an older shell mounts
+## the packs (the link asks the content client for them) and never starts their entry.
+func _start_addon_entries() -> void:
+	if link == null or _cloud == null or link.content_extra.is_empty():
+		return
+
+	for child in _game_root.get_children():
+		if str(child.name).begins_with("Addon_"):
+			return
+
+	TmcAddonEntry.attach(_game_root, _cloud, link.content_extra, "client")
+
+
 func _clear_game() -> void:
 	for child in _game_root.get_children():
 		_game_root.remove_child(child)

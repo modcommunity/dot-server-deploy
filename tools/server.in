@@ -697,6 +697,13 @@ INSTALL_TOOL="res://tools/install_games.gd"
 has_owner_maps() {
     [ -f "$CONFIG_DIR/content.yml" ] && grep -qE '^[[:space:]]+maps:' "$CONFIG_DIR/content.yml"
 }
+
+## True when cfg/addons.yml names a pack (an uncommented owner/pack anywhere in it), whose
+## newest version install-games resolves, prefetches and checks against this build.
+has_owner_addons() {
+    [ -f "$CONFIG_DIR/addons.yml" ] \
+        && grep -vE '^[[:space:]]*#' "$CONFIG_DIR/addons.yml" | grep -qE '[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+'
+}
 INDEX_TOOL="res://tools/index.gd"
 
 ## Fetch the descriptors and the packs for TMC_GAMES. Returns the tool's exit code:
@@ -706,7 +713,7 @@ do_install_games() {
         note "no games list: TMC_GAMES, or --games arena,g2gfast"
         note "without one this server offers whatever is already in $CONTENT_DIR"
         # The maps an owner added still need a version each; the tool resolves only those.
-        has_owner_maps || return 0
+        has_owner_maps || has_owner_addons || return 0
     fi
 
     local args=(--headless --path "$PROJECT" --script "$INSTALL_TOOL" --
@@ -1402,7 +1409,15 @@ if [ ! -f "$CONFIG_DIR/content.yml" ] && [ -f "$PROJECT/cfg.example/content.yml"
         && note "wrote $CONFIG_DIR/content.yml from the template: this server's settings per game"
 fi
 
-if [ -z "$NO_INSTALL" ] && { [ -n "$OPT_GAMES" ] || has_owner_maps; } \
+# cfg/addons.yml (the extra packs an owner adds per game) is newer still, and copied the
+# same way: when it is missing, never over one that exists.
+if [ ! -f "$CONFIG_DIR/addons.yml" ] && [ -f "$PROJECT/cfg.example/addons.yml" ] \
+        && [ -d "$CONFIG_DIR" ] && { [ "$COMMAND" = "run" ] || [ "$COMMAND" = "check" ]; }; then
+    cat "$PROJECT/cfg.example/addons.yml" > "$CONFIG_DIR/addons.yml" \
+        && note "wrote $CONFIG_DIR/addons.yml from the template: extra packs this server adds per game"
+fi
+
+if [ -z "$NO_INSTALL" ] && { [ -n "$OPT_GAMES" ] || has_owner_maps || has_owner_addons; } \
         && { [ "$COMMAND" = "run" ] || [ "$COMMAND" = "check" ]; }; then
     printf '\n  %sgames%s\n' "$BLD" "$OFF"
     do_install_games

@@ -1225,8 +1225,60 @@ defaults:
 	_check(_game_config("games:\n  game-x:\n    scene: res://other.tscn\n") == null,
 		"what makes the game the game (scene) is refused")
 	_check(_game_config("games:\n  game-x:\n    max_player: 3\n") == null, "a misspelt key is refused")
-	_check(_game_config("games:\n  game-x:\n    maps:\n      - surf_mesa\n") == null,
-		"a map that is not owner/map is refused")
+	_check(_game_config("games:\n  game-x:\n    maps:\n      - a/b/c\n") == null,
+		"a three-segment map id stays refused")
+	_check(_game_config("games:\n  game-x:\n    maps:\n      - surf_mesa\n") != null,
+		"a bare map name is read")
+	_check(_game_config("games:\n  game-x:\n    map_owner: a/b\n") == null,
+		"a map_owner that is not one name is refused")
+
+	# --- bare map names: one owner rule for the host and the installer ---------------
+	var by_key := _game_config("""games:
+  game-x:
+    map_owner: keyowner
+    maps:
+      add:
+        - surf_mesa
+        - bhop_pit@2
+      remove:
+        - me/c
+""")
+	by_key.resolved = {"keyowner/surf_mesa": "7"}
+	var key_game := _owner_game("owner/game-x", g2g)
+	var key_content := TmcContent.new()
+	key_content.games.append(key_game)
+	by_key.apply_all(key_content)
+	_check(key_game.maps == PackedStringArray(["me/a@1", "me/b@1", "keyowner/surf_mesa@7", "keyowner/bhop_pit@2"]),
+		"a bare add takes the section's map_owner (resolved version or its own pin)", str(key_game.maps))
+	_check(by_key.errors.is_empty(), "and nothing is reported", str(by_key.errors))
+	_check(by_key.all_map_entries(key_content).has("keyowner/surf_mesa")
+		and by_key.all_map_entries(key_content).has("keyowner/bhop_pit@2"),
+		"the installer's entry list is qualified by the same rule (what it pins is what the host looks up)",
+		str(by_key.all_map_entries(key_content)))
+
+	var rank := _game_config("games:\n  game-x:\n    maps:\n      - m1\n      - m2\n      - m3\n")
+	var ranked := _owner_game("own/game-x", PackedStringArray())
+	ranked.cvars["sv_map_content_owner"] = "fromcvar"
+	var rank_content := TmcContent.new()
+	rank_content.games.append(ranked)
+	_check(rank.map_owner_for(ranked) == "fromcvar", "no map_owner: the game's sv_map_content_owner cvar wins over its content id")
+	ranked.cvars.erase("sv_map_content_owner")
+	_check(rank.map_owner_for(ranked) == "own", "no cvar: the owner half of the game's content id")
+	var with_default := _game_config("defaults:\n  map_owner: dflt\ngames:\n  game-x:\n    maps:\n      - m1\n")
+	_check(with_default.map_owner_for(ranked) == "dflt", "defaults: map_owner beats the cvar and the content id")
+	var with_own := _game_config("defaults:\n  map_owner: dflt\ngames:\n  game-x:\n    map_owner: mine\n")
+	_check(with_own.map_owner_for(ranked) == "mine", "the game's map_owner beats defaults:")
+	ranked.content_id = ""
+	_check(rank.map_owner_for(ranked) == "", "nothing resolves: no owner")
+	rank.apply_all(rank_content)
+	_check(rank.errors.size() == 3 and rank.errors[0].contains("m1") and rank.errors[0].contains("game-x"),
+		"and each bare entry is refused with the game and the entry named", str(rank.errors))
+
+	var removal := _game_config("games:\n  game-x:\n    map_owner: me\n    maps:\n      remove:\n        - a\n        - me/b\n")
+	var removed := _owner_game("owner/game-x", g2g)
+	removal.apply(removed)
+	_check(removed.maps == PackedStringArray(["me/c@1"]),
+		"remove: matches the bare and the qualified spelling of the same map", str(removed.maps))
 
 	var none := TmcGameConfig.load_from("res://examples/fixtures/nothing", "res://examples/fixtures/nothing")
 	var game5 := _owner_game("owner/game-x", g2g)

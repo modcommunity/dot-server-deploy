@@ -39,13 +39,18 @@
 #           duration_sec: 1800
 #         vote:                  this game's time limit in the server's game vote
 #           time_limit_sec: 2400
+#       map_owner: gamemann      who a bare map name below belongs to (optional)
 #       maps:
 #         game_maps: true        also offer the maps the game itself lists (the default)
 #         add:                   maps to offer on top
 #           - owner/map          the newest on the content origin, checked every start
 #           - owner/map@1.2.0    held at that version until you change it here
+#           - surf_mesa          a bare name works too: its owner is map_owner: (the game's,
+#                                then defaults:), else the game's own sv_map_content_owner
+#                                cvar, else the owner of the game's own id. If none of those
+#                                says, the server refuses to start and names the entry
 #         remove:                maps the game lists that this server does not want
-#           - owner/map
+#           - owner/map          (a bare name matches the same map as its owner/map spelling)
 #
 # Order: the game's game.yml < defaults < games: <game>. Cvars and metadata merge key by
 # key; a list replaces a list. What makes a game the game it is -- scene, client_scene,

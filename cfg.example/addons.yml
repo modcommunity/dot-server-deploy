@@ -1,0 +1,37 @@
+# Extra packs THIS SERVER adds to a game, on top of what the game's author lists.
+#
+# A pack here is one more dependency of the game, for this server only: the server mounts
+# it before the game loads, and every client that joins downloads and mounts it with the
+# game, in the same content sync. The game's identity does not change (cfg/content.yml
+# still refuses `dependencies:`); the pack is appended after the game's own and is never
+# listed twice.
+#
+#   defaults:                      every game on this server
+#     add: [owner/pack, owner/pack@1.2.0]
+#   games:
+#     <game>:                      its id (gamemann/game-g2gfast) or its name half
+#       add: [owner/other-pack]
+#       remove: [owner/pack]       drop a default for this game only
+#
+# A pack is a published content id, `owner/pack`, with an optional `@version`. A version you
+# leave off is pinned at start to the newest the origin has (./server install-games), so a
+# new upload reaches this server on its next start and two players never get two versions.
+# A pack this build's addons cannot run (its requires.json) is refused at that point with a
+# message and left out, rather than failing a game change later.
+#
+# A pack may start something: its pack.json can say `"addon": {"entry": "x.tscn", "side":
+# "server"}` (side is server, client or both; both if left out), and the server and each
+# client then instantiate that scene after the game loads. A pack with no entry is only
+# mounted (art, sounds, a map set). A pack whose entry fails logs an ERROR naming it and the
+# game carries on.
+#
+# A client built before extra packs existed ignores them; the client half only takes effect
+# for players on a shell exported after that change.
+#
+# Nothing is added until you write it here. An example (not a real pack):
+#
+# defaults:
+#   add: [someone/extra-sounds]
+# games:
+#   game-g2gfast:
+#     add: [someone/speedrun-hud@1.0.0]

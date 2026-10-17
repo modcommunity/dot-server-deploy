@@ -113,7 +113,7 @@ func _init() -> void:
 			bases = _bases_from_config(config_dir)
 
 		await process_frame
-		await _resolve_owner_maps(config_dir, data_dir, bases)
+		await _resolve_owner_maps(config_dir, data_dir, bases, content_dir, PackedStringArray())
 		quit(EXIT_OK)
 		return
 
@@ -380,7 +380,7 @@ func _init() -> void:
 	state["installed"] = installed
 	_write_state(data_dir, state)
 
-	await _resolve_owner_maps(config_dir, data_dir, bases)
+	await _resolve_owner_maps(config_dir, data_dir, bases, content_dir, TmcGameRef.dirs_in(",".join(wanted)))
 
 	print("")
 	print("  games    : %s" % ", ".join(present))
@@ -1114,7 +1114,10 @@ static func stamp_dependencies(
 ##
 ## Pinned entries are not looked up -- the host reads them straight from the file -- and
 ## nothing is downloaded here: a map is fetched when the server changes to it.
-func _resolve_owner_maps(config_dir: String, data_dir: String, bases: PackedStringArray) -> void:
+func _resolve_owner_maps(
+	config_dir: String, data_dir: String, bases: PackedStringArray, content_dir: String,
+	allow_dirs: PackedStringArray
+) -> void:
 	var loaded := TmcGameConfig.load_from(config_dir, data_dir)
 
 	if not loaded.ok:
@@ -1122,7 +1125,16 @@ func _resolve_owner_maps(config_dir: String, data_dir: String, bases: PackedStri
 		return
 
 	var owner_maps := loaded.value as TmcGameConfig
-	var entries := owner_maps.all_map_entries()
+
+	# The same scan the host makes, so a bare map name gets the owner the host will give
+	# it (TmcGameConfig.map_owner_for); a content directory that is not there yet is no
+	# games, and only the owner/map spellings resolve.
+	var scanned := TmcContent.scan(content_dir, allow_dirs)
+	var entries := owner_maps.all_map_entries(scanned.value if scanned.ok else null)
+
+	for line in owner_maps.errors:
+		DotLog.error(CHANNEL, "a map in the server's map list cannot be used", {"entry": line})
+		print("  BAD MAP  : %s" % line)
 
 	if entries.is_empty() and owner_maps.resolved.is_empty():
 		return

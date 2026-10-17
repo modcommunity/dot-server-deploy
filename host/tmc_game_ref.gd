@@ -95,3 +95,29 @@ static func dirs_in(raw: String) -> PackedStringArray:
 			out.append(dir)
 
 	return out
+
+
+## A map entry of `cfg/content.yml`, qualified with [param owner] when it is bare.
+##
+## [b]The one place a bare map name becomes an id.[/b] `install-games` pins versions under
+## the id this returns and the host looks them up under the same one; two spellings of
+## "surf_mesa" resolved in two places is the drift this file exists to prevent. Returns
+## `{"ok": bool, "id": "<owner>/<map>", "version": "", "why": ""}`. Three segments
+## (`a/b/c`) and an empty name are refused, never guessed at; a bare name with no
+## [param owner] is refused too, because the caller is the one who can name the entry.
+static func qualify_map(raw: String, owner: String) -> Dictionary:
+	var ref := parse(raw)
+	var id := str(ref["id"])
+	var segments := id.split("/")
+
+	if id == "" or segments.size() > 2 or "" in segments:
+		return {"ok": false, "id": "", "version": "", "why": "is not <map> or <owner>/<map>"}
+
+	if segments.size() == 2:
+		return {"ok": true, "id": id, "version": str(ref["version"]), "why": ""}
+
+	if owner == "":
+		return {"ok": false, "id": "", "version": "",
+			"why": "has no owner: set map_owner: for the game or in defaults:"}
+
+	return {"ok": true, "id": "%s/%s" % [owner, id], "version": str(ref["version"]), "why": ""}

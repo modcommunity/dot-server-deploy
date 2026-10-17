@@ -149,6 +149,7 @@ cfg/                 what an operator edits. Written on first run, and not in th
   admin_menu.yml       what /admin offers, and to whom
   loading.yml          the picture, music and tips over a game or map change
   content.yml          your settings per game over its author's: cvars, maps, votes, slots
+  addons.yml           extra packs you add to a game, delivered to its players
   permissions.yml      who is in which group
   content/<id>/        per-game configuration
 
@@ -293,6 +294,23 @@ The order is the game's `game.yml`, then `defaults:`, then the game's own sectio
 **When a map is downloaded is the game's choice**, written as `metadata: maps_delivery:` in its own `game.yml`: `lazy` (the default) fetches a map when the server changes to it, for games whose maps are large scenes (game-g2gfast, game-arena); `server` fetches them all before the game loads, for games whose maps are small documents the server sends players itself (the minigames); `client` does the same and also sends each pack to every player, for a game whose client builds a map from its pack (game-playground).
 
 A box without the file gets the template's on its next start. The template lists the stock maps for every game (game-g2gfast's 26 courses, and the maps pack of mg-wipeout, mg-deathrun, mg-prop-hunt and game-playground), so a server offers them until its owner takes them out. A file that already exists is never rewritten, so a box that got an older template keeps it: compare it with `cfg.example/content.yml` after an update, or delete it to take the new one.
+
+### Extra packs for a game: `cfg/addons.yml`
+
+A pack you add to a game is delivered to its players with it, for your server only. The game's identity does not change: the pack is appended after the game's own dependencies, mounted by the server before the game loads and by every client in the same content sync.
+
+```yaml
+defaults:                        # every game on this server
+  add: [someone/extra-sounds]
+games:
+  game-g2gfast:                  # a game id, or its name half
+    add: [someone/speedrun-hud@1.0.0]
+    remove: [someone/extra-sounds]   # drop a default for this game only
+```
+
+A pack is `owner/pack`, optionally `@version`. A version left off is pinned to the newest the origin has every start (`install-games`, into `data/content-addons.json`), and the pack is downloaded then; one this build's addons cannot run (its `requires.json`) is refused with a message and left out. A pack can start something: its `pack.json` may carry `"addon": {"entry": "x.tscn", "side": "server"}` (`side` is `server`, `client` or `both`), and the server and each client then instantiate that scene after the game loads; without one the pack is only mounted. A bad file exits 5. A game change needs every dependency, so a pack the origin cannot give stops that change: take it out of the file.
+
+**The client half needs a shell exported after this change** (`client/shell.gd` starts the entry); an older shell mounts the packs and never starts them. The template (`cfg.example/addons.yml`) lists nothing, and a box without the file gets it on its next start.
 
 ### Installing somebody else's game
 

@@ -17,11 +17,13 @@ extends RefCounted
 ##     metadata:                        # merged key by key into the game's metadata:
 ##       map_vote:
 ##         duration_sec: 1800
+##     map_owner: gamemann              # who a bare map name belongs to (see below)
 ##     maps:
 ##       game_maps: true                # keep the maps the game's own game.yml lists
 ##       add:
 ##         - gamemann/surf_mesa         # the newest on the origin, re-checked every start
 ##         - gamemann/bhop_grove@1.2.0  # held at that version
+##         - bhop_pit                   # bare: the owner comes from map_owner (below)
 ##       remove:
 ##         - gamemann/bhop_pit
 ## [/codeblock]
@@ -45,6 +47,13 @@ extends RefCounted
 ## other `map_vote` settings); a list replaces a list. The host's own metadata keys --
 ## `kind`, `module`, `directory` -- win over both, as they do over `game.yml`.
 ##
+## [b]A bare map name gets its owner from, in order:[/b] the game's `map_owner:`, then
+## `defaults: map_owner:`, then the game's own `sv_map_content_owner` cvar (as the effective
+## descriptor has it, this file's cvars included), then the owner half of the game's content
+## id. None of them: [member errors] names the entry. [method map_owner_for] and
+## [method qualified_rule] are the only code that decides this, and `install-games` goes
+## through [method all_map_entries], so it pins the ids the host will look up.
+##
 ## [b]Unpinned maps are resolved by the installer, not here.[/b] `TmcContent` refuses a
 ## map with no version because a server that resolved `@latest` per join would hand two
 ## players two different packs under one map. So `./server install-games` (every start)
@@ -63,7 +72,7 @@ const FILE := "content.yml"
 const RESOLVED_FILE := "content-maps.json"
 
 ## Keys a game section may carry.
-const KEYS: PackedStringArray = ["name", "max_players", "cvars", "metadata", "maps"]
+const KEYS: PackedStringArray = ["name", "max_players", "cvars", "metadata", "maps", "map_owner"]
 
 ## Keys that say what the game IS. Refused, with the reason.
 const IDENTITY: PackedStringArray = [
@@ -86,6 +95,11 @@ var resolved: Dictionary = {}
 
 ## Problems found while applying, for the boot report.
 var warnings: PackedStringArray = PackedStringArray()
+
+## Entries that cannot be used at all (a bare map name no rule can give an owner). Unlike a
+## warning these stop the host: a server that quietly offered fewer maps than its owner
+## wrote is the failure this file replaced.
+var errors: PackedStringArray = PackedStringArray()
 
 
 func _init() -> void:
@@ -157,16 +171,96 @@ func read(tree: Dictionary) -> DotResult:
 	return DotResult.success(null)
 
 
-## Every map entry the file names, across all sections: what the installer resolves.
-func all_map_entries() -> PackedStringArray:
+## Every map entry the file names for the games in [param content], qualified: what the
+## installer resolves. The installer and the host read the same rule here
+## ([method qualified_rule]), so the id `install-games` pins is the id [method apply] looks
+## up. A bare name of a section no game in [param content] matches cannot be given an
+## owner and is skipped (the host reports the section); an unusable entry lands in
+## [member errors] and the rest still resolve.
+func all_map_entries(content: TmcContent = null) -> PackedStringArray:
 	var out := PackedStringArray()
 
+	if content != null:
+		for descriptor in content.games:
+			var owner := map_owner_for(descriptor)
+
+			for section: Dictionary in [defaults, _section_for(descriptor)]:
+				if section.is_empty():
+					continue
+
+				var rule := qualified_rule(descriptor.game_id, section["maps"], owner)
+
+				for entry in (rule["add"] as PackedStringArray):
+					if not out.has(entry):
+						out.append(entry)
+
+	# Sections no descriptor claimed (or no content given): only the spellings that need
+	# no owner.
 	for section: Dictionary in [defaults] + games.values():
 		for entry in (section["maps"]["add"] as PackedStringArray):
-			if not out.has(entry):
-				out.append(entry)
+			if bool(TmcGameRef.qualify_map(entry, "")["ok"]) and not out.has(_spelled(entry, "")):
+				out.append(_spelled(entry, ""))
 
 	return out
+
+
+## Who a bare map name belongs to for [param descriptor]; "" when nothing says. The order
+## is in the class comment. The cvar is read as the game will run with it: its
+## `game.yml` value, then `defaults:`, then the game's section.
+func map_owner_for(descriptor: DotGameDescriptor) -> String:
+	var own := _section_for(descriptor)
+
+	if str(own.get("map_owner", "")) != "":
+		return str(own["map_owner"])
+
+	if str(defaults.get("map_owner", "")) != "":
+		return str(defaults["map_owner"])
+
+	var cvars := descriptor.cvars.duplicate()
+	cvars.merge(defaults["cvars"], true)
+	cvars.merge(own.get("cvars", {}), true)
+	var cvar := str(cvars.get("sv_map_content_owner", "")).strip_edges()
+
+	if cvar != "":
+		return cvar
+
+	return descriptor.content_id.get_slice("/", 0) if descriptor.content_id.contains("/") else ""
+
+
+## [param rule] (a normalised `maps:` block) with every entry qualified for [param owner].
+## `add` entries keep their `@version`; `remove` entries are ids, or a bare name when
+## [param owner] is "" (then [method _maps] matches it on the name half, because removing
+## needs no owner to be unambiguous). An `add` that cannot be qualified is dropped and
+## recorded in [member errors] with [param game] and the entry.
+func qualified_rule(game: String, rule: Dictionary, owner: String) -> Dictionary:
+	var add := PackedStringArray()
+	var remove := PackedStringArray()
+
+	for entry in (rule["add"] as PackedStringArray):
+		var q := TmcGameRef.qualify_map(entry, owner)
+
+		if not bool(q["ok"]):
+			var line := "%s: maps: add: '%s' %s" % [game, entry, q["why"]]
+
+			if not errors.has(line):
+				errors.append(line)
+
+			continue
+
+		add.append(_spelled(entry, owner))
+
+	for entry in (rule["remove"] as PackedStringArray):
+		var q := TmcGameRef.qualify_map(entry, owner)
+		remove.append(str(q["id"]) if bool(q["ok"]) else entry)
+
+	return {"add": add, "remove": remove, "game_maps": rule["game_maps"]}
+
+
+## `owner/map[@version]` for an entry written as [param raw].
+static func _spelled(raw: String, owner: String) -> String:
+	var q := TmcGameRef.qualify_map(raw, owner)
+	var out := str(q["id"])
+	return out if str(q["version"]) == "" else "%s@%s" % [out, q["version"]]
 
 
 ## Lays the file over every descriptor in [param content]. Returns how many changed.
@@ -191,12 +285,14 @@ func apply(descriptor: DotGameDescriptor) -> bool:
 		descriptor.cvars.duplicate(true), descriptor.metadata.duplicate(true), descriptor.maps,
 		descriptor.dependencies, descriptor.server_dependencies]
 
-	_apply_section(descriptor, defaults)
+	var owner := map_owner_for(descriptor)
+
+	_apply_section(descriptor, defaults, owner)
 
 	var own := _section_for(descriptor)
 
 	if not own.is_empty():
-		_apply_section(descriptor, own)
+		_apply_section(descriptor, own, owner)
 
 	_maps_to_clients(descriptor)
 
@@ -231,6 +327,9 @@ func describe_lines() -> PackedStringArray:
 			", name" if section.has("name") else "",
 			", max_players" if section.has("max_players") else "",
 		])
+
+		if section.has("map_owner"):
+			lines[lines.size() - 1] += ", map_owner " + str(section["map_owner"])
 
 	return lines
 
@@ -289,6 +388,16 @@ func _read_section(where: String, value: Variant) -> DotResult:
 
 		out[key] = TmcContent.flatten_cvars(block) if key == "cvars" else block
 
+	if section.has("map_owner"):
+		var who := str(section["map_owner"]).strip_edges()
+
+		if who == "" or who.contains("/") or who.contains("@") or who.contains(" "):
+			return DotResult.fail(
+				DotError.CODE_INVALID, "%s: map_owner must be one owner name, e.g. gamemann." % where
+			)
+
+		out["map_owner"] = who
+
 	var maps := _read_maps(where, section.get("maps", {}))
 
 	if not maps.ok:
@@ -334,15 +443,19 @@ func _read_maps(where: String, value: Variant) -> DotResult:
 			)
 
 		for entry in listed:
-			var ref := TmcGameRef.parse(str(entry))
+			# Only the SHAPE is checked here; the owner of a bare name depends on the game,
+			# which a section does not know. qualify_map with a placeholder owner is the
+			# same parser the resolution uses.
+			var shape := TmcGameRef.qualify_map(str(entry), "x")
 
-			if not ref["from_origin"]:
+			if not bool(shape["ok"]):
 				return DotResult.fail(
 					DotError.CODE_INVALID,
-					"%s: maps: '%s' is not <owner>/<map>." % [where, str(entry)],
-					"a map here is a published pack, e.g. gamemann/surf_mesa"
+					"%s: maps: '%s' %s." % [where, str(entry), shape["why"]],
+					"a map here is a published pack: gamemann/surf_mesa, or surf_mesa with a map_owner"
 				)
 
+			var ref := TmcGameRef.parse(str(entry))
 			var spelled := str(ref["id"])
 
 			if field == "add" and str(ref["version"]) != "":
@@ -351,7 +464,7 @@ func _read_maps(where: String, value: Variant) -> DotResult:
 			if field == "add":
 				add.append(spelled)
 			else:
-				remove.append(spelled)
+				remove.append(str(ref["id"]))
 
 	game_maps = bool((value as Dictionary).get("game_maps", true))
 	return DotResult.success({"add": add, "remove": remove, "game_maps": game_maps})
@@ -360,7 +473,7 @@ func _read_maps(where: String, value: Variant) -> DotResult:
 # --- Applying -------------------------------------------------------------------
 
 
-func _apply_section(descriptor: DotGameDescriptor, section: Dictionary) -> void:
+func _apply_section(descriptor: DotGameDescriptor, section: Dictionary, owner: String) -> void:
 	if section.has("name"):
 		descriptor.display_name = str(section["name"])
 
@@ -382,7 +495,7 @@ func _apply_section(descriptor: DotGameDescriptor, section: Dictionary) -> void:
 
 		descriptor.metadata[key] = _merged(descriptor.metadata.get(key), metadata[key])
 
-	descriptor.maps = _maps(descriptor, section["maps"])
+	descriptor.maps = _maps(descriptor, qualified_rule(descriptor.game_id, section["maps"], owner))
 
 
 ## When a game's maps are fetched, which only the game can say: `metadata: maps_delivery:`
@@ -456,10 +569,22 @@ func _maps(descriptor: DotGameDescriptor, rule: Dictionary) -> PackedStringArray
 
 	for entry in (rule["remove"] as PackedStringArray):
 		var id := _content_id(entry)
-		by_id.erase(id)
-		var at := order.find(id)
-		if at >= 0:
-			order.remove_at(at)
+
+		# A bare name that no owner could be found for matches every map of that name.
+		var doomed := PackedStringArray([id])
+
+		if not id.contains("/"):
+			doomed.clear()
+
+			for have in order:
+				if _name_half(have) == id:
+					doomed.append(have)
+
+		for gone in doomed:
+			by_id.erase(gone)
+			var at := order.find(gone)
+			if at >= 0:
+				order.remove_at(at)
 
 	for entry in (rule["add"] as PackedStringArray):
 		var ref := TmcGameRef.parse(entry)

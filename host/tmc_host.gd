@@ -637,6 +637,13 @@ func _apply_game_config() -> DotResult:
 	for line in overrides.warnings:
 		DotLog.warn(CHANNEL, line)
 
+	if not overrides.errors.is_empty():
+		return DotResult.fail(
+			DotError.CODE_INVALID,
+			"cfg/%s: %s" % [TmcGameConfig.FILE, "; ".join(overrides.errors)],
+			"a bare map name needs map_owner:, sv_map_content_owner or an owner/map spelling"
+		)
+
 	return DotResult.success(overrides)
 
 

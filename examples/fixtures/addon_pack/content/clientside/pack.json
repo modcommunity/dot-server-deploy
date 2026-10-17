@@ -1,0 +1,1 @@
+{"id": "dev/clientside", "version": "0.3.0", "name": "Clientside", "addon": {"entry": "entry.tscn", "side": "client"}}
