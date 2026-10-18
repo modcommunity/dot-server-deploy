@@ -165,7 +165,7 @@ query_bind_ip: "*"
 #
 # Empty means the network half is off, which is right for a LAN deployment and for a
 # build that ships everything it runs. A manifest still has to be signed by a key in
-# cfg/content.json whatever the source, so adding a URL here is not by itself a way
+# data/content.json whatever the source, so adding a URL here is not by itself a way
 # to be handed somebody else's scripts.
 content_urls:
   - "https://dotgames.org/content"

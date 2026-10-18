@@ -348,10 +348,15 @@ foreach ($template in (Get-ChildItem -LiteralPath $templates -Recurse -File |
 }
 
 # The server's own content trust, derived from the client's. setup.sh explains it:
-# DotCloudClient refuses every unsigned manifest, and with no cfg\content.json it
+# DotCloudClient refuses every unsigned manifest, and with no data\content.json it
 # starts with no trusted keys at all, so a server told where to download its maps
-# still cannot download one.
-if ((-not (Test-Path -LiteralPath 'cfg\content.json')) -and (Test-Path -LiteralPath 'client\content.json')) {
+# still cannot download one. It used to live in cfg\, where nothing reads it now, so an
+# old install's copy is moved rather than regenerated: it may carry a key somebody added.
+if ((Test-Path -LiteralPath 'cfg\content.json') -and (-not (Test-Path -LiteralPath 'data\content.json'))) {
+    Move-Item -LiteralPath 'cfg\content.json' -Destination 'data\content.json'
+    Write-Host "    moved cfg\content.json to data\content.json" -ForegroundColor Green
+}
+if ((-not (Test-Path -LiteralPath 'data\content.json')) -and (Test-Path -LiteralPath 'client\content.json')) {
     $src = Get-Content -LiteralPath 'client\content.json' -Raw | ConvertFrom-Json
     $trust = [ordered]@{
         require_signed_manifests = $true
@@ -361,10 +366,10 @@ if ((-not (Test-Path -LiteralPath 'cfg\content.json')) -and (Test-Path -LiteralP
         $trust.require_signed_manifests = $src.require_signed_manifests
     }
     [System.IO.File]::WriteAllText(
-        (Join-Path $Root 'cfg\content.json'),
+        (Join-Path $Root 'data\content.json'),
         ($trust | ConvertTo-Json -Depth 8) + "`n",
         (New-Object System.Text.UTF8Encoding $false))
-    Write-Host "    +    cfg\content.json" -ForegroundColor Green
+    Write-Host "    +    data\content.json" -ForegroundColor Green
 }
 
 # What an upgrade added, named rather than skipped. Never overwriting a file that

@@ -166,7 +166,7 @@ func _init() -> void:
 	# before its descriptor is trusted, and the prefetch below needs the same store, the
 	# same trusted keys and the same bases -- two clients would download everything twice
 	# and disagree about what was already here.
-	var cloud := _build_cloud(content_dir, data_dir, config_dir, bases)
+	var cloud := _build_cloud(content_dir, data_dir, bases)
 
 	# [b]Started here, because everything below reaches it by a route that does not.[/b]
 	# `acquire` and `ensure` start the client themselves; `fetch_manifest` and
@@ -1629,7 +1629,6 @@ func _cache_manifest(
 func _build_cloud(
 	content_dir: String,
 	data_dir: String,
-	config_dir: String,
 	bases: PackedStringArray
 ) -> DotCloudClient:
 	if bases.is_empty():
@@ -1642,7 +1641,9 @@ func _build_cloud(
 	# Says "this server" in a refusal: a pack needing a newer addon API than this box has
 	# is an operator's problem to fix, and the sentence should say whose build it is.
 	cloud.host_role = "server"
-	cloud.config_file = "%s/content.json" % config_dir
+	# Where TmcHost._build_cloud reads it: the same trust, or this would prefetch packs the
+	# server then refuses to mount.
+	cloud.config_file = "%s/content.json" % data_dir
 
 	if not FileAccess.file_exists(cloud.config_file):
 		cloud.config_file = "res://client/content.json"

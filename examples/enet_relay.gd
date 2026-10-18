@@ -276,7 +276,7 @@ func _write_config(trusted_key: String) -> void:
 			text = "log_level: warn\nlog_file: false\n"
 		DotPaths.write_text(cfg.path_join(name), text)
 	if trusted_key != "":
-		DotPaths.write_text(cfg.path_join("content.json"), JSON.stringify({
+		DotPaths.write_text(_root.path_join("data").path_join("content.json"), JSON.stringify({
 			"require_signed_manifests": true,
 			"trusted_keys": {"default": trusted_key},
 		}))

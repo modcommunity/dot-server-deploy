@@ -662,7 +662,7 @@ PUBLIC_KEY="${TMC_PUBLIC_KEY:-$PROJECT/keys/content.pub}"
 do_pack() {
     [ -f "$SIGNING_KEY" ] || die "no signing key at $SIGNING_KEY
 
-  A pack has to be signed. cfg/content.json and client/content.json both ship
+  A pack has to be signed. data/content.json and client/content.json both carry
   require_signed_manifests: true, because a pack can contain scripts -- so an
   unsigned one is refused by every client and publishing it would produce a
   directory that looks finished and mounts nowhere.

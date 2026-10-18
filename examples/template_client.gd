@@ -194,7 +194,7 @@ func _publish(pack_dir: String) -> bool:
 	var cfg := ROOT.path_join("cfg")
 	for name in DirAccess.get_files_at(CONFIG_FIXTURE):
 		DotPaths.write_text(cfg.path_join(name), FileAccess.get_file_as_string(CONFIG_FIXTURE.path_join(name)))
-	DotPaths.write_text(cfg.path_join("content.json"), JSON.stringify({
+	DotPaths.write_text(ROOT.path_join("data").path_join("content.json"), JSON.stringify({
 		"require_signed_manifests": true,
 		"trusted_keys": {"default": str(pair.value["public"])},
 	}))

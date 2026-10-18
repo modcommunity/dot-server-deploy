@@ -1307,17 +1307,20 @@ func _build_cloud() -> void:
 	cloud.config = DotCloudConfig.new()
 	cloud.config.cache_dir = "%s/content_cache" % _data_dir
 	# [b]Falls back to the tracked defaults when the deployment has no answer of its
-	# own.[/b] `cfg/content.json` is GENERATED from `client/content.json` by setup.sh, so
-	# it exists on a real install and on nothing else -- and with every game delivered, a
-	# config directory without it is a server that can mount no game at all. It failed
-	# with "require_signed_manifests is on but no trusted_keys are configured", which is
-	# true, unhelpful, and names a file the operator never wrote.
+	# own.[/b] `data/content.json` is GENERATED from `client/content.json` by setup.sh
+	# (plus this box's own signing key), so it exists on a real install and on nothing
+	# else -- and with every game delivered, a server without it can mount no game at
+	# all. It failed with "require_signed_manifests is on but no trusted_keys are
+	# configured", which is true, unhelpful, and names a file the operator never wrote.
+	#
+	# In the data directory, not `cfg/`: it is machine-written state like the rest of
+	# `data/`, not a setting, and `cfg/` is the directory an operator edits by hand.
 	#
 	# `client/content.json` is the shipped default and is in this repository on purpose:
 	# it holds the PUBLIC half of the signing key, which is not a secret and is the same
 	# for every deployment that trusts our packs. A deployment that trusts a different
-	# publisher writes `cfg/content.json` and this never looks.
-	cloud.config_file = "%s/content.json" % _config_dir
+	# publisher writes `data/content.json` and this never looks.
+	cloud.config_file = "%s/content.json" % _data_dir
 
 	if not FileAccess.file_exists(cloud.config_file):
 		cloud.config_file = "res://client/content.json"

@@ -2202,7 +2202,7 @@ fi
 
 # [b]The server's own content trust, derived from the client's.[/b]
 #
-# `DotCloudClient` reads `cfg/content.json` and refuses every unsigned manifest --
+# `DotCloudClient` reads `data/content.json` and refuses every unsigned manifest --
 # correctly, since a pack can contain scripts. With no such file it starts with
 # `require_signed_manifests: true` and NO keys, so every fetch fails with "no
 # trusted_keys are configured" and a server that was told where to download its maps
@@ -2212,13 +2212,21 @@ fi
 # (`client/content.json`) is committed and carries the public key, and this writes the
 # same trust where the server reads it, so the two halves cannot disagree about what
 # they will mount.
-if [ ! -f cfg/content.json ] && [ -f client/content.json ] && command -v python3 >/dev/null 2>&1; then
+#
+# In data/, not cfg/: it is machine-written state, and cfg/ is what an operator edits
+# by hand. An install from before the move has it in cfg/, where nothing reads it any
+# more, so it is moved rather than regenerated -- it may carry a key somebody added.
+if [ -f cfg/content.json ] && [ ! -f data/content.json ]; then
+    mv cfg/content.json data/content.json \
+        && ok "moved cfg/content.json to data/content.json (the server reads it there now)"
+fi
+if [ ! -f data/content.json ] && [ -f client/content.json ] && command -v python3 >/dev/null 2>&1; then
     python3 -c 'import json,io
 src = json.load(io.open("client/content.json", encoding="utf-8"))
-io.open("cfg/content.json", "w", encoding="utf-8").write(json.dumps({
+io.open("data/content.json", "w", encoding="utf-8").write(json.dumps({
     "require_signed_manifests": src.get("require_signed_manifests", True),
     "trusted_keys": src.get("trusted_keys", {}),
-}, indent=4) + "\n")' && printf '    %s+%s    %s\n' "$GRN" "$OFF" "cfg/content.json"
+}, indent=4) + "\n")' && printf '    %s+%s    %s\n' "$GRN" "$OFF" "data/content.json"
 fi
 
 # [b]And the key THIS box publishes with, or it cannot read what it just wrote.[/b]
@@ -2236,21 +2244,21 @@ fi
 # them.
 #
 # Merged rather than written, and run on every setup rather than only the first: an
-# upgrade keeps the cfg/content.json it has, and a key added only on a first run would
+# upgrade keeps the data/content.json it has, and a key added only on a first run would
 # be missing from every box that already existed. Under its own id, beside ours, so the
 # two coexist and neither replaces the other.
-if [ -f keys/content.pub ] && [ -f cfg/content.json ] \
+if [ -f keys/content.pub ] && [ -f data/content.json ] \
         && command -v python3 >/dev/null 2>&1; then
     if python3 -c 'import json,io,sys
 pub = io.open("keys/content.pub", encoding="utf-8").read().strip()
-doc = json.load(io.open("cfg/content.json", encoding="utf-8"))
+doc = json.load(io.open("data/content.json", encoding="utf-8"))
 keys = doc.setdefault("trusted_keys", {})
 if keys.get("local") == pub:
     sys.exit(1)
 keys["local"] = pub
-io.open("cfg/content.json", "w", encoding="utf-8").write(json.dumps(doc, indent=4) + "\n")'
+io.open("data/content.json", "w", encoding="utf-8").write(json.dumps(doc, indent=4) + "\n")'
     then
-        ok "the signing key on this box is trusted by its server (cfg/content.json)"
+        ok "the signing key on this box is trusted by its server (data/content.json)"
         note "a BROWSER client needs it too: add keys/content.pub to client/content.json
        under trusted_keys before ./server export-web, or players get our packs only"
     fi
