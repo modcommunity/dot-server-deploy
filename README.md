@@ -580,7 +580,7 @@ A computed list's values must be single words (no spaces, quotes or semicolons),
 
 ## Loading screens
 
-When the server changes game, or a map has to be downloaded, players already on the server see a full-screen loading screen with your picture, music and tips, and the download's own progress on top. The first connect is not covered, because the page that launched the player shows that.
+From pressing Connect, and again when the server changes game or a map has to be downloaded, players see a full-screen loading screen with your picture, music and tips, and the download's own progress on top. On a first join, before the server's document has arrived, it shows the server's address and the stage (connecting, downloading, loading).
 
 ```yaml
 loading_images: ["https://example.com/loading/one.jpg", "https://example.com/loading/two.jpg"]

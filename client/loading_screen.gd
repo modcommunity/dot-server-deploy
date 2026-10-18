@@ -112,6 +112,9 @@ var _visible := false
 var _shown_at := 0.0
 var _game_id := ""
 var _game_name := ""
+## What to call the place being joined before the server's document (or its game) has
+## arrived: a first join has neither for the first seconds. See [method set_server].
+var _server_name := ""
 var _entry: Dictionary = {}
 var _tips: Array = []
 var _tip_index := 0
@@ -186,6 +189,14 @@ func adopt(data: Dictionary) -> void:
 		_prefetch_entry(_doc["default"])
 		for id in (_doc["games"] as Dictionary).keys():
 			_prefetch_entry(_doc["games"][id])
+		# A first join puts the screen up before this arrives, with nothing to read: take
+		# the document up now rather than at the next show, which is a game change away.
+		# Only when there was nothing, so a screen already showing tips does not reshuffle.
+		if _visible and _entry.is_empty():
+			_apply_entry()
+			if _music != null and not _music.playing:
+				_start_music()
+			_hint.visible = not (_entry.get("music", []) as Array).is_empty()
 
 	var next: Variant = data.get("next", null)
 	if next is Dictionary:
@@ -215,6 +226,7 @@ func reset() -> void:
 	_pending_content_at = -1.0
 	_game_id = ""
 	_game_name = ""
+	_server_name = ""
 	# The next server's media is the next server's budget. Kept: what has ARRIVED, which
 	# costs nothing to keep and is the same picture if the next server names it too.
 	_queue.clear()
@@ -222,6 +234,15 @@ func reset() -> void:
 		if not (_media[url] is Object):
 			_media.erase(url)
 	_hide(false)
+
+
+## Names the server being joined, for the title until the document brings its own. A first
+## join shows the screen from the click, long before the server has said anything.
+func set_server(server_name: String) -> void:
+	_server_name = server_name
+	if _visible and str(_entry.get("title", "")) == "":
+		_title.text = _server_name
+		_title.visible = _title.text != ""
 
 
 func has_document() -> bool:
@@ -355,7 +376,7 @@ func current_entry() -> Dictionary:
 
 func _apply_entry() -> void:
 	_entry = current_entry()
-	_title.text = str(_entry.get("title", ""))
+	_title.text = str(_entry.get("title", _server_name))
 	_title.visible = _title.text != ""
 	_tips = (_entry.get("tips", []) as Array).duplicate()
 	_tips.shuffle()
@@ -1038,6 +1059,9 @@ func describe() -> Dictionary:
 		"showing": _visible,
 		"reasons": _reasons.keys().map(func(r: StringName) -> String: return String(r)),
 		"game": _game_id,
+		"server": _server_name,
+		"title": _title.text if _title != null else "",
+		"status": _status.text if _status != null else "",
 		"next": _next.duplicate(),
 		"media": {"known": _media.size(), "ready": fetched, "failed": failed, "queued": _queue.size()},
 		"muted": music_muted,

@@ -115,11 +115,12 @@ Exit codes: `2` usage, `3` no runtime, `4` no project (`install-games`: addons b
 
 **Host and shell**
 
-- `host/` is not in the client build: what both sides need is written twice, and a suite checks the copies agree. [vote](docs/game-vote.md#on-the-hud), [admin](docs/admin-menu.md#the-loading-screen-covers-a-change-never-the-first-join)
+- `host/` is not in the client build: what both sides need is written twice, and a suite checks the copies agree. [vote](docs/game-vote.md#on-the-hud), [admin](docs/admin-menu.md#the-loading-screen-covers-a-join-and-a-change)
 - The game vote's commands keep the `game_` prefix and its director `register_service = false`; one game on offer means no game vote. [vote](docs/game-vote.md)
 - The notice overlay draws nothing at the top centre: lines then ballots in one right-hand column; a ballot hides the line it names; ballots are opaque. [vote](docs/game-vote.md#on-the-hud)
 - The game vote and a game's own vote never show a ballot together (`TmcVote` chains every director's `busy_fn`). [vote](docs/game-vote.md#the-games-own-vote-and-this-one-take-turns)
 - A module's unload runs AFTER its game's scene is freed: guard every world reference in `_module_unload` with `is_instance_valid`. [vote](docs/game-vote.md#the-games-own-vote-and-this-one-take-turns)
+- The loading screen covers the first join too (`_joining`, from Connect to spawn) as well as a change under a player; every exit of a join (`_fail`, `_on_disconnected`, a failed connect) must clear `_joining`, or the screen sits over the menu until its 90 s staleness. [admin](docs/admin-menu.md#the-loading-screen-covers-a-join-and-a-change)
 - An admin menu leaf is a console line run with the admin's context; never act directly. Notice payloads are measured in bytes with `var_to_bytes`. [admin](docs/admin-menu.md#the-menu-is-a-way-of-typing-a-command)
 - A new client-to-server feature is a new envelope kind, not chat (chat has a flood limit) and not a handshake key (a signon change). [admin](docs/admin-menu.md#the-menu-is-a-way-of-typing-a-command)
 - Solo (`--solo`, `?solo=`) mounts a pack as a join does and starts its `client_scene` with NO client link; a game reads its solo map packs from `DotRegistry` `dot_solo` by name, and `client/solo.json` must match `cfg.example/content.yml`. [web](docs/web-client.md#solo-play)

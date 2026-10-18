@@ -26,7 +26,7 @@ const MEDIA_PORT := 27109
 
 const TARGET_GAME := "hungry_classic"
 
-const CHECKS := 28
+const CHECKS := 31
 
 var _passed := 0
 var _failed := 0
@@ -247,16 +247,29 @@ func _test_connect() -> bool:
 	_section("a player joins")
 
 	_shell._connect_to("127.0.0.1:%d" % _port)
-	if not _check(await _until(func() -> bool: return _me() != null, 30.0), "the server spawns them"):
+	# In the same frame as the click, before the server has said a word: a first join used to
+	# show a grey menu for the whole download and load.
+	_check(_screen().is_showing(), "the loading screen is up the moment they press Connect")
+	_check(str(_screen().describe()["title"]).contains("127.0.0.1"),
+		"naming the server, since no document has come", str(_screen().describe()))
+
+	var seen_before_spawn := [false]
+	var watch := func() -> bool:
+		if _me() == null and _screen().is_showing():
+			seen_before_spawn[0] = true
+		return _me() != null
+	if not _check(await _until(watch, 30.0), "the server spawns them"):
 		_done()
 		return false
+	_check(seen_before_spawn[0], "and it was showing while they were still joining")
 
 	_check(await _until(func() -> bool: return _screen().has_document(), 10.0),
 		"and sends the loading screen on spawn")
 	_check(await _until(func() -> bool: return _screen().describe()["media"]["ready"] == 1, 10.0),
 		"whose picture the shell fetches while they play (%d served)" % _media_served,
 		str(_screen().describe()["media"]))
-	_check(not _screen().is_showing(), "and does not show on the first join")
+	_check(await _until(func() -> bool: return not _screen().is_showing(), 10.0),
+		"and the screen is gone once the game has spawned", str(_screen().describe()))
 	_done()
 	return true
 

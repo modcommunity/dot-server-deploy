@@ -134,6 +134,16 @@ func _init() -> void:
 						{"label": "Freeze", "go": "i:freeze #12"}, {"label": "Bring to me", "go": "i:bring #12"},
 					],
 				})
+		"joining":
+			# A first join, before the server has sent its document: the address as the
+			# title and the stage as the status, over the menu the player pressed Connect on.
+			shell.set("_joining", true)
+			var joining: Node = shell.get("loading")
+			joining.call("set_server", "hns01.example.net:27015")
+			joining.call("begin", &"game")
+			joining.call("set_progress", 0.42, "Downloading game content…", "8.1 / 13.0 MiB")
+			for i in 30:
+				await process_frame
 		"loading":
 			# A game change under a player, with an owner's picture, title and tip. The
 			# picture is a game's own screenshot put straight into the screen's cache, so no

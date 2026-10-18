@@ -102,10 +102,20 @@ var admin_menu: TmcAdminMenuPanel = null
 ## The server owner's screen over a game or map change. See [TmcLoadingScreen].
 var loading: TmcLoadingScreen = null
 
-## Whether this connection has put a game on screen yet. The loading screen is for a
-## change UNDER a player, never for the first join -- the menu, or the page that launched
-## them, has that.
+## Whether this connection has put a game on screen yet.
 var _has_spawned := false
+
+## Between pressing Connect and the first spawn. The loading screen covers this too: a
+## browser join is half a minute of downloading and a script load that blocks the page, and
+## the menu behind it (a status line and a bar) was a grey screen to the player. It is the
+## other half of the screen's rule, with [member _has_spawned]: a join, or a change under
+## a player.
+var _joining := false
+
+## Time.get_ticks_usec() at each stage of the current join, by name, for [method _log_join].
+## The stages are the ones the link reports; the blocking load inside `LOADING` is one
+## number here because the link does it in one synchronous call.
+var _join_marks: Dictionary = {}
 
 ## Whose packs may replace this build's addons: the organisation's, and the one addon that
 ## is not theirs (the weapons pack, published under its author). See [DotCloudAddonSet].
@@ -176,7 +186,7 @@ func _ready() -> void:
 	loading = TmcLoadingScreen.new()
 	loading.name = "Loading"
 	loading.in_game_fn = func() -> bool:
-		return _has_spawned and _menu != null and not _menu.visible
+		return _joining or (_has_spawned and _menu != null and not _menu.visible)
 	add_child(loading)
 
 	# The shell is built, so a start on the addon overlay arrived. Until this line a broken
@@ -1323,6 +1333,12 @@ func _connect_to(address: String) -> void:
 
 	_status.text = "Connecting to %s…" % target
 	_set_busy(true)
+	_joining = true
+	_join_marks = {"start": Time.get_ticks_usec()}
+	loading.reset()
+	loading.set_server(target)
+	loading.begin(TmcLoadingScreen.REASON_GAME)
+	loading.set_progress(-1.0, _text("shell.loading.connecting", {"server": target}, "Connecting to %s…" % target))
 
 	# Off a solo game first: a server's game goes under the same root, and a solo session
 	# left registered would hand the server's game the solo maps and the menu's Leave.
@@ -1368,13 +1384,22 @@ func _connect_to(address: String) -> void:
 
 	link.phase_changed.connect(func(phase: int, text: String) -> void:
 		_status.text = text
-		# A game change under a player who is already in: the link goes back through
-		# downloading and loading, and that is the stretch the loading screen covers.
-		if _has_spawned and phase in [DotClientLink.Phase.DOWNLOADING, DotClientLink.Phase.LOADING]:
+		_mark_join(phase)
+		# A first join and a game change under a player who is already in: the link goes
+		# through connecting, downloading and loading, and the loading screen covers all.
+		if (_has_spawned or _joining) and phase in [
+				DotClientLink.Phase.CONNECTING, DotClientLink.Phase.AUTHENTICATING,
+				DotClientLink.Phase.DOWNLOADING, DotClientLink.Phase.LOADING]:
 			loading.begin(TmcLoadingScreen.REASON_GAME)
 			loading.set_progress(-1.0, text)
 	)
 	link.download_progress.connect(func(fraction: float, text: String) -> void:
+		if _joining:
+			# First and last progress report: the gap after the last is verifying and
+			# mounting, which the link awaits inside DOWNLOADING.
+			if not _join_marks.has("dl_first"):
+				_join_marks["dl_first"] = Time.get_ticks_usec()
+			_join_marks["dl_last"] = Time.get_ticks_usec()
 		_indeterminate(false)
 		_progress.value = clampf(fraction, 0.0, 1.0) * 100.0
 		_status.text = "%s  %d%%" % [text, int(fraction * 100.0)]
@@ -1392,6 +1417,8 @@ func _connect_to(address: String) -> void:
 	var connecting: DotResult = await link.connect_to_server(target)
 
 	if not connecting.ok:
+		_joining = false
+		loading.end(TmcLoadingScreen.REASON_GAME)
 		_status.text = _text("shell.connect.failed", {"reason": _explain(connecting.error)},
 			"Could not connect: %s" % _explain(connecting.error))
 		_set_busy(false)
@@ -1465,6 +1492,7 @@ func _update_addons(addons: DotCloudAddonSet, wanted: Dictionary, target: String
 	_set_busy(true)
 	_indeterminate(true)
 	_say(_text("shell.addons.updating", {}, "Updating the game for this server…"))
+	loading.set_progress(-1.0, _text("shell.addons.updating", {}, "Updating the game for this server…"))
 
 	# Where to come back to, and who was signed in -- the page's sign-in code will
 	# already have been spent by the time the restart asks for it.
@@ -1914,7 +1942,10 @@ func is_solo() -> bool:
 ## left this to the link would stack every game an operator ever switched to on top of the
 ## last, each with its own netcode manager ticking the same tree.
 func _on_game_changed(game_id: String, _content_id: String, display_name: String) -> void:
-	if _has_spawned:
+	_join_marks["game_changed"] = Time.get_ticks_usec()
+	if _joining and display_name != "":
+		loading.set_progress(-1.0, _text("shell.loading.game", {"game": display_name}, "Loading %s…" % display_name))
+	if _has_spawned or _joining:
 		loading.begin(TmcLoadingScreen.REASON_GAME, game_id, display_name)
 	# What is on the menu depends on the game -- its live tools, its own items -- so a page
 	# from the last one is a page of choices that may not exist any more. Seen in a browser:
@@ -1929,6 +1960,8 @@ func _on_game_changed(game_id: String, _content_id: String, display_name: String
 
 ## Signon finished. Put the game on screen.
 func _on_spawned() -> void:
+	_log_join()
+	_joining = false
 	_set_busy(false)
 	_menu.visible = false
 	_has_spawned = true
@@ -2166,10 +2199,43 @@ func _on_notice(notice: DotNotice) -> void:
 ## whatever server it belonged to.
 func _leave_game_ui() -> void:
 	_has_spawned = false
+	_joining = false
 	if admin_menu != null:
 		admin_menu.close()
 	if loading != null:
 		loading.reset()
+
+
+## Notes when the link entered a phase, for [method _log_join].
+func _mark_join(phase: int) -> void:
+	if not _joining:
+		return
+	var key: String = DotClientLink.Phase.keys()[phase]
+	if not _join_marks.has(key):
+		_join_marks[key] = Time.get_ticks_usec()
+
+
+## One line saying where a first join's time went, in milliseconds, for a browser console.
+## Measured because the join stalled a player's page for half a minute and nobody could say
+## in which step. `load` is `LOADING` to `PLAYING`: the link loads the scene, instantiates
+## it and adds it in one call, so the game's own `_ready` and setup are inside it.
+func _log_join() -> void:
+	if not _joining or not _join_marks.has("start"):
+		return
+	var now := Time.get_ticks_usec()
+	var order := ["start", "CONNECTING", "AUTHENTICATING", "DOWNLOADING", "dl_first", "dl_last", "LOADING", "PLAYING"]
+	var stages := {}
+	var last: int = _join_marks["start"]
+	var last_name := "start"
+	for key in order.slice(1):
+		if _join_marks.has(key):
+			stages["%s>%s" % [last_name, key]] = int((int(_join_marks[key]) - last) / 1000.0)
+			last = _join_marks[key]
+			last_name = key
+	stages["%s>spawned" % last_name] = int((now - last) / 1000.0)
+	stages["total"] = int((now - int(_join_marks["start"])) / 1000.0)
+	DotLog.info(CHANNEL, "join timings (ms)", stages)
+	_join_marks = {}
 
 
 ## Says something, whether or not the menu is on screen.
