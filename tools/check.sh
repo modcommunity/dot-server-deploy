@@ -451,6 +451,13 @@ echo
 echo "solo play's pieces"
 timeout 300 "$GODOT" --headless --path . res://examples/solo_check.tscn < /dev/null || fails=$((fails + 1))
 
+# Subscribed packs in solo play through the real shell: a solo start mounts a subscribed map
+# pack and the game's catalogue lists it, an online start never syncs and sees none, a code
+# pack restarts before an online join. Armed: see the header of the suite.
+echo
+echo "subscribed packs in solo play"
+timeout 300 "$GODOT" --headless --path . res://examples/workshop_solo.tscn < /dev/null || fails=$((fails + 1))
+
 # The game vote's `time_up: finish_round` through real round ends: smash and prophunt on
 # short rounds, the clock running out mid-round, the change held until the match ends that
 # round. About two minutes. Armed: with TmcVote hearing no rounds the change happens at the

@@ -69,6 +69,19 @@ var _solo_version: String = ""
 var _solo_button: Button = null
 var _solo_session: TmcSoloSession = null
 
+## The Workshop's sync client (see [method _ensure_workshop]): the subscribed packs a solo
+## start mounts. Never synced for an online join.
+var _workshop: DotCloudWorkshop = null
+
+## The site origin the Workshop talks to when it is not the one in `client/auth.json`. For a
+## suite pointing it at a fake site; a player's page can never set it.
+var workshop_backbone_url: String = ""
+
+## Answers the download question without a dialog. For a suite.
+var workshop_ask_override: Callable = Callable()
+
+signal _download_answered(yes: bool)
+
 ## What restarting looks like, for a suite: called instead of reloading the page or
 ## re-executing the process. Unset in a real client.
 var restart_fn: Callable = Callable()
@@ -231,6 +244,11 @@ func _ready() -> void:
 	# with no server. See [TmcSolo]. Checked before the server, because `embed.html` sends
 	# one or the other and a solo launch has no address to dial.
 	var solo := TmcSolo.requested()
+
+	# A restart that carries a join (see [method _restart_for_online]) goes to the server,
+	# not back into the solo game the page's address still names.
+	if str(resumed.get("server", "")) != "":
+		solo = {"id": "", "version": ""}
 
 	if solo.has("refused"):
 		_say("'%s' is not a game this client can start." % str(solo["refused"]))
@@ -1340,6 +1358,17 @@ func _connect_to(address: String) -> void:
 		_status.text = "Type an address first."
 		return
 
+	# [b]Online never sees a subscription.[/b] The index's session is what every catalogue
+	# filters by, and the cloud client's tag is what a mount is stamped with: both go to
+	# `online` before anything of the server's is fetched, and `sync()` is never called here.
+	# A pack that runs code stays resident in this process after its game is freed, so a
+	# process that mounted one restarts first rather than joining with it loaded.
+	if _workshop != null and _workshop.requires_restart_before_online():
+		_restart_for_online(target)
+		return
+
+	_enter_online_session()
+
 	_status.text = "Connecting to %s…" % target
 	_set_busy(true)
 	_joining = true
@@ -1368,6 +1397,7 @@ func _connect_to(address: String) -> void:
 	# ever join servers whose games ship inside this build. Every game in `content/` is
 	# `kind: builtin` today, which is exactly why nothing noticed.
 	_ensure_cloud()
+	_enter_online_session()
 
 	link = DotClientLink.new()
 	# "Server", because Godot routes an RPC by the receiver's node path relative to its
@@ -1735,6 +1765,7 @@ func _start_solo(content_id: String, version: String = "") -> void:
 
 	_ensure_cloud()
 	_adopt_content_url_arg()
+	_enter_solo_session()
 
 	var started := await _load_solo(content_id, version)
 
@@ -1815,6 +1846,13 @@ func _load_solo(content_id: String, version: String) -> DotResult:
 		var parts := TmcSolo.split_key(str(maps.value))
 		session.map_roots.append(DotCloudClient.mount_prefix_for(StringName(parts["id"]), parts["version"]))
 
+	# Subscribed packs, after the game's own and before its scene exists, so the scene's
+	# catalogues find every entry already in the index. A game that states no `accepts`
+	# takes none and is not asked about them.
+	session.takes_subscriptions = not _game_accepts(mount).is_empty()
+	if session.takes_subscriptions:
+		session.workshop_summary = await _sync_workshop(content_id)
+
 	var path := mount.path_join(safe.value)
 	var packed: Variant = load(path)
 
@@ -1856,6 +1894,180 @@ func _load_solo(content_id: String, version: String) -> DotResult:
 		"content": "%s@%s" % [content_id, wanted], "scene": path, "maps": session.map_keys.size(),
 	})
 	return DotResult.success(instance)
+
+
+# --- The Workshop (subscribed packs in solo play) --------------------------------
+
+## This process is playing alone: packs mounted from here on are `solo`, and the index offers
+## solo entries to the catalogues that follow it.
+func _enter_solo_session() -> void:
+	DotContentIndex.shared().set_session(DotContentIndex.SESSION_SOLO)
+	if _cloud != null:
+		_cloud.session_tag = DotContentIndex.SESSION_SOLO
+
+
+## This process is joining a server: nothing subscribed is visible from here, and what the
+## server's game mounts is tagged `online` (a pack already mounted at the same id and version
+## is reused and tagged, by dot-cloud, not downloaded again).
+func _enter_online_session() -> void:
+	DotContentIndex.shared().set_session(DotContentIndex.SESSION_ONLINE)
+	if _cloud != null:
+		_cloud.session_tag = DotContentIndex.SESSION_ONLINE
+
+
+## What the game says it takes from a subscription: `accepts` in the `provides.json` at the
+## root of its own pack. Read from the mount, because the content index keeps a pack's entries
+## and not its manifest. Empty means none, and the Workshop is not asked.
+func _game_accepts(mount: String) -> Dictionary:
+	var path := mount.path_join("provides.json")
+	if not FileAccess.file_exists(path):
+		return {}
+	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
+	if parsed is Dictionary:
+		var accepts: Variant = (parsed as Dictionary).get("accepts", null)
+		if accepts is Dictionary:
+			return accepts
+	return {}
+
+
+## The site the Workshop reads from: the one this build signs in against, from the same
+## shipped file the sign-in reads, never from the page.
+func _workshop_site() -> String:
+	if workshop_backbone_url != "":
+		return workshop_backbone_url
+	if _auth != null and _auth.config != null and _auth.config.backbone_url != "":
+		return _auth.config.backbone_url
+	if FileAccess.file_exists(AUTH_CONFIG):
+		var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(AUTH_CONFIG))
+		if parsed is Dictionary:
+			return str((parsed as Dictionary).get("backbone_url", ""))
+	return ""
+
+
+## Places the Workshop beside the content client. Idempotent.
+func _ensure_workshop() -> DotCloudWorkshop:
+	if _workshop != null and is_instance_valid(_workshop):
+		return _workshop
+
+	_ensure_cloud()
+	_workshop = DotCloudWorkshop.new()
+	_workshop.name = "Workshop"
+	_workshop.cloud = _cloud
+	_workshop.config = DotCloudWorkshopConfig.new()
+	_workshop.config.workshop_backbone_url = _workshop_site()
+	# The bearer is read when asked, so a refresh between launches is picked up; a guest, and
+	# a build with no sign-in at all, answers "".
+	_workshop.token_fn = _workshop_token
+	_workshop.ask_fn = _ask_download
+	_workshop.progress.connect(_on_workshop_progress)
+	_workshop.pack_failed.connect(func(id: String, _v: String, error: DotError) -> void:
+		DotLog.warn(CHANNEL, "a subscribed pack could not be mounted", {"pack": id, "why": str(error)}))
+	add_child(_workshop)
+	return _workshop
+
+
+func _workshop_token() -> String:
+	if _auth == null or _auth.store == null or not _auth.store.has_credentials():
+		return ""
+	return _auth.store.access_token()
+
+
+## Runs the sync for a solo game behind the loading screen. The value is the summary; a
+## refusal or a programmer error is an empty one, because nothing here may stop a game.
+func _sync_workshop(content_id: String) -> Dictionary:
+	var workshop := _ensure_workshop()
+	workshop.config.workshop_backbone_url = _workshop_site()
+
+	# Refresh the bearer first: `token_fn` is synchronous and a token that has just expired
+	# would read as a guest.
+	if _auth != null and _auth.is_signed_in():
+		await _auth.valid_access_token()
+
+	var res: DotResult = await workshop.sync(content_id)
+
+	if not res.ok:
+		DotLog.warn(CHANNEL, "the Workshop sync did not run", {"why": str(res.error)})
+		return {}
+
+	return res.value as Dictionary if res.value is Dictionary else {}
+
+
+func _on_workshop_progress(done: int, total: int, bytes_done: int, bytes_total: int, current: String) -> void:
+	if loading == null or total <= 0:
+		return
+	if not loading.is_showing():
+		loading.begin(TmcLoadingScreen.REASON_GAME)
+	var fraction := float(done) / float(total)
+	if bytes_total > 0:
+		fraction = (float(done) + clampf(float(bytes_done) / float(bytes_total), 0.0, 1.0)) / float(total)
+	loading.set_progress(clampf(fraction, 0.0, 1.0), _text("workshop.progress",
+		{"done": mini(done + 1, total), "total": total, "title": current},
+		"Subscribed content %d/%d, %s" % [mini(done + 1, total), total, current]))
+
+
+## "Download 120 MB of subscribed content?", awaited by the sync before it fetches.
+func _ask_download(summary: Dictionary) -> bool:
+	if workshop_ask_override.is_valid():
+		return bool(await workshop_ask_override.call(summary))
+
+	var dialog := ConfirmationDialog.new()
+	dialog.title = _text("workshop.ask.title", {}, "Subscribed content")
+	dialog.dialog_text = _text("workshop.ask.text", {"size": DotPaths.format_bytes(int(summary.get("bytes", 0)))},
+		"Download %s of subscribed content?" % DotPaths.format_bytes(int(summary.get("bytes", 0))))
+	dialog.confirmed.connect(func() -> void: _download_answered.emit(true))
+	dialog.canceled.connect(func() -> void: _download_answered.emit(false))
+	add_child(dialog)
+	dialog.popup_centered(Vector2i(420, 0))
+	var yes: bool = await _download_answered
+	dialog.queue_free()
+	return yes
+
+
+## The Subscriptions page for the game on screen.
+func _make_workshop_panel() -> TmcWorkshopPanel:
+	var panel := TmcWorkshopPanel.new()
+	panel.workshop = _workshop
+	panel.text_fn = _text
+	panel.site_url = _workshop_site()
+	# The web's sign-in is a game-bound handoff; the site refuses it an all-games change.
+	panel.game_bound = DotPlatform.is_web()
+	panel.no_sign_in = _auth == null
+	if _solo_session != null:
+		panel.summary = _solo_session.workshop_summary
+		panel.takes_subscriptions = _solo_session.takes_subscriptions
+		panel.game_name = _solo_session.display_name
+	return panel
+
+
+## A restart that comes back to this join, for a process that has a script pack resident.
+## A browser reloads and a desktop build relaunches (see [method _restart]); the plan's
+## `resume` is what the next start reads to join [param target] as the addon update does.
+func _restart_for_online(target: String) -> void:
+	_say(_text("workshop.restarting", {}, "Restarting to leave your subscribed content behind…"))
+
+	var resume := {"server": target}
+	if _auth != null and _auth.is_signed_in() and _auth.identity() != null:
+		resume["member"] = _auth.identity().uid
+
+	var plan := DotCloudAddonSet.read_plan()
+	plan["resume"] = resume
+	var keep := PackedStringArray([DotCloudAddonSet.PLAN])
+	if resume.has("member"):
+		var tokens := _auth.config.token_store_path
+		for path in [tokens, tokens + ".salt"]:
+			if FileAccess.file_exists(path):
+				keep.append(path)
+
+	var written := DotCloudAddonSet.write_plan(plan)
+	if written.ok and await _restart(keep):
+		return
+
+	# Never join with a subscribed script resident: the player restarts by hand.
+	DotLog.warn(CHANNEL, "not joining: a subscribed pack that runs code is loaded and this platform cannot restart itself", {
+		"server": target,
+	})
+	_status.text = _text("workshop.restart_by_hand", {},
+		"Close and reopen the game to join a server: a subscribed pack that runs code is loaded.")
 
 
 ## Fetches and mounts one pack by `<id>[@<version>]`, resolving a missing version to the
@@ -1911,6 +2123,7 @@ func _on_solo_node_added(node: Node) -> void:
 	(func() -> void:
 		if is_instance_valid(menu):
 			menu.apply_server_rules({"leave_text": "Back to menu"})
+			TmcWorkshopPanel.add_to_menu(menu, _make_workshop_panel)
 	).call_deferred()
 
 

@@ -35,6 +35,14 @@ var mount_root: String = ""
 var map_roots: PackedStringArray = PackedStringArray()
 var map_keys: PackedStringArray = PackedStringArray()
 
+## Whether the game's manifest has `provides.accepts`. A game without it takes no
+## subscriptions, the sync is not run for it, and its page says so.
+var takes_subscriptions: bool = false
+
+## The Workshop's summary for this start (`{}` when it did not run), for the Subscriptions
+## page: what mounted, what was skipped and why, whether the player was a guest.
+var workshop_summary: Dictionary = {}
+
 ## What leaving does. Set by the shell.
 var leave_fn: Callable = Callable()
 
@@ -72,6 +80,8 @@ func describe() -> Dictionary:
 		"display_name": display_name,
 		"mount_root": mount_root,
 		"map_keys": Array(map_keys),
+		"takes_subscriptions": takes_subscriptions,
+		"subscribed": (workshop_summary.get("mounted", []) as Array).size(),
 	}
 
 

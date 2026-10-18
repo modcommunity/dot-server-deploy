@@ -215,7 +215,9 @@ func _watch_fallback(game: Node) -> void:
 func _physics_process(_delta: float) -> void:
 	for gid: int in _fallback.keys():
 		var entry: Dictionary = _fallback[gid]
-		var game: Node = entry["game"]
+		# A Variant: a freed game assigned to a typed `Node` is a script error, and a freed game
+		# is exactly the case this test exists for (a solo game replaced by another).
+		var game: Variant = entry["game"]
 		if not is_instance_valid(game):
 			_fallback.erase(gid)
 			if _fallback.is_empty() and _gates.is_empty():
