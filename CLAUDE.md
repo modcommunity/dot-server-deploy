@@ -30,7 +30,7 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first; this file is what is specifi
 | Path | What |
 | --- | --- |
 | `host/` | the server: boot, cfg, content, the game vote, admin menu, enrollment and the rest. **Not in the client build**. [files](docs/README.md#where-the-code-is) |
-| `client/` | the shell: `boot.tscn` (main scene; mounts an addon overlay), `shell.gd`, the notice overlay, admin menu, loading screen, friends, `locales/` |
+| `client/` | the shell: `boot.tscn` (main scene; mounts an addon overlay), `shell.gd`, the notice overlay, admin menu, loading screen, `tmc_game_cover.gd` (keeps it over a game until ready: hosts a `DotLoadGate`, else the root contract, else camera plus frames), friends, `locales/` |
 | `cfg.example/` | the tracked config templates; `cfg/` is written from them once and gitignored |
 | `content/<id>/` | descriptors (`game.yml`, `pack.json`) for first-party games and map packs; installed games land in `content/<owner>/<name>/` |
 | `tools/` | `server.in` (generates `./server`), the installer, indexer and packer, the check scripts, `addons-lock.sh`, the runtime fetchers |
@@ -121,6 +121,7 @@ Exit codes: `2` usage, `3` no runtime, `4` no project (`install-games`: addons b
 - The game vote and a game's own vote never show a ballot together (`TmcVote` chains every director's `busy_fn`). [vote](docs/game-vote.md#the-games-own-vote-and-this-one-take-turns)
 - A module's unload runs AFTER its game's scene is freed: guard every world reference in `_module_unload` with `is_instance_valid`. [vote](docs/game-vote.md#the-games-own-vote-and-this-one-take-turns)
 - The loading screen covers the first join too (`_joining`, from Connect to spawn) as well as a change under a player; every exit of a join (`_fail`, `_on_disconnected`, a failed connect) must clear `_joining`, or the screen sits over the menu until its 90 s staleness. [admin](docs/admin-menu.md#the-loading-screen-covers-a-join-and-a-change)
+- No game is shown before it is ready: `TmcGameCover` hosts its `DotLoadGate` (by `dot_load_gate_host` metadata on the game root, reached by name only), else the root contract (`WARM_WAIT_SEC`), else covers until a camera in the game and 10 physics frames, at most 5 s. Its warm-up runs `PROCESS_MODE_ALWAYS`: the camera is often under a frozen body. [web](docs/web-client.md#the-game-is-not-shown-until-it-is-ready)
 - An admin menu leaf is a console line run with the admin's context; never act directly. Notice payloads are measured in bytes with `var_to_bytes`. [admin](docs/admin-menu.md#the-menu-is-a-way-of-typing-a-command)
 - A new client-to-server feature is a new envelope kind, not chat (chat has a flood limit) and not a handshake key (a signon change). [admin](docs/admin-menu.md#the-menu-is-a-way-of-typing-a-command)
 - Solo (`--solo`, `?solo=`) mounts a pack as a join does and starts its `client_scene` with NO client link; a game reads its solo map packs from `DotRegistry` `dot_solo` by name, and `client/solo.json` must match `cfg.example/content.yml`. [web](docs/web-client.md#solo-play)

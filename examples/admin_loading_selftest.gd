@@ -12,7 +12,7 @@ extends Node
 ## a socket this suite serves itself, because the fetch is the half most likely to be
 ## wrong and least likely to be noticed.
 
-const CHECKS := 158
+const CHECKS := 179
 
 var _passed := 0
 var _failed := 0
@@ -57,6 +57,9 @@ func _run() -> void:
 	_test_loading_client()
 	_test_shell_version()
 	await _test_loading_fetch()
+	await _test_cover_gate()
+	await _test_cover_contract()
+	await _test_cover_fallback()
 
 	print("")
 	_check(
@@ -1140,3 +1143,150 @@ func _until_frames(condition: Callable, frames: int) -> void:
 		if bool(condition.call()):
 			return
 		await get_tree().process_frame
+
+
+# --- Covering a game until it is ready ---------------------------------------------------
+
+## A loading screen, a cover that claims a game root, and the root, as the shell builds them.
+func _cover_rig() -> Array:
+	var screen := TmcLoadingScreen.new()
+	screen.in_game_fn = func() -> bool: return true
+	add_child(screen)
+	var root := Node.new()
+	root.name = "CoverGames"
+	var cover := TmcGameCover.new()
+	cover.loading = screen
+	cover.claim(root)
+	add_child(cover)
+	add_child(root)
+	return [screen, cover, root]
+
+
+func _cover_free(rig: Array) -> void:
+	for n: Node in rig:
+		n.free()
+
+
+func _until_ms(condition: Callable, ms: int) -> int:
+	var t0 := Time.get_ticks_msec()
+	while not bool(condition.call()) and Time.get_ticks_msec() - t0 < ms:
+		await get_tree().process_frame
+	return Time.get_ticks_msec() - t0
+
+
+func _test_cover_gate() -> void:
+	_section("a game's load gate drives the loading screen")
+	var rig := _cover_rig()
+	var screen: TmcLoadingScreen = rig[0]
+	var cover: TmcGameCover = rig[1]
+	var root: Node = rig[2]
+	_check(TmcGameCover.HOST_META == DotLoadGate.HOST_META and TmcGameCover.GATE_META == DotLoadGate.META,
+		"the cover spells the gate's metadata as dot-core does")
+
+	var game := Node3D.new()
+	var gate := DotLoadGate.new()
+	gate.require_camera = false
+	gate.register_service = false
+	gate.hold(&"map", "Loading the map")
+	game.add_child(gate)
+	root.add_child(game)
+	_check(gate.is_hosted() and not gate.is_cover_showing(), "a gate made under the claimed root is hosted, with no cover of its own")
+	cover.watch()
+	_check(screen.is_showing() and cover.mode_of(game) == "gate", "the loading screen is up over it at once", cover.mode_of(game))
+	_check(screen._status.text == "Loading the map", "with the gate's line", screen._status.text)
+	gate.set_progress(0.4, "Building the level")
+	_check(is_equal_approx(screen._bar.value, 40.0) and screen._status.text == "Building the level",
+		"and the gate's progress", "%s %s" % [screen._bar.value, screen._status.text])
+
+	var cam := Camera3D.new()
+	game.add_child(cam)
+	cam.make_current()
+	var at_open: Array = []
+	gate.opened.connect(func() -> void: at_open.append(screen.is_showing()))
+	gate.release(&"map")
+	await _until_ms(func() -> bool: return gate.is_open(), 8000)
+	_check(gate.is_open() and at_open == [false], "released: warmed here, screen down, then the gate opens", str(at_open))
+	_check(not cam.has_node("Warmup") or cam.get_node("Warmup").is_queued_for_deletion(), "the shell's warm-up ran on the camera and went")
+
+	gate.hold(&"map", "Changing map")
+	_check(screen.is_showing() and screen._status.text == "Changing map", "a second hold puts the screen back with its line")
+	gate.release(&"map")
+	await _until_ms(func() -> bool: return gate.is_open(), 8000)
+	_check(gate.is_open() and not screen.is_showing(), "and it lifts again")
+
+	gate.hold(&"map")
+	_check(screen.is_showing(), "held once more")
+	root.remove_child(game)
+	game.free()
+	_check(not screen.is_showing(), "a game freed under its own gate takes the screen with it")
+
+	# A gate made before the root was claimed is found and hosted by watch().
+	var root2 := Node.new()
+	add_child(root2)
+	var game2 := Node3D.new()
+	var gate2 := DotLoadGate.new()
+	gate2.require_camera = false
+	gate2.register_service = false
+	gate2.hold(&"x")
+	game2.add_child(gate2)
+	root2.add_child(game2)
+	_check(not gate2.is_hosted() and gate2.is_cover_showing(), "unclaimed, a gate covers by itself")
+	cover.claim(root2)
+	cover.watch()
+	_check(gate2.is_hosted() and not gate2.is_cover_showing() and screen.is_showing(),
+		"watch() finds it by its metadata and takes the job over")
+	root2.free()
+	_cover_free(rig)
+	_done()
+
+
+func _test_cover_contract() -> void:
+	_section("a game on the older root contract")
+	var rig := _cover_rig()
+	var screen: TmcLoadingScreen = rig[0]
+	var cover: TmcGameCover = rig[1]
+	var root: Node = rig[2]
+	var game: Node3D = preload("res://examples/game_cover_contract_game.gd").new()
+	root.add_child(game)
+	cover.watch()
+	_check(screen.is_showing() and cover.mode_of(game) == "contract", "covered until it says it is ready", cover.mode_of(game))
+	game.ready_now = true
+	game.ready_to_show.emit()
+	await _until_ms(func() -> bool: return not screen.is_showing(), 2000)
+	_check(not screen.is_showing(), "and shown when it does")
+	_cover_free(rig)
+	_done()
+
+
+func _test_cover_fallback() -> void:
+	_section("a game with no gate and no contract is covered anyway")
+	var rig := _cover_rig()
+	var screen: TmcLoadingScreen = rig[0]
+	var cover: TmcGameCover = rig[1]
+	var root: Node = rig[2]
+	var game := Node3D.new()
+	root.add_child(game)
+	cover.watch()
+	_check(screen.is_showing() and cover.mode_of(game) == "fallback", "covered at spawn", cover.mode_of(game))
+	for i in 20:
+		await get_tree().physics_frame
+	_check(screen.is_showing(), "still covered with no camera after 20 physics frames")
+	var cam := Camera3D.new()
+	game.add_child(cam)
+	cam.make_current()
+	var took := await _until_ms(func() -> bool: return not screen.is_showing(), 4000)
+	_check(not screen.is_showing() and took < int(TmcGameCover.FALLBACK_MAX_SEC * 1000.0) - 500,
+		"shown once its camera has settled, well before the cap", "%d ms" % took)
+	_check(cover.mode_of(game) == "", "and no longer on the fallback")
+
+	var bare := Node.new()
+	root.add_child(bare)
+	var t0 := Time.get_ticks_msec()
+	cover.watch()
+	_check(screen.is_showing(), "a game that never makes a camera is covered too")
+	await _until_ms(func() -> bool: return not screen.is_showing(), 9000)
+	var waited := Time.get_ticks_msec() - t0
+	_check(not screen.is_showing() and waited >= int(TmcGameCover.FALLBACK_MAX_SEC * 1000.0) - 100,
+		"and shown at the cap, never held for ever", "%d ms" % waited)
+	_cover_free(rig)
+	_done()
