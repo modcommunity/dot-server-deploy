@@ -200,8 +200,14 @@ const HANDLED_ELSEWHERE := ["sv_content_dir"]
 ## The boot configuration, after every file has been applied.
 var server: DotServerConfig = DotServerConfig.new()
 
-## The netcode configuration a game module reads.
+## The operator's net settings as written in cfg (a [DotNetConfig] with its defaults
+## for the rest). Nothing reads this directly: a game builds its own [DotNetConfig], so
+## these numbers only matter through [method net_ceiling].
 var net: DotNetConfig = DotNetConfig.new()
+
+## The [DotNetConfig] properties the operator actually wrote, so [method net_ceiling]
+## does not pass off a DotNetConfig default as an operator limit.
+var _net_written: PackedStringArray = []
 
 ## What dot-log adds on top of the file every server already writes.
 ##
@@ -529,6 +535,23 @@ static func _replay_defaults() -> DotReplayConfig:
 	# VPS disk is the incident rather than the record of one.
 	cfg.max_file_mib = 256
 	return cfg
+
+
+## The operator's net settings as limits on a game's own: [DotNetConfig] property -> number,
+## only for what cfg wrote.
+##
+## [b]Handed to the game module, which applies it ([code]DotGameNetcode.cap[/code]) before
+## its netcode starts.[/b] Until then these were parsed into [member net] and nothing read
+## them, because every game builds its own [DotNetConfig]. Ceilings, not overrides: 0 is
+## "no limit from the operator", and the game's own value wins when it is lower. The
+## exception is [code]net_interp_buffer[/code], a smoothing choice the module overrides.
+func net_ceiling() -> Dictionary:
+	var out := {}
+
+	for key in _net_written:
+		out[key] = net.get(key)
+
+	return out
 
 
 func _apply(file: String, tree: Dictionary) -> DotResult:
@@ -1005,6 +1028,9 @@ func _apply_settings(file: String, tree: Dictionary) -> DotResult:
 
 			if not applied_net.ok:
 				return applied_net.wrap("%s: %s" % [file, name])
+
+			if not _net_written.has(String(NET_KEYS[name])):
+				_net_written.append(String(NET_KEYS[name]))
 
 			continue
 

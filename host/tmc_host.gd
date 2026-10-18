@@ -708,6 +708,10 @@ func _boot() -> bool:
 	# is still honoured, and still runs after the listener opens, because that is where
 	# something dot-server has and this format does not belongs.
 	config.server.autoexec_config = "%s/autoexec.cfg" % _config_dir
+	# The operator's net_max_* as ceilings on whatever game loads: dot-game's
+	# DotGameModule reads this meta before its netcode starts. The name is spelled out
+	# (it is DotGameNetcode.CEILING_META) so the host does not need dot-game linked to boot.
+	server.set_meta(&"dot_net_ceiling", config.net_ceiling())
 	add_child(server)
 
 	# Queries are their own addon now, and a server only answers them if a host is

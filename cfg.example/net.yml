@@ -23,11 +23,17 @@ net_public_ip: ""
 
 # Performance
 # -----------------------------------------
-# Maximum bytes per second per client.
+# These are CEILINGS on what each game asks for, applied when the game's module loads:
+# the value in force is the lower of the game's and yours, and 0 on either side means no
+# limit from that side. Existing boxes keep their own cfg/net.yml.
+
+# Maximum bytes per second per client (1000000 is about 8 Mbit/s). 0 = unlimited.
 net_max_bps: 1000000
 
-# Maximum number of packets per second per client.
-net_max_pps: 60
+# Maximum packets per second per client. 0 = unlimited. Leave it at 0 unless you know
+# the game's update rate: a packet cap below it starves snapshots.
+net_max_pps: 0
 
-# Max number of network updates per second a client can send or receive.
-net_max_update_rate: 66
+# Maximum snapshots per second sent to a client. 0 = use the game's own rate. Never
+# above the game's tick rate; it is lowered to a divisor of the tick rate if need be.
+net_max_update_rate: 0
