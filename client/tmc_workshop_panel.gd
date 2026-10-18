@@ -23,6 +23,9 @@ const CHANNEL := "tmc.workshop_panel"
 ## The page's id in a DotMenu.
 const PAGE_ID := &"subscriptions"
 
+## The least height of a switch or button, in pixels: a finger, not a cursor.
+const TOUCH_HEIGHT := 44
+
 ## A change was made (or refused). For a suite and for the shell to log.
 signal changed(what: String)
 
@@ -139,7 +142,9 @@ func refresh() -> void:
 	var removed := list.removed()
 
 	if items.is_empty() and removed.is_empty():
-		_add_line(_t("workshop.none", "You have no subscriptions this game can use."))
+		_add_line(_t("workshop.none", "No subscriptions yet"), true)
+		_add_line(_t("workshop.none_why",
+			"Subscribe to maps and packs on the site and they show up here."), false, true)
 		_add_site_button()
 		return
 
@@ -180,10 +185,16 @@ func _add_line(text: String, strong: bool = false, quiet: bool = false) -> Label
 	return l
 
 
+## The page's one footer action. Worded differently from a card's "Open on the site" so the
+## two are never read as the same button twice.
 func _add_site_button() -> void:
+	add_child(HSeparator.new())
 	var b := Button.new()
-	b.text = _t("workshop.open_site", "Open on the site")
-	b.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	b.name = "ManageOnSite"
+	b.text = _t("workshop.manage_site", "Manage subscriptions on the site")
+	b.custom_minimum_size = Vector2(0, TOUCH_HEIGHT)
+	b.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	b.pressed.connect(func() -> void: _open(site_url))
 	b.disabled = site_url == ""
 	add_child(b)
@@ -207,11 +218,23 @@ func _item_card(item: Dictionary) -> Control:
 	pad.add_child(box)
 
 	var name_label := Label.new()
-	name_label.text = str(item.get("name", content_id))
+	var title := str(item.get("name", "")).strip_edges()
+	name_label.text = title if title != "" else content_id
 	name_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	name_label.add_theme_font_size_override("font_size", 16)
 	box.add_child(name_label)
+
+	var sub := PackedStringArray()
+	for k in pack.get("kinds", []):
+		sub.append(str(k).capitalize())
+	if str(pack.get("version", "")) != "":
+		sub.append("v" + str(pack["version"]))
+	if not sub.is_empty():
+		var subline := _label(" - ".join(sub))
+		subline.name = "Subline"
+		subline.modulate = Color(1, 1, 1, 0.6)
+		box.add_child(subline)
 
 	var status := Label.new()
 	status.name = "State"
@@ -232,10 +255,10 @@ func _item_card(item: Dictionary) -> Control:
 		n.modulate = Color(1, 1, 1, 0.7)
 		box.add_child(n)
 
-	var flow := HFlowContainer.new()
-	flow.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	flow.add_theme_constant_override("h_separation", 12)
-	flow.add_theme_constant_override("v_separation", 6)
+	# Stacked, not a flow: a switch's text is only as narrow as its longest word when it wraps,
+	# and a row of four collided at phone width. One per line is also the touch layout.
+	var flow := VBoxContainer.new()
+	flow.add_theme_constant_override("separation", 2)
 	box.add_child(flow)
 
 	var this_game := CheckButton.new()
@@ -243,6 +266,7 @@ func _item_card(item: Dictionary) -> Control:
 	this_game.text = _t("workshop.this_game", "On for this game")
 	this_game.button_pressed = not _scope_off(sub_id)
 	this_game.toggled.connect(func(on: bool) -> void: _set_scope(sub_id, on))
+	_touch(this_game)
 	flow.add_child(this_game)
 
 	if game_bound:
@@ -250,6 +274,7 @@ func _item_card(item: Dictionary) -> Control:
 		site.name = "EveryGameOnSite"
 		site.text = _t("workshop.change_all_on_site", "Change for every game on the site")
 		site.pressed.connect(func() -> void: _open(str(item.get("webUrl", site_url))))
+		_touch(site)
 		flow.add_child(site)
 	else:
 		var all := CheckButton.new()
@@ -257,6 +282,7 @@ func _item_card(item: Dictionary) -> Control:
 		all.text = _t("workshop.all_games", "On for every game")
 		all.button_pressed = bool(_pending.get("all:" + sub_id, str(item.get("scope", "")) == "all"))
 		all.toggled.connect(func(on: bool) -> void: _set_all(sub_id, on))
+		_touch(all)
 		flow.add_child(all)
 
 	var device := CheckButton.new()
@@ -264,12 +290,14 @@ func _item_card(item: Dictionary) -> Control:
 	device.text = _t("workshop.this_device", "On on this device")
 	device.button_pressed = not _device_off(content_id)
 	device.toggled.connect(func(on: bool) -> void: _set_device(content_id, not on))
+	_touch(device)
 	flow.add_child(device)
 
 	var open := Button.new()
 	open.name = "OpenOnSite"
 	open.text = _t("workshop.open_asset", "Open on the site")
 	open.pressed.connect(func() -> void: _open(str(item.get("webUrl", site_url))))
+	_touch(open)
 	flow.add_child(open)
 
 	return card
@@ -298,8 +326,17 @@ func _removed_card(gone: Dictionary) -> Control:
 		on.text = _t("workshop.this_game", "On for this game")
 		on.button_pressed = bool(_pending.get(sub_id, false))
 		on.toggled.connect(func(v: bool) -> void: _set_scope(sub_id, v))
+		_touch(on)
 		box.add_child(on)
 	return card
+
+
+## A button or switch that is a touch target and wraps its text instead of widening the page.
+func _touch(b: Button) -> void:
+	b.custom_minimum_size = Vector2(0, TOUCH_HEIGHT)
+	b.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	b.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
 
 func _label(text: String) -> Label:

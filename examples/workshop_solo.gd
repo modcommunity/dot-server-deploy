@@ -23,7 +23,7 @@ extends Node
 const WORK := "user://tmc_workshop_solo"
 const SHELL := "res://client/shell.tscn"
 const GAME := "gamemann/ws-game"
-const CHECKS := 55
+const CHECKS := 56
 const ACCEPTS := {"kinds": ["map", "script"], "map_kinds": ["sandbox"]}
 const HttpServer := preload("res://examples/fixtures/ws_http_server.gd")
 const Backbone := preload("res://examples/fixtures/ws_backbone.gd")
@@ -197,10 +197,20 @@ func _publish(dir: String, id: String, key_id: String) -> void:
 	_check(res.ok, "fixture pack %s publishes" % id, str(res.error) if not res.ok else "")
 
 
+## What the site would send as the asset's title.
+func _title_of(id: String) -> String:
+	match id:
+		"ws_map":
+			return "Harbour Blitz"
+		"ws_prop":
+			return "Crate Pack Deluxe"
+	return id
+
+
 func _item(id: String) -> Dictionary:
 	var p: Dictionary = _packs[id]
 	return {
-		"subscriptionId": "sub-" + id, "assetId": 1, "name": id, "scope": "all", "autoUpdate": true,
+		"subscriptionId": "sub-" + id, "assetId": 1, "name": _title_of(id), "scope": "all", "autoUpdate": true,
 		"pack": {
 			"contentId": id, "version": "1.0.0",
 			"manifestUrl": "%s/%s/manifest.json" % [_content.base_url(), id],
@@ -282,6 +292,7 @@ func _test_solo_with_subscription() -> void:
 		"as a map whose scene is in the mounted pack", def.scene_path if def != null else "")
 	_check(not session.workshop_summary.get("guest", true), "the summary says signed in")
 	_check(not _ws.requires_restart_before_online(), "data packs need no restart before an online join")
+	await _wait_cover_gone()
 	await _shot("solo_with_pack_map")
 
 	# A game that states no accepts is not asked at all.
@@ -436,6 +447,31 @@ func _shots_dir() -> String:
 ## The window, not the stretched viewport: the project stretches to 1280x720, so the viewport reads the same at any window width.
 func image_size_of_window() -> Vector2i:
 	return DisplayServer.window_get_size()
+
+
+## Until the shell's loading screen is down (the cover keeps a game with no camera for up to
+## 5 s), so the picture shows the game and not the screen over it. A suite without --shots
+## does not wait.
+func _wait_cover_gone() -> void:
+	if _shots_dir() == "":
+		return
+	var loading: Variant = _shell.get("loading")
+	var until := Time.get_ticks_msec() + 12000
+	# The cover starts watching a game a frame or so after the start returns, so "no reason is
+	# up" is true before it is up: wait for the game to be watched first.
+	while is_instance_valid(_game_node()) and not _game_node().has_meta(&"tmc_warm_watched") \
+			and Time.get_ticks_msec() < until:
+		await get_tree().process_frame
+	while loading != null and is_instance_valid(loading) \
+			and (loading.is_showing() or not (loading.describe().get("reasons", []) as Array).is_empty()) \
+			and Time.get_ticks_msec() < until:
+		await get_tree().process_frame
+	# It fades out: is_showing() is false from the first frame of the fade.
+	var root: Variant = loading.get("_root") if loading != null else null
+	while root is Control and is_instance_valid(root) and (root as Control).visible \
+			and Time.get_ticks_msec() < until:
+		await get_tree().process_frame
+	_check(loading == null or not loading.is_showing(), "the cover was gone before the picture")
 
 
 func _shot(label: String) -> void:
