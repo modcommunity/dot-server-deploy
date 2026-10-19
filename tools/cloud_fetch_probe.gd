@@ -29,6 +29,9 @@ func _init() -> void:
 	var client := DotCloudClient.new()
 	client.name = "Cloud"
 	client.config = DotCloudConfig.new()
+	# A client's fetch, run headless: dot-cloud's `auto` would read that as a server and
+	# leave a pack's client-only files (API 8) behind.
+	client.config.side = "client"
 	# The REAL shipped config, not a permissive one built here. The whole point is to
 	# find out whether the key we published with is the key this client trusts -- a probe
 	# that turned signing off would pass while the product failed.

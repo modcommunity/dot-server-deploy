@@ -1047,7 +1047,9 @@ func _ensure_cloud() -> void:
 	_cloud.config = DotCloudConfig.new()
 	# The shell is a player's client even when a suite runs it headless, where dot-cloud's
 	# `auto` would read "server" and leave a game's client-only files (API 8) behind, so a
-	# headless test client would load a different game from a player's.
+	# headless test client would load a different game from a player's. A solo game runs
+	# its server in this process too, so [method _start_solo] widens this to both, and
+	# dot-cloud mounts the server-only rest of a pack already mounted for a join.
 	_cloud.config.side = "client"
 
 	# [b]A player may keep nothing.[/b] Downloads are kept between sessions by default --
@@ -1768,6 +1770,8 @@ func _start_solo(content_id: String, version: String = "") -> void:
 	_say("Finding %s…" % content_id)
 
 	_ensure_cloud()
+	# The solo game's server runs here as well: it needs the server-only files (API 8).
+	_cloud.config.side = "both"
 	_adopt_content_url_arg()
 	_enter_solo_session()
 
@@ -2149,6 +2153,8 @@ func _leave_solo() -> void:
 func _end_solo_session() -> void:
 	if get_tree().node_added.is_connected(_on_solo_node_added):
 		get_tree().node_added.disconnect(_on_solo_node_added)
+	if _cloud != null and is_instance_valid(_cloud):
+		_cloud.config.side = "client"
 	if _solo_session == null:
 		return
 	DotRegistry.unregister_instance(TmcSolo.MAPS_SERVICE, _solo_session)

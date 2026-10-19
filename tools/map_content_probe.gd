@@ -47,6 +47,9 @@ func _init() -> void:
 	var cloud := DotCloudClient.new()
 	cloud.name = "Cloud"
 	cloud.config = DotCloudConfig.new()
+	# A client's fetch, run headless: dot-cloud's `auto` would read that as a server and
+	# leave a pack's client-only files (API 8) behind.
+	cloud.config.side = "client"
 	cloud.config_file = CONTENT_CONFIG
 	cloud.config.cache_dir = "user://map_probe_%d" % Time.get_ticks_msec()
 	# The published tree on disk, which is what a CDN is serving a copy of. Using the

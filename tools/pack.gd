@@ -95,6 +95,29 @@ static func publisher_for(requires_file: String) -> DotCloudPublisher:
 	return pub
 
 
+## The pack paths a side must get, from the source's `game.yml`: the descriptor for both
+## (install-games reads it on a server, the shell on a client), its `scene` and `module` for
+## the server, its `client_scene` for the client. Empty for a source with no descriptor.
+static func needs_for(source: String) -> DotResult:
+	var out := {}
+	var yml := source.path_join("game.yml")
+	if not FileAccess.file_exists(yml):
+		return DotResult.success(out)
+	var read := TmcYaml.parse_file(yml)
+	if not read.ok:
+		return read.wrap("could not read %s" % yml)
+	var tree: Dictionary = read.value
+	out["game.yml"] = "both"
+	for key in ["scene", "module"]:
+		var path := str(TmcYaml.at(tree, key, ""))
+		if path != "":
+			out[path] = "server"
+	var client_scene := str(TmcYaml.at(tree, "client_scene", ""))
+	if client_scene != "":
+		out[client_scene] = "both" if out.has(client_scene) else "client"
+	return DotResult.success(out)
+
+
 func _initialize() -> void:
 	DotLog.timestamps = false
 	DotLog.set_level(DotLog.Level.INFO)
@@ -325,6 +348,15 @@ func _publish_one(
 	pub.version = str(meta["version"])
 	pub.display_name = str(meta["name"])
 	pub.entry_scene = str(meta["entry"])
+
+	# [b]What this host's loader opens can never be one side's file[/b] (dot-cloud API 8): a
+	# game's `sides.json` that caught `game.yml`, its server scene or its module would publish
+	# a pack install-games refuses or a server cannot start. The publisher refuses it instead.
+	var needed := needs_for(source)
+	if not needed.ok:
+		return needed
+	for path: String in needed.value:
+		pub.need_on_side(path, str(needed.value[path]))
 
 	if str(meta["mount_root"]) != "":
 		pub.mount_root = str(meta["mount_root"])
