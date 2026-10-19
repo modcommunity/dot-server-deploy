@@ -1,0 +1,6 @@
+{
+    "id": "tmc/murdermystery_maps",
+    "version": "0.1.0",
+    "name": "Murder Mystery maps",
+    "exclude_dirs": ["tools", ".github", "docs"]
+}

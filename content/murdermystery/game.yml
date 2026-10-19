@@ -1,0 +1,30 @@
+# game-murder-mystery, as this server publishes it.
+#
+# Murder mystery: one murderer (more on a big server) hides among the innocents and kills before the
+# round runs out. The maps are NOT in this pack: they are murdermystery_maps below, mounted on the
+# server only, because the server sends each client the map it is playing as a document.
+#
+# Keep scene, client_scene and module in step with game-murder-mystery's own game.yml.
+
+name: Murder Mystery
+content_id: tmc/murdermystery
+version: 0.1.0
+kind: pack
+max_players: 24
+
+scene: scenes/mm_server.tscn
+client_scene: game/mm.tscn
+module: game/mm_module.gd
+
+# Pinned, because TmcContent refuses an unpinned entry rather than resolving one per join.
+server_dependencies:
+  - tmc/murdermystery_maps@0.1.0
+
+cvars:
+  mm_round_seconds: "180"
+  mm_grace_seconds: "10"
+  mm_players_per_murderer: "12"
+  mm_murderer_weapon: "knife"
+  # Stand-ins, so one person on an empty server has somebody to play with.
+  mm_bots: "1"
+  bot_quota: "5"

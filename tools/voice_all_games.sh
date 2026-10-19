@@ -10,7 +10,7 @@
 set -uo pipefail
 cd "$(dirname "$0")/.."
 games=("$@")
-[ ${#games[@]} -eq 0 ] && games=(arena buses deathrun delivery g2gfast hideseek hungry_classic lookatme playground prophunt smash wipeout zombiezone)
+[ ${#games[@]} -eq 0 ] && games=(arena buses deathrun delivery g2gfast hideseek hungry_classic lookatme murdermystery playground prophunt smash wipeout zombiezone)
 mkdir -p .godot/test-logs
 failed=0
 printf '%-15s %-8s %-10s %-8s %-12s %-10s %s\n' game result router voice heard_all rms off_leak

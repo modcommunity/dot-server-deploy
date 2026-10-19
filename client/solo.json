@@ -6,6 +6,7 @@
         "gamemann/mg-deathrun": ["gamemann/mg-deathrun-maps"],
         "gamemann/mg-prop-hunt": ["gamemann/mg-prop-hunt-maps"],
         "gamemann/game-hide-n-seek": ["gamemann/hide-n-seek-maps"],
-        "gamemann/game-zombie-zone": ["gamemann/zombie-zone-maps"]
+        "gamemann/game-zombie-zone": ["gamemann/zombie-zone-maps"],
+        "gamemann/game-murder-mystery": ["gamemann/murder-mystery-maps"]
     }
 }

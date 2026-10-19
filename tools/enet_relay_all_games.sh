@@ -20,7 +20,7 @@ for a in "$@"; do
         *) games+=("$a") ;;
     esac
 done
-[ ${#games[@]} -eq 0 ] && games=(arena buses deathrun delivery g2gfast hideseek hungry_classic lookatme playground prophunt smash wipeout zombiezone dot-game-template)
+[ ${#games[@]} -eq 0 ] && games=(arena buses deathrun delivery g2gfast hideseek hungry_classic lookatme murdermystery playground prophunt smash wipeout zombiezone dot-game-template)
 mkdir -p .godot/test-logs
 failed=0
 started=$(date +%s)
