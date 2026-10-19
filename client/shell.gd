@@ -1045,6 +1045,10 @@ func _ensure_cloud() -> void:
 	# player's cue that this shell, not the server, is the one to update.
 	_cloud.host_role = "client"
 	_cloud.config = DotCloudConfig.new()
+	# The shell is a player's client even when a suite runs it headless, where dot-cloud's
+	# `auto` would read "server" and leave a game's client-only files (API 8) behind, so a
+	# headless test client would load a different game from a player's.
+	_cloud.config.side = "client"
 
 	# [b]A player may keep nothing.[/b] Downloads are kept between sessions by default --
 	# content-addressed, so a file two games or two versions share is stored once, and a

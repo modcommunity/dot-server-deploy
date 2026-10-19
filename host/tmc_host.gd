@@ -1306,6 +1306,10 @@ func _build_cloud() -> void:
 	cloud.host_role = "server"
 	cloud.config = DotCloudConfig.new()
 	cloud.config.cache_dir = "%s/content_cache" % _data_dir
+	# A pack's client-only files (a game's baked light, dot-cloud API 8) are never fetched
+	# here: this process never draws. Said outright rather than left to `auto`, which reads
+	# the same on a headless box and would read wrong on a server started with a window.
+	cloud.config.side = "server"
 	# [b]Falls back to the tracked defaults when the deployment has no answer of its
 	# own.[/b] `data/content.json` is GENERATED from `client/content.json` by setup.sh
 	# (plus this box's own signing key), so it exists on a real install and on nothing

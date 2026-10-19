@@ -1638,6 +1638,9 @@ func _build_cloud(
 	cloud.name = "Cloud"
 	cloud.config = DotCloudConfig.new()
 	cloud.config.cache_dir = "%s/content_cache" % data_dir
+	# The side TmcHost._build_cloud fetches as, so a prefetch does not cache a game's
+	# client-only files (dot-cloud API 8) that the server would then never mount.
+	cloud.config.side = "server"
 	# Says "this server" in a refusal: a pack needing a newer addon API than this box has
 	# is an operator's problem to fix, and the sentence should say whose build it is.
 	cloud.host_role = "server"
