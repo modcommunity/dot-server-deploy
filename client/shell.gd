@@ -157,6 +157,8 @@ func _ready() -> void:
 		else DotLog.Level.INFO
 	)
 
+	TmcSiteDefault.apply(AUTH_CONFIG)
+
 	_game_root = Node.new()
 	_game_root.name = GAME_ROOT
 	add_child(_game_root)

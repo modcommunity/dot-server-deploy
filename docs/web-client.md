@@ -11,6 +11,10 @@
 - **It is the SITE origin, not the game origin.** They are deliberately different registrable domains: the game origin is a sandbox that keeps the site's cookies and storage away from the engine. Pointing the backbone at it would send the site's handoff codes to the domain the separation protects them from.
 - **The shell calls `try_web_handoff()`, never `DotAuthClient.sign_in()`.** `sign_in()` falls through to a device-code login, which this shell has nowhere to display; it cost two backbone requests on every bare page load.
 
+## Which site the server browsers list
+
+`TmcSiteDefault` (`client/tmc_site_default.gd`) publishes `client/auth.json`'s `backbone_url` as `DOT_BROWSER_BACKBONE_URL` when the shell starts, unless argv, the environment or `?backbone=` already names a site. That is the default for a hand-started shell and for the web, where a game's own fallback of "the page's origin" is wrong: the published game origin is a static bucket that answers `/api/...` with 403 (checked 2026-10-19 against `dotgames.org`), while the site answers the anonymous listing with CORS `*`. tmc-app still passes `--browser-backbone-url` itself. A change reaches players only with a new shell build upload. Test: `examples/solo_check`.
+
 ## Solo play
 
 The shell runs one game in the tab with no server: `--solo <owner>/<repo>` (and `--solo-version`) on the command line, or `?solo=` (and `&solo_version=`) on `embed.html`, which forwards it as `--solo`. It is what the site's direct Play button ("Play solo") boots: website-city's `game.boot` puts `boot.solo = {contentId, version}` in the descriptor when there is no server and the app's content is a game pack, and `web/tmc-loader.js` turns that into the query string. The code is `client/tmc_solo.gd` (the request, `latest.json`, the `game.yml` reader, `client/solo.json`) and `client/tmc_solo_session.gd`; `_start_solo` in `shell.gd` drives them.

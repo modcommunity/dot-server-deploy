@@ -10,12 +10,12 @@ extends Node
 ## running the shell: `godot --headless --path . res://client/boot.tscn -- --solo
 ## gamemann/game-arena --content-url <origin>/content` (docs/web-client.md#solo-play).
 ##
-## Armed by: making `follow_pointer` ignore `moved_to` (the hop checks fail); letting `valid_id` accept an upper-case or three-segment id (the refusals
+## Armed by: making `TmcSiteDefault.resolve` ignore the environment or argv (the "wins" checks fail); making `follow_pointer` ignore `moved_to` (the hop checks fail); letting `valid_id` accept an upper-case or three-segment id (the refusals
 ## fail); dropping the `_strip_comment` call in `parse_descriptor` (every game.yml with a
 ## trailing comment on a read field disagrees with TmcYaml); and deleting a game from
 ## `client/solo.json` (the drift check names it).
 
-const CHECKS := 27
+const CHECKS := 35
 
 ## Every game repository, beside this project or in games/: `games.list`'s first column.
 const GAMES_LIST := "res://games.list"
@@ -42,6 +42,7 @@ func _ready() -> void:
 	_test_ids()
 	_test_descriptor_reader()
 	_test_map_list()
+	_test_site_default()
 	await _test_session()
 
 	print("")
@@ -78,6 +79,23 @@ func _test_ids() -> void:
 
 	var split := TmcSolo.split_key("gamemann/surf_mesa@1.2.2")
 	_check(split["id"] == "gamemann/surf_mesa" and split["version"] == "1.2.2", "a key splits at its last '@'")
+
+	_done()
+
+
+func _test_site_default() -> void:
+	_section("a hand-started shell lists the site from client/auth.json")
+
+	var auth := '{"backbone_url": "https://site.example/"}'
+	var none := PackedStringArray()
+	_check(TmcSiteDefault.resolve(auth, "", none, "") == "https://site.example", "the shipped site is the default, trailing slash trimmed")
+	_check(TmcSiteDefault.resolve(auth, "https://env.example", none, "") == "", "an environment variable wins")
+	_check(TmcSiteDefault.resolve(auth, "", PackedStringArray(["--browser-backbone-url=https://a.example"]), "") == "", "argv with = wins")
+	_check(TmcSiteDefault.resolve(auth, "", PackedStringArray(["--browser-backbone-url", "https://a.example"]), "") == "", "argv with a separate value wins")
+	_check(TmcSiteDefault.resolve(auth, "", none, "https://q.example") == "", "?backbone= wins on the web")
+	_check(TmcSiteDefault.resolve("", "", none, "") == "" and TmcSiteDefault.resolve("{}", "", none, "") == "", "a missing or unreadable file names no site")
+	_check(TmcSiteDefault.resolve('{"backbone_url": "javascript:x"}', "", none, "") == "", "a non-http value is refused")
+	_check(TmcSiteDefault.resolve(FileAccess.get_file_as_string("res://client/auth.json"), "", none, "").begins_with("http"), "the shipped client/auth.json yields a site")
 
 	_done()
 
