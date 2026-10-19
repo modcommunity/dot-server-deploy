@@ -182,6 +182,11 @@ func _boot() -> bool:
 	print("")
 	print("booting")
 
+	# Pinned to the hand-built maps: the imported ones (ze_*, zs_*) have no props, and this suite
+	# checks props. Without the pin the server picks any shipped map, so the result depended on
+	# which one came up. Layered env var of the game's own config (ZzConfig.map_ids).
+	OS.set_environment("ZZ_MAP_IDS", "zz_blackout_1,zz_blackout_2,zz_blackout_3,zz_chapel,zz_high_school,zz_lot,zz_mall,zz_relief_camp,zz_stadium")
+
 	var packed: Variant = load("res://host/host.tscn")
 	_host = (packed as PackedScene).instantiate()
 	_host.auto_start = false
