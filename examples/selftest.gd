@@ -17,7 +17,7 @@ const CFG := "res://examples/fixtures"
 ## A loaded game with rounds and no match the game vote can find. See the section that uses it.
 const RoundsWithoutMatch := preload("res://examples/fixtures/rounds_without_match.gd")
 
-const CHECKS := 354
+const CHECKS := 356
 
 var _passed := 0
 var _failed := 0
@@ -1896,7 +1896,7 @@ func _test_game_rotation() -> void:
 
 	var tree := {"rotation": "small", "rotations": {
 		"small": {"mode": "random", "games": ["arena", "surf", "bhop"]},
-		"loop": {"mode": "cycle", "games": ["bhop", "arena", "surf"]},
+		"loop": {"mode": "cycle", "cooldown": 7, "games": ["bhop", "arena", "surf"]},
 	}}
 	var votes := _rotation_votes(tree)
 	var director := votes.director
@@ -1937,6 +1937,13 @@ func _test_game_rotation() -> void:
 	votes.rotation.switch("small")
 	votes.apply_rotation()
 	_check(votes.director.rules.end_vote == votes._end_vote_base, "leaving the cycle restores the ballot")
+	votes.rotation.switch("loop")
+	votes.apply_rotation()
+	_check(votes.director.rules.cooldown == 7, "a rotation's own cooldown applies")
+	votes.rotation.switch("small")
+	votes.apply_rotation()
+	_check(votes.director.rules.cooldown == votes._cooldown_base and votes._cooldown_base != 7,
+		"and a rotation with none falls back to vote.yml's, not the previous rotation's")
 	votes.free()
 
 	# vote_exclude still works with a rotation: both sets are off the ballot.

@@ -110,6 +110,10 @@ var rotation: TmcGameRotation = null
 ## vote.yml's `end_vote`, before a cycle rotation turned it off.
 var _end_vote_base := true
 
+## vote.yml's cooldown, before any rotation's. A rotation with none of its own falls back to this,
+## not to the previous rotation's value.
+var _cooldown_base := 0
+
 var server: DotServer = null
 
 ## How often the tree is searched for the loaded game's own vote directors. A game builds its
@@ -144,7 +148,7 @@ func apply_rotation() -> void:
 	if rotation == null or director == null:
 		return
 	director.rules.end_vote = false if rotation.is_cycle() else _end_vote_base
-	director.rules.cooldown = rotation.cooldown(director.rules.cooldown)
+	director.rules.cooldown = rotation.cooldown(_cooldown_base)
 	_refresh_offer()
 
 
@@ -208,6 +212,7 @@ static func install(
 	# that leaves one game is a server with one game on offer.
 	var operator_excluded: Array[StringName] = source.excluded.duplicate()
 	var base_end_vote := rules.end_vote
+	var base_cooldown := rules.cooldown
 	var plan := {"excluded": [] as Array[StringName], "order": [] as Array[StringName], "fell_back": false}
 	if p_rotation != null:
 		plan = p_rotation.resolve(p_server.games.games)
@@ -250,6 +255,7 @@ static func install(
 	votes._operator_excluded = operator_excluded
 	votes.rotation = p_rotation
 	votes._end_vote_base = base_end_vote
+	votes._cooldown_base = base_cooldown
 	votes._refresh_offer()
 	votes._wire()
 
