@@ -33,7 +33,8 @@
 #
 # WHAT IS AN INPUT: the files releases.md "What needs a new shell" lists that live in
 # this repository -- the lock (which names every addon's ref), the shell's own client/
-# code, project.godot, the tracked presets, the page the engine runs in -- plus the
+# code, project.godot, the tracked presets, the page the engine runs in and the loader
+# template export-web stamps into the build (web/tmc-loader.js) -- plus the
 # engine version. Tracked files only, as they are in the working tree: an export is made
 # from the working tree, and client/auth.json and export_presets.cfg are a deployment's
 # own answers, untracked on purpose. tools/server.in is not an input although its
@@ -48,7 +49,7 @@ RECORD="$ROOT/web/shell-build.inputs"
 # web-shell workflow's `paths:` filter, which is a copy (a workflow cannot run a script
 # to decide whether it triggers); tools/check_lists.sh is not taught it because the
 # filter only decides when to look, and the job itself always compares this.
-INPUT_PATHS=(addons.lock client project.godot export_presets.example.cfg web/embed.html)
+INPUT_PATHS=(addons.lock client project.godot export_presets.example.cfg web/embed.html web/tmc-loader.js)
 
 die() { printf 'shell-inputs: %s\n' "$*" >&2; exit 3; }
 

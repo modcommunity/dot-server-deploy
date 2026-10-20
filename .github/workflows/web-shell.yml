@@ -29,6 +29,7 @@ on:
             - project.godot
             - export_presets.example.cfg
             - web/embed.html
+            - web/tmc-loader.js
             - tools/fetch-godot.sh
             - tools/shell-inputs.sh
             - .github/workflows/web-shell.yml
@@ -70,12 +71,36 @@ jobs:
                   set -uo pipefail
                   tools/shell-inputs.sh check; rc=$?
                   if [ "$rc" = 0 ] && [ "$FORCE" != "true" ]; then
-                      echo "web/shell-build ($(cat web/shell-build)) was exported from this tree; nothing to do."
+                      echo "web/shell-build ($(cat web/shell-build)) was exported from this tree; nothing to build."
                       echo "build=false" >> "$GITHUB_OUTPUT"
+                      # [b]But is it released?[/b] A pin that reached main without its tag
+                      # (an earlier run that died between push and dispatch, a hand push)
+                      # is a shell no release names, so dot-ci's server-compat and every
+                      # game release still see the previous one. No v* tag at or after the
+                      # pin commit: tag main (its record matches, so release.yml's gate
+                      # passes) and release it.
+                      pin="$(git log -1 --format=%H -- web/shell-build.inputs)"
+                      if [ -n "$pin" ] && [ -z "$(git tag --contains "$pin" -l 'v*')" ]; then
+                          last="$(git tag -l 'v*' | sort -V | tail -1)"; last="${last:-v0.0.0}"
+                          tag="${last%.*}.$(( ${last##*.} + 1 ))"
+                          git config user.name "github-actions[bot]"
+                          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+                          git tag -a "$tag" -m "Web shell $(cat web/shell-build)" || exit 1
+                          git push -q origin "refs/tags/$tag" || exit 1
+                          echo "the pin $(git rev-parse --short "$pin") had no release; tagged main $tag"
+                          echo "untagged=$tag" >> "$GITHUB_OUTPUT"
+                      fi
                       exit 0
                   fi
                   [ "$rc" -le 2 ] || exit "$rc"
                   echo "build=true" >> "$GITHUB_OUTPUT"
+
+            - name: Release the pin that had no tag
+              if: steps.need.outputs.untagged != ''
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  TAG: ${{ steps.need.outputs.untagged }}
+              run: gh workflow run release.yml --repo "$GITHUB_REPOSITORY" --ref "$TAG"
 
             - name: Settings this needs
               if: steps.need.outputs.build == 'true'

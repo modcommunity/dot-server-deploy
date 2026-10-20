@@ -288,15 +288,41 @@ else
     git -C "$REPO" commit -q -m "Pin the web shell $BUILD" \
         -m "web/shell-build names the shell exported from addons.lock at $(git -C "$REPO" rev-parse --short HEAD), uploaded to $PREFIX."
 fi
-LAST=$(git -C "$REPO" tag -l 'v*' | sort -V | tail -1)
-LAST=${LAST:-v0.0.0}
-TAG="${LAST%.*}.$(( ${LAST##*.} + 1 ))"
+next_tag() {
+    local last
+    last=$(git -C "$REPO" tag -l 'v*' | sort -V | tail -1)
+    last=${last:-v0.0.0}
+    echo "${last%.*}.$(( ${last##*.} + 1 ))"
+}
+TAG=$(next_tag)
 git -C "$REPO" tag -a "$TAG" -m "Web shell $BUILD"
 echo
 if [ "$NO_PUSH" = 1 ]; then
     echo "pinned: $REPO web/shell-build = $BUILD, tagged $TAG; nothing pushed (--no-push)"
     exit 0
 fi
-git -C "$REPO" push -q origin "$BRANCH" "$TAG"
-echo "pinned: $REPO web/shell-build = $BUILD, tagged $TAG, pushed $BRANCH and $TAG"
-echo "-- Servers on TMC_AUTO_UPDATE=when-needed move on their next start."
+
+# [b]The branch and the tag move together or not at all.[/b] Somebody can push or tag
+# while the export runs; a plain two-ref push then lands the pin without its tag, or the
+# tag without the pin, and nothing would put it right. On a rejection: drop the local
+# tag, take what origin has, replay the pin on it, and try again with the next free tag
+# -- unless origin's new commits changed the shell's inputs, in which case this build is
+# no longer the tree's, and the run that push started builds the right one.
+for attempt in 1 2 3 4 5; do
+    if git -C "$REPO" push -q --atomic origin "HEAD:refs/heads/$BRANCH" "refs/tags/$TAG"; then
+        echo "pinned: $REPO web/shell-build = $BUILD, tagged $TAG, pushed $BRANCH and $TAG"
+        echo "-- Servers on TMC_AUTO_UPDATE=when-needed move on their next start."
+        exit 0
+    fi
+    [ "$attempt" = 5 ] && break
+    echo "push rejected (attempt $attempt): origin moved; replaying the pin on it"
+    git -C "$REPO" tag -d "$TAG" >/dev/null
+    git -C "$REPO" fetch -q --tags origin "$BRANCH" || die "cannot fetch origin/$BRANCH"
+    git -C "$REPO" rebase -q "origin/$BRANCH" \
+        || { git -C "$REPO" rebase --abort 2>/dev/null; die "the pin does not replay on origin/$BRANCH; nothing pushed"; }
+    "$REPO/tools/shell-inputs.sh" compare "$work/build/shell-inputs.txt" \
+        || die "origin/$BRANCH changed the shell's inputs since this export; nothing pushed (the run for that push builds it). $PREFIX is uploaded and unpinned."
+    TAG=$(next_tag)
+    git -C "$REPO" tag -a "$TAG" -m "Web shell $BUILD"
+done
+die "could not push the pin and $TAG after 5 attempts; $PREFIX is uploaded and unpinned"

@@ -1413,7 +1413,9 @@ lock_moved() {
     record="$(git -C "$PROJECT" show "origin/$branch:web/shell-build.inputs" 2>/dev/null)" || return 0
     lock_sum="$(git -C "$PROJECT" show "origin/$branch:addons.lock" 2>/dev/null | sha256sum | cut -d' ' -f1)"
     if ! printf '%s\n' "$record" | grep -qxF "lock	$lock_sum"; then
-        note "the addon lock on this checkout's branch has moved, but its web shell is not pinned yet; staying on this one until it is"
+        # WARN, not a note: if the web-shell workflow is failing, this line on every
+        # start is how an operator finds out that no box is taking the new lock.
+        warn "the addon lock on this checkout's branch has moved, but its web shell is not pinned yet (dot-server-deploy's web-shell workflow); staying on this one until it is"
         return 1
     fi
     return 0
