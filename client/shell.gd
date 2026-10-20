@@ -1700,6 +1700,13 @@ func _restart(keep: PackedStringArray = PackedStringArray()) -> bool:
 		var location: Variant = DotWeb.get_global("location")
 		if location == null:
 			return false
+		# dot-game's DotGameClient arms a "Leave site?" prompt while a game is live, and
+		# this reload is ours, not the player's: an update restart that asks "are you
+		# sure" is one a player cancels. Disarmed by property, not eval, for the same CSP
+		# reason as above; the flag is absent when no game client installed it.
+		var tab_guard: Variant = DotWeb.get_global("__dotTabGuard")
+		if tab_guard != null:
+			tab_guard.armed = false
 		location.reload()
 		return true
 

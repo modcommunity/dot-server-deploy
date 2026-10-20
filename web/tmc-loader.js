@@ -377,9 +377,15 @@
    * googleusercontent.com, githubusercontent.com and dropboxusercontent.com rather
    * than from a subdomain of the site.
    */
+  /*
+   * `allow-modals` is for one dialog: the "Leave site?" prompt dot-game arms while a game
+   * is live, the only net under Ctrl+W, which a page cannot cancel. A frame sandboxed
+   * without it has its beforeunload prompt suppressed, so the tab closed mid-round. It
+   * also lets the frame call alert() and confirm(), which cost a player a click, not data.
+   */
   frame.setAttribute(
     'sandbox',
-    'allow-scripts allow-same-origin allow-pointer-lock allow-downloads'
+    'allow-scripts allow-same-origin allow-pointer-lock allow-downloads allow-modals'
   );
   /*
    * `microphone`, for voice chat: a framed page may not call getUserMedia unless the frame
@@ -388,6 +394,30 @@
    */
   frame.setAttribute('allow', 'autoplay; gamepad; fullscreen; cross-origin-isolated; microphone');
   frame.setAttribute('allowfullscreen', 'true');
+
+  /*
+   * The keyboard lock, from up here. In fullscreen, Chromium lets a page take Ctrl+W, Ctrl+T
+   * and the rest from the browser (`navigator.keyboard.lock()`), but only the top-level
+   * document may ask: the game's own call, inside this frame, is refused. When the game
+   * goes fullscreen this document's `fullscreenElement` is the frame, so lock then and
+   * release when it leaves. Elsewhere the API is missing and this does nothing.
+   */
+  document.addEventListener('fullscreenchange', function () {
+    var k = navigator.keyboard;
+    if (!k) return;
+    try {
+      if (document.fullscreenElement === frame) {
+        if (k.lock) {
+          var p = k.lock();
+          if (p && p.catch) p.catch(function () {});
+        }
+      } else if (k.unlock) {
+        k.unlock();
+      }
+    } catch (e) {
+      /* not allowed here; the leave prompt is still the net */
+    }
+  });
 
   frame.onerror = function () {
     // Rarely reached: a navigation that returns an error DOCUMENT fires load, not
