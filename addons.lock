@@ -8,7 +8,7 @@ dot-bot	v0.1.1
 dot-browser	v0.1.3
 dot-chat	v0.1.4
 dot-cloud	v0.1.11
-dot-combat	v0.1.7
+dot-combat	v0.1.8
 dot-console	v0.1.5
 dot-core	v0.1.13
 dot-economy	v0.1.4
@@ -57,9 +57,9 @@ dot-timer	v0.1.6
 dot-ui	v0.1.6
 dot-user	v0.1.4
 dot-user-avatar	v0.1.5
-dot-vehicle	v0.1.3
+dot-vehicle	v0.1.4
 dot-voice	v0.1.6
 dot-vote	v0.1.11
-dot-weapon	v0.1.5
+dot-weapon	v0.1.6
 zed-dot-weapons	v0.1.2
 zee-dot-weapons	v0.1.12
