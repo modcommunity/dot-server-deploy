@@ -1409,6 +1409,17 @@ if [ ! -f "$CONFIG_DIR/content.yml" ] && [ -f "$PROJECT/cfg.example/content.yml"
         && note "wrote $CONFIG_DIR/content.yml from the template: this server's settings per game"
 fi
 
+# cfg/maps.yml and cfg/games.yml (which maps and which games PLAY; the rest stay installed)
+# are newer than that, and copied the same way. The templates only comment out their examples,
+# so a copy changes nothing until an operator edits it.
+for rotation_file in maps.yml games.yml; do
+    if [ ! -f "$CONFIG_DIR/$rotation_file" ] && [ -f "$PROJECT/cfg.example/$rotation_file" ] \
+            && [ -d "$CONFIG_DIR" ] && { [ "$COMMAND" = "run" ] || [ "$COMMAND" = "check" ]; }; then
+        cat "$PROJECT/cfg.example/$rotation_file" > "$CONFIG_DIR/$rotation_file" \
+            && note "wrote $CONFIG_DIR/$rotation_file from the template: which ${rotation_file%.yml} play"
+    fi
+done
+
 # cfg/addons.yml (the extra packs an owner adds per game) is newer still, and copied the
 # same way: when it is missing, never over one that exists.
 if [ ! -f "$CONFIG_DIR/addons.yml" ] && [ -f "$PROJECT/cfg.example/addons.yml" ] \

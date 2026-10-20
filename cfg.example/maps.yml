@@ -1,0 +1,73 @@
+# WHICH MAPS A GAME PLAYS, over the maps that are merely installed.
+#
+# content.yml says what is installed (maps add/remove). This file says what is PLAYED. A map
+# that is installed but not in the active rotation stays loadable (`map <id>` from staff) and
+# shows in the map list as "not in rotation"; it is left out of the rotation, the map vote,
+# nominations, rock-the-vote and the next-map choice. That is how a server keeps forty maps
+# for testing and plays twelve.
+#
+# No file, or nothing set here, plays every map the game offers.
+#
+#   defaults:                    every game on this server
+#     rotation: main            which named list plays; `sv_map_rotation <name>` switches it
+#                               live (staff), `maps_rotations` lists them
+#     mode: random              random = a random map, not one of the last `cooldown`
+#                               cycle  = a fixed order, in the order written, wrapping
+#     cooldown: 5               maps back that random will not repeat (never more than half
+#                               the list)
+#     maps:                     the simplest form: one list, no names. It is a rotation
+#       - gamemann/g2gfast-maps/*   called main, with this level's mode and cooldown
+#   games:
+#     <game>:                  id (gamemann/game-g2gfast) or name half (game-g2gfast), as in
+#                              content.yml
+#       rotation: main
+#       rotations:             named lists; a game level may have `maps:` or `rotations:`
+#         main:                if both, a rotation called main here wins over `maps:` (and the
+#           mode: random       server logs a WARN once)
+#           maps:
+#             - surf_mesa      a bare name
+#             - surf_*         a name glob, matched against the INSTALLED maps only (nothing
+#                              is downloaded from this file). A glob starting with * must be
+#                              quoted: "*_v2", "*"
+#         cycle:
+#           mode: cycle
+#           maps: [bhop_a, bhop_b, bhop_c]
+#         testing:             new imports: installed, not played until you switch to this
+#           maps: [surf_new_1, surf_new_2]
+#
+# Every entry in a list takes content.yml's spellings, plus globs:
+#
+#   owner/map                 exactly that map
+#   surf_mesa                 a bare name (the installed map with that id)
+#   owner/collection/*        every installed map of that collection (a map repository)
+#   owner/*                   every installed map published by that owner
+#   surf_*  "*_v2"  "*"       name globs, matched against installed ids
+#
+# Patterns are expanded when the file is read and again on every map change, so a map
+# installed meanwhile that matches joins without a restart. In a cycle the order is the order
+# written, and each glob's matches are sorted by id. An id or pattern that matches nothing logs
+# a WARN and is skipped; a rotation that ends up empty WARNs and plays every installed map, so
+# an edit can never leave the server with nothing to play.
+#
+# Layers, weakest first: the game's own shipped list, this file's `defaults:`, this file's
+# `games: <game>`. A list replaces a list; mode, cooldown and rotation merge. This template
+# changes nothing until you uncomment something.
+#
+# Command names. A `commands:` block (in `defaults:` or under a game) renames the vote
+# commands. `prefix` goes in front of every name; `names` maps a role to a name, or to a list
+# whose first name is the one help shows and the rest are aliases:
+#
+#   defaults:
+#     commands:
+#       prefix: ""
+#       names:
+#         rtv: [rockthevote, rtv]
+#         maps: maplist
+#
+# A name that another command already has logs a WARN and is skipped, it never takes theirs.
+# The roles are dot-vote's (nominate, rtv, vote, timeleft, nextmap ...) and dot-map's (map,
+# maps, mapinfo, rotation, rotations).
+
+defaults:
+
+games:

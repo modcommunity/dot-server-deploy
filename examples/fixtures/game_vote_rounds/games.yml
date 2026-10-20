@@ -1,0 +1,4 @@
+# Every installed game is in the rotation, in a cycle-free random mode: the suite plays them all,
+# and this file is what proves the games.yml reader, the matcher and the ballot's filter run in a
+# real host against real content. A glob that starts with * is quoted: the YAML subset refuses it bare.
+games: ["*"]

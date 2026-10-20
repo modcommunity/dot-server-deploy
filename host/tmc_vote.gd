@@ -74,7 +74,8 @@ extends Node
 
 const CHANNEL := "tmc.vote"
 
-## What every console command of the server-level vote is called.
+## What every console command of the server-level vote is called, unless games.yml's
+## `commands:` block (`prefix`, `names`) says otherwise.
 ##
 ## See the class documentation: a game's own vote gets the bare names.
 const COMMAND_PREFIX := "game_"
@@ -103,6 +104,12 @@ var source: DotVoteGameSource = null
 var commands: DotVoteCommands = null
 var feed: DotVoteBallotFeed = null
 
+## Which games play (cfg/games.yml), or null: every installed game. See [TmcGameRotation].
+var rotation: TmcGameRotation = null
+
+## vote.yml's `end_vote`, before a cycle rotation turned it off.
+var _end_vote_base := true
+
 var server: DotServer = null
 
 ## How often the tree is searched for the loaded game's own vote directors. A game builds its
@@ -112,6 +119,34 @@ const RESCAN_SEC := 1.0
 
 ## The chained [member DotVoteDirector.busy_fn] set on a game's director, kept on it as meta.
 const CHAINED_META := &"tmc_game_vote_chained"
+
+## `sv_game_rotation [name]` and `games_rotations`: which games play, switched live.
+func _install_rotation_commands(p_server: DotServer) -> void:
+	p_server.console.command("games_rotations", func(ctx: DotCmdContext) -> void:
+		ctx.reply_lines(rotation.describe_lines()),
+		"List the game rotations in games.yml", "").with_chat()
+	p_server.console.command("sv_game_rotation", func(ctx: DotCmdContext) -> void:
+		if ctx.args.is_empty():
+			ctx.reply("Game rotation %s (of: %s)." % [rotation.active_name(), ", ".join(rotation.rotation_names())])
+			return
+		var switched := rotation.switch(ctx.args[0])
+		if not switched.ok:
+			ctx.reply_error(switched)
+			return
+		apply_rotation()
+		ctx.reply("Now playing game rotation %s." % ctx.args[0]),
+		"Show or switch the active game rotation", DotAdminFlags.CHANGEMAP)
+
+
+## Re-applies the rotation after a live switch: the ballot's exclusions and order, the
+## cooldown, and whether a game's end asks or moves on (a cycle moves on).
+func apply_rotation() -> void:
+	if rotation == null or director == null:
+		return
+	director.rules.end_vote = false if rotation.is_cycle() else _end_vote_base
+	director.rules.cooldown = rotation.cooldown(director.rules.cooldown)
+	_refresh_offer()
+
 
 ## The loaded game's own vote directors: its map, mode or layout vote. See [method game_directors].
 var _game_directors: Array[DotVoteDirector] = []
@@ -143,7 +178,8 @@ static func install(
 	host: Node,
 	p_server: DotServer,
 	rules: DotVoteRules,
-	excluded: PackedStringArray
+	excluded: PackedStringArray,
+	p_rotation: TmcGameRotation = null
 ) -> TmcVote:
 	if rules == null or not rules.enabled:
 		DotLog.info(CHANNEL, "voting for the next game is turned off", {})
@@ -167,6 +203,20 @@ static func install(
 
 	for id in excluded:
 		source.excluded.append(StringName(id))
+
+	# The rotation's exclusions count towards "is there anything to vote about": a rotation
+	# that leaves one game is a server with one game on offer.
+	var operator_excluded: Array[StringName] = source.excluded.duplicate()
+	var base_end_vote := rules.end_vote
+	var plan := {"excluded": [] as Array[StringName], "order": [] as Array[StringName], "fell_back": false}
+	if p_rotation != null:
+		plan = p_rotation.resolve(p_server.games.games)
+		for id: StringName in plan["excluded"]:
+			if not source.excluded.has(id):
+				source.excluded.append(id)
+		if p_rotation.is_cycle():
+			rules.end_vote = false
+		rules.cooldown = p_rotation.cooldown(rules.cooldown)
 
 	var offered := votable_count(source, p_server.games)
 
@@ -197,7 +247,9 @@ static func install(
 	# host holds, so it needs no global name at all.
 	votes.director.register_service = false
 
-	votes._operator_excluded = source.excluded.duplicate()
+	votes._operator_excluded = operator_excluded
+	votes.rotation = p_rotation
+	votes._end_vote_base = base_end_vote
 	votes._refresh_offer()
 	votes._wire()
 
@@ -207,7 +259,14 @@ static func install(
 	votes.commands = DotVoteCommands.new()
 	votes.commands.director = votes.director
 	votes.commands.prefix = COMMAND_PREFIX
-	votes.commands.names = COMMAND_NAMES
+	votes.commands.names = COMMAND_NAMES.duplicate()
+	# games.yml's `commands:` block, laid over the defaults above by bind(): the operator's
+	# names win, aliases register beside them, and a name another command has is skipped
+	# with a WARN rather than taken.
+	if p_rotation != null:
+		votes.commands.spec_fn = p_rotation.commands
+	if p_server.config != null and not p_server.config.chat_command_prefixes.is_empty():
+		votes.commands.chat_prefix = p_server.config.chat_command_prefixes[0]
 	# The server's vote is over GAMES, and the map menu (M) is the game's own director's: a
 	# second `mapmenu` here would offer the game list as maps. By name, because a dot-vote
 	# older than API 5 has no such property.
@@ -226,8 +285,11 @@ static func install(
 
 	votes.feed = DotVoteBallotFeed.of(votes.director, votes._send_ballot)
 	votes.feed.title = BALLOT_TITLE
-	votes.feed.command = COMMAND_PREFIX + COMMAND_NAMES["vote"]
+	votes.feed.command = votes.commands.command_name("vote")
 	votes.feed.people_fn = votes._person
+
+	if p_rotation != null and p_rotation.has_rotations():
+		votes._install_rotation_commands(p_server)
 
 	p_server.games.game_loaded.connect(votes._on_game_loaded)
 	p_server.client_disconnected.connect(votes._on_client_left)
@@ -355,8 +417,9 @@ func _on_countdown_tick(seconds_left: int, runoff: bool) -> void:
 ## The ballot is open: the line becomes how to vote, and the ballot's own time.
 func _on_vote_opened(options: Array, seconds: float) -> void:
 	_show_line(
-		"Vote for the next game: !%s%s 1-%d" % [
-			COMMAND_PREFIX, COMMAND_NAMES["vote"], options.size()
+		"Vote for the next game: %s 1-%d" % [
+			commands.typed("vote") if commands != null else "!" + COMMAND_PREFIX + COMMAND_NAMES["vote"],
+			options.size(),
 		],
 		seconds
 	)
@@ -548,6 +611,12 @@ func _on_game_loaded(_content_key: String) -> void:
 ## running game's own modes are its own vote's to choose.
 func _refresh_offer() -> void:
 	var excluded: Array[StringName] = _operator_excluded.duplicate()
+	if rotation != null:
+		var plan := rotation.resolve(server.games.games)
+		for id: StringName in plan["excluded"]:
+			if not excluded.has(id):
+				excluded.append(id)
+		source.order = plan["order"]
 	var current := server.games.current() if server != null and server.games != null else null
 	var running := current.content_id if current != null else ""
 	var seen := {}

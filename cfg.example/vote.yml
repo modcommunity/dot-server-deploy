@@ -42,6 +42,7 @@ enabled: true
 # content/ are games a player would choose" is a question about this deployment.
 #
 # Games named here are never on a ballot. Empty offers every installed game.
+# games.yml can instead list the games to play (named rotations); this still applies on top.
 vote_exclude: []
 
 # --- When a vote happens --------------------------------------------------

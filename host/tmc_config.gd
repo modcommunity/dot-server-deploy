@@ -854,7 +854,7 @@ func _apply_settings(file: String, tree: Dictionary) -> DotResult:
 		var value: Variant = tree[key]
 
 		if value is Dictionary or value is Array and name not in [
-			"sv_tags", "rcon_allowed"
+			"sv_tags", "rcon_allowed", "chat_command_prefixes"
 		]:
 			# A nested block in a flat file. Reported rather than flattened: a reader that
 			# invented a dotted name for it would invent a different one from the writer.
@@ -965,6 +965,16 @@ func _apply_settings(file: String, tree: Dictionary) -> DotResult:
 
 		if name == "sv_tags":
 			server.tags = _string_list(value)
+			continue
+
+		if name == "chat_command_prefixes":
+			# The characters a chat line starts with to run a command. The FIRST is the one
+			# help text and the game vote's ballot line tell players to type.
+			var prefixes := _string_list(value)
+			if prefixes.is_empty():
+				unknown.append("%s: chat_command_prefixes needs at least one prefix" % file)
+			else:
+				server.chat_command_prefixes = prefixes
 			continue
 
 		if name == "log_router":

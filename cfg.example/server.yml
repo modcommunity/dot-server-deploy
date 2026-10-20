@@ -8,6 +8,11 @@
 sv_name: "TMC Test Server"
 sv_maxplayers: 64
 
+# The characters that make a chat line a command: `!rtv`, `/rtv`. The FIRST one is what help
+# and the game vote's ballot line tell players to type, so list yours first. maps.yml and
+# games.yml can rename the vote commands (a `commands:` block with `prefix` and `names`).
+#chat_command_prefixes: ["!", "/"]
+
 # How long to hold the slot of a player whose browser tab went into the background.
 #
 # A BROWSER STOPS DRIVING THE GAME'S MAIN LOOP FOR A HIDDEN TAB. It stops calling

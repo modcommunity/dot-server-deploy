@@ -18,6 +18,10 @@ A loaded game may run its own map vote, and its module registers `rtv`, `nominat
 - **A game's time limit lives in its own `game.yml`**, under `metadata: vote: time_limit_sec:`, not in a second table of game ids here. `metadata: map_vote:` rides with it and is the layer the game's own map vote reads between its code defaults and `user://cfg/<game>_vote.json`. The three keys this host sets (`kind`, `module`, `directory`) win over the block.
 - **`begin_on_apply` is off.** Otherwise the director announces a change it made and the host announces the same change through `game_loaded`: two notifications, two history entries, every cooldown half as long. The host's signal is the right one because it also fires for an operator's manual `changelevel`. `examples/multigame.tscn` fails if it is flipped.
 
+## games.yml decides which games are voted on and played
+
+`cfg/games.yml` picks the games a server plays out of the ones installed in `content/`: named rotations, `mode: random|cycle`, `cooldown`, `sv_game_rotation <name>` to switch, `games_rotations` to list. It uses dot-core's `DotRotationSpec`, the same matcher as dot-map's `maps.yml`, so entries and layering read the same. A game outside the active rotation stays installed (an admin can still `changelevel` to it) and is left out of the ballot, `!game_nominate`, `!game_next`, the pick `!game_rtv` and the end of a game make, and the content/-order fallback. `vote_exclude` still applies on top. A `cycle` turns the end-of-game ballot off and plays the written order. No file offers every installed game. Its `commands:` block renames the `game_` prefix and the command names (with aliases); the constants in `host/tmc_vote.gd` are only the defaults. Collisions log a WARN and skip the name.
+
 ## One game on offer is no game vote
 
 `TmcVote.install` returns null (no `!game_*` commands, no clock, no ballot) when fewer than two games are on offer after `vote_exclude`, and the game's own map vote is then the only vote.

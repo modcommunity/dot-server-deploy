@@ -17,7 +17,7 @@ const CFG := "res://examples/fixtures"
 ## A loaded game with rounds and no match the game vote can find. See the section that uses it.
 const RoundsWithoutMatch := preload("res://examples/fixtures/rounds_without_match.gd")
 
-const CHECKS := 333
+const CHECKS := 354
 
 var _passed := 0
 var _failed := 0
@@ -50,6 +50,7 @@ func _run() -> void:
 	_test_vote_layers_reach_a_ballot()
 	_test_vote_rounds_without_a_match()
 	_test_vote_limit_waits_for_a_change()
+	_test_game_rotation()
 	_test_vote_notices()
 	_test_auth()
 	_test_logging()
@@ -1840,6 +1841,170 @@ func _test_vote_rounds_without_a_match() -> void:
 ## Forced rather than waited for: the change is declared under way by hand, nobody is on the
 ## server, and the clock is run well past its limit. Without TmcVote's hold the director
 ## draws a game at random and announces a second change.
+## A vote over five stand-in games, with `games.yml` given as a tree. [member TmcVote.server] only
+## needs `games`, so a bare server with a manager stands in for the host.
+func _rotation_votes(tree: Dictionary, excluded: Array = [], running: String = "") -> TmcVote:
+	var manager := DotGameManager.new()
+	for id in ["arena", "surf", "bhop", "maze", "deathrun"]:
+		var d := DotGameDescriptor.new()
+		d.game_id = id
+		d.content_id = "tmc/" + id
+		d.display_name = id
+		manager.games.append(d)
+	var server := DotServer.new()
+	server.games = manager
+	var rules := DotVoteRules.new()
+	rules.enabled = true
+	rules.duration_sec = 10.0
+	rules.empty_choice = DotVoteRules.EmptyChoice.RANDOM
+	var rotation := TmcGameRotation.from_tree(tree)
+	var votes := TmcVote.new()
+	votes.name = "RotVotes"
+	votes.server = server
+	votes.source = DotVoteGameSource.of(manager)
+	for id in excluded:
+		votes.source.excluded.append(StringName(id))
+	votes._operator_excluded = votes.source.excluded.duplicate()
+	votes.rotation = rotation
+	votes._end_vote_base = rules.end_vote
+	votes._refresh_offer()
+	votes.director = DotVoteDirector.new()
+	votes.director.name = "Director"
+	votes.director.rules = rules
+	votes.director.source = votes.source
+	votes.director.register_service = false
+	votes.director.begin_on_apply = false
+	votes.director.auto_apply = false
+	votes.director.player_count_fn = func() -> int: return 0
+	votes.director.busy_fn = func() -> bool: return false
+	votes.set_physics_process(false)
+	add_child(votes)
+	votes.add_child(votes.director)
+	votes.director.begin(StringName(running if running != "" else "arena"))
+	return votes
+
+
+func _ids(choices: Array) -> Array:
+	var out := []
+	for c in choices:
+		out.append(String(c.id))
+	return out
+
+
+func _test_game_rotation() -> void:
+	_section("games.yml decides which games are voted on and played")
+
+	var tree := {"rotation": "small", "rotations": {
+		"small": {"mode": "random", "games": ["arena", "surf", "bhop"]},
+		"loop": {"mode": "cycle", "games": ["bhop", "arena", "surf"]},
+	}}
+	var votes := _rotation_votes(tree)
+	var director := votes.director
+
+	# The ballot and the offer: maze and deathrun are installed, and on no ballot.
+	var offered := _ids(votes.source.choices())
+	_check(not offered.has("maze") and not offered.has("deathrun") and offered.has("surf"),
+		"the ballot's pool is the rotation's games (%s)" % [offered])
+
+	var options := _ids(director.build_options(0))
+	_check(not options.has("maze") and not options.has("deathrun") and not options.is_empty(),
+		"a ballot built now carries only listed games (%s)" % [options])
+
+	# Nominations.
+	_check(not director.nominate(&"p1", &"maze").ok, "!game_nominate refuses an installed game that is not listed")
+	_check(director.nominate(&"p1", &"surf").ok, "and takes a listed one")
+	_check(not director.nominatable_ids().has(&"deathrun"), "the nomination list leaves unlisted games out")
+
+	# Next game: !game_next (set_next) and the rotation fallback used by rtv and the time limit.
+	_check(not director.set_next(&"maze").ok, "game_next refuses an unlisted game")
+	var seen := {}
+	for i in 30:
+		seen[String(director.next_in_rotation())] = true
+		director.history.note_played(StringName("bhop"))
+	_check(not seen.has("maze") and not seen.has("deathrun"),
+		"rtv and the end-of-game draw never land on an unlisted game (%s)" % [seen.keys()])
+	votes.free()
+
+	# Written order under a cycle, and the vote ends the game by the order alone.
+	var cyc := TmcGameRotation.from_tree(tree)
+	_check(cyc.switch("loop").ok and cyc.is_cycle(), "sv_game_rotation can switch to the cycle")
+	votes = _rotation_votes(tree)
+	votes.rotation.switch("loop")
+	votes.apply_rotation()
+	_check(votes.director.rules.end_vote == false, "a cycle turns the end-of-game ballot off")
+	_check(_ids(votes.source.choices()).slice(0, 3) == ["bhop", "arena", "surf"],
+		"and the offer is in the written order (%s)" % [_ids(votes.source.choices())])
+	votes.rotation.switch("small")
+	votes.apply_rotation()
+	_check(votes.director.rules.end_vote == votes._end_vote_base, "leaving the cycle restores the ballot")
+	votes.free()
+
+	# vote_exclude still works with a rotation: both sets are off the ballot.
+	votes = _rotation_votes(tree, ["surf"])
+	var both := _ids(votes.source.choices())
+	_check(not both.has("surf") and not both.has("maze") and both.has("arena"),
+		"vote_exclude and the rotation both apply (%s)" % [both])
+	votes.free()
+
+	# No file: content order, every game.
+	votes = _rotation_votes({})
+	_check(_ids(votes.source.choices()).size() == 5, "with no games.yml every installed game is offered")
+	votes.free()
+
+	# A rotation matching nothing plays everything, and an unknown entry is only a WARN.
+	votes = _rotation_votes({"games": ["nothing_like_it", "arena", "surf"]})
+	var some := _ids(votes.source.choices())
+	_check(some.has("arena") and some.has("surf") and not some.has("bhop"),
+		"an entry matching no game is skipped and the rest still play (%s)" % [some])
+	votes.free()
+	votes = _rotation_votes({"games": ["nothing_like_it"]})
+	_check(_ids(votes.source.choices()).size() == 5, "a rotation with no match plays every game")
+	votes.free()
+
+	# games.yml's `commands:` block: the constants are only the defaults.
+	var named := TmcGameRotation.from_tree({"commands": {
+		"prefix": "g_", "names": {"rtv": ["rockthevote", "rock"], "vote": "pick", "timeleft": "BAD NAME"},
+	}})
+	_check(named.warnings.size() == 1, "a name that cannot be typed is dropped with one warning (%s)" % [named.warnings])
+	var console := DotConsole.new()
+	add_child(console)
+	console.command("g_rock", func(_c: DotCmdContext) -> void: pass, "someone else's", "")
+	votes = _rotation_votes(tree)
+	var cmds := DotVoteCommands.new()
+	cmds.director = votes.director
+	cmds.prefix = TmcVote.COMMAND_PREFIX
+	cmds.names = TmcVote.COMMAND_NAMES.duplicate()
+	cmds.spec_fn = named.commands
+	cmds.chat_prefix = "/"
+	cmds.with_map_menu = false
+	cmds.bind(console)
+	_check(console.find_command("g_rockthevote") != null and console.find_command("g_pick") != null
+			and console.find_command("g_vote") == null and console.find_command("game_rtv") == null,
+		"games.yml renames the game vote's prefix and commands")
+	_check(cmds.skipped.has("g_rock") and cmds.registered.has("g_rockthevote"),
+		"an alias that another command holds is skipped, the name beside it registers (%s)" % [cmds.skipped])
+	_check(cmds.typed("vote") == "/g_pick" and cmds.command_name("nextmap") == "g_next",
+		"the hint reads the renamed command behind the first chat prefix, and untouched roles keep the defaults (%s)" % cmds.typed("vote"))
+	var plain := DotVoteCommands.new()
+	plain.prefix = TmcVote.COMMAND_PREFIX
+	plain.names = TmcVote.COMMAND_NAMES.duplicate()
+	plain.spec_fn = TmcGameRotation.from_tree({}).commands
+	_check(plain.command_name("rtv") == "game_rtv" and plain.command_name("vote") == "game_vote",
+		"with no commands block the old names stand")
+	console.free()
+	votes.free()
+
+	# Patterns, the same matcher as maps.yml.
+	votes = _rotation_votes({"games": ["tmc/a*", "deathrun"]})
+	var globbed := _ids(votes.source.choices())
+	_check(globbed.has("arena") and globbed.has("deathrun") and globbed.size() == 2,
+		"globs and bare names pick games (%s)" % [globbed])
+	votes.free()
+
+	_done()
+
+
+
 func _test_vote_limit_waits_for_a_change() -> void:
 	_section("the game vote's limit waits for a change under way")
 

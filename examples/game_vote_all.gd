@@ -126,10 +126,10 @@ func _save_shot(shot_name: String) -> void:
 		_shots.append(path)
 
 
-## Every check this suite runs: booting (3), each game, the way back to the first (3), the
+## Every check this suite runs: booting (4), each game, the way back to the first (3), the
 ## RPC watch and the two totals.
 func _expected_checks() -> int:
-	return 3 + PER_GAME * _order.size() + 3 + 3
+	return 4 + PER_GAME * _order.size() + 3 + 3
 
 
 func _ready() -> void:
@@ -358,11 +358,16 @@ func _boot() -> bool:
 	var started: DotResult = await _host.start(CONFIG, CONTENT, DATA)
 
 	if not _check(started.ok, "the host boots", str(started.error)):
-		_skip(2, "the host did not boot")
+		_skip(3, "the host did not boot")
 		_done()
 		return false
 
 	_check(_director() != null, "with the game vote installed", "vote.yml is off")
+
+	var rot: Variant = _votes().rotation if _votes() != null else null
+	_check(rot != null and rot.has_rotations() and rot.plays(_host.server.games.games).size() > 1,
+		"and games.yml's rotation reaches it, naming the installed games",
+		"fixture games.yml is missing or matched nothing")
 
 	_shell = (load(SHELL) as PackedScene).instantiate()
 	_shell.name = "Shell"

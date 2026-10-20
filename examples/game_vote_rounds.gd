@@ -79,9 +79,9 @@ const PROTECT := ["buses"]
 ## Checks per game section, whichever branch it takes, besides its [constant RULES] check.
 const PER_GAME := 10
 
-## Every check this suite runs: booting (3), each game and its rules, the way back (2), the RPC
+## Every check this suite runs: booting (4), each game and its rules, the way back (2), the RPC
 ## watch and the two totals.
-const CHECKS := 3 + PER_GAME * 4 + 1 + 2 + 3
+const CHECKS := 4 + PER_GAME * 4 + 1 + 2 + 3
 
 ## dot-match's `State.LIVE`: the round is being played.
 const LIVE := DotMatch.State.LIVE
@@ -363,7 +363,7 @@ func _boot() -> bool:
 	var started: DotResult = await _host.start(CONFIG, CONTENT, DATA)
 
 	if not _check(started.ok, "the host boots", str(started.error)):
-		_skip(2, "the host did not boot")
+		_skip(3, "the host did not boot")
 		_done()
 		return false
 
@@ -373,6 +373,11 @@ func _boot() -> bool:
 		"with the game vote on finish_round, applied at the end of time",
 		"time_up %d, apply %d" % [_director().rules.time_up, _director().rules.apply] if _director() != null else "no game vote"
 	)
+
+	var rot: Variant = _votes().rotation if _votes() != null else null
+	_check(rot != null and rot.has_rotations() and rot.plays(_host.server.games.games).size() > 1,
+		"and games.yml's rotation reaches it, naming the installed games",
+		"fixture games.yml is missing or matched nothing")
 
 	_shell = (load(SHELL) as PackedScene).instantiate()
 	_shell.name = "Shell"

@@ -870,7 +870,15 @@ func _boot() -> bool:
 	# After the first game is loaded, because the director has to be told what is
 	# running — a vote system that starts on no game at all has no clock, nothing on
 	# cooldown, and offers the game everybody is playing on its own first ballot.
-	votes = TmcVote.install(self, server, config.vote, config.vote_exclude)
+	# games.yml: which installed games play. No file is every game; an unreadable one is an
+	# ERROR and plays every game too, because a vote that cannot start is worse.
+	var rotation_read := TmcGameRotation.load_file("%s/%s" % [_config_dir, TmcGameRotation.FILE])
+	if not rotation_read.ok:
+		DotLog.error(CHANNEL, "games.yml could not be read; every installed game plays", {
+			"why": str(rotation_read.error),
+		})
+	var games_rotation: TmcGameRotation = rotation_read.value if rotation_read.ok else null
+	votes = TmcVote.install(self, server, config.vote, config.vote_exclude, games_rotation)
 
 	# [b]After the listing, because the listing is where the backbone client is.[/b] A
 	# party is reported over the same integration credential the listing uses, and a
@@ -1736,10 +1744,10 @@ func _announce() -> void:
 	print("  games   : %s" % ", ".join(content.ids()))
 	print("  voting  : %s" % (
 		"off" if votes == null
-		else "%s, %s per game, !%srtv at %d%%" % [
+		else "%s, %s per game, %s at %d%%" % [
 			votes.rules_summary(),
 			votes.director.clock.formatted_remaining(),
-			TmcVote.COMMAND_PREFIX,
+			votes.commands.typed("rtv"),
 			int(config.vote.rtv_fraction * 100.0),
 		]
 	))
