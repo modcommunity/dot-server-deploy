@@ -38,7 +38,7 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first; this file is what is specifi
 | `addons/`, `addons.lock` | linked addons (`addons/.repos/` holds clones) and the tag each is locked to |
 | `games/` | game repositories (links on a developer box), `.gdignore`d |
 | `dist/`, `data/`, `keys/` | published packs, runtime state, the signing key (all gitignored) |
-| `web/` | `README.md` (publishing), `embed.html`, `tmc-loader.js`, `shell-build` (tracked) |
+| `web/` | `README.md` (publishing), `embed.html`, `tmc-loader.js`, `shell-build` and `shell-build.inputs` (tracked, written by the pin) |
 | `deploy/` | `pterodactyl-egg.json`, TLS and nginx scripts, systemd, S3 publish |
 | `games.list` | every game and maps pack `setup.sh` publishes, `<repository> <content directory>` |
 | `setup.sh`, `setup.ps1`, `Dockerfile`, `demo.sh`, `play.sh`, `upgrade.sh` | installers and front doors |
@@ -105,11 +105,12 @@ Exit codes: `2` usage, `3` no runtime, `4` no project (`install-games`: addons b
 **Releases and shells**
 
 - Addon release: tag → site publishes the pack → `tools/addons-lock.sh write`, push → restart. Push the lock only after the packs are on the origin. [releases](docs/releases.md#the-release-orders)
-- Game release: tag the addons → lock here → release this repo → tag the game. [releases](docs/releases.md#the-release-orders)
+- Game release: tag the addons → lock here and push → the web-shell workflow's tag → tag the game. [releases](docs/releases.md#the-release-orders)
+- **The shell is built by CI** (`.github/workflows/web-shell.yml`): a push changing a shell input exports, uploads, pins `web/shell-build` (+ `web/shell-build.inputs`) and tags. Never tag a lock bump by hand: `release.yml` refuses a tag whose pinned shell is not its own, dot-ci's server-compat skips it, and `./server` will not update onto it. `tools/publish-web-shell.sh` is the manual fallback. [releases](docs/releases.md#publishing-the-web-build)
 - A new shell is needed for the engine, the boot stage, `client/` code, a signon change, or addon files outside `addons/<dir>/`. [releases](docs/releases.md#what-needs-a-new-shell)
 - `tools/addons-lock.sh check` before any export; check against the tags, not the sibling checkouts. [releases](docs/releases.md#addonslock)
 - `setup.sh` moves only its own clones to the lock, never a developer's checkout. [releases](docs/releases.md#addonslock)
-- `web/shell-build` must name a build that is uploaded and registered, or players get the shared build. [releases](docs/releases.md#webshell-build-and-sv_web_build)
+- `web/shell-build` must name a build that is uploaded; the site registers it itself (`web-build-register`) when a server reports it. [releases](docs/releases.md#webshell-build-and-sv_web_build)
 - `export-web` publishes nothing; check the deployed bytes before believing a client conclusion. Content before build. [releases](docs/releases.md#publishing-the-web-build)
 - Native launch arguments come after a bare `--`; Godot silently ignores what it does not know. [native](docs/native-client.md#the-launch-arguments-need-the-bare---)
 

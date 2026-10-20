@@ -1,0 +1,161 @@
+# Exports, uploads and pins the web shell whenever what it is built from changes, then
+# releases the pin as the next tag. Nobody exports, uploads, pins or registers a shell by
+# hand any more; tools/publish-web-shell.sh is the fallback (docs/releases.md,
+# "Publishing the web build").
+#
+# Game packs carry no addons, so a game runs on the addon code compiled into the shell
+# its server pins. A lock bump released without a new shell made every game built on it
+# "needs dot-combat API level 5 or newer; this client has level 4" at Play (2026-10-20).
+#
+# [b]No loops.[/b] The job first compares tools/shell-inputs.sh's fingerprint of main with
+# web/shell-build.inputs and does nothing when they agree. The pin commit changes only
+# web/shell-build and its record, neither of which is an input, and it is pushed with the
+# workflow's own token, which starts no workflow run. The tag is released by dispatching
+# release.yml, the one event that token may start.
+#
+# [b]main, not the pushed commit.[/b] Runs queue one deep (concurrency below), so the run
+# that gets to go builds whatever main is by then, and a run whose push was overtaken
+# finds the record already matching and stops.
+name: Web shell
+
+on:
+    push:
+        branches: [main]
+        # A copy of tools/shell-inputs.sh's INPUT_PATHS plus the engine pin and this
+        # machinery. It only decides when to look; the job compares the fingerprint.
+        paths:
+            - addons.lock
+            - 'client/**'
+            - project.godot
+            - export_presets.example.cfg
+            - web/embed.html
+            - tools/fetch-godot.sh
+            - tools/shell-inputs.sh
+            - .github/workflows/web-shell.yml
+    workflow_dispatch:
+        inputs:
+            force:
+                description: Export and pin even when the record matches (a broken upload, a new backbone URL).
+                type: boolean
+                default: false
+
+concurrency:
+    group: web-shell
+    cancel-in-progress: false
+
+permissions:
+    contents: write # the pin commit and the tag
+    actions: write # dispatching release.yml on the tag
+
+jobs:
+    shell:
+        runs-on: ubuntu-latest
+        timeout-minutes: 75
+        env:
+            WEB_SHELL_APP: ${{ vars.WEB_SHELL_APP || 'godot' }}
+            WEB_SHELL_ORIGIN: ${{ vars.WEB_SHELL_ORIGIN }}
+            WEB_SHELL_BACKBONE_URL: ${{ vars.WEB_SHELL_BACKBONE_URL }}
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  ref: ${{ github.event.repository.default_branch }}
+                  # Every tag, so the next v0.1.x is computed from all of them.
+                  fetch-depth: 0
+
+            - name: Is the pinned shell this tree's?
+              id: need
+              env:
+                  FORCE: ${{ inputs.force }}
+              run: |
+                  set -uo pipefail
+                  tools/shell-inputs.sh check; rc=$?
+                  if [ "$rc" = 0 ] && [ "$FORCE" != "true" ]; then
+                      echo "web/shell-build ($(cat web/shell-build)) was exported from this tree; nothing to do."
+                      echo "build=false" >> "$GITHUB_OUTPUT"
+                      exit 0
+                  fi
+                  [ "$rc" -le 2 ] || exit "$rc"
+                  echo "build=true" >> "$GITHUB_OUTPUT"
+
+            - name: Settings this needs
+              if: steps.need.outputs.build == 'true'
+              env:
+                  S3_KEY_SET: ${{ secrets.GAMES_S3_ACCESS_KEY != '' && secrets.GAMES_S3_ACCESS_SECRET != '' && secrets.GAMES_S3_BUCKET != '' }}
+              run: |
+                  missing=()
+                  [ "$S3_KEY_SET" = true ] || missing+=("secrets GAMES_S3_ACCESS_KEY, GAMES_S3_ACCESS_SECRET, GAMES_S3_BUCKET")
+                  [ -n "$WEB_SHELL_BACKBONE_URL" ] || missing+=("variable WEB_SHELL_BACKBONE_URL (client/auth.json's backbone_url)")
+                  [ -n "$WEB_SHELL_ORIGIN" ] || missing+=("variable WEB_SHELL_ORIGIN (the content origin, e.g. https://cdn.example.net)")
+                  if [ "${#missing[@]}" -gt 0 ]; then
+                      printf 'missing repository settings:\n'; printf '  %s\n' "${missing[@]}"
+                      exit 1
+                  fi
+
+            - name: Install what the runtime and the zip need
+              if: steps.need.outputs.build == 'true'
+              run: |
+                  sudo apt-get update -qq
+                  sudo apt-get install -y -qq --no-install-recommends \
+                      libfontconfig1 libx11-6 libxcursor1 libxinerama1 libxrandr2 libxi6 zip unzip brotli
+
+            # The templates are pinned with digests in tools/; the cache only saves the
+            # download (about 1 GB), the script still verifies what it finds.
+            - name: Cache the export templates
+              if: steps.need.outputs.build == 'true'
+              uses: actions/cache@v4
+              with:
+                  path: |
+                      ~/.local/share/godot/export_templates
+                  key: godot-templates-${{ hashFiles('tools/fetch-godot.sh', 'tools/fetch-export-templates.sh') }}
+
+            # The addons at the lock, fresh clones (setup.sh moves only its own clones,
+            # and these are all its own). --no-games: the shell ships no game.
+            - name: Set up at the lock
+              if: steps.need.outputs.build == 'true'
+              env:
+                  DEPS_TOKEN: ${{ secrets.DOT_DEPS_TOKEN }}
+                  GIT_TERMINAL_PROMPT: '0'
+              run: |
+                  set -euo pipefail
+                  if [ -n "$DEPS_TOKEN" ]; then
+                      git config --global url."https://x-access-token:${DEPS_TOKEN}@github.com/".insteadOf "https://github.com/"
+                  fi
+                  ./setup.sh --no-games
+                  # Only for the clones: the push below uses the checkout's own token.
+                  git config --global --unset-all url."https://x-access-token:${DEPS_TOKEN}@github.com/".insteadOf 2>/dev/null || true
+                  tools/addons-lock.sh check
+
+            - name: Export
+              if: steps.need.outputs.build == 'true'
+              run: |
+                  set -euo pipefail
+                  # A deployment's answer, untracked; the same line demo.sh writes.
+                  printf '{\n  "backbone_url": "%s"\n}\n' "$WEB_SHELL_BACKBONE_URL" > client/auth.json
+                  ./server export-web --zip
+                  cat web/build/shell-inputs.txt
+
+            - name: Upload, pin and tag
+              if: steps.need.outputs.build == 'true'
+              id: pin
+              env:
+                  GAMES_S3_ACCESS_KEY: ${{ secrets.GAMES_S3_ACCESS_KEY }}
+                  GAMES_S3_ACCESS_SECRET: ${{ secrets.GAMES_S3_ACCESS_SECRET }}
+                  GAMES_S3_BUCKET: ${{ secrets.GAMES_S3_BUCKET }}
+                  GAMES_S3_REGION: ${{ secrets.GAMES_S3_REGION }}
+              run: |
+                  set -euo pipefail
+                  git config user.name "github-actions[bot]"
+                  git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+                  tools/publish-web-shell.sh --zip web/build.zip --pin \
+                      --app "$WEB_SHELL_APP" --origin "$WEB_SHELL_ORIGIN" \
+                      --notes "Exported by the web-shell workflow, run ${{ github.run_id }}, from $(git rev-parse --short HEAD)"
+                  tag="$(git describe --tags --exact-match HEAD)"
+                  echo "tag=$tag" >> "$GITHUB_OUTPUT"
+                  echo "### Web shell $(cat web/shell-build), released as $tag" >> "$GITHUB_STEP_SUMMARY"
+
+            - name: Release the tag
+              if: steps.need.outputs.build == 'true'
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  TAG: ${{ steps.pin.outputs.tag }}
+              run: gh workflow run release.yml --repo "$GITHUB_REPOSITORY" --ref "$TAG"

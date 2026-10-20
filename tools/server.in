@@ -1199,6 +1199,28 @@ case "$COMMAND" in
         # index.js. An unset base is written anyway and refuses to start with a
         # message naming this flag, which beats a game that fails silently.
         stamp_loader
+
+        # [b]What this build was exported from[/b], inside the build, so it travels with
+        # the zip to the bucket. tools/publish-web-shell.sh refuses to pin a build whose
+        # record does not match the checkout it pins in (a lock pulled between the export
+        # and the pin was the way to pin a shell built from the previous lock), and the
+        # release workflow compares the uploaded copy with the tag. tools/shell-inputs.sh.
+        if [ -x "$PROJECT/tools/shell-inputs.sh" ]; then
+            # Not fatal: a tarball has no git to list the inputs with, and its build can
+            # still be served by hand. It just cannot be pinned.
+            "$PROJECT/tools/shell-inputs.sh" print > "$PROJECT/web/build/shell-inputs.txt" \
+                || { rm -f "$PROJECT/web/build/shell-inputs.txt"
+                     warn "no shell-inputs.txt in this build, so tools/publish-web-shell.sh will not pin it"; }
+            # The lock is only half of it: on a developer box addons/ links sibling
+            # checkouts, usually ahead of their tags, and a shell exported from those is
+            # not the shell the lock names (a pin of 2026-10-20 carried three addons
+            # ahead of the lock). The pin refuses a build marked off-lock.
+            if [ -f "$PROJECT/web/build/shell-inputs.txt" ] \
+                    && ! "$PROJECT/tools/addons-lock.sh" check >/dev/null 2>&1; then
+                printf 'addons\toff-lock\n' >> "$PROJECT/web/build/shell-inputs.txt"
+                warn "the linked addons are not at addons.lock (tools/addons-lock.sh check), so this build will not be pinned"
+            fi
+        fi
         printf '  wrote %s\n' "$PROJECT/web/build"
 
         # [b]The archive the site's publisher takes, because a directory is not one.[/b]
@@ -1377,7 +1399,24 @@ lock_moved() {
     # web/shell-build too: it is what this server reports as sv_web_build, so a new shell
     # pinned on the branch without a lock bump used to reach no box until a reinstall,
     # and its players stayed on the previous shell.
-    ! git -C "$PROJECT" diff --quiet HEAD "origin/$branch" -- addons.lock web/shell-build 2>/dev/null
+    git -C "$PROJECT" diff --quiet HEAD "origin/$branch" -- addons.lock web/shell-build 2>/dev/null \
+        && return 1
+
+    # [b]Not onto a lock whose shell is not pinned yet.[/b] A lock is pushed first and the
+    # web-shell workflow exports, uploads and pins its shell some minutes later. A box
+    # that moved in between would serve the new addons to players framed in the old
+    # shell, and a game built on the new addons would be refused at Play. The record's
+    # `lock` line is sha256 of the lock the pinned shell was exported from
+    # (tools/shell-inputs.sh). A branch with no record predates this and is followed.
+    local record lock_sum
+    command -v sha256sum >/dev/null 2>&1 || return 0
+    record="$(git -C "$PROJECT" show "origin/$branch:web/shell-build.inputs" 2>/dev/null)" || return 0
+    lock_sum="$(git -C "$PROJECT" show "origin/$branch:addons.lock" 2>/dev/null | sha256sum | cut -d' ' -f1)"
+    if ! printf '%s\n' "$record" | grep -qxF "lock	$lock_sum"; then
+        note "the addon lock on this checkout's branch has moved, but its web shell is not pinned yet; staying on this one until it is"
+        return 1
+    fi
+    return 0
 }
 
 case "$AUTO_UPDATE" in

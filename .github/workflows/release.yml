@@ -14,8 +14,48 @@ name: Release
 on:
     push:
         tags: ['v*']
+    # The web-shell workflow tags with its own token, which starts no run, so it
+    # dispatches this on the tag instead (`gh workflow run release.yml --ref vX.Y.Z`).
+    workflow_dispatch:
 
 jobs:
+    # [b]No release whose pinned shell is not this tag's.[/b] Game packs carry no addons
+    # and run on the addon code compiled into the shell, so a tag whose addons.lock moved
+    # past the shell in web/shell-build is a release no game built on the new lock can be
+    # played on (2026-10-20). web/shell-build.inputs is the fingerprint the pinned build
+    # was exported from (tools/shell-inputs.sh); here it has to match the tag's tree, and,
+    # when WEB_SHELL_ORIGIN is set, the copy the build itself carries on the origin. A tag
+    # pushed by hand after a lock bump fails here, and dot-ci's server-compat skips it.
+    shell-pin:
+        runs-on: ubuntu-latest
+        timeout-minutes: 5
+        steps:
+            - uses: actions/checkout@v4
+            - name: The pinned shell was exported from this tag
+              env:
+                  ORIGIN: ${{ vars.WEB_SHELL_ORIGIN }}
+                  APP: ${{ vars.WEB_SHELL_APP || 'godot' }}
+              run: |
+                  set -uo pipefail
+                  build="$(tr -d '[:space:]' < web/shell-build)"
+                  echo "web/shell-build: $build"
+                  tools/shell-inputs.sh check; rc=$?
+                  if [ "$rc" != 0 ]; then
+                      echo
+                      echo "This tag's shell inputs (addons.lock, client/, ...) are not the ones $build"
+                      echo "was exported from. Let the web-shell workflow export and pin, and release"
+                      echo "the tag it makes; do not tag a lock bump by hand. docs/releases.md."
+                      exit 1
+                  fi
+                  if [ -n "$ORIGIN" ]; then
+                      url="${ORIGIN%/}/$APP/$build/shell-inputs.txt"
+                      curl -fsS "$url" -o "$RUNNER_TEMP/served.txt" \
+                          || { echo "$url does not answer: is $build uploaded?"; exit 1; }
+                      tools/shell-inputs.sh compare "$RUNNER_TEMP/served.txt" \
+                          || { echo "the build on the origin is not the one the record names"; exit 1; }
+                      echo "served: $url"
+                  fi
+
     validate:
         uses: modcommunity/dot-ci/.github/workflows/validate.yml@v1
         with:
@@ -25,7 +65,7 @@ jobs:
             DEPS_TOKEN: ${{ secrets.DOT_DEPS_TOKEN }}
 
     release:
-        needs: validate
+        needs: [validate, shell-pin]
         uses: modcommunity/dot-ci/.github/workflows/release.yml@v1
         permissions:
             contents: write
