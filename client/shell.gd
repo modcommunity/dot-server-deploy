@@ -69,6 +69,12 @@ var _solo_version: String = ""
 var _solo_button: Button = null
 var _solo_session: TmcSoloSession = null
 
+## The connect form's own pieces beyond [member _name], [member _address] and [member _join],
+## kept so [method _show_connect_form] can take the whole form away for a solo launch.
+var _blurb: Label = null
+var _name_caption: Label = null
+var _address_caption: Label = null
+
 ## The Workshop's sync client (see [method _ensure_workshop]): the subscribed packs a solo
 ## start mounts. Never synced for an online join.
 var _workshop: DotCloudWorkshop = null
@@ -251,6 +257,7 @@ func _ready() -> void:
 	# not back into the solo game the page's address still names.
 	if str(resumed.get("server", "")) != "":
 		solo = {"id": "", "version": ""}
+		_show_connect_form(true)
 
 	if solo.has("refused"):
 		_say("'%s' is not a game this client can start." % str(solo["refused"]))
@@ -797,16 +804,16 @@ func _build_menu() -> void:
 	title.add_theme_constant_override("outline_size", 9)
 	box.add_child(title)
 
-	var blurb := Label.new()
-	blurb.text = "Connect to a server. It decides what you play."
-	blurb.theme_type_variation = &"DotDim"
-	blurb.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	blurb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	box.add_child(blurb)
+	_blurb = Label.new()
+	_blurb.theme_type_variation = &"DotDim"
+	_blurb.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_blurb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	box.add_child(_blurb)
 
 	box.add_child(_gap(16))
 
-	box.add_child(_caption("Display name"))
+	_name_caption = _caption("Display name")
+	box.add_child(_name_caption)
 
 	_name = LineEdit.new()
 	_name.placeholder_text = "Your name"
@@ -841,7 +848,8 @@ func _build_menu() -> void:
 
 	box.add_child(_gap(4))
 
-	box.add_child(_caption("Server"))
+	_address_caption = _caption("Server")
+	box.add_child(_address_caption)
 
 	_address = LineEdit.new()
 	_address.placeholder_text = "host:port"
@@ -927,7 +935,25 @@ func _build_menu() -> void:
 	# mouse. game-arena shipped exactly that. Guarded, because a shell told to join at once
 	# (a link, a suite) has taken the panel down again by the time the deferred call runs, and
 	# grab_focus out of the tree is an engine error (shell_notice printed one every run).
+	# A solo launch never shows the form, not even for the moment sign-in takes: the site
+	# sent the player to play one game here, and a "Guest 123" name and a localhost
+	# address under it read as being asked to type something before it starts.
+	_show_connect_form(str(TmcSolo.requested()["id"]) == "")
 	_focus_when_shown(_join)
+
+
+## The connect form (name, server, Connect) or, for a shell opened to play one game with no
+## server, only that game. Not given back after a solo game's Leave: Play solo is the way on,
+## and a server the player follows from there (a friend's Join) fills the address itself.
+func _show_connect_form(shown: bool) -> void:
+	for control: Control in [_name_caption, _name, _address_caption, _address, _join]:
+		if control != null:
+			control.visible = shown
+	if _blurb != null:
+		_blurb.text = "Connect to a server. It decides what you play." if shown else "Playing solo, with no server."
+	if not shown and _solo_button != null:
+		_solo_button.visible = true
+		_primary(_solo_button)
 
 
 ## Deferred grab_focus that re-checks at call time: by then the control may be freed or out
@@ -1773,8 +1799,8 @@ func _start_solo(content_id: String, version: String = "") -> void:
 	_solo_version = version
 	_set_busy(true)
 	_join.text = "Connect"
+	_show_connect_form(false)
 	if _solo_button != null:
-		_solo_button.visible = true
 		_solo_button.disabled = true
 	_say("Finding %s…" % content_id)
 
