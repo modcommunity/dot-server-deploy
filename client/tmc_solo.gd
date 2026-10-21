@@ -338,3 +338,33 @@ static func split_key(key: String) -> Dictionary:
 	if at > 0:
 		return {"id": key.substr(0, at), "version": key.substr(at + 1)}
 	return {"id": key, "version": ""}
+
+
+## Where the player's solo choices are kept. A shell setting, not a game's: the shell is
+## what fetches the packs, and a delivered game may not name a shell class.
+const PREFS := "user://tmc_solo.cfg"
+
+
+## Whether the player chose to skip [param content_id]'s maps pack in solo. The default is
+## false (fetch on Play), so a player who never touched the choice sees no change.
+static func skip_maps(content_id: String) -> bool:
+	var cfg := ConfigFile.new()
+	if cfg.load(PREFS) != OK:
+		return false
+	return bool(cfg.get_value("skip_maps", content_id, false))
+
+
+## Keeps the choice. Only a skip is stored: fetching is the default, so clearing the key
+## returns to it and a later change of default needs no migration.
+static func set_skip_maps(content_id: String, skip: bool) -> void:
+	var cfg := ConfigFile.new()
+	cfg.load(PREFS)  # A missing file is the first choice; any other failure starts clean.
+	if skip:
+		cfg.set_value("skip_maps", content_id, true)
+	elif cfg.has_section_key("skip_maps", content_id):
+		cfg.erase_section_key("skip_maps", content_id)
+	if cfg.save(PREFS) != OK:
+		DotLog.warn(CHANNEL, "could not keep the solo maps choice", {"path": PREFS})
+		return
+	# user:// in a browser is an IndexedDB mirror that is only written when asked.
+	DotWeb.sync_filesystem()

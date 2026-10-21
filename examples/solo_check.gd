@@ -15,7 +15,7 @@ extends Node
 ## trailing comment on a read field disagrees with TmcYaml); and deleting a game from
 ## `client/solo.json` (the drift check names it).
 
-const CHECKS := 35
+const CHECKS := 39
 
 ## Every game repository, beside this project or in games/: `games.list`'s first column.
 const GAMES_LIST := "res://games.list"
@@ -44,6 +44,7 @@ func _ready() -> void:
 	_test_map_list()
 	_test_site_default()
 	await _test_session()
+	_test_skip_maps()
 
 	print("")
 	print("%d sections, %d completed" % [_entered, _completed])
@@ -221,6 +222,24 @@ func _test_session() -> void:
 	DotRegistry.unregister_instance(TmcSolo.MAPS_SERVICE, session)
 	session.queue_free()
 	DotPaths.remove_tree(root)
+	_done()
+
+
+func _test_skip_maps() -> void:
+	_section("the player's choice to skip a game's maps pack is kept, and defaults to fetching")
+
+	var id := "gamemann/solo-check-probe"
+	var before := FileAccess.get_file_as_bytes(TmcSolo.PREFS) if FileAccess.file_exists(TmcSolo.PREFS) else PackedByteArray()
+	TmcSolo.set_skip_maps(id, false)
+	_check(not TmcSolo.skip_maps(id), "with no choice made the maps pack is fetched")
+	TmcSolo.set_skip_maps(id, true)
+	_check(TmcSolo.skip_maps(id), "a skip is kept")
+	_check(not TmcSolo.skip_maps("gamemann/other"), "and is per game")
+	TmcSolo.set_skip_maps(id, false)
+	_check(not TmcSolo.skip_maps(id), "turning it back on returns to the default")
+
+	if before.is_empty():
+		DirAccess.remove_absolute(TmcSolo.PREFS)
 	_done()
 
 

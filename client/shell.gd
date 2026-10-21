@@ -67,6 +67,10 @@ var _mouse_before_prompt: Input.MouseMode = Input.MOUSE_MODE_VISIBLE
 var _solo_id: String = ""
 var _solo_version: String = ""
 var _solo_button: Button = null
+## Whether to fetch this game's maps pack in solo; see [method TmcSolo.skip_maps].
+var _solo_maps_check: CheckBox = null
+## What the pack being fetched is, said in the status line over every cloud phase text.
+var _solo_pack_label: String = ""
 var _solo_session: TmcSoloSession = null
 
 ## The connect form's own pieces beyond [member _name], [member _address] and [member _join],
@@ -876,6 +880,16 @@ func _build_menu() -> void:
 	_solo_button.pressed.connect(func() -> void: _start_solo(_solo_id, _solo_version))
 	box.add_child(_solo_button)
 
+	# The player's say over the maps pack a solo game fetches before it starts. On by
+	# default; shown with the solo button, because it only means something to a solo game.
+	_solo_maps_check = CheckBox.new()
+	_solo_maps_check.text = "Download this game's maps"
+	_solo_maps_check.tooltip_text = "Off: solo play starts with only the maps built into the game."
+	_solo_maps_check.button_pressed = true
+	_solo_maps_check.visible = false
+	_solo_maps_check.toggled.connect(func(on: bool) -> void: TmcSolo.set_skip_maps(_solo_id, not on))
+	box.add_child(_solo_maps_check)
+
 	# THE LOADING BAR. Hidden until something is actually loading, because a bar sitting at
 	# zero on a menu is a progress indicator for nothing.
 	_progress = ProgressBar.new()
@@ -954,6 +968,16 @@ func _show_connect_form(shown: bool) -> void:
 	if not shown and _solo_button != null:
 		_solo_button.visible = true
 		_primary(_solo_button)
+		_refresh_solo_maps_check()
+
+
+## Shows the maps choice for the solo game this shell was opened for, as last kept.
+func _refresh_solo_maps_check() -> void:
+	if _solo_maps_check == null:
+		return
+	var has_maps := _solo_id != "" and not TmcSolo.map_packs(_solo_id).is_empty()
+	_solo_maps_check.visible = has_maps
+	_solo_maps_check.set_pressed_no_signal(not TmcSolo.skip_maps(_solo_id))
 
 
 ## Deferred grab_focus that re-checks at call time: by then the control may be freed or out
@@ -1208,7 +1232,7 @@ func _report_client_behind(sentence: String) -> void:
 
 func _on_cloud_phase(phase: int, text: String) -> void:
 	if _status != null and text != "":
-		_status.text = text
+		_status.text = _solo_pack_label if _solo_pack_label != "" else text
 
 	# [b]In a game, a failed download or mount has nowhere to be said.[/b] The status line
 	# is on the menu, and the menu is hidden while a game runs -- so a map the server
@@ -1797,6 +1821,7 @@ func _start_solo(content_id: String, version: String = "") -> void:
 
 	_solo_id = content_id
 	_solo_version = version
+	_refresh_solo_maps_check()
 	_set_busy(true)
 	_join.text = "Connect"
 	_show_connect_form(false)
@@ -1877,9 +1902,12 @@ func _load_solo(content_id: String, version: String) -> DotResult:
 
 	# The map packs a server owner would name, from the stock list. One that will not
 	# fetch is a map nobody can change to, not a game that will not start.
-	for key in TmcSolo.map_packs(content_id):
-		_say("Fetching maps: %s…" % key)
-		var maps := await _ensure_solo_pack(key)
+	var skip_maps := TmcSolo.skip_maps(content_id)
+	if skip_maps:
+		DotLog.info(CHANNEL, "the player skips this game's maps pack", {"content": content_id})
+
+	for key in ([] if skip_maps else TmcSolo.map_packs(content_id)):
+		var maps := await _ensure_solo_pack(key, true)
 		if not maps.ok:
 			DotLog.warn(CHANNEL, "a solo map pack could not be fetched", {
 				"pack": key, "why": str(maps.error),
@@ -1888,6 +1916,8 @@ func _load_solo(content_id: String, version: String) -> DotResult:
 		session.map_keys.append(str(maps.value))
 		var parts := TmcSolo.split_key(str(maps.value))
 		session.map_roots.append(DotCloudClient.mount_prefix_for(StringName(parts["id"]), parts["version"]))
+
+	_solo_pack_label = ""
 
 	# Subscribed packs, after the game's own and before its scene exists, so the scene's
 	# catalogues find every entry already in the index. A game that states no `accepts`
@@ -2115,7 +2145,10 @@ func _restart_for_online(target: String) -> void:
 
 ## Fetches and mounts one pack by `<id>[@<version>]`, resolving a missing version to the
 ## newest. The value is the `<id>@<version>` that was mounted.
-func _ensure_solo_pack(key: String) -> DotResult:
+##
+## [param announce] says what is being fetched (name and size) in the status line for as long
+## as the fetch runs, so a download the player did not ask for by name is at least named.
+func _ensure_solo_pack(key: String, announce: bool = false) -> DotResult:
 	var parts := TmcSolo.split_key(key)
 	var id := str(parts["id"])
 	var version := str(parts["version"])
@@ -2130,11 +2163,35 @@ func _ensure_solo_pack(key: String) -> DotResult:
 		id = str(latest.value["id"])
 		version = str(latest.value["version"])
 
+	if announce:
+		_solo_pack_label = await _describe_solo_pack(id, version)
+		_say(_solo_pack_label)
+
 	var got: DotResult = await _cloud.ensure(StringName(id), version)
 	if not got.ok:
+		_solo_pack_label = ""
 		return got
 
 	return DotResult.success("%s@%s" % [id, version])
+
+
+## "Fetching maps: <name> (<size>)…". The size is what is still to download (a pack already
+## on the disk is "already downloaded"), from the manifest alone. A manifest that will not
+## resolve here only costs the size: [method DotCloudClient.ensure] reports the real failure.
+func _describe_solo_pack(id: String, version: String) -> String:
+	var pack_name := id.get_slice("/", 1)
+	var resolved: DotResult = await _cloud.resolve_manifest(StringName(id), version)
+	if not resolved.ok:
+		return "Fetching maps: %s…" % pack_name
+
+	var manifest := resolved.value as DotCloudManifest
+	if manifest.display_name != "":
+		pack_name = manifest.display_name
+
+	var plan := _cloud.plan_for(manifest)
+	if int(plan.get("missing_bytes", 0)) <= 0:
+		return "Maps: %s (already downloaded)" % pack_name
+	return "Fetching maps: %s (%s)…" % [pack_name, DotPaths.format_bytes(int(plan["missing_bytes"]))]
 
 
 ## `--content-url <base>` on a desktop launch: one more place to ask for packs, after the
