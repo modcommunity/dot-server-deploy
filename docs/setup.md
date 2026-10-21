@@ -67,3 +67,11 @@ They filter the `GAMES` array and nothing else; everything below walks only `GAM
 
 - `tools/server.ps1.in`'s `pack` still runs `res://tools/publish.tscn`, a scene that was never written; the bash launcher builds on `tools/pack.gd` and dot-cloud's CLI. It needs a port, not a patch.
 - No `TMC_*` environment layer and no `install-games`, deliberately ([installing-games.md](installing-games.md#rules-of-the-installer)).
+
+## The deployment wizard
+
+`deploy.sh` and `deploy/modify.sh` share their helpers with `setup.sh`: `deploy/lib.sh` holds the questions and `cfg_get`/`cfg_set` (which read and write double-quoted YAML with escapes, as `DotYaml` reads it), and `deploy/wizard-lib.sh` the plan engine, the certificate questions and the reading of entries back out of nginx. A change to how `setup.sh` asks or writes config is a change to `lib.sh`, and all three pick it up.
+
+- **The wizard runs installers as root** (`sudo`, unless it is root already), though they call `sudo` themselves: `install-server-tls.sh` tests `[ -f "$SSL_CERT" ]` before it escalates, and a Let's Encrypt `live/` directory is readable by root only, so as the operator the check fails on a certificate that is there.
+- **`entries_scan` reads the vhost's first line** (`# TLS in front of a dot-server, for D:P -> B`, `# D -- THE GAME CONTENT ORIGIN.`) and the directives the templates write. Change a template's first line or those directives and `modify.sh` stops finding what it installed.
+- **`deploy.ps1` does on Windows what does not need nginx**: config, the firewall (`New-NetFirewallRule`), a Scheduled Task at startup in place of the unit, and `publish` through bash. Certificates, the proxy, the origin and `modify` are Linux-only and say so. Under PowerShell on Linux it forwards to `deploy.sh`. Its config writer is checked against `cfg_set` on Linux; **the Windows half has never been run**, like `setup.ps1`.

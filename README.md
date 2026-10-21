@@ -169,6 +169,8 @@ data/                what the server writes
   admins.json  bans.json  audit.jsonl
 
 deploy/              the root-owned half: TLS certificates, nginx in front, the S3 publish
+  modify.sh              change or remove a deployed domain (./deploy.sh modify)
+  lib.sh  wizard-lib.sh  shared by setup.sh, deploy.sh and modify.sh
   issue-letsencrypt.sh   a real certificate, by whichever method the box allows
   install-server-tls.sh  wss:// on a public port -> the server on the loopback
   install-game-origin.sh the game's own origin, which is a security boundary
@@ -756,6 +758,40 @@ The same deployment the Pterodactyl egg makes, and for the same reasons. The ove
 An overlay rather than a second compose file, because the two deployments differ in exactly three settings and a copy would drift the moment one of them gained a volume.
 
 `TMC_BUILD_GAMES` defaults to `all`, so an existing `docker compose up` keeps producing the image it produced yesterday. Whether a box carries its games or fetches them is a decision about a deployment, not something a rebuild should make quietly.
+
+## The deployment wizard: `./deploy.sh`
+
+Everything in `deploy/` and the config questions of `setup.sh`, asked in one place. `./deploy.sh` with no argument is a menu; `./deploy.sh new` is a whole public server (config, a certificate, `wss://` in front, the service, the firewall), and each part is also its own command: `config`, `cert`, `proxy`, `origin`, `service`, `firewall`, `publish`, `list`.
+
+```bash
+./deploy.sh                       # the menu
+./deploy.sh new --dry-run         # ask everything, print the commands, run none of them
+./deploy.sh new -y --domain play.example.com --email ops@example.com --method webroot
+./deploy.sh cert --domain example.com --method dns --dns-plugin cloudflare --dns-credentials /root/.secrets/cloudflare.ini --wildcard
+```
+
+**It does nothing itself.** Every step is one of the scripts in `deploy/` or `setup.sh`, called with the answers as flags, and the plan it prints before asking to go ahead is those exact commands (`--verbose` shows them; `--dry-run` stops there). So a deployment made with the wizard is one somebody could have typed, and a step that fails prints the commands that were still to run, ready to paste once the cause is fixed. Every question has a flag that answers it, and `-y` takes the default for the rest, which makes the same wizard a provisioning script; `./deploy.sh --help` lists them.
+
+The certificate question covers every way this project gets one: Let's Encrypt by any method `issue-letsencrypt.sh` has (webroot, nginx, standalone, DNS-01 through a certbot plugin, which it installs if it is missing, and a wildcard), the local development CA, a pair of files you already have, or a self-signed pair for a proxy nobody browses to. A name that does not resolve to this box is said before Let's Encrypt is asked, because a failed validation costs an hour of rate limit. `publish` reads S3 credentials from the environment or from `--env-file` when the step runs; they are never asked for on the command line and never printed.
+
+An installer that nginx refuses (`nginx -t` fails) leaves its vhost behind; the wizard puts back the file that was there before, or removes the new one, so a failed step does not break the next `nginx -s reload` for every other site on the box.
+
+### Changing what is deployed: `deploy/modify.sh`
+
+```bash
+./deploy/modify.sh list                                  # every proxy and game origin nginx has from this project
+./deploy/modify.sh domain play.example.com play2.example.com
+./deploy/modify.sh port play.example.com 8443
+./deploy/modify.sh backend play.example.com 127.0.0.1:6081 --restart
+./deploy/modify.sh cert play.example.com                 # renew now, or change where it comes from
+./deploy/modify.sh remove games.example.com --delete-cert
+```
+
+An entry is named by its domain, `domain:port` when one domain has two, its vhost file, or the number `list` prints; `./deploy.sh modify` is the same script. A game origin also takes `origins`, `root`, `content-root` and `cache`.
+
+**What an entry has now is read out of nginx, not out of a record.** The vhost each installer writes says what it was made from, the certificate's renewal file says how it was issued, and the systemd unit says which checkout it runs, so there is nothing of the wizard's own to go stale when somebody changes a box by hand. **Nothing edits a vhost either**: a change runs the installer again with every value the entry has and the one that changed, because a hand-edited copy drifts from the template until no later fix applies to it.
+
+**A move is add, then remove.** The new vhost is installed and tested before the old one is touched, so a change that nginx refuses leaves the deployment as it was. What still points at the old name is said or asked about rather than left: `net_public_ip` in `cfg/net.yml` (and a restart), the site's record of the game origin, the firewall for an old port, and the old Let's Encrypt certificate, which is deleted only when no other vhost uses it.
 
 ## TLS, and the one question that picks the method
 

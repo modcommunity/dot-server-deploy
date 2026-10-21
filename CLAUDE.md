@@ -39,9 +39,9 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first; this file is what is specifi
 | `games/` | game repositories (links on a developer box), `.gdignore`d |
 | `dist/`, `data/`, `keys/` | published packs, runtime state, the signing key (all gitignored) |
 | `web/` | `README.md` (publishing), `embed.html`, `tmc-loader.js`, `shell-build` and `shell-build.inputs` (tracked, written by the pin) |
-| `deploy/` | `pterodactyl-egg.json`, TLS and nginx scripts, systemd, S3 publish |
+| `deploy/` | `pterodactyl-egg.json`, TLS and nginx scripts, systemd, S3 publish; `modify.sh` (change or remove a deployed entry); `lib.sh` (questions and `cfg_get`/`cfg_set`, shared with `setup.sh`), `wizard-lib.sh` (the plan engine and reading entries back out of nginx) |
 | `games.list` | every game and maps pack `setup.sh` publishes, `<repository> <content directory>` |
-| `setup.sh`, `setup.ps1`, `Dockerfile`, `demo.sh`, `play.sh`, `upgrade.sh` | installers and front doors |
+| `setup.sh`, `setup.ps1`, `deploy.sh`, `deploy.ps1`, `Dockerfile`, `demo.sh`, `play.sh`, `upgrade.sh` | installers and front doors; `deploy.sh` is the wizard over `deploy/` |
 
 ## Running and testing
 
@@ -100,7 +100,8 @@ Exit codes: `2` usage, `3` no runtime, `4` no project (`install-games`: addons b
 - `safe.directory '*'` belongs in the egg's install script only, never in `setup.sh`. [egg](docs/pterodactyl.md#a-reinstall-is-root-looking-at-somebody-elses-checkout)
 - Paths baked at install must be project-relative (the volume moves from `/mnt/server` to `/home/container`). The startup line uses `{{SERVER_PORT}}`; old servers keep their own copy of it. [egg](docs/pterodactyl.md)
 - The runtime is pinned and checked against digests in the script; a mismatch deletes and exits. Stage downloads on the destination filesystem, not `/tmp`. [setup](docs/setup.md#the-runtime-toolsfetch-godotsh)
-- `setup.ps1` and `server.ps1` have never been run on Windows; `server.ps1.in`'s `pack` still names a scene that does not exist. [setup](docs/setup.md#windows)
+- `setup.ps1`, `server.ps1` and `deploy.ps1` have never been run on Windows; `server.ps1.in`'s `pack` still names a scene that does not exist. [setup](docs/setup.md#windows)
+- `deploy.sh` and `deploy/modify.sh` only call the `deploy/` scripts and `setup.sh` with flags; a new installer option is a flag there first. Entries are read back from the vhost's first line and the template's directives (`entries_scan`), so a template change must keep them readable. [setup](docs/setup.md#the-deployment-wizard)
 
 **Releases and shells**
 

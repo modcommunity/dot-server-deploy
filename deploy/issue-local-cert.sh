@@ -3,6 +3,7 @@
 # Issue a certificate from the local development CA.
 #
 #   ./deploy/issue-local-cert.sh example.com '*.example.com' www.example.com
+#   ./deploy/issue-local-cert.sh --create-ca play.example.test
 #
 # The first name is the CN and names the files; every name given becomes a SAN.
 # The CA is the one deploy/install-game-origin.sh --local-ca creates, so a machine
@@ -25,6 +26,7 @@ CA_CERT="${TMC_LOCAL_CA_CERT:-/opt/tmc-local-ca.crt}"
 CA_KEY="${TMC_LOCAL_CA_KEY:-/opt/tmc-local-ca.key}"
 OUT_DIR="${TMC_CERT_DIR:-/opt}"
 OUT_NAME=""
+CREATE_CA=""
 
 names=()
 while [ $# -gt 0 ]; do
@@ -33,6 +35,7 @@ while [ $# -gt 0 ]; do
         --ca-key)  CA_KEY="${2:?--ca-key needs a value}"; shift 2 ;;
         --out-dir) OUT_DIR="${2:?--out-dir needs a value}"; shift 2 ;;
         --name)    OUT_NAME="${2:?--name needs a value}"; shift 2 ;;
+        --create-ca) CREATE_CA=1; shift ;;
         -h|--help) sed -n '2,18p' "$0"; exit 0 ;;
         -*)        die "unknown argument: $1" 2 ;;
         *)         names+=("$1"); shift ;;
@@ -40,8 +43,24 @@ while [ $# -gt 0 ]; do
 done
 
 [ "${#names[@]}" -gt 0 ] || die "give at least one name: ./deploy/issue-local-cert.sh example.test" 2
+# --create-ca makes the CA when there is none, with the same subject and limits as
+# install-game-origin.sh --local-ca, so a machine that trusts one trusts the other. It
+# is a flag rather than the default because a missing CA on a box that HAD one is a
+# path mistake, and silently minting a second CA turns it into "every browser that
+# trusted this box stopped trusting it".
+if [ -n "$CREATE_CA" ] && ! { [ -f "$CA_CERT" ] && [ -f "$CA_KEY" ]; }; then
+    sudo openssl req -x509 -newkey rsa:4096 -nodes -sha256 -days 3650 \
+        -keyout "$CA_KEY" -out "$CA_CERT" \
+        -subj "/CN=TMC Local Development CA/O=TMC Development" \
+        -addext "basicConstraints=critical,CA:TRUE,pathlen:0" \
+        -addext "keyUsage=critical,keyCertSign,cRLSign" >/dev/null 2>&1 \
+        || die "could not create a CA at $CA_CERT"
+    sudo chmod 600 "$CA_KEY"; sudo chmod 644 "$CA_CERT"
+    ok "created local CA: $CA_CERT"
+fi
+
 [ -f "$CA_CERT" ] && [ -f "$CA_KEY" ] || die "no local CA at $CA_CERT.
-  Make one with: ./deploy/install-game-origin.sh --local-ca --domain <game domain>"
+  Make one with --create-ca, or ./deploy/install-game-origin.sh --local-ca --domain <game domain>"
 
 CN="${names[0]}"
 # The CN may be a wildcard, which is not a filename anybody wants.
