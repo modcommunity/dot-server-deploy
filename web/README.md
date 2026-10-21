@@ -140,6 +140,8 @@ So for a site-published game:
 
 and upload `web/tmc-loader.js` **as-is**, placeholder and all, on the loader field above it. The stamp stays the fallback for the two deployments below, where there is no site to ask.
 
+**The loader needs no hand upload once the deploy repository holds the key.** The web-shell workflow's `loader` job sends `web/tmc-loader.js` to the site as-is on every run, through the same checks as the loader field, labelled after the last commit that changed it; the site answers a version it already has as unchanged. Issue the key in the admin panel (Game → **Loader publish key**) and add it as the repository secret `TMC_LOADER_PUBLISH_KEY`; set the variable `TMC_SITE_URL` when the site is not `WEB_SHELL_BACKBONE_URL`. Without the key the job skips with a notice and the field above is still the way. Details: [docs/releases.md](../docs/releases.md#publishing-the-web-build).
+
 The loader refuses either way if the resolved location is same-origin with the site — that check is what holds the frame sandbox up, and it does not care which source won. If `NEXT_PUBLIC_GAME_ORIGIN` is unset or points at the site's own domain, the game does not start and says so.
 
 ## Serving it from a bucket instead

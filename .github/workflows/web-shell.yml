@@ -184,3 +184,58 @@ jobs:
                   GH_TOKEN: ${{ github.token }}
                   TAG: ${{ steps.pin.outputs.tag }}
               run: gh workflow run release.yml --repo "$GITHUB_REPOSITORY" --ref "$TAG"
+
+    # Publishes web/tmc-loader.js to the site's shared loader, the page script that frames
+    # every shell. It is not part of the shell (the site serves it), so it needs no export
+    # and runs beside the shell job, not after it.
+    #
+    # [b]Every run, not only when the file changed.[/b] The label is the last commit that
+    # touched the file, and the site answers a label it already has with the same bytes as
+    # "unchanged" and writes nothing. So a run whose push was overtaken (the queue above) or
+    # a manual dispatch can never lose a loader change, and repeating one costs a request.
+    #
+    # The key opens exactly that endpoint (Admin, Game, "Loader publish key"). Unset, the
+    # job skips with a notice: a fork or a box without the site still builds its shell.
+    loader:
+        runs-on: ubuntu-latest
+        timeout-minutes: 5
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  ref: ${{ github.event.repository.default_branch }}
+                  fetch-depth: 0
+
+            - name: Publish the shared loader
+              env:
+                  KEY: ${{ secrets.TMC_LOADER_PUBLISH_KEY }}
+                  SITE: ${{ vars.TMC_SITE_URL || vars.WEB_SHELL_BACKBONE_URL }}
+              run: |
+                  set -euo pipefail
+                  if [ -z "$KEY" ]; then
+                      echo "::notice::TMC_LOADER_PUBLISH_KEY is not set, so the shared loader was not published. Upload web/tmc-loader.js by hand (docs/releases.md)."
+                      exit 0
+                  fi
+                  if [ -z "$SITE" ]; then
+                      echo "::notice::Neither TMC_SITE_URL nor WEB_SHELL_BACKBONE_URL is set, so there is no site to publish the shared loader to."
+                      exit 0
+                  fi
+                  sha="$(git log -1 --format=%H -- web/tmc-loader.js)"
+                  label="git-${sha:0:12}"
+                  notes="web/tmc-loader.js at ${sha:0:12}, published by the web-shell workflow, run ${{ github.run_id }}"
+                  enc() { jq -rn --arg v "$1" '$v|@uri'; }
+                  url="${SITE%/}/api/app/v1/web/loader?label=$(enc "$label")&notes=$(enc "$notes")"
+                  # The key goes in a header file, never on the command line, where it
+                  # would be in the process list; curl's own output never includes it.
+                  hdr="$(mktemp)"
+                  trap 'rm -f "$hdr"' EXIT
+                  printf 'Authorization: Bearer %s\n' "$KEY" > "$hdr"
+                  code="$(curl -sS -o body.json -w '%{http_code}' --max-time 60 -X POST \
+                      -H @"$hdr" -H 'Content-Type: application/javascript' \
+                      --data-binary @web/tmc-loader.js "$url")" || code="000"
+                  echo "HTTP $code"
+                  cat body.json 2>/dev/null || true
+                  echo
+                  case "$code" in
+                      2??) echo "### Shared loader $label: HTTP $code" >> "$GITHUB_STEP_SUMMARY" ;;
+                      *) echo "::error::Publishing the shared loader failed with HTTP $code (body above)."; exit 1 ;;
+                  esac
