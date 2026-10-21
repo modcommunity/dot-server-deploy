@@ -218,7 +218,7 @@ $addons = @('dot_core','dot_log','dot_net','dot_game','dot_entity','dot_server',
             'dot_match','dot_player_controller','dot_timer','dot_map','dot_leaderboard','dot_stats','dot_props','dot_vote',
             'dot_combat','dot_chat','dot_voice','dot_moderation','dot_browser','dot_npc','dot_npc_ai','dot_npc_ai_director',
             'dot_vehicle','dot_achievements','dot_objective','dot_effects','dot_spectate','dot_economy','dot_settings','dot_console',
-            'dot_audio','dot_fx','dot_lighting','dot_procedural_generation','dot_inventory','dot_peer_to_peer','dot_weapon','dot_physics',
+            'dot_audio','dot_fx','dot_lighting','dot_weather','dot_procedural_generation','dot_inventory','dot_peer_to_peer','dot_weapon','dot_physics',
             'dot_spawn','dot_team','dot_player','dot_player_class','dot_player_char','zee_weapons','dot_party','dot_matchmaking',
             'dot_locale','dot_replay','dot_friends','dot_sql','dot_menu','dot_bot','zed_weapons')
 
