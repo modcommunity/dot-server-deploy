@@ -41,6 +41,8 @@
 
 set -uo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
+# A dev run must not reset this checkout to origin (self_update in server.in).
+export TMC_AUTO_UPDATE=never
 ROOT="$PWD"
 
 GODOT="${GODOT:-godot}"

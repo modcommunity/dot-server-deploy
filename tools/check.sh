@@ -13,6 +13,8 @@
 
 set -uo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
+# A dev run must not reset this checkout to origin (self_update in server.in).
+export TMC_AUTO_UPDATE=never
 
 GODOT="${GODOT:-godot}"
 RED=$'\033[31m'; GRN=$'\033[32m'; YLW=$'\033[33m'; OFF=$'\033[0m'
@@ -42,7 +44,7 @@ done < <(find host client examples -name '*.gd' 2>/dev/null | sort)
 
 echo
 echo "shell scripts"
-for f in setup.sh tools/server.in docker-entrypoint.sh docker-healthcheck.sh tools/check.sh tools/check_boot_failures.sh tools/check_lists.sh tools/check_deploy_modes.sh tools/deploy-modes.sh tools/enet_relay_all_games.sh; do
+for f in setup.sh tools/server.in docker-entrypoint.sh docker-healthcheck.sh tools/check.sh tools/check_boot_failures.sh tools/check_lists.sh tools/check_deploy_modes.sh tools/check_self_update.sh tools/deploy-modes.sh tools/enet_relay_all_games.sh; do
     [ -f "$f" ] || continue
     if bash -n "$f" 2>/dev/null; then
         printf '  %sok%s   %s\n' "$GRN" "$OFF" "$f"
@@ -60,6 +62,7 @@ bash tools/check_lists.sh || fails=$((fails + 1))
 echo
 echo "the deploy modes (compose, pterodactyl)"
 bash tools/check_deploy_modes.sh || fails=$((fails + 1))
+bash tools/check_self_update.sh || fails=$((fails + 1))
 
 echo
 echo "the published games"

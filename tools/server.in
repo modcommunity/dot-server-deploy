@@ -1349,8 +1349,17 @@ self_update() {
     GIT_TERMINAL_PROMPT=0 git -C "$PROJECT" fetch --quiet --depth 1 origin "$branch" \
         || { warn "TMC_AUTO_UPDATE: could not fetch origin/$branch"; return 1; }
 
-    if [ "$(git -C "$PROJECT" rev-parse --is-shallow-repository)" != "true" ] \
+    # A depth-1 fetch cannot say whether HEAD is behind origin or has commits of its own,
+    # so a shallow checkout deepens to HEAD's date first; if HEAD is still not contained,
+    # it is somebody's work (or unknowable) and is never reset.
+    if [ "$(git -C "$PROJECT" rev-parse --is-shallow-repository)" = "true" ] \
             && ! git -C "$PROJECT" merge-base --is-ancestor HEAD "origin/$branch" 2>/dev/null; then
+        local since
+        since="$(( $(git -C "$PROJECT" log -1 --format=%ct HEAD 2>/dev/null || echo 0) - 86400 ))"
+        GIT_TERMINAL_PROMPT=0 git -C "$PROJECT" fetch --quiet --shallow-since="@$since" origin "$branch" 2>/dev/null \
+            || { warn "TMC_AUTO_UPDATE: could not tell whether this checkout has commits of its own; not touching it"; return 1; }
+    fi
+    if ! git -C "$PROJECT" merge-base --is-ancestor HEAD "origin/$branch" 2>/dev/null; then
         warn "TMC_AUTO_UPDATE: this checkout has commits origin/$branch does not; pull it yourself"
         return 1
     fi

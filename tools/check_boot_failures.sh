@@ -22,6 +22,8 @@
 
 set -u
 cd "$(dirname "$0")/.." || exit 1
+# A dev run must not reset this checkout to origin (self_update in server.in).
+export TMC_AUTO_UPDATE=never
 
 RED=$'\e[31m'; GRN=$'\e[32m'; OFF=$'\e[0m'
 [ -t 1 ] || { RED=""; GRN=""; OFF=""; }
