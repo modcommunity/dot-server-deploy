@@ -17,8 +17,7 @@ extends Node
 
 const CHECKS := 39
 
-## Every game repository, beside this project or in games/: `games.list`'s first column.
-const GAMES_LIST := "res://games.list"
+## Every game repository, beside this project or in games/: the repositories of cfg/content/games.yml (shipped content-lists/games.yml).
 
 ## The stock per-game map packs a server ships with.
 const STOCK_CONTENT := "res://cfg.example/content.yml"
@@ -187,7 +186,7 @@ func _test_map_list() -> void:
 	for id: Variant in ((parsed as Dictionary).get("maps", {}) as Dictionary):
 		if not known.has(str(id).get_slice("/", 1)):
 			strays.append(str(id))
-	_check(strays.is_empty(), "every game solo.json names is in games.list", ", ".join(strays))
+	_check(strays.is_empty(), "every game solo.json names is in games.yml", ", ".join(strays))
 
 	_done()
 
@@ -247,12 +246,12 @@ func _test_skip_maps() -> void:
 
 func _games() -> PackedStringArray:
 	var out := PackedStringArray()
-	for line in FileAccess.get_file_as_string(GAMES_LIST).split("\n"):
-		var row := line.strip_edges()
-		if row == "" or row.begins_with("#"):
-			continue
-		var repo := row.split(" ", false)[0]
-		if _source(repo) != "" and FileAccess.file_exists(_source(repo).path_join("game.yml")):
+	var listed := TmcContentLists.load_list("games", "res://cfg")
+	if not listed.ok:
+		return out
+	for e: Dictionary in listed.value:
+		var repo := String(e["id"])
+		if e["kind"] == "repo" and _source(repo) != "" and FileAccess.file_exists(_source(repo).path_join("game.yml")):
 			out.append(repo)
 	return out
 
