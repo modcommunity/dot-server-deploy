@@ -878,6 +878,8 @@ func _boot() -> bool:
 			"why": str(rotation_read.error),
 		})
 	var games_rotation: TmcGameRotation = rotation_read.value if rotation_read.ok else null
+	if games_rotation != null and not games_rotation.has_rotations():
+		games_rotation = _order_from_content_list(server) if _has_content_games_list() else games_rotation
 	votes = TmcVote.install(self, server, config.vote, config.vote_exclude, games_rotation)
 
 	# [b]After the listing, because the listing is where the backbone client is.[/b] A
@@ -1796,3 +1798,30 @@ func _die(code: int, why: String) -> void:
 static func _value(args: PackedStringArray, flag: String, fallback: String) -> String:
 	var index := args.find(flag)
 	return args[index + 1] if index >= 0 and index + 1 < args.size() else fallback
+
+
+## True when the operator wrote cfg/content/games.yml; the shipped list alone never changes how games rotate.
+func _has_content_games_list() -> bool:
+	return FileAccess.file_exists("%s/content/games.yml" % _config_dir) or FileAccess.file_exists("%s/server/content/games.yml" % _config_dir)
+
+
+## Zero-config game order: the operator's games.yml order over the installed games, when there are several.
+## Null (keep what is there) for one game or an unreadable list; an unknown game in it is an ERROR and every game plays.
+func _order_from_content_list(p_server: DotServer) -> TmcGameRotation:
+	var listed := TmcContentLists.load_list("games", _config_dir)
+	if not listed.ok:
+		DotLog.error(CHANNEL, "cfg/content/games.yml could not be read; every installed game plays", {"why": str(listed.error)})
+		return null
+	var installed := PackedStringArray()
+	for d: DotGameDescriptor in p_server.games.games:
+		var key := TmcGameRotation.key_of(d)
+		var short := key.get_slice("/", key.get_slice_count("/") - 1)
+		if not installed.has(short):
+			installed.append(short)
+	if installed.size() < 2:
+		return null
+	var order := TmcContentLists.game_order(listed.value, installed)
+	if not order.ok:
+		DotLog.error(CHANNEL, "games.yml game order not applied; every installed game plays", {"why": str(order.error)})
+		return null
+	return TmcGameRotation.from_order(order.value)

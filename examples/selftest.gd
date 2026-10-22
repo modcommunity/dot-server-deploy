@@ -974,6 +974,8 @@ func _test_content_lists() -> void:
 	_check(not TmcContentLists.map_rotation(gl.value, "nope", PackedStringArray()).ok, "map_rotation refuses an unknown game")
 	_put(root + "/content/games.yml", "entries:\n  - repo: g1\n    rotation: fast\n")
 	_check(not TmcContentLists.load_list("games", root).ok, "an unknown rotation mode is refused")
+	var cyc := TmcGameRotation.from_order(PackedStringArray(["bee", "ay"]))
+	_check(cyc.is_cycle() and cyc.rotation_names() == PackedStringArray(["main"]), "the zero-config game order is a cycle")
 	DotPaths.remove_tree(root)
 	_done()
 

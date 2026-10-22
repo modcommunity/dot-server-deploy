@@ -45,6 +45,12 @@ static func load_file(path: String) -> DotResult:
 	return DotResult.success(rotation)
 
 
+## No games.yml rotation, but the operator's cfg/content/games.yml gives an order: those games, in that order,
+## as the `main` cycle. See [method TmcContentLists.game_order].
+static func from_order(order: PackedStringArray) -> TmcGameRotation:
+	return from_tree({"rotation": "main", "mode": "cycle", "games": Array(order)})
+
+
 static func from_tree(tree: Dictionary) -> TmcGameRotation:
 	var rotation := TmcGameRotation.new()
 	rotation.spec = DotRotationSpec.normalize(tree, "games", rotation.warnings, FILE)
