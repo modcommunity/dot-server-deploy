@@ -17,7 +17,7 @@ const CFG := "res://examples/fixtures"
 ## A loaded game with rounds and no match the game vote can find. See the section that uses it.
 const RoundsWithoutMatch := preload("res://examples/fixtures/rounds_without_match.gd")
 
-const CHECKS := 376
+const CHECKS := 385
 
 var _passed := 0
 var _failed := 0
@@ -956,6 +956,24 @@ func _test_content_lists() -> void:
 	_put(root + "/server/content/addons.yml", "entries: [\n")
 	_check(not TmcContentLists.load_list("addons", root).ok, "a file that is not yml fails")
 	_check(TmcContentLists.load_list("nope", root).error.code == DotError.CODE_INVALID, "an unknown list is refused")
+	_put(root + "/server/content/addons.yml", "entries:\n  - repo: a\n    maps: [x]\n")
+	_check(not TmcContentLists.load_list("addons", root).ok, "maps: in addons.yml is refused")
+	DotPaths.remove_tree(root)
+	_put(root + "/content/games.yml", "entries:\n  - repo: g1\n    content: one\n    maps: [b, a]\n    rotation: random\n  - repo: g2\n    content: two\n  - repo: g3\n")
+	var gl := TmcContentLists.load_list("games", root)
+	_check(gl.ok and gl.value[0]["maps"] == PackedStringArray(["b", "a"]) and gl.value[0]["rotation"] == "random", "games.yml entries carry maps: and rotation:")
+	var order := TmcContentLists.game_order(gl.value, PackedStringArray(["g3", "zz", "two", "one"]))
+	_check(order.ok and order.value == PackedStringArray(["one", "two", "g3", "zz"]), "game_order follows games.yml, then installed games it does not name sorted")
+	_check(not TmcContentLists.game_order(gl.value, PackedStringArray(["one"]), PackedStringArray(["nope"])).ok, "game_order names an unknown game")
+	var mr := TmcContentLists.map_rotation(gl.value, "one", PackedStringArray(["a", "b", "c"]))
+	_check(mr.ok and mr.value["maps"] == PackedStringArray(["b", "a"]) and mr.value["rotation"] == "random", "map_rotation: maps: is the order")
+	mr = TmcContentLists.map_rotation(gl.value, "two", PackedStringArray(["z", "y"]))
+	_check(mr.ok and mr.value["maps"] == PackedStringArray(["y", "z"]) and mr.value["rotation"] == "sequential", "map_rotation: no maps: is installed sorted, sequential")
+	var bm := TmcContentLists.map_rotation(gl.value, "one", PackedStringArray(["a"]))
+	_check(not bm.ok and bm.error.message.contains("'b'"), "map_rotation names an uninstalled map")
+	_check(not TmcContentLists.map_rotation(gl.value, "nope", PackedStringArray()).ok, "map_rotation refuses an unknown game")
+	_put(root + "/content/games.yml", "entries:\n  - repo: g1\n    rotation: fast\n")
+	_check(not TmcContentLists.load_list("games", root).ok, "an unknown rotation mode is refused")
 	DotPaths.remove_tree(root)
 	_done()
 

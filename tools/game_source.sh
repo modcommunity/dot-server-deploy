@@ -33,7 +33,7 @@
 # interrupted clone is not a game, and reporting it as one produces a publish failure
 # three steps later that names the publisher. A DATA pack's repository (a game's maps or
 # courses) has no `game/`; its `project.godot` is the same proof that a checkout is there.
-# Testing for `game/` alone made every maps repository in games.list "missing", so
+# Testing for `game/` alone made every maps repository in games.yml "missing", so
 # setup.sh published nothing on a developer box ("keeping the packs in dist/") and died
 # on a fresh one ("nowhere this run looked") from the day mg-wipeout-maps was listed.
 
@@ -76,14 +76,12 @@ game_source() {
     return 1
 }
 
-## The `repo:content directory` list, read out of games.list.
+## The `repo:content directory` list, read out of cfg/content/games.yml (shipped content-lists/games.yml).
 ##
-## [b]games.list is the one place that says which games this project publishes.[/b]
-## Three hand-kept copies of this list have drifted here already, and then the one in
-## setup.sh drifted from the games themselves; setup.sh, this function and
-## tools/package_check.sh all read the file, and tools/check_lists.sh checks it against
-## content/ and the repositories beside this one.
+## [b]That file is the one place that says which games this project publishes.[/b] setup.sh, this
+## function and tools/package_check.sh all read it through tools/content_lists.sh, and
+## tools/check_lists.sh checks it against content/ and the repositories beside this one.
 game_entries() {
-    [ -f "$TMC_ROOT/games.list" ] || return 1
-    awk '!/^[[:space:]]*(#|$)/ { print $1 ":" $2 }' "$TMC_ROOT/games.list"
+    [ -f "$TMC_ROOT/tools/content_lists.sh" ] || return 1
+    ( . "$TMC_ROOT/tools/content_lists.sh"; content_legacy_notice "$TMC_ROOT/cfg"; content_game_entries "$TMC_ROOT/cfg" )
 }

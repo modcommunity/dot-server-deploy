@@ -13,6 +13,9 @@ extends RefCounted
 ##     pin: v1.0.0
 ##     content: arena                # games.yml only: the content directory
 ##   - pack: gamemann/surf_mesa      # a dot-cloud pack id; `@1.2.0` or `pin:` pins it
+##   - repo: game-arena              # games.yml only, both optional:
+##     maps: [dm_one, dm_two]        #   the maps to rotate, in this order (absent: every installed map, sorted)
+##     rotation: random              #   sequential (default), random or vote
 ## [/codeblock]
 ##
 ## Layers, weakest first: the shipped default (`content-lists/` in this project), the operator's
@@ -24,11 +27,14 @@ const CHANNEL := "tmc.content_lists"
 const DEFAULT_DIR := "res://content-lists"
 const KINDS := ["addons", "games"]
 
+const ROTATIONS := ["sequential", "random", "vote"]
+
 const _ID_CHARS := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-"
 const _PIN_CHARS := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._+-"
 
 
-## Value: an Array of {kind: "repo"|"pack", id, pin, content}, in list order. Fails with CODE_PARSE for
+## Value: an Array of {kind: "repo"|"pack", id, pin, content, maps, rotation}, in list order (`maps` is a
+## PackedStringArray, `rotation` "" when the entry does not say). Fails with CODE_PARSE for
 ## a file that is not yml and CODE_INVALID naming the file and entry for a bad one.
 static func load_list(kind: String, config_dir: String, default_dir: String = DEFAULT_DIR) -> DotResult:
 	if not KINDS.has(kind):
@@ -76,6 +82,61 @@ static func pin_for(entries: Array, id: String) -> String:
 	return String(entries[at]["pin"]) if at >= 0 else ""
 
 
+## The order games rotate in: the games.yml entries that are in [param installed] (by content directory, else
+## id), in list order, then any installed game the list does not name, sorted. One game is a list of one, so
+## the caller does no game rotation. Fails with CODE_NOT_FOUND-style CODE_INVALID naming an id in
+## [param wanted] (an explicit order an operator wrote elsewhere) that is neither listed nor installed.
+static func game_order(entries: Array, installed: PackedStringArray, wanted: PackedStringArray = PackedStringArray()) -> DotResult:
+	var known := PackedStringArray()
+	for e: Dictionary in entries:
+		known.append(_game_id(e))
+	for id in wanted:
+		if not known.has(id) and not installed.has(id):
+			return DotResult.fail(DotError.CODE_INVALID, "Unknown game '%s': not in games.yml (%s) and not installed (%s)." % [id, ", ".join(known), ", ".join(installed)])
+	var out := PackedStringArray()
+	var order: PackedStringArray = wanted if not wanted.is_empty() else known
+	for id in order:
+		if installed.has(id) and not out.has(id):
+			out.append(id)
+	var rest := PackedStringArray()
+	for id in installed:
+		if not out.has(id):
+			rest.append(id)
+	rest.sort()
+	out.append_array(rest)
+	return DotResult.success(out)
+
+
+## The map rotation of one game: Value {maps: PackedStringArray, rotation: String}. The entry's `maps:` list
+## is the order; absent means [param installed_maps] sorted. A map the entry names that is not installed, or a
+## [param game_id] the list does not hold, fails with CODE_INVALID naming it and what is available.
+static func map_rotation(entries: Array, game_id: String, installed_maps: PackedStringArray) -> DotResult:
+	var maps := PackedStringArray(installed_maps)
+	maps.sort()
+	var mode := "sequential"
+	var found := false
+	for e: Dictionary in entries:
+		if _game_id(e) != game_id and e["id"] != game_id:
+			continue
+		found = true
+		var listed: PackedStringArray = e.get("maps", PackedStringArray())
+		for m in listed:
+			if not installed_maps.has(m):
+				return DotResult.fail(DotError.CODE_INVALID, "games.yml: game '%s' lists map '%s', which is not installed (installed: %s)." % [game_id, m, ", ".join(maps)])
+		if not listed.is_empty():
+			maps = listed
+		if String(e.get("rotation", "")) != "":
+			mode = String(e["rotation"])
+		break
+	if not found:
+		return DotResult.fail(DotError.CODE_INVALID, "Unknown game '%s': games.yml does not list it." % game_id)
+	return DotResult.success({"maps": maps, "rotation": mode})
+
+
+static func _game_id(e: Dictionary) -> String:
+	return String(e["content"]) if String(e["content"]) != "" else String(e["id"])
+
+
 static func _index_of(entries: Array, id: String) -> int:
 	for i in entries.size():
 		if entries[i]["id"] == id:
@@ -111,6 +172,8 @@ static func _entry(raw: Variant, kind: String) -> DotResult:
 	var pack := ""
 	var pin := ""
 	var content := ""
+	var maps := PackedStringArray()
+	var rotation := ""
 	if raw is String:
 		var parts := (raw as String).split("@", true, 1)
 		pin = parts[1] if parts.size() > 1 else ""
@@ -121,12 +184,20 @@ static func _entry(raw: Variant, kind: String) -> DotResult:
 	elif raw is Dictionary:
 		var d: Dictionary = raw
 		for key in d:
-			if not ["repo", "pack", "pin", "content"].has(String(key)):
+			if not ["repo", "pack", "pin", "content", "maps", "rotation"].has(String(key)):
 				return DotResult.fail(DotError.CODE_INVALID, "unknown key '%s'" % key)
 		repo = String(d.get("repo", ""))
 		pack = String(d.get("pack", ""))
 		pin = String(d.get("pin", ""))
 		content = String(d.get("content", ""))
+		rotation = String(d.get("rotation", ""))
+		if "maps" in d:
+			if not (d["maps"] is Array):
+				return DotResult.fail(DotError.CODE_INVALID, "maps: is a list of map ids")
+			for m in d["maps"]:
+				if String(m) == "" or not _all_in(String(m), _ID_CHARS):
+					return DotResult.fail(DotError.CODE_INVALID, "'%s' is not a map id" % m)
+				maps.append(String(m))
 		for part in ["repo", "pack"]:
 			if String(d.get(part, "")).contains("@"):
 				if pin != "":
@@ -154,7 +225,11 @@ static func _entry(raw: Variant, kind: String) -> DotResult:
 		return DotResult.fail(DotError.CODE_INVALID, "'%s' is not a version, tag or commit" % pin)
 	if content != "" and (kind != "games" or repo == "" or not _all_in(content, _ID_CHARS)):
 		return DotResult.fail(DotError.CODE_INVALID, "content: is a directory name, for a games.yml repository")
-	return DotResult.success({"kind": "repo" if repo != "" else "pack", "id": id, "pin": pin, "content": content})
+	if (not maps.is_empty() or rotation != "") and kind != "games":
+		return DotResult.fail(DotError.CODE_INVALID, "maps: and rotation: belong in games.yml")
+	if rotation != "" and not ROTATIONS.has(rotation):
+		return DotResult.fail(DotError.CODE_INVALID, "rotation: is %s, got '%s'" % [" | ".join(ROTATIONS), rotation])
+	return DotResult.success({"kind": "repo" if repo != "" else "pack", "id": id, "pin": pin, "content": content, "maps": maps, "rotation": rotation})
 
 
 static func _all_in(text: String, allowed: String) -> bool:

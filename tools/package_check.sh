@@ -79,8 +79,8 @@ echo "staging"
 # of the same knowledge and it had drifted like the other two: it still named
 # a renamed game, and it was missing every addon added since — so the staged tree was
 # vendored without them and the packaged check passed on a build the real one could not
-# make. setup.sh is the one place that knows what this project is made of, and games.list
-# (which setup.sh reads) the one place that names its games.
+# make. setup.sh is the one place that knows what this project is made of, and cfg/content/games.yml
+# (shipped content-lists/games.yml) the one place that names its games.
 #
 # [b]And it read an array that no longer exists.[/b] `ADDONS=(` became `ADDONS_ALL=(` when
 # the list became derivable, this pattern matched nothing, and not one addon was staged:
@@ -90,15 +90,12 @@ echo "staging"
 # three addons were added that had not been pushed yet, and so could not be cloned.
 # `zee_weapons` and `zed_weapons` are the names whose repositories are not the names with hyphens -- see
 # `addon_repo` in setup.sh -- and `dot_` alone never matched it either.
+. "$ROOT/tools/content_lists.sh"
 mapfile -t STAGE_REPOS < <(
-    {
-        sed -n '/^ADDONS_ALL=(/,/)/p' "$ROOT/setup.sh" | grep -oE '(dot|zee|zed)_[a-z0-9_]+' \
-            | sed 's/^zee_weapons$/zee-dot-weapons/; s/^zed_weapons$/zed-dot-weapons/' | tr '_' '-'
-        awk '!/^[[:space:]]*(#|$)/ { print $1 }' "$ROOT/games.list"
-    } | sort -u
+    { content_addon_repos "$ROOT/cfg"; content_game_entries "$ROOT/cfg" | cut -d: -f1; } | sort -u
 )
 
-[ ${#STAGE_REPOS[@]} -gt 0 ] || fail "could not read the repository list out of setup.sh"
+[ ${#STAGE_REPOS[@]} -gt 0 ] || fail "could not read the repository lists (cfg/content/addons.yml, games.yml)"
 
 for repo in "${STAGE_REPOS[@]}"; do
     if [ -d "$ROOT/../$repo" ]; then

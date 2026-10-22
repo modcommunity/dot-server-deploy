@@ -14,19 +14,17 @@
 # `./server export-web` / `export-native`, so the shell that gets published was built
 # from the same commits the servers will install.
 #
-# The list of addons is setup.sh's ADDONS_ALL, read rather than repeated -- the rule
-# package_check.sh learned the hard way.
+# The list of addons is cfg/content/addons.yml (shipped content-lists/addons.yml), read through
+# tools/content_lists.sh rather than repeated -- the rule package_check.sh learned the hard way.
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LOCK="$ROOT/addons.lock"
 
-mapfile -t REPOS < <(
-    sed -n '/^ADDONS_ALL=(/,/)/p' "$ROOT/setup.sh" | grep -oE '(dot|zee|zed)_[a-z0-9_]+' \
-        | sed 's/^zee_weapons$/zee-dot-weapons/; s/^zed_weapons$/zed-dot-weapons/' | tr '_' '-' | sort -u
-)
+. "$ROOT/tools/content_lists.sh"
+mapfile -t REPOS < <(content_addon_repos "$ROOT/cfg" | sort -u)
 
-[ ${#REPOS[@]} -gt 0 ] || { echo "could not read ADDONS_ALL out of setup.sh" >&2; exit 2; }
+[ ${#REPOS[@]} -gt 0 ] || { echo "could not read the addon list (cfg/content/addons.yml)" >&2; exit 2; }
 
 # The same owner rule as setup.sh's repo_url: the addons are the organisation's, the one
 # pack that is not is its author's.

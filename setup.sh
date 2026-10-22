@@ -295,6 +295,10 @@ warn() { printf '    %s!!%s   %s\n' "$YLW" "$OFF" "$1"; }
 note() { printf '    %s--%s   %s\n' "$DIM" "$OFF" "$1"; }
 die()  { printf '\n    %s%s%s\n\n' "$RED" "$1" "$OFF" >&2; exit "${2:-1}"; }
 
+# The addon and game lists: cfg/content/{addons,games}.yml over the shipped content-lists/.
+[ -f "$ROOT/tools/content_lists.sh" ] || die "tools/content_lists.sh is missing: it reads the addon and game lists" 4
+. "$ROOT/tools/content_lists.sh"
+
 # --- Not on this machine: write the files for another way of running it -----
 case "$DEPLOY_MODE" in
     host) [ -z "$MODE_OUT" ] && [ "${#MODE_ARGS[@]}" -eq 0 ] \
@@ -931,6 +935,9 @@ ADDONS_LOCK="$ROOT/addons.lock"
 
 lock_ref() {
     [ "${TMC_ADDONS_LOCK:-on}" != "off" ] || return 1
+    local pin
+    pin="$(content_list addons "$ROOT/cfg" 2>/dev/null | awk -F'\t' -v r="$1" '$2 == r && $3 != "" { print $3; exit }')"
+    if [ -n "$pin" ]; then printf '%s\n' "$pin"; return 0; fi
     [ -f "$ADDONS_LOCK" ] || return 1
     awk -v r="$1" '$1 == r && $2 != "" { print $2; found = 1; exit } END { exit !found }' \
         "$ADDONS_LOCK"
@@ -1097,26 +1104,14 @@ clone_repos() {
 
 step "games"
 
-# repository:content id, read from games.list -- THE list of what this project publishes.
-#
-# It used to be an array written out here, and six games were finished, packed and tested
-# while it still named seven: a game missing from a hand-kept list is a game a fresh box
-# never builds, with nothing saying so. games.list is one file every script reads (this
-# one, tools/game_source.sh's `game_entries`, tools/package_check.sh), and
-# tools/check_lists.sh fails when a content/<dir>/pack.json or a game repository beside
-# this one has no line in it. Its own header says what the two fields mean.
-#
-# A stale repository name is a hard failure rather than a warning: "skipping a game"
-# scrolls past and a server with no games does not.
+# repository:content id, read from cfg/content/games.yml (shipped default content-lists/games.yml),
+# THE list of what this project publishes. A stale repository name is a hard failure, not a
+# warning: a server with no games does not scroll past. A games.list is still read, with one
+# WARN, while the operator has no games.yml (until 2026-12-31).
 GAMES=()
-[ -f "$ROOT/games.list" ] || die "games.list is missing: it is the list of games this project publishes" 4
-while read -r _repo _dir _rest; do
-    case "$_repo" in ''|'#'*) continue ;; esac
-    [ -n "$_dir" ] && [ -z "$_rest" ] \
-        || die "games.list: '$_repo $_dir $_rest' is not '<repository> <content directory>'" 5
-    GAMES+=("$_repo:$_dir")
-done < "$ROOT/games.list"
-[ ${#GAMES[@]} -gt 0 ] || die "games.list names no games" 5
+content_legacy_notice "$ROOT/cfg" || true
+mapfile -t GAMES < <(content_game_entries "$ROOT/cfg") || die "cfg/content/games.yml: could not be read" 5
+[ ${#GAMES[@]} -gt 0 ] || die "cfg/content/games.yml names no games" 5
 
 # --- Or none of them -------------------------------------------------------
 #
@@ -1440,17 +1435,16 @@ fi
 # build wires in -- and it is what a build with no game sources at all wires in, because
 # a published pack in dist/ does not say which classes it parses against. When the games
 # ARE here, the list below is derived from them instead: see ADDONS_SHELL.
-ADDONS_ALL=(dot_core dot_log dot_net dot_game dot_entity dot_server dot_server_query dot_server_security dot_2d dot_ui dot_auth dot_cloud dot_user
-        dot_user_avatar dot_platform dot_loadout dot_match
-        dot_player_controller dot_timer dot_map dot_leaderboard dot_stats
-        dot_props dot_vote dot_combat dot_chat dot_voice dot_moderation
-        dot_browser dot_npc dot_npc_ai dot_npc_ai_director dot_vehicle
-        dot_achievements dot_objective dot_effects dot_spectate dot_economy
-        dot_settings dot_console dot_audio dot_fx dot_lighting dot_weather
-        dot_procedural_generation dot_inventory dot_peer_to_peer dot_weapon
-        dot_physics dot_spawn dot_team dot_player dot_player_class
-        dot_player_char zee_weapons dot_party dot_matchmaking dot_locale
-        dot_replay dot_friends dot_sql dot_menu dot_bot zed_weapons)
+# Read from cfg/content/addons.yml (shipped default content-lists/addons.yml), never written out here.
+ADDONS_ALL=()
+while IFS= read -r _repo; do
+    case "$_repo" in
+        zee-dot-weapons) ADDONS_ALL+=(zee_weapons) ;;
+        zed-dot-weapons) ADDONS_ALL+=(zed_weapons) ;;
+        *)               ADDONS_ALL+=("${_repo//-/_}") ;;
+    esac
+done < <(content_addon_repos "$ROOT/cfg") || die "cfg/content/addons.yml: could not be read" 5
+[ ${#ADDONS_ALL[@]} -gt 0 ] || die "cfg/content/addons.yml names no addons" 5
 
 # What THIS project's own scripts name, whatever games it carries.
 #
