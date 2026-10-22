@@ -119,4 +119,11 @@ else
     fi
 fi
 
+# content_lists.sh reads flow lists and refuses what it cannot read, rather than yielding no games.
+T=$(mktemp -d); trap 'rm -rf "$T"' EXIT; mkdir -p "$T/content"
+cl_try() { printf '%s\n' "$1" > "$T/content/games.yml"; content_game_entries "$T" 2>&1; }
+out=$(cl_try 'entries: [a, "b"]'); [ "$out" = $'a:a\nb:b' ] && good "flow-style entries: [a, b] is read" || bad "flow-style entries read as: ${out:-nothing}"
+out=$(cl_try 'entries: a, b'); case "$out" in *"must be a block list"*) good "a non-list entries: value is refused" ;; *) bad "entries: a, b was not refused: ${out:-nothing}" ;; esac
+out=$(cl_try $'entries:\n  - repo: x/y'); case "$out" in *"has a slash"*) good "repo: with a slash is refused" ;; *) bad "repo: x/y was not refused: ${out:-nothing}" ;; esac
+
 exit $((fails > 0))

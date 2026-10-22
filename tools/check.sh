@@ -89,7 +89,7 @@ echo "the published games"
 mapfile -t GAME_ENTRIES < <(game_entries)
 
 if [ ${#GAME_ENTRIES[@]} -eq 0 ]; then
-    printf '  %sFAIL%s could not read the games list out of games.list\n' "$RED" "$OFF"
+    printf '  %sFAIL%s could not read the games list out of games.yml\n' "$RED" "$OFF"
     fails=$((fails + 1))
 fi
 

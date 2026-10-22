@@ -39,12 +39,18 @@ content_list() {
         if (!have) return
         have = 0
         if ((repo == "") == (pack == "")) fail("entry " (nent + 1) ": give exactly one of repo and pack")
+        if (repo ~ /\//) fail("entry " (nent + 1) ": repo \047" repo "\047 has a slash; use pack: for an owner/pack id")
         id = (repo != "") ? repo : pack
         if (id !~ /^[A-Za-z0-9._-]+(\/[A-Za-z0-9._-]+)?$/ || id ~ /\.\./) fail("entry " (nent + 1) ": \047" id "\047 is not a repository name or an owner/pack id")
         if (pin ~ /[^A-Za-z0-9._+-]/) fail("entry " (nent + 1) ": \047" pin "\047 is not a version, tag or commit")
         nent++
         dk[nd, nent] = (repo != "") ? "repo" : "pack"; di[nd, nent] = id; dp[nd, nent] = pin; dc[nd, nent] = content
         dn[nd] = nent
+    }
+    function addbare(rest) {
+        flush(); have = 1; repo = ""; pack = ""; pin = ""; content = ""
+        if (index(rest, "@")) { pin = substr(rest, index(rest, "@") + 1); rest = substr(rest, 1, index(rest, "@") - 1) }
+        if (rest ~ /\//) pack = rest; else repo = rest
     }
     function setkey(k, v) {
         v = trim(v)
@@ -69,7 +75,12 @@ content_list() {
             if (v ~ /^\[/) { gsub(/[\[\]]/, "", v); n = split(v, parts, ","); for (i = 1; i <= n; i++) { t = trim(parts[i]); sub(/@.*/, "", t); if (t != "") dr[nd] = dr[nd] " " t " " } }
             else mode = "remove"
         }
-        else if (line ~ /^entries:/) { mode = "entries"; edash = -1 }
+        else if (line ~ /^entries:/) {
+            v = line; sub(/^entries:[[:space:]]*/, "", v); sub(/[[:space:]]+$/, "", v)
+            if (v == "") { mode = "entries"; edash = -1 }
+            else if (v ~ /^\[.*\]$/) { gsub(/[\[\]]/, "", v); n = split(v, parts, ","); for (i = 1; i <= n; i++) { t = trim(parts[i]); if (t != "") addbare(t) } flush() }
+            else fail("entries: must be a block list (one \"- item\" per line) or a one-line [a, b] list, not \047" v "\047")
+        }
         next
     }
     mode == "remove" && line ~ /^[[:space:]]*-/ { t = line; sub(/^[[:space:]]*-[[:space:]]*/, "", t); t = trim(t); sub(/@.*/, "", t); dr[nd] = dr[nd] " " t " "; next }
