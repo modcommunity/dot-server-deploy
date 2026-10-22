@@ -546,6 +546,11 @@ func _notification(what: int) -> void:
 ## Where downloads go when the player keeps none. Separate from the normal cache so a
 ## player switching the setting off does not have their kept games deleted, and back on
 ## finds them still there.
+const SLICE_EXTENSIONS := ["tscn", "scn", "tres", "res"]
+
+## Frames the last [method _slice_load] yielded across; the selftest reads it.
+var slice_frames_yielded: int = 0
+
 const SESSION_CACHE := "user://dot_cloud_session"
 
 
@@ -1906,6 +1911,12 @@ func _load_solo(content_id: String, version: String) -> DotResult:
 	if skip_maps:
 		DotLog.info(CHANNEL, "the player skips this game's maps pack", {"content": content_id})
 
+	var slice_keys: Array[String] = [DotCloudClient.content_key_for(StringName(content_id), wanted)]
+	for key in (desc["dependencies"] as PackedStringArray) + (desc["server_dependencies"] as PackedStringArray):
+		var parts := TmcSolo.split_key(key)
+		if str(parts["version"]) != "":
+			slice_keys.append(DotCloudClient.content_key_for(StringName(parts["id"]), str(parts["version"])))
+
 	for key in ([] if skip_maps else TmcSolo.map_packs(content_id)):
 		var maps := await _ensure_solo_pack(key, true)
 		if not maps.ok:
@@ -1927,6 +1938,7 @@ func _load_solo(content_id: String, version: String) -> DotResult:
 		session.workshop_summary = await _sync_workshop(content_id)
 
 	var path := mount.path_join(safe.value)
+	await _slice_load(_pack_script_paths(slice_keys))
 	var packed: Variant = load(path)
 
 	if not (packed is PackedScene):
@@ -2194,6 +2206,63 @@ func _describe_solo_pack(id: String, version: String) -> String:
 	return "Fetching maps: %s (%s)…" % [pack_name, DotPaths.format_bytes(int(plan["missing_bytes"]))]
 
 
+## Code and scenes of the mounted packs [param keys], in the order that lets a scene find its
+## scripts already cached.
+func _pack_script_paths(keys: Array[String]) -> PackedStringArray:
+	var scripts := PackedStringArray()
+	var others := PackedStringArray()
+
+	for key in keys:
+		var manifest := _cloud.manifest_for(key)
+		if manifest == null:
+			continue
+
+		for file in manifest.files:
+			var res_path := manifest.resource_path(file)
+			var ext := res_path.get_extension()
+			if ext == "gd":
+				scripts.append(res_path)
+			elif ext in SLICE_EXTENSIONS:
+				others.append(res_path)
+
+	return scripts + others
+
+
+## What a scene in this build pulls in, scripts first.
+static func _scene_dependency_paths(path: String) -> PackedStringArray:
+	var out := PackedStringArray()
+	for dep in ResourceLoader.get_dependencies(path):
+		var dep_path := dep.get_slice("::", 2) if "::" in dep else dep
+		if dep_path.get_extension() in SLICE_EXTENSIONS or dep_path.get_extension() == "gd":
+			out.append(dep_path)
+	out.sort()
+	return out
+
+
+## Fills the resource cache across frames so the [code]load()[/code] that follows is a hit and
+## the loading cover keeps animating. A browser without threads would otherwise compile every
+## script in one frame. Native builds skip it unless [param force]. A failure only means the
+## plain load() does the work, and says what is wrong.
+func _slice_load(paths: PackedStringArray, force: bool = false) -> void:
+	if paths.is_empty() or not (force or DotPlatform.is_web()):
+		return
+
+	var loader := DotCloudSliceLoader.new()
+	loader.progress.connect(func(done: int, total: int, _path: String) -> void:
+		var fraction := float(done) / float(maxi(total, 1))
+		if _progress != null:
+			_progress.visible = true
+			_progress.value = fraction * 100.0
+		if loading != null:
+			loading.set_progress(fraction, _text("shell.loading.scripts", {}, "Preparing the game…")))
+
+	var res: DotResult = await loader.load_all(get_tree(), paths)
+	slice_frames_yielded = loader.frames_yielded
+
+	if not res.ok:
+		DotLog.warn(CHANNEL, "slice preload stopped early", {"why": str(res.error)})
+
+
 ## `--content-url <base>` on a desktop launch: one more place to ask for packs, after the
 ## ones `content.json` names. Only an address -- every manifest still has to verify against
 ## this build's key -- and never read from the page, whose solo launch uses the page's own
@@ -2348,6 +2417,7 @@ func _on_spawned() -> void:
 		return
 
 	var path := String(BUILTIN_CLIENTS[content_id])
+	await _slice_load(_scene_dependency_paths(path))
 	var packed: Variant = load(path)
 
 	if packed == null:

@@ -80,3 +80,5 @@ The game listens on `net_port` (6064 in the template) with `net_transport: dual`
 ## Which shell a player is running
 
 The shell's menu, the loading screen and the standalone page each carry a small dim line in the bottom-right corner: `shell 20261016-0230 · c09533b`. The commit is stamped by `export-web` and `export-native` into `client/build_stamp.gd` (generated, git-ignored; `-dirty` when the tree had changes). The build id cannot be stamped, because it is chosen at upload after the export: on the web it is read back from the page's path (`/game/<app>/<id>/`, `/godot/<id>/`) and only an exact `YYYYMMDD-HHMM` segment is accepted. Native builds show the commit alone, and a run from source shows nothing. See `client/shell_version.gd`.
+
+The shell fills the resource cache with `DotCloudSliceLoader` (dot-cloud) before it `load()`s a game's client scene in the browser, so compiling a pack's scripts is spread over frames and the loading cover's bar moves instead of freezing for one long frame. Native builds skip it. It needs a dot-cloud that has the loader: `addons.lock` must be bumped to the tag that carries it.

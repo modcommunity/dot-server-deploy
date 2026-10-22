@@ -12,7 +12,7 @@ extends Node
 ## a socket this suite serves itself, because the fetch is the half most likely to be
 ## wrong and least likely to be noticed.
 
-const CHECKS := 179
+const CHECKS := 182
 
 var _passed := 0
 var _failed := 0
@@ -60,6 +60,7 @@ func _run() -> void:
 	await _test_cover_gate()
 	await _test_cover_contract()
 	await _test_cover_fallback()
+	await _test_slice_preload()
 
 	print("")
 	_check(
@@ -1025,6 +1026,21 @@ func _test_loading_client() -> void:
 
 ## The corner line naming the client. The id is only ever read from a URL path, so what
 ## the path parser accepts is what can reach a player's screen.
+## The shell's pre-load list for a scene, and the slice loader filling the cache from it.
+func _test_slice_preload() -> void:
+	_section("slice preload before a scene load")
+
+	var deps: PackedStringArray = (load("res://client/shell.gd") as GDScript)._scene_dependency_paths("res://client/boot.tscn")
+	_check(not deps.is_empty(), "a scene's dependencies are listed", str(deps))
+
+	var loader := DotCloudSliceLoader.new()
+	var res: DotResult = await loader.load_all(get_tree(), deps, false)
+	_check(res.ok, "the slice loader loads them without threads", "" if res.ok else str(res.error))
+	_check(ResourceLoader.has_cached(deps[0]) if not deps.is_empty() else false,
+		"the first is in the cache, so the plain load() is a hit")
+	_done()
+
+
 func _test_shell_version() -> void:
 	_section("the shell's version line")
 
