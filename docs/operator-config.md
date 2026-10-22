@@ -1,6 +1,6 @@
-# Changing your server's settings: edit `cfg/` and nothing else
+# Changing your server's settings: edit `cfg/server/` only
 
-Everything you tune lives in the `cfg/` folder beside your server. **Never edit a file inside `addons/`, `content/` or the game itself**: an upgrade replaces those and your change is gone. Put your changes in `cfg/` and an upgrade keeps them.
+Everything you tune lives in the `cfg/server/` folder beside your server. **Never edit a file inside `addons/`, `content/`, the game itself or the rest of `cfg/`**: an upgrade replaces those (or they are the shipped defaults) and your change is gone. Put your changes in `cfg/server/` and an upgrade keeps them.
 
 ## Where a setting can live
 
@@ -31,7 +31,15 @@ maps: [dm_new_map]
 
 **Change one game only.** Put the file under `cfg/server/game/<game>/<addon>/` instead, for example `cfg/server/game/game-arena/dot_map/maps.yml`. Other games on the box are unaffected.
 
-**Choose what gets downloaded.** `cfg/content/addons.yml` and `cfg/content/games.yml` list the addon repositories and the games or packs this server installs, see [content-lists.md](content-lists.md).
+**Choose what gets downloaded.** `cfg/server/content/addons.yml` and `cfg/server/content/games.yml` list the addon repositories and the games or packs this server installs (`cfg/content/` works too), see [content-lists.md](content-lists.md). Most servers need no rotation file: with none, a game rotates through its installed maps sorted by name, and several games rotate in the order of `games.yml`. To pick maps and the order, add them to the game's entry:
+
+```yaml
+entries:
+  - repo: game-arena
+    maps: [dm_one, dm_two]    # the rotation, in this order
+```
+
+A `maps.yml` rotation file (weights, per-map settings) still wins when it exists.
 
 ## Which layer won, and what loaded
 
