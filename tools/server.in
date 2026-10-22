@@ -706,14 +706,23 @@ has_owner_addons() {
 }
 INDEX_TOOL="res://tools/index.gd"
 
+## True when cfg/content/games.yml lists a pack (`pack:` or an owner/name), which install-games fetches.
+has_listed_packs() {
+    local f
+    for f in "$CONFIG_DIR/content/games.yml" "$CONFIG_DIR/server/content/games.yml"; do
+        [ -f "$f" ] && grep -vE '^[[:space:]]*#' "$f" | grep -qE 'pack:|^[[:space:]]*-[[:space:]]+[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+' && return 0
+    done
+    return 1
+}
+
 ## Fetch the descriptors and the packs for TMC_GAMES. Returns the tool's exit code:
 ## 0 everything asked for is here, 2 none of it is, 3 some of it is not.
 do_install_games() {
     if [ -z "$OPT_GAMES" ]; then
-        note "no games list: TMC_GAMES, or --games arena,g2gfast"
+        note "no games list: TMC_GAMES, --games arena,g2gfast, or packs in cfg/content/games.yml"
         note "without one this server offers whatever is already in $CONTENT_DIR"
         # The maps an owner added still need a version each; the tool resolves only those.
-        has_owner_maps || has_owner_addons || return 0
+        has_owner_maps || has_owner_addons || has_listed_packs || return 0
     fi
 
     local args=(--headless --path "$PROJECT" --script "$INSTALL_TOOL" --

@@ -103,6 +103,18 @@ func _init() -> void:
 	var config_dir := str(opts.get("config", "cfg"))
 	var bases := _list(str(opts.get("base", "")))
 
+	# No --games: the packs cfg/content/games.yml lists (`pack: owner/name`, optionally pinned) are
+	# what to fetch. Its repository entries are cloned by setup.sh, not fetched here.
+	if wanted.is_empty():
+		var listed := TmcContentLists.load_list("games", config_dir)
+		if not listed.ok:
+			push_error("install-games: %s" % str(listed.error))
+			quit(EXIT_USAGE)
+			return
+		for e: Dictionary in listed.value:
+			if e["kind"] == "pack":
+				wanted.append(String(e["id"]) + ("@" + String(e["pin"]) if String(e["pin"]) != "" else ""))
+
 	if wanted.is_empty():
 		# Not an error, and this is the ordinary case for a hand-run server: no list
 		# means "run what is in the content directory", which needs no installer at all
