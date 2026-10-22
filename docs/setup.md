@@ -1,5 +1,17 @@
 # setup.sh: addons, games and the runtime
 
+**For**: an operator installing or re-installing a server, and anyone changing `setup.sh`. **Quick start**:
+
+```bash
+./setup.sh              # runtime, addons into addons/, games into games/, writes ./server
+./setup.sh --no-games   # a box that installs its games at runtime
+./setup.sh --update     # move the clones to addons.lock
+./server
+```
+
+**Edit** `cfg/server/` only; **never edit** `addons/`, `games/`, `dist/` or the generated `./server`. Which games and addons exist is `cfg/server/content/` ([content-lists.md](content-lists.md)).
+
+
 `setup.sh` (and `setup.ps1` for Windows) fetches the runtime, puts the addons and games where the build can see them, publishes the packs, and writes `./server` from `tools/server.in`. **`./server` is generated: regenerate it (re-run `setup.sh`) after editing `tools/server.in`**, or an export runs the old launcher without the new checks.
 
 ## One fact, one place

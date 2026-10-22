@@ -1,5 +1,16 @@
 # Download lists: `cfg/content/addons.yml` and `cfg/content/games.yml`
 
+**For**: a server operator choosing which addons and games are downloaded. **Quick start**:
+
+```bash
+mkdir -p cfg/server/content
+printf 'merge: true\nentries: [game-arena]\n' > cfg/server/content/games.yml
+./setup.sh && ./server
+```
+
+**Edit** `cfg/server/content/addons.yml` and `games.yml`. **Never edit** the shipped `content-lists/*.yml` or `addons.lock`. `entries:` takes a block list or a one-line flow list; a `repo:` is a bare repository name and a slash in it is refused (use `pack: owner/name` for a dot-cloud pack).
+
+
 Which addon repositories and which games or packs a server installs is data you own. The shipped defaults are `content-lists/addons.yml` (the pinned addon repositories, from `addons.lock`) and `content-lists/games.yml` (the games `setup.sh` publishes); `host/tmc_content_lists.gd` (`TmcContentLists`) owns the schema and reads them. `cfg/content/` is a folder of its own, not a tier, so it never clashes with `cfg/addons/<addon>/`.
 
 ```yaml

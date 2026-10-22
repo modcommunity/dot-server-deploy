@@ -1,5 +1,16 @@
 # Releases: the lock, the shells and the order
 
+**For**: whoever releases an addon, a game or the web shell. **Quick start** (an addon):
+
+```bash
+git -C ../dot-vote tag v0.2.1 && git -C ../dot-vote push origin v0.2.1   # 1. tag the addon
+tools/addons-lock.sh write                                               # 2. lock it here (check the pack is on the origin first)
+git add addons.lock && git commit -m "Lock dot-vote v0.2.1" && git push  # 3. the web-shell workflow does the rest
+```
+
+**Never** export, upload or pin a web shell by hand while the workflow is up; the order for a game is in the table below.
+
+
 This repository is where an addon release, a game release and a shell release meet. The family's release checklist is in the `release-rules` memory; this is what the code here enforces and why.
 
 ## The release orders

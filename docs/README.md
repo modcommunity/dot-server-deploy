@@ -1,5 +1,8 @@
 # dot-server-deploy docs
 
+**Start with** the [README](../README.md) (install, quick start, what to edit). Operators: [setup.md](setup.md), [operator-config.md](operator-config.md), [content-lists.md](content-lists.md), [releases.md](releases.md). Editors of this tool: the rest.
+
+
 The reasoning behind [../CLAUDE.md](../CLAUDE.md)'s rules. The operator's view of every feature is the [README](../README.md); publishing the web shell is [web/README.md](../web/README.md).
 
 | File | Subject |

@@ -1,5 +1,18 @@
 # Changing your server's settings: edit `cfg/server/` only
 
+**For**: a server operator changing a setting. **Quick start**:
+
+```bash
+mkdir -p cfg/server/addons/dot_party
+echo 'party_seat_hold_sec: 30' > cfg/server/addons/dot_party/party.yml
+./server            # restart; data/from_yaml.cfg shows what your files became
+```
+
+1. Find the addon's folder name (`dot-party` is `dot_party`).
+2. Put a file with only the keys you change in `cfg/server/addons/<addon>/`, or in `cfg/server/game/<game>/<addon>/` for one game.
+3. Restart and read `data/from_yaml.cfg`.
+
+
 Everything you tune lives in the `cfg/server/` folder beside your server. **Never edit a file inside `addons/`, `content/`, the game itself or the rest of `cfg/`**: an upgrade replaces those (or they are the shipped defaults) and your change is gone. Put your changes in `cfg/server/` and an upgrade keeps them.
 
 ## Where a setting can live

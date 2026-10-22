@@ -11,6 +11,29 @@ This tool, along with every asset it is built on, was built initially with **Cla
 
 I intend on reviewing code, testing, and editing documentation regularly. If you're interested in helping out, please let me know!
 
+## Start here
+
+**For a server operator**: you run a game server for players and want it to stay up through upgrades. **For a developer**: you want to see your game running in a server and browser. The rest of this file is the reference; this block is all most people need.
+
+```bash
+git clone https://github.com/modcommunity/dot-server-deploy && cd dot-server-deploy
+./setup.sh              # fetches a Godot runtime, links the addons, writes ./server
+./server --games arena  # installs the game if needed, then starts the server
+./server --help         # every command and option
+```
+
+| Edit | Never edit |
+| --- | --- |
+| `cfg/server/addons/<addon>/` and `cfg/server/game/<game>/` (your settings) | `addons/`, `content/`, `games/`, `dist/` (replaced by an upgrade) |
+| `cfg/server/content/addons.yml` and `games.yml` (what gets downloaded) | `cfg.example/`, `content-lists/` (the shipped defaults) |
+| `cfg/content.yml` (per-game cvars and maps), `cfg/addons.yml` (extra packs) | `./server` (generated: re-run `./setup.sh` after changing `tools/server.in`) |
+
+Next: [docs/setup.md](docs/setup.md) (install), [docs/operator-config.md](docs/operator-config.md) (change a setting), [docs/content-lists.md](docs/content-lists.md) (choose games and addons), [Upgrading](#upgrading-a-server-that-is-already-running). To try a game on your own machine without a server install, use `./play.sh` below.
+
+## Releasing
+
+Releasing an addon, a game or a new web shell has an order, and CI refuses a skipped step: see [docs/releases.md](docs/releases.md). The short version: tag the addons, bump `addons.lock` (`tools/addons-lock.sh write`) and push; the web-shell workflow then builds, uploads, pins and tags the shell with nobody exporting anything by hand; tag the game last.
+
 ## Playing it locally, in one command
 
 ```bash
@@ -674,7 +697,7 @@ A game left out is left out *everywhere except `dist/`*: **a pack an earlier run
 
 **The content a BROWSER client downloads is published separately, and from one place.** A server prefers `dist/` on its own box over the network, so a box publishing its own packs and a content origin publishing different ones is a server and its players running different builds of the same version — silently, since the version string is the same. Publish both from the same commit.
 
-**The browser client is not upgraded by any of this.** `./server export-web` has to be re-run and the result *published*, and how it is published depends on the deployment shape — a site-published build is `--zip` and an upload every time. [web/README.md](web/README.md#shipping-a-client-change-which-shape-you-are-on-and-what-it-costs) has the table and the ten-second check for which shape you are on. A client change that was exported but not published looks precisely like a change that did not work: the browser runs the previous build and prints the previous errors.
+**The browser client is not upgraded by any of this.** The web shell is built, uploaded, pinned and tagged by CI (`.github/workflows/web-shell.yml`) whenever a push to `main` changes a shell input; a server on `TMC_AUTO_UPDATE=when-needed` moves to it on its next start ([docs/releases.md](docs/releases.md#publishing-the-web-build)). Only a box that publishes its own shell by hand still runs `./server export-web` and uploads the result; [web/README.md](web/README.md#shipping-a-client-change-which-shape-you-are-on-and-what-it-costs) has the table and the ten-second check for which shape you are on.
 
 **Once, on a box that ran an older `setup.sh`**, the pull stops on a uid instead:
 
