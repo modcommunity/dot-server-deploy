@@ -1,6 +1,6 @@
 extends Node
 
-## A server owner's extra pack (`cfg/addons.yml`) is mounted as a dependency of the game and
+## A server owner's extra pack (`cfg/packs.yml`) is mounted as a dependency of the game and
 ## its entry scene is started.
 ##
 ## Publishes four fixture packs with the real `tools/pack.gd` (one starting on the server, one
@@ -113,7 +113,7 @@ func _mount_and_attach(pair: DotResult) -> void:
 		"require_signed_manifests": true, "trusted_keys": {"default": str(pair.value["public"])},
 	}))
 	# `plain` is left unpinned in the file: the installer's cache answers for it.
-	_write(cfg.path_join("addons.yml"),
+	_write(cfg.path_join("packs.yml"),
 		"defaults:\n  add: [dev/extra@1.2.0, dev/plain]\ngames:\n  game:\n    add: [dev/clientside@0.3.0, dev/broken@1.0.0]\n")
 	_write(data.path_join(TmcAddonsConfig.RESOLVED_FILE), JSON.stringify({"packs": {"dev/plain": "2.0.0"}}))
 
@@ -131,7 +131,7 @@ func _mount_and_attach(pair: DotResult) -> void:
 	add_child(cloud)
 
 	var loaded := TmcAddonsConfig.load_from(cfg, data)
-	_check(loaded.ok, "cfg/addons.yml and the installer's pins load", str(loaded.error) if not loaded.ok else "")
+	_check(loaded.ok, "cfg/packs.yml and the installer's pins load", str(loaded.error) if not loaded.ok else "")
 
 	if not loaded.ok:
 		_done()
@@ -178,7 +178,7 @@ func _mount_and_attach(pair: DotResult) -> void:
 		"a key nothing mounted is skipped")
 
 	# remove: drops a default for one game.
-	_write(cfg.path_join("addons.yml"),
+	_write(cfg.path_join("packs.yml"),
 		"defaults:\n  add: [dev/extra@1.2.0]\ngames:\n  game:\n    remove: [dev/extra]\n")
 	var again := TmcAddonsConfig.load_from(cfg, data)
 	var other := DotGameDescriptor.new()

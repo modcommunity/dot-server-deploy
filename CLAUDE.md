@@ -18,8 +18,8 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first; this file is what is specifi
 | [docs/addon-packs.md](docs/addon-packs.md) | `client/boot.tscn`, `_advertise_addons`, the update-and-restart path |
 | [docs/native-client.md](docs/native-client.md) | `export-native`, launch arguments, presets |
 | [docs/web-client.md](docs/web-client.md) | `client/shell.gd`, sign-in, clearing downloads, TLS |
-| [docs/game-vote.md](docs/game-vote.md) | `host/tmc_vote.gd`, `cfg/vote.yml`, the notice overlay |
-| [docs/admin-menu.md](docs/admin-menu.md) | `/admin`, `cfg/admin_menu.yml`, the loading screen |
+| [docs/game-vote.md](docs/game-vote.md) | `host/tmc_vote.gd`, `cfg/addons/dot_vote/vote.yml`, the notice overlay |
+| [docs/admin-menu.md](docs/admin-menu.md) | `/admin`, `cfg/addons/dot_menu/admin_menu.yml`, the loading screen |
 | [docs/operator-services.md](docs/operator-services.md) | logging, the security guard, party, matchmaking, replay, friends |
 | [docs/enrollment.md](docs/enrollment.md) | `host/tmc_enroll.gd`, `data/listing.json` |
 | [docs/testing.md](docs/testing.md) | adding or trusting a suite |

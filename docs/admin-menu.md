@@ -1,6 +1,6 @@
 # `/admin` and the loading screen
 
-Two server-owner features with one shape: the server decides, a `DotNotice` carries it, and the shell draws it. `host/tmc_admin_menu.gd` + `client/admin_menu_panel.gd`, configured by `cfg/admin_menu.yml`; `host/tmc_loading.gd` + `client/loading_screen.gd`, configured by `cfg/loading.yml`. Both are installed at the end of `TmcHost._boot`, after the first game. The README's "The admin menu" and "Loading screens" are the owner's view. Players need a shell that has both; an older shell ignores the topics and the server still answers `/admin` with a page nobody draws.
+Two server-owner features with one shape: the server decides, a `DotNotice` carries it, and the shell draws it. `host/tmc_admin_menu.gd` + `client/admin_menu_panel.gd`, configured by `cfg/addons/dot_menu/admin_menu.yml`; `host/tmc_loading.gd` + `client/loading_screen.gd`, configured by `cfg/addons/dot_core/loading.yml`. Both are installed at the end of `TmcHost._boot`, after the first game. The README's "The admin menu" and "Loading screens" are the owner's view. Players need a shell that has both; an older shell ignores the topics and the server still answers `/admin` with a page nobody draws.
 
 ## The menu is a way of typing a command
 

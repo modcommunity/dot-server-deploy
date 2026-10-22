@@ -79,13 +79,13 @@ function readCfg(file, key) {
   } catch { return ''; }
 }
 
-const rconFile = [path.join(configDir, 'addons', 'dot_console', 'rcon.yml'), path.join(configDir, 'rcon.yml')]
+const rconFile = [path.join(configDir, 'server', 'addons', 'dot_console', 'rcon.yml'), path.join(configDir, 'addons', 'dot_console', 'rcon.yml'), path.join(configDir, 'rcon.yml')]
   .find((f) => fs.existsSync(f)) || path.join(configDir, 'rcon.yml');
 const password = process.env.TMC_RCON_PASSWORD
   || readCfg(rconFile, 'rcon_password');
 
 if (!password) {
-  console.error(`no RCON password in ${configDir}/rcon.yml and TMC_RCON_PASSWORD is unset`);
+  console.error(`no RCON password in ${configDir}/addons/dot_console/rcon.yml and TMC_RCON_PASSWORD is unset`);
   console.error('an empty password means the RCON listener does not open at all');
   process.exit(5);
 }

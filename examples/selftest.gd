@@ -17,7 +17,7 @@ const CFG := "res://examples/fixtures"
 ## A loaded game with rounds and no match the game vote can find. See the section that uses it.
 const RoundsWithoutMatch := preload("res://examples/fixtures/rounds_without_match.gd")
 
-const CHECKS := 387
+const CHECKS := 398
 
 var _passed := 0
 var _failed := 0
@@ -921,6 +921,35 @@ func _test_layered_cfg() -> void:
 	_put(root + "/server/addons/dot_server/groups.yml", "groups:\n  b:\n    permissions: [y]\n")
 	var g: TmcConfig = TmcConfig.load_dir(root).value
 	_check(g.groups.has("b") and not g.groups.has("a"), "a new-layout groups.yml wins whole over the flat file")
+	_put(root + "/rcon.yml", "rcon_password: \"flat-password\"\nrcon_port: 7001\n")
+	var rc: TmcConfig = TmcConfig.load_dir(root).value
+	_check(rc.server.rcon_password == "flat-password" and rc.server.rcon_port == 7001, "a flat rcon.yml is still read")
+	_put(root + "/addons/dot_console/rcon.yml", "rcon_password: \"addon-password\"\n")
+	rc = TmcConfig.load_dir(root).value
+	_check(rc.server.rcon_password == "addon-password", "the addon folder's rcon.yml wins over the flat one")
+	_put(root + "/server/addons/dot_console/rcon.yml", "rcon_password: \"operator-password\"\nrcon_allowed: [\"10.0.0.1\"]\n")
+	rc = TmcConfig.load_dir(root).value
+	_check(rc.server.rcon_password == "operator-password", "the operator tier is the strongest rcon.yml")
+	_check(rc.server.rcon_allowed_addresses == PackedStringArray(["10.0.0.1"]), "and its other keys layer over the addon's")
+	_put(root + "/server/addons/dot_console/rcon.yml", "rcon_password: \"\"\n")
+	rc = TmcConfig.load_dir(root).value
+	_check(rc.server.rcon_password == "", "an empty operator password switches RCON off, whatever the weaker tiers hold")
+	_put(root + "/addons/dot_vote/vote.yml", "vote_exclude: [maze]\n")
+	var vc: TmcConfig = TmcConfig.load_dir(root).value
+	_check(vc.vote_exclude.has("maze"), "vote.yml is read from addons/dot_vote/")
+	_put(root + "/addons/dot_core/loading.yml", "loading_title: Hello\n")
+	_put(root + "/server/addons/dot_core/loading.yml", "loading_title: Operator\n")
+	var ld := TmcConfig.merged_file("dot-core", "loading.yml", root)
+	_check(ld.ok and String((ld.value as Dictionary).get("loading_title", "")) == "Operator", "loading.yml layers, the operator tier last")
+	_put(root + "/addons.yml", "defaults:\n  add: [dev/extra@1.2.0]\n")
+	var old_packs := TmcAddonsConfig.load_from(root, root + "/data")
+	_check(old_packs.ok, "an old addons.yml is still read for packs", str(old_packs.error))
+	_put(root + "/packs.yml", "defaults:\n  add: [dev/extra@1.2.0]\n")
+	var new_packs := TmcAddonsConfig.load_from(root, root + "/data")
+	_check(new_packs.ok, "and packs.yml wins when both exist", str(new_packs.error))
+	_check(DotCfgLegacy.find(root + "/games.yml", root + "/game_rotation.yml") == "", "no games.yml and no game_rotation.yml is no rotation file")
+	_put(root + "/games.yml", "rotation: main\n")
+	_check(DotCfgLegacy.find(root + "/games.yml", root + "/game_rotation.yml") == root + "/games.yml", "games.yml is found through the shim")
 	DotPaths.remove_tree(root)
 	DotAddonConfig.config_root = ""
 	_done()
@@ -2177,7 +2206,7 @@ func _test_vote_limit_waits_for_a_change() -> void:
 func _test_vote_notices() -> void:
 	_section("the game vote on the shell's HUD")
 
-	var parsed := TmcYaml.parse_file("res://cfg.example/vote.yml")
+	var parsed := TmcYaml.parse_file("res://cfg.example/addons/dot_vote/vote.yml")
 
 	if not _check(parsed.ok, "the shipped vote.yml template parses", str(parsed.error)):
 		_done()

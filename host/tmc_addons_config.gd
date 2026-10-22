@@ -1,7 +1,7 @@
 class_name TmcAddonsConfig
 extends RefCounted
 
-## The extra packs a server OWNER adds to a game, from `cfg/addons.yml`.
+## The extra packs a server OWNER adds to a game, from `cfg/packs.yml`.
 ##
 ## [codeblock]
 ## defaults:                            # every game on this server
@@ -35,7 +35,9 @@ extends RefCounted
 const CHANNEL := "tmc.content"
 
 ## The owner's file, under the config directory.
-const FILE := "addons.yml"
+const FILE := "packs.yml"
+## The name before the cfg/ move; read through DotCfgLegacy until its cutoff.
+const LEGACY_FILE := "addons.yml"
 
 ## The installer's answers, under the data directory: `{"packs": {"<owner>/<pack>": "<version>"}}`.
 const RESOLVED_FILE := "content-addons.json"
@@ -55,12 +57,13 @@ var resolved: Dictionary = {}
 var warnings: PackedStringArray = PackedStringArray()
 
 
-## Reads `cfg/addons.yml` and the installer's cache. A missing file is no extra packs.
+## Reads `cfg/packs.yml` and the installer's cache. A missing file is no extra packs.
 static func load_from(config_dir: String, data_dir: String) -> DotResult:
 	var out := TmcAddonsConfig.new()
-	var path := "%s/%s" % [config_dir.rstrip("/"), FILE]
+	var dir := config_dir.rstrip("/")
+	var path := DotCfgLegacy.find("%s/%s" % [dir, LEGACY_FILE], "%s/%s" % [dir, FILE])
 
-	if FileAccess.file_exists(path):
+	if path != "" and FileAccess.file_exists(path):
 		var parsed := TmcYaml.parse_file(path)
 
 		if not parsed.ok:
@@ -82,7 +85,7 @@ static func load_from(config_dir: String, data_dir: String) -> DotResult:
 	return DotResult.success(out)
 
 
-## Takes a parsed `addons.yml` apart, refusing what it would otherwise have to guess at.
+## Takes a parsed `packs.yml` apart, refusing what it would otherwise have to guess at.
 func read(tree: Dictionary) -> DotResult:
 	for key: String in tree:
 		if not key in ["defaults", "games"]:

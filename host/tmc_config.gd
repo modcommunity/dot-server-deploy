@@ -159,6 +159,11 @@ const LAYERED := {
 	"groups.yml": "dot-server",
 	"permissions.yml": "dot-server",
 	"admin_menu.yml": "dot-menu",
+	"log.yml": "dot-log",
+	"rcon.yml": "dot-console",
+	"auth.yml": "dot-auth",
+	"vote.yml": "dot-vote",
+	"loading.yml": "dot-core",
 }
 
 ## Keys that exist and are handled somewhere other than a config object.
@@ -424,11 +429,7 @@ static func load_dir(directory: String) -> DotResult:
 
 		var path := "%s/%s" % [base, name]
 
-		# rcon.yml moved under its addon; the flat file is read until DotCfgLegacy's cutoff.
-		if name == "rcon.yml":
-			path = DotCfgLegacy.find(path, "%s/addons/dot_console/%s" % [base, name])
-
-		if path == "" or not FileAccess.file_exists(path):
+		if not FileAccess.file_exists(path):
 			config.files_missing.append(name)
 			continue
 
@@ -580,6 +581,13 @@ func _load_layered(name: String, base: String) -> DotResult:
 	else:
 		files_missing.append(name)
 	return DotResult.success(null)
+
+
+## Value: every tier of [param file] merged into one tree ({} when no tier has it).
+static func merged_file(addon: String, file: String, base: String) -> DotResult:
+	var config := TmcConfig.new()
+	var merged := config._merged_tree(addon, file, base)
+	return DotResult.success(merged.value["tree"]) if merged.ok else merged
 
 
 ## Value: {tree, found}, every tier of [param file] merged, for the keys that are this deployment's.

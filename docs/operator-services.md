@@ -4,7 +4,7 @@ Each of these is operator- or shell-level: a game should not have to know about 
 
 ## The log sink layer
 
-`TmcConfig.build_log_router()` and `TmcHost._build_logging()`, configured by `cfg/log.yml` below its "sink layer" divider: the in-memory ring behind `log tail`, RFC 5424 syslog, a batched HTTP collector in nine wire formats, redaction, and flood control.
+`TmcConfig.build_log_router()` and `TmcHost._build_logging()`, configured by `cfg/addons/dot_log/log.yml` below its "sink layer" divider: the in-memory ring behind `log tail`, RFC 5424 syslog, a batched HTTP collector in nine wire formats, redaction, and flood control.
 
 - **The shared settings are copied out of `server`, not read twice.** The level, channels, mirror threshold and file settings exist on `DotServerConfig` because a deployment with no dot-log still has them through dot-core's sink; `build_log_router()` carries them across. A second set of keys would let a deployment that turned the router on silently write its log somewhere else.
 - **`log_router: auto` is on.** The router's file target is a strict superset of the plain sink (same directory, basename, rotation, naming, `log_json`), and it adds `log status|tail|grep|targets|test` on the console. `off` restores the plain sink exactly. It accepts a bool as well as the three words ([configuration.md](configuration.md#the-configuration-is-a-surface-not-a-second-parser)).
@@ -12,7 +12,7 @@ Each of these is operator- or shell-level: a game should not have to know about 
 
 ## The guard: dot-server-security
 
-`TmcHost._build_security()`: a `DotSecurityManager` beside the server, one `DotSecurityWatch` wiring it to chat, connections, RCON, the console and dot-auth, and a `DotAntiCheat` reporting into the same rule engine. `cfg/security.yml` is the whole policy.
+`TmcHost._build_security()`: a `DotSecurityManager` beside the server, one `DotSecurityWatch` wiring it to chat, connections, RCON, the console and dot-auth, and a `DotAntiCheat` reporting into the same rule engine. `cfg/addons/dot_server_security/security.yml` is the whole policy.
 
 - **It ships in dry run**: every trip is logged and ledgered as `WOULD`, nobody is punished. A guard that punishes a community on thresholds nobody chose gets turned off after the first false positive. The intended sequence: read `sec_status` and `sec_log` for a week, then `sec_dryrun: false`.
 - **Every anti-cheat movement threshold ships at 0 ("do not check").** A guessed speed limit bans the best player the first time they chain a surf ramp into a boost. `sec_ac_status` reports the fastest legitimate values seen.
@@ -21,7 +21,7 @@ Each of these is operator- or shell-level: a game should not have to know about 
 
 ## Party, matchmaking and locale
 
-`host/tmc_party.gd` (`TmcParty.install`, from the end of `TmcHost._boot`), from `cfg/party.yml` and `cfg/matchmaking.yml` (prefix rules: [configuration.md](configuration.md#prefixes-that-keep-two-copies-of-an-addon-apart)).
+`host/tmc_party.gd` (`TmcParty.install`, from the end of `TmcHost._boot`), from `cfg/addons/dot_party/party.yml` and `cfg/addons/dot_matchmaking/matchmaking.yml` (prefix rules: [configuration.md](configuration.md#prefixes-that-keep-two-copies-of-an-addon-apart)).
 
 - **`DotPartyReservations`, always** (unless `party_enabled: false`); with no booking it admits everybody. `seats_fn` counts sessions past authentication against `max_players`; `bypass_fn` is a session holding `DotAdminFlags.RESERVATION`. Bookings come from the backbone when there is a client and from `party_reserve` at the console either way. `party_reserve` lends the booking a copy of the terms with the gates open and the ceiling kept, because the policy's gates are for site bookings, not an owner at their own console.
 - **`DotPartyServer`, only with a backbone client** (`TmcReport`'s, which exists when `data/listing.json` has a token); one client serves both so one token has one rate limiter.
@@ -34,7 +34,7 @@ Each of these is operator- or shell-level: a game should not have to know about 
 
 ## The replay ring
 
-`host/tmc_replay.gd` (`TmcReplay.install`, after `TmcParty`), from `cfg/replay.yml`. Every server keeps a `DotReplayRing` (60 s, capped at 32 MiB) fed by a `DotReplayEventTap` on dot-server's event bus, plus a roster keyframe every 10 s. `replay`, `replay save [seconds] [why]` and `replay list` are on the console, RCON and chat.
+`host/tmc_replay.gd` (`TmcReplay.install`, after `TmcParty`), from `cfg/addons/dot_replay/replay.yml`. Every server keeps a `DotReplayRing` (60 s, capped at 32 MiB) fed by a `DotReplayEventTap` on dot-server's event bus, plus a roster keyframe every 10 s. `replay`, `replay save [seconds] [why]` and `replay list` are on the console, RCON and chat.
 
 - **It records the event bus and a roster, not the netcode.** Which peer's view a net tap records is a game's decision; a game that wants a watchable demo wires `DotReplayNetTap` itself.
 - **The clock is the wall clock at `sv_tickrate`**, not the physics tick, because dot-server hibernates to 5 Hz when empty and "the last sixty seconds" must mean sixty seconds.

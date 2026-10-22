@@ -40,7 +40,7 @@ ORIG_ARGS=("$@")
 # See the note at the end of --help: `DotConfig` refuses secrets from the environment as
 # well as from argv, because both are readable by other processes on the machine --
 # `/proc/<pid>/environ` for one and `ps` for the other -- and both end up in pasted bug
-# reports. The password lives in cfg/rcon.yml, which is a file with a mode on it.
+# reports. The password lives in cfg/addons/dot_console/rcon.yml, which is a file with a mode on it.
 
 # The runtime setup.sh found. Re-resolved when it has since moved, because a baked path
 # that silently stops working is worse than a search that takes a millisecond.
@@ -166,6 +166,9 @@ usage() {
                         a publish a server INSTALLS from. Run it after
                         `pack --all`; a stale index points servers at versions
                         the origin no longer has.
+    cfg-migrate         Move the flat cfg/*.yml files of an older install under
+                        cfg/addons/<addon>/ and cfg/packs.yml, cfg/game_rotation.yml,
+                        keeping a copy in cfg.bak/. --dry-run lists the moves.
     install-games       Fetch the descriptors and packs for --games from the
                         content origin, into content/ and data/content_cache.
                         `run` does this for you when TMC_GAMES is set.
@@ -327,7 +330,7 @@ usage() {
   argv is readable by every other process on the machine via ps, the environment
   is readable via /proc/<pid>/environ, and both end up in pasted bug reports --
   which is why DotConfig refuses secrets from argv and the environment alike.
-  rcon_password lives in cfg/rcon.yml, which is a file with a mode on it.
+  rcon_password lives in cfg/addons/dot_console/rcon.yml, which is a file with a mode on it.
 USAGE
 }
 
@@ -335,7 +338,7 @@ USAGE
 
 case "${1:-}" in
     run|check|config|games|export-web|export-native|stamp-loader) COMMAND="$1"; shift ;;
-    install-games|index) COMMAND="$1"; shift ;;
+    install-games|index|cfg-migrate) COMMAND="$1"; shift ;;
     pack|publish)
         COMMAND="pack"; shift
         PACK_ID="${1:-}"
@@ -514,6 +517,20 @@ mkdir -p "$(abs "$DATA_DIR")"  || die "could not create $(abs "$DATA_DIR")" 5
 # the same reason: a second parser here would drift from the one the server uses.
 cfg_value() { sed -n "s/^[[:space:]]*$2[[:space:]]*:[[:space:]]*\"\?\([^\"#]*\)\"\?.*/\1/p" "$1" 2>/dev/null | head -1 | tr -d '[:space:]'; }
 
+## The value of KEY from the strongest cfg file that sets it: the operator tier, the addon
+## folder, the flat rcon.yml from before the move, then server.yml and net.yml. A file that
+## names the key with an empty value decides (empty password means RCON off).
+rcon_cfg_value() {
+    local d f
+    d="$(abs "$CONFIG_DIR")"
+    for f in server/addons/dot_console/rcon.yml addons/dot_console/rcon.yml rcon.yml server.yml net.yml; do
+        if grep -qE "^[[:space:]]*$1[[:space:]]*:" "$d/$f" 2>/dev/null; then
+            cfg_value "$d/$f" "$1"
+            return 0
+        fi
+    done
+}
+
 port_busy() { ss -ltn 2>/dev/null | grep -qE "[:.]$1[[:space:]]"; }
 
 if [ "$COMMAND" = "run" ]; then
@@ -535,7 +552,7 @@ if [ "$COMMAND" = "run" ]; then
         # prints names a port that looks free.
         #
         # [b]`rcon_port` is read, not assumed.[/b] This used to test `PORT + 1` flatly,
-        # which is only the DEFAULT -- `cfg/rcon.yml` ships `rcon_port: 0` with "0 uses
+        # which is only the DEFAULT -- `cfg/addons/dot_console/rcon.yml` ships `rcon_port: 0` with "0 uses
         # the game port + 1" written beside it, so a number there is an override the
         # server honours. The launcher did not, so setting it moved the listener and
         # refused to start anyway, insisting a port the operator had just vacated was
@@ -556,10 +573,7 @@ if [ "$COMMAND" = "run" ]; then
         # Only whether it is EMPTY is read. The value is a secret and never leaves this
         # test.
         RCON_ON=""
-        for f in rcon server net; do
-            [ -n "$RCON_ON" ] && break
-            [ -n "$(cfg_value "$(abs "$CONFIG_DIR")/$f.yml" rcon_password)" ] && RCON_ON=1
-        done
+        [ -n "$(rcon_cfg_value rcon_password)" ] && RCON_ON=1
 
         # [b]The override outranks the file, exactly as it does in the engine.[/b] This
         # is the same bug the comment above describes, one layer up: the launcher used
@@ -572,12 +586,10 @@ if [ "$COMMAND" = "run" ]; then
             RCON_PORT="$OPT_RCON_PORT"
             RCON_WHY="--rcon-port"
         fi
-        for f in rcon server net; do
-            [ "$RCON_PORT" = "skip" ] && break
-            [ -n "$RCON_PORT" ] && break
-            RCON_PORT="$(cfg_value "$(abs "$CONFIG_DIR")/$f.yml" rcon_port)"
+        if [ "$RCON_PORT" != "skip" ] && [ -z "$RCON_PORT" ]; then
+            RCON_PORT="$(rcon_cfg_value rcon_port)"
             case "$RCON_PORT" in ''|*[!0-9]*|0) RCON_PORT="" ;; esac
-        done
+        fi
 
         if [ "$RCON_PORT" = "skip" ]; then
             RCON_PORT=""
@@ -590,7 +602,7 @@ if [ "$COMMAND" = "run" ]; then
 
         [ -n "$RCON_PORT" ] && port_busy "$RCON_PORT" && die "port $RCON_PORT is in use, and that is where RCON listens ($RCON_WHY).
 
-  Set rcon_port in $CONFIG_DIR/rcon.yml to move it, or stop what is on that port." 6
+  Set rcon_port in $CONFIG_DIR/addons/dot_console/rcon.yml to move it, or stop what is on that port." 6
     fi
 fi
 
@@ -696,6 +708,41 @@ do_pack() {
     exit 0
 }
 
+## ./server cfg-migrate: moves each flat file the old layout used to its new home, and keeps the
+## original in cfg.bak/ first. Never overwrites a file that already exists at the new path.
+do_cfg_migrate() {
+    local dry="${DRY_RUN:-}" moves f src dst moved=0
+    [ -d "$CONFIG_DIR" ] || die "no config directory at $CONFIG_DIR" 2
+    moves="log.yml:addons/dot_log auth.yml:addons/dot_auth vote.yml:addons/dot_vote
+loading.yml:addons/dot_core rcon.yml:addons/dot_console groups.yml:addons/dot_server
+permissions.yml:addons/dot_server security.yml:addons/dot_server_security
+party.yml:addons/dot_party matchmaking.yml:addons/dot_matchmaking replay.yml:addons/dot_replay
+admin_menu.yml:addons/dot_menu maps.yml:addons/dot_map addons.yml:. games.yml:."
+    for f in $moves; do
+        src="$CONFIG_DIR/${f%%:*}"
+        dst="$CONFIG_DIR/${f##*:}/${f%%:*}"
+        case "$f" in
+            addons.yml:.) dst="$CONFIG_DIR/packs.yml" ;;
+            games.yml:.) dst="$CONFIG_DIR/game_rotation.yml" ;;
+        esac
+        [ -f "$src" ] || continue
+        if [ -f "$dst" ]; then
+            note "kept $dst; delete the old ${src##*/} by hand"
+            continue
+        fi
+        if [ -n "$dry" ]; then
+            note "would move ${src##*/} -> ${dst#"$CONFIG_DIR"/}"
+        else
+            mkdir -p "$CONFIG_DIR.bak" "$(dirname "$dst")"
+            [ -e "$CONFIG_DIR.bak/${src##*/}" ] || cp -p "$src" "$CONFIG_DIR.bak/${src##*/}"
+            mv "$src" "$dst" && note "moved ${src##*/} -> ${dst#"$CONFIG_DIR"/} (copy in $CONFIG_DIR.bak/)"
+        fi
+        moved=$((moved + 1))
+    done
+    [ "$moved" -gt 0 ] || note "nothing to move: $CONFIG_DIR already uses the new layout"
+    exit 0
+}
+
 INSTALL_TOOL="res://tools/install_games.gd"
 
 ## True when cfg/content.yml names maps, whose newest versions install-games resolves.
@@ -703,11 +750,13 @@ has_owner_maps() {
     [ -f "$CONFIG_DIR/content.yml" ] && grep -qE '^[[:space:]]+maps:' "$CONFIG_DIR/content.yml"
 }
 
-## True when cfg/addons.yml names a pack (an uncommented owner/pack anywhere in it), whose
+## True when cfg/packs.yml (or the older addons.yml) names a pack (an uncommented owner/pack anywhere in it), whose
 ## newest version install-games resolves, prefetches and checks against this build.
 has_owner_addons() {
-    [ -f "$CONFIG_DIR/addons.yml" ] \
-        && grep -vE '^[[:space:]]*#' "$CONFIG_DIR/addons.yml" | grep -qE '[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+'
+    local f="$CONFIG_DIR/packs.yml"
+    [ -f "$f" ] || f="$CONFIG_DIR/addons.yml"
+    [ -f "$f" ] \
+        && grep -vE '^[[:space:]]*#' "$f" | grep -qE '[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+'
 }
 INDEX_TOOL="res://tools/index.gd"
 
@@ -1153,6 +1202,7 @@ case "$COMMAND" in
     config)     ARGS+=(--print-config) ;;
     games)      ARGS+=(--list-games) ;;
     pack)       do_pack ;;
+    cfg-migrate) do_cfg_migrate ;;
     index)      do_index ;;
     install-games)
         do_install_games
@@ -1473,24 +1523,25 @@ if [ ! -f "$CONFIG_DIR/content.yml" ] && [ -f "$PROJECT/cfg.example/content.yml"
         && note "wrote $CONFIG_DIR/content.yml from the template: this server's settings per game"
 fi
 
-# cfg/maps.yml and cfg/games.yml (which maps and which games PLAY; the rest stay installed)
-# are newer than that, and copied the same way. The templates only comment out their examples,
-# so a copy changes nothing until an operator edits it.
-for rotation_file in maps.yml games.yml; do
-    if [ ! -f "$CONFIG_DIR/$rotation_file" ] && [ -f "$PROJECT/cfg.example/$rotation_file" ] \
-            && [ -d "$CONFIG_DIR" ] && { [ "$COMMAND" = "run" ] || [ "$COMMAND" = "check" ]; }; then
-        cat "$PROJECT/cfg.example/$rotation_file" > "$CONFIG_DIR/$rotation_file" \
-            && note "wrote $CONFIG_DIR/$rotation_file from the template: which ${rotation_file%.yml} play"
-    fi
-done
-
-# cfg/addons.yml (the extra packs an owner adds per game) is newer still, and copied the
-# same way: when it is missing, never over one that exists.
-if [ ! -f "$CONFIG_DIR/addons.yml" ] && [ -f "$PROJECT/cfg.example/addons.yml" ] \
-        && [ -d "$CONFIG_DIR" ] && { [ "$COMMAND" = "run" ] || [ "$COMMAND" = "check" ]; }; then
-    cat "$PROJECT/cfg.example/addons.yml" > "$CONFIG_DIR/addons.yml" \
-        && note "wrote $CONFIG_DIR/addons.yml from the template: extra packs this server adds per game"
-fi
+# cfg/addons/dot_map/maps.yml and cfg/game_rotation.yml (which maps and which games PLAY; the rest
+# stay installed) are newer than that, and copied the same way. The templates only comment out
+# their examples, so a copy changes nothing until an operator edits it. A flat maps.yml,
+# games.yml or addons.yml from before the move is still read, so its template is not copied
+# beside it: the new file would win whole.
+copy_template() {
+    local rel="$1" legacy="$2" why="$3"
+    [ -d "$CONFIG_DIR" ] && { [ "$COMMAND" = "run" ] || [ "$COMMAND" = "check" ]; } || return 0
+    [ -f "$CONFIG_DIR/$rel" ] && return 0
+    [ -n "$legacy" ] && [ -f "$CONFIG_DIR/$legacy" ] && return 0
+    [ -f "$PROJECT/cfg.example/$rel" ] || return 0
+    mkdir -p "$(dirname "$CONFIG_DIR/$rel")"
+    cat "$PROJECT/cfg.example/$rel" > "$CONFIG_DIR/$rel" \
+        && note "wrote $CONFIG_DIR/$rel from the template: $why"
+}
+copy_template addons/dot_map/maps.yml maps.yml "which maps play"
+copy_template game_rotation.yml games.yml "which games play"
+# cfg/packs.yml (the extra packs an owner adds per game), same rule.
+copy_template packs.yml addons.yml "extra packs this server adds per game"
 
 if [ -z "$NO_INSTALL" ] && { [ -n "$OPT_GAMES" ] || has_owner_maps || has_owner_addons; } \
         && { [ "$COMMAND" = "run" ] || [ "$COMMAND" = "check" ]; }; then

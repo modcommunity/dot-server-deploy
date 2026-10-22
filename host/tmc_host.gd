@@ -872,9 +872,10 @@ func _boot() -> bool:
 	# cooldown, and offers the game everybody is playing on its own first ballot.
 	# games.yml: which installed games play. No file is every game; an unreadable one is an
 	# ERROR and plays every game too, because a vote that cannot start is worse.
-	var rotation_read := TmcGameRotation.load_file("%s/%s" % [_config_dir, TmcGameRotation.FILE])
+	var rotation_read := TmcGameRotation.load_file(DotCfgLegacy.find(
+		"%s/%s" % [_config_dir, TmcGameRotation.LEGACY_FILE], "%s/%s" % [_config_dir, TmcGameRotation.FILE]))
 	if not rotation_read.ok:
-		DotLog.error(CHANNEL, "games.yml could not be read; every installed game plays", {
+		DotLog.error(CHANNEL, "game_rotation.yml could not be read; every installed game plays", {
 			"why": str(rotation_read.error),
 		})
 	var games_rotation: TmcGameRotation = rotation_read.value if rotation_read.ok else null
@@ -913,10 +914,7 @@ func _boot() -> bool:
 
 	# After the first game too: it watches that game's map session for per-map screens.
 	var reread := func() -> DotResult:
-		var path := "%s/loading.yml" % _config_dir
-		if not FileAccess.file_exists(path):
-			return DotResult.success({})
-		return TmcYaml.parse_file(path)
+		return TmcConfig.merged_file("dot-core", "loading.yml", _config_dir)
 
 	loading = TmcLoading.install(self, server, config.loading, reread, map_session)
 

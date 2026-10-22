@@ -23,7 +23,7 @@ Your settings are in `.env`: change a line and run `docker compose up -d` again.
 
 The health check asks the server itself whether it is answering, so a server that started but never opened its port shows as unhealthy instead of running.
 
-**Passwords never go in `.env` or the compose file.** The RCON password is generated once on the first start into `cfg/rcon.yml`; read it there. Nothing in this tool accepts a password, on purpose: environment variables show up in `docker inspect`.
+**Passwords never go in `.env` or the compose file.** The RCON password is generated once on the first start into `cfg/addons/dot_console/rcon.yml`; read it there. Nothing in this tool accepts a password, on purpose: environment variables show up in `docker inspect`.
 
 **With a domain and nginx.** Add `--domain play.example.com`: the browser (WebSocket) port is then published on the loopback only, and the command that sets up nginx is printed. The nginx config is the same one the host install uses (`deploy/install-server-tls.sh`); it forwards to `127.0.0.1:<port>`.
 
@@ -39,7 +39,7 @@ The health check asks the server itself whether it is answering, so a server tha
 
 What you set in the panel's Startup tab lands in the server's files: the name, player slots and which platforms may join are written into `cfg/server.yml` every time the server starts, so editing a variable in the panel and editing the file give the same result. Everything the panel has no variable for you change in the file manager, under `cfg/`. [operator-config.md](operator-config.md) says which file holds what.
 
-Leave the Port variable empty; the panel's primary allocation is passed to the server for you. As with the host install, passwords are not variables: set the RCON password in `cfg/rcon.yml` in the file manager.
+Leave the Port variable empty; the panel's primary allocation is passed to the server for you. As with the host install, passwords are not variables: set the RCON password in `cfg/addons/dot_console/rcon.yml` in the file manager.
 
 Nginx in front of a panel server is the same config again: point `deploy/install-server-tls.sh --backend` at the node and the primary allocation.
 

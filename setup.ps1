@@ -324,7 +324,10 @@ foreach ($template in (Get-ChildItem -LiteralPath $templates -Recurse -File |
     $rel = $template.FullName.Substring($templates.Length + 1)
     $target = Join-Path 'cfg' $rel
     if (Test-Path -LiteralPath $target) { continue }
-    if ($rel -eq 'addons\dot_console\rcon.yml' -and (Test-Path -LiteralPath 'cfg\rcon.yml')) { continue }
+    # A flat file from before the move is still read; a fresh template beside it would win whole.
+    if ($rel -like 'addons\*\*.yml' -and (Test-Path -LiteralPath (Join-Path 'cfg' (Split-Path -Leaf $rel)))) { continue }
+    if ($rel -eq 'packs.yml' -and (Test-Path -LiteralPath 'cfg\addons.yml')) { continue }
+    if ($rel -eq 'game_rotation.yml' -and (Test-Path -LiteralPath 'cfg\games.yml')) { continue }
 
     New-Item -ItemType Directory -Force -Path (Split-Path -Parent (Join-Path $Root $target)) | Out-Null
 
@@ -377,8 +380,9 @@ if ((-not (Test-Path -LiteralPath 'data\content.json')) -and (Test-Path -Literal
 # exists is the rule; the cost is that a release which ADDS a setting is invisible,
 # so say which ones your files do not mention. A commented-out key counts as
 # answered -- deleting a setting on purpose is not a question.
-foreach ($template in (Get-ChildItem -LiteralPath $templates -File -Filter '*.yml' | Sort-Object Name)) {
-    $target = Join-Path 'cfg' $template.Name
+foreach ($template in (Get-ChildItem -LiteralPath $templates -File -Recurse -Filter '*.yml' | Sort-Object FullName)) {
+    $target = Join-Path 'cfg' $template.FullName.Substring($templates.Length + 1)
+    if (-not (Test-Path -LiteralPath $target)) { $target = Join-Path 'cfg' $template.Name }
     if (-not (Test-Path -LiteralPath $target)) { continue }
 
     $have = Get-Content -LiteralPath $target

@@ -2157,9 +2157,14 @@ while IFS= read -r template; do
     rel="${template#cfg.example/}"
     target="cfg/$rel"
     [ -f "$target" ] && continue
-    # A server set up before rcon.yml moved keeps its password in the flat file, which is
-    # still read (DotCfgLegacy); a second, generated one would win over it.
-    [ "$rel" = "addons/dot_console/rcon.yml" ] && [ -f cfg/rcon.yml ] && continue
+    # A server set up before the files moved under cfg/addons/ keeps its edits in the flat
+    # file, which is still read (DotCfgLegacy); a fresh template beside it would win whole
+    # and hide them. Same for packs.yml and game_rotation.yml, which were addons.yml and games.yml.
+    case "$rel" in
+        addons/*/*.yml) [ -f "cfg/$(basename "$rel")" ] && continue ;;
+        packs.yml) [ -f cfg/addons.yml ] && continue ;;
+        game_rotation.yml) [ -f cfg/games.yml ] && continue ;;
+    esac
     mkdir -p "$(dirname "$target")"
 
     if [ "$rel" = "addons/dot_console/rcon.yml" ]; then
@@ -2171,11 +2176,15 @@ while IFS= read -r template; do
         NEW_RCON=1
     else
         cat "$template" > "$target"
-        [ "$rel" = "vote.yml" ] && NEW_VOTE=1
+        [ "$rel" = "addons/dot_vote/vote.yml" ] && NEW_VOTE=1
     fi
 
     printf '    %s+%s    %s\n' "$GRN" "$OFF" "$target"
 done < <(find cfg.example -type f \( -name '*.yml' -o -name '*.md' \) | sort)
+
+# The vote file an exclusion goes into: the flat one while an older box still has it.
+VOTE_YML=cfg/addons/dot_vote/vote.yml
+[ -f cfg/vote.yml ] && VOTE_YML=cfg/vote.yml
 
 # [b]A game this build did not publish must not be OFFERED, and that is not the same
 # question as which packs exist.[/b] The catalogue is `content/<id>/game.yml`, which is
@@ -2224,19 +2233,19 @@ if [ ${#DROPPED_DIRS[@]} -gt 0 ]; then
     # What vote.yml already excludes, kept: an operator's own exclusions are theirs, and a
     # run that replaced that line rather than adding to it would put their games back on
     # the ballot as a side effect of a flag about something else.
-    existing="$(grep -E '^vote_exclude:' cfg/vote.yml 2>/dev/null | head -1 \
+    existing="$(grep -E '^vote_exclude:' "$VOTE_YML" 2>/dev/null | head -1 \
         | sed -E 's/^vote_exclude:[[:space:]]*\[?//; s/\][[:space:]]*$//' | tr -d '" ' | tr ',' ' ')"
     merged="$(printf '%s\n' $existing "${EXCLUDE_IDS[@]}" | sed '/^$/d' | sort -u | tr '\n' ' ')"
     line="vote_exclude: [$(printf '%s' "$merged" | sed 's/ $//; s/ /, /g')]"
 
-    if [ "${NEW_VOTE:-0}" -eq 1 ] && grep -qE '^vote_exclude:' cfg/vote.yml; then
+    if [ "${NEW_VOTE:-0}" -eq 1 ] && grep -qE '^vote_exclude:' "$VOTE_YML"; then
         # sed over the one line rather than a rewrite of the file: everything else in
         # cfg.example/vote.yml is forty lines of why, and a generated file that dropped
         # them would answer this question and lose the answers to the others.
-        sed -i "s|^vote_exclude:.*|$line|" cfg/vote.yml
-        ok "cfg/vote.yml excludes the games this build does not carry: ${EXCLUDE_IDS[*]}"
+        sed -i "s|^vote_exclude:.*|$line|" "$VOTE_YML"
+        ok "$VOTE_YML excludes the games this build does not carry: ${EXCLUDE_IDS[*]}"
     else
-        warn "cfg/vote.yml still offers games this build did not publish.
+        warn "$VOTE_YML still offers games this build did not publish.
        Your cfg/ is yours, so this run did not touch it. Set:
 
            $line
@@ -2320,8 +2329,9 @@ umask "$umask_old"
 # that describes a key nobody's config contains. So say so. A key that is present but
 # COMMENTED OUT counts as answered -- an operator who deleted a setting on purpose is
 # not asking to be reminded of it every run.
-for template in cfg.example/*.yml; do
-    target="cfg/$(basename "$template")"
+for template in $(find cfg.example -name '*.yml' | sort); do
+    target="cfg/${template#cfg.example/}"
+    [ -f "$target" ] || target="cfg/$(basename "$template")"
     [ -f "$target" ] || continue
     added=""
     while IFS= read -r key; do

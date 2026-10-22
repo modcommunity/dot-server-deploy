@@ -1,6 +1,6 @@
 # The game vote: players choose the next game
 
-`cfg/vote.yml` and `host/tmc_vote.gd`. dot-map votes for maps inside a game; this votes for what the SERVER runs next, which only exists because this project runs more than one game per server.
+`cfg/addons/dot_vote/vote.yml` and `host/tmc_vote.gd`. dot-map votes for maps inside a game; this votes for what the SERVER runs next, which only exists because this project runs more than one game per server.
 
 ```
 !game_nominate g2gfast   !game_rtv   !game_vote 2      !game_timeleft   !game_next
@@ -20,7 +20,7 @@ A loaded game may run its own map vote, and its module registers `rtv`, `nominat
 
 ## games.yml decides which games are voted on and played
 
-`cfg/games.yml` picks the games a server plays out of the ones installed in `content/`: named rotations, `mode: random|cycle`, `cooldown`, `sv_game_rotation <name>` to switch, `games_rotations` to list. It uses dot-core's `DotRotationSpec`, the same matcher as dot-map's `maps.yml`, so entries and layering read the same. A game outside the active rotation stays installed (an admin can still `changelevel` to it) and is left out of the ballot, `!game_nominate`, `!game_next`, the pick `!game_rtv` and the end of a game make, and the content/-order fallback. `vote_exclude` still applies on top. A `cycle` turns the end-of-game ballot off and plays the written order. No file offers every installed game. Its `commands:` block renames the `game_` prefix and the command names (with aliases); the constants in `host/tmc_vote.gd` are only the defaults. Collisions log a WARN and skip the name.
+`cfg/game_rotation.yml` picks the games a server plays out of the ones installed in `content/`: named rotations, `mode: random|cycle`, `cooldown`, `sv_game_rotation <name>` to switch, `games_rotations` to list. It uses dot-core's `DotRotationSpec`, the same matcher as dot-map's `maps.yml`, so entries and layering read the same. A game outside the active rotation stays installed (an admin can still `changelevel` to it) and is left out of the ballot, `!game_nominate`, `!game_next`, the pick `!game_rtv` and the end of a game make, and the content/-order fallback. `vote_exclude` still applies on top. A `cycle` turns the end-of-game ballot off and plays the written order. No file offers every installed game. Its `commands:` block renames the `game_` prefix and the command names (with aliases); the constants in `host/tmc_vote.gd` are only the defaults. Collisions log a WARN and skip the name.
 
 ## One game on offer is no game vote
 
@@ -57,7 +57,7 @@ The ballot, countdown and result reach chat through `announce_fn`, and also go o
 - **A closed ballot's result comes down when another ballot opens.** A panel holds "X won" for `result_hold_sec` (4 s), and a game's own ballot often opens inside that, right after the game vote keeps the game: the two stacked down the column to y~650 at 1280x720 and covered the bottom-right HUD of smash, wipeout and deathrun. The result is news only until something else asks a question.
 - **A ballot's background is opaque** (`TmcNoticeOverlay.ballot_theme()`): the theme's 0.92 let a bright HUD under it read through (a lot screen's prices showed under "Don't change won").
 - **A late joiner is sent the line that is still true** from `client_spawned`; notices go to playing sessions only.
-- **The cue ids are written twice and checked against each other.** `cfg.example/vote.yml` names them (`tmc_vote_start`, `tmc_vote_end`, `tmc_vote_warning`, `tmc_vote_count`) because the server decides what plays; `TmcNoticeOverlay.sound_catalogue()` has them because the client plays them and `host/` is not in the client build. `selftest` fails on a cue the overlay lacks (dot-audio plays an unknown id as silence) or one with no synthesised stand-in. Real sounds go in `client/sounds/<id>.ogg`.
+- **The cue ids are written twice and checked against each other.** `cfg.example/addons/dot_vote/vote.yml` names them (`tmc_vote_start`, `tmc_vote_end`, `tmc_vote_warning`, `tmc_vote_count`) because the server decides what plays; `TmcNoticeOverlay.sound_catalogue()` has them because the client plays them and `host/` is not in the client build. `selftest` fails on a cue the overlay lacks (dot-audio plays an unknown id as silence) or one with no synthesised stand-in. Real sounds go in `client/sounds/<id>.ogg`.
 - **The overlay does not register an audio manager or touch buses**: a delivered game registers its own `dot_audio` and sets its own volumes. It plays on `Master` because this project declares no bus layout.
 
 ## The ballot is drawn, and a click votes
@@ -66,7 +66,7 @@ The ballot, countdown and result reach chat through `announce_fn`, and also go o
 
 ## Template changes do not reach existing deployments
 
-`cfg.example/vote.yml` ships `vote_warning_sec: 10`, `runoff_warning_sec: 5` and the four cue ids. `cfg/` is never overwritten, so a deployment whose `vote.yml` predates them has the ballot line and no countdown or sound until those keys are uncommented there.
+`cfg.example/addons/dot_vote/vote.yml` ships `vote_warning_sec: 10`, `runoff_warning_sec: 5` and the four cue ids. `cfg/` is never overwritten, so a deployment whose `vote.yml` predates them has the ballot line and no countdown or sound until those keys are uncommented there.
 
 ## A game that stops its map clock must stop its vote's clock too
 

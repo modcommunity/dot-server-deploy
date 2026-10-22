@@ -8,7 +8,7 @@ The README's "Configuration" section is the operator's view of each file. This i
 
 - `git pull` on a running server refused to merge over an operator's edits, so operators stashed their config or committed a box's port into the repository;
 - the three copies drifted in the direction that grants nothing (the setup scripts kept writing group flag names that match no flag, and a tarball install had no `vote.yml` at all);
-- a generated RCON password reached a public repository through `git add -A` on a tracked `cfg/rcon.yml`. `rcon_allowed: ["127.0.0.1"]` made it a rotation rather than an incident.
+- a generated RCON password reached a public repository through `git add -A` on a tracked `cfg/addons/dot_console/rcon.yml`. `rcon_allowed: ["127.0.0.1"]` made it a rotation rather than an incident.
 
 So `cfg.example/` is the only copy. `cfg/` is gitignored, written file by file on first run by whichever setup script ran, and **never overwritten**: an upgrade that regenerated a config would throw away the edits on the one run nobody is watching. The cost is that a template which gains a setting is invisible, so both setup scripts finish by naming the keys the templates have that your files do not mention, counting a commented-out key as answered. The template `cfg.example/addons/dot_console/rcon.yml` ships `rcon_password: ""` and setup writes the generated password into `cfg/addons/dot_console/rcon.yml` on the way in, so the tracked file never holds a secret. A flat `cfg/rcon.yml` is still read (with a WARN) until 2026-12-31. The same rule covers `export_presets.example.cfg` ([native-client.md](native-client.md)).
 
@@ -42,7 +42,7 @@ exported defaults  <  cfg/*.yml  <  DOT_SERVER_* (and each addon's DOT_* prefix)
 
 dot-server's permission model is flags, not roles: operators do not agree on what a "moderator" is, and a game adds `slay` without coordinating. What an operator writes is roles. `TmcAdmins` is the translation and the only place the two vocabularies meet. It is a **source**, not a replacement: `DotAdminManager` merges every source, so a player named here and in a site group gets the union.
 
-**It does nothing without authentication.** `DotAdminManager.resolve` returns before consulting any source when a session is not authenticated, because a guest uid is a random per-device string. That looks exactly like the file being ignored, which is why `cfg/auth.yml` says so at the top.
+**It does nothing without authentication.** `DotAdminManager.resolve` returns before consulting any source when a session is not authenticated, because a guest uid is a random per-device string. That looks exactly like the file being ignored, which is why `cfg/addons/dot_auth/auth.yml` says so at the top.
 
 ## A server owner's settings per game: `cfg/content.yml`
 
@@ -59,3 +59,8 @@ dot-server's permission model is flags, not roles: operators do not agree on wha
 - **When a map pack is fetched is the game's `metadata: maps_delivery:`** (`TmcGameConfig._maps_to_clients`): `lazy` leaves it in `maps` (fetched on a change); `server` also puts it in `server_dependencies`, mounted before the game loads; `client` puts it in `dependencies`, mounted before load and sent to every player. `server` exists because dot-server admits players once the scene is up and does not wait for a module, so a game that fetched its maps in its own module load ran its first seconds on its built-in course.
 
 selftest's "a server's settings per game" section holds these rules and ties the template to the reader.
+
+## The `cfg/` move (2026-10-22)
+
+Settings that one addon reads live in `cfg/addons/<addon>/<file>`, and the operator's overrides in `cfg/server/addons/<addon>/<file>`, which is the strongest layer (for `rcon.yml` too; an empty `rcon_password` there switches RCON off). `TmcConfig.LAYERED` names the files and their addons; `server.yml` and `net.yml` stay flat. The flat files, `addons.yml` (now `packs.yml`) and `games.yml` (now `game_rotation.yml`) are read through `DotCfgLegacy` until 2026-12-31, and a template is never copied beside a flat file that exists, because the new path wins whole. `./server cfg-migrate [--dry-run]` moves them and keeps the originals in `cfg.bak/`. `net.yml` into `server.yml` and `content.yml` into `cfg/game/<game>/server.yml` are not done.
+
