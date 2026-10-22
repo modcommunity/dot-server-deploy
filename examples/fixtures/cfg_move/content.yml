@@ -1,0 +1,9 @@
+games:
+  game-x:
+    max_players: 20
+    cvars:
+      a: "1"
+      keep: "yes"
+    maps:
+      add:
+        - me/old_map

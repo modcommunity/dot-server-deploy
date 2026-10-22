@@ -167,8 +167,9 @@ usage() {
                         `pack --all`; a stale index points servers at versions
                         the origin no longer has.
     cfg-migrate         Move the flat cfg/*.yml files of an older install under
-                        cfg/addons/<addon>/ and cfg/packs.yml, cfg/game_rotation.yml,
-                        keeping a copy in cfg.bak/. --dry-run lists the moves.
+                        cfg/addons/<addon>/ and cfg/packs.yml, cfg/game_rotation.yml;
+                        net.yml into server.yml, content.yml's games: into
+                        cfg/game/<game>/server.yml; keeping a copy in cfg.bak/. --dry-run lists the moves.
     install-games       Fetch the descriptors and packs for --games from the
                         content origin, into content/ and data/content_cache.
                         `run` does this for you when TMC_GAMES is set.
@@ -183,7 +184,7 @@ usage() {
                         deployment change, not a rebuild.
 
   Options
-    --port N            Listen here instead of what cfg/net.yml says.
+    --port N            Listen here instead of what cfg/server.yml says.
     --bind ADDR         Interface to bind. * or 0.0.0.0 is every one.
     --rcon-port N       RCON listens here. Default is the game port plus one.
     --a2s-port N        A2S answers here (UDP). Default is the game port, whose
@@ -281,7 +282,7 @@ usage() {
 
   Where the configuration actually lives
 
-  IN cfg/, AS YAML. `cfg/net.yml` has net_port and net_bind_ip; `cfg/server.yml`
+  IN cfg/, AS YAML. `cfg/server.yml` has net_port and net_bind_ip; `cfg/server.yml`
   has sv_name and sv_maxplayers; and so on. That is the normal place to change
   any of this, and the only one where the comment explaining why survives.
 
@@ -538,7 +539,9 @@ if [ "$COMMAND" = "run" ]; then
     for ((n = 0; n < ${#OVERRIDES[@]} - 1; n++)); do
         [ "${OVERRIDES[n]}" = "--port" ] && PORT="${OVERRIDES[n + 1]}"
     done
+    # net.yml (before net_* moved into server.yml) is read after server.yml, so it wins.
     [ -n "$PORT" ] || PORT="$(cfg_value "$(abs "$CONFIG_DIR")/net.yml" net_port)"
+    [ -n "$PORT" ] || PORT="$(cfg_value "$(abs "$CONFIG_DIR")/server.yml" net_port)"
 
     # Digits, and not merely non-empty: a `net_port` line somebody has commented out or
     # written as `${PORT}` reaches here as text, and `$((PORT + 1))` on text is a shell
@@ -739,15 +742,85 @@ admin_menu.yml:addons/dot_menu maps.yml:addons/dot_map addons.yml:. games.yml:."
         fi
         moved=$((moved + 1))
     done
+    cfg_migrate_net
+    cfg_migrate_content
+    moved=$((moved + CFG_MIGRATED))
     [ "$moved" -gt 0 ] || note "nothing to move: $CONFIG_DIR already uses the new layout"
     exit 0
+}
+
+CFG_MIGRATED=0
+
+## net.yml into server.yml: appended whole when server.yml names none of its keys, else left for
+## the operator (a duplicate key in one YAML file is the worse outcome).
+cfg_migrate_net() {
+    local src="$CONFIG_DIR/net.yml" dst="$CONFIG_DIR/server.yml" k
+    [ -f "$src" ] || return 0
+    if [ -f "$dst" ]; then
+        for k in $(grep -oE '^[A-Za-z_]+:' "$src" | tr -d ':'); do
+            if grep -qE "^$k[[:space:]]*:" "$dst"; then
+                note "kept net.yml: server.yml already sets $k; merge them by hand"
+                return 0
+            fi
+        done
+    fi
+    if [ -n "${DRY_RUN:-}" ]; then
+        note "would append net.yml to server.yml"
+    else
+        mkdir -p "$CONFIG_DIR.bak"
+        [ -e "$CONFIG_DIR.bak/net.yml" ] || cp -p "$src" "$CONFIG_DIR.bak/net.yml"
+        [ -f "$dst" ] && [ -n "$(tail -c 1 "$dst")" ] && printf '\n' >> "$dst"
+        { printf '\n# Network (moved from net.yml)\n'; cat "$src"; } >> "$dst" && rm -f "$src" \
+            && note "moved net.yml -> server.yml (copy in $CONFIG_DIR.bak/)"
+    fi
+    CFG_MIGRATED=$((CFG_MIGRATED + 1))
+}
+
+## content.yml's games: entries into game/<game>/server.yml (same keys, dedented); defaults: stays.
+cfg_migrate_content() {
+    local src="$CONFIG_DIR/content.yml" g n=0 games rest
+    [ -f "$src" ] && grep -qE '^games:' "$src" || return 0
+    games="$(awk '/^games:/ {inb=1; next} inb && /^[A-Za-z_]/ {inb=0} inb && /^  [^ #][^:]*:[[:space:]]*$/ {k=$1; sub(/:$/,"",k); gsub(/["'"'"']/,"",k); print k}' "$src")"
+    for g in $games; do
+        if [ -f "$CONFIG_DIR/game/$g/server.yml" ]; then
+            note "kept game/$g/server.yml; its entry stays in content.yml"
+            return 0
+        fi
+    done
+    if [ -n "${DRY_RUN:-}" ]; then
+        for g in $games; do note "would write game/$g/server.yml from content.yml"; done
+        CFG_MIGRATED=$((CFG_MIGRATED + 1))
+        return 0
+    fi
+    mkdir -p "$CONFIG_DIR.bak"
+    [ -e "$CONFIG_DIR.bak/content.yml" ] || cp -p "$src" "$CONFIG_DIR.bak/content.yml"
+    for g in $games; do
+        mkdir -p "$CONFIG_DIR/game/$g"
+        awk -v want="$g" '
+            /^games:/ {inb=1; next}
+            inb && /^[A-Za-z_]/ {inb=0}
+            !inb {next}
+            /^  [^ #][^:]*:[[:space:]]*$/ {k=$1; sub(/:$/,"",k); gsub(/["'"'"']/,"",k); cur=(k==want); next}
+            cur {sub(/^  /,""); print}
+        ' "$src" > "$CONFIG_DIR/game/$g/server.yml"
+        note "wrote game/$g/server.yml from content.yml"
+        n=$((n + 1))
+    done
+    rest="$(mktemp)"
+    awk '/^games:/ {inb=1; print "games: {}"; next} inb && /^[A-Za-z_]/ {inb=0} !inb {print}' "$src" > "$rest"
+    cat "$rest" > "$src"; rm -f "$rest"
+    CFG_MIGRATED=$((CFG_MIGRATED + 1))
 }
 
 INSTALL_TOOL="res://tools/install_games.gd"
 
 ## True when cfg/content.yml names maps, whose newest versions install-games resolves.
 has_owner_maps() {
-    [ -f "$CONFIG_DIR/content.yml" ] && grep -qE '^[[:space:]]+maps:' "$CONFIG_DIR/content.yml"
+    local f
+    for f in "$CONFIG_DIR/content.yml" "$CONFIG_DIR"/game/*/server.yml; do
+        [ -f "$f" ] && grep -qE '^[[:space:]]*maps:' "$f" && return 0
+    done
+    return 1
 }
 
 ## True when cfg/packs.yml (or the older addons.yml) names a pack (an uncommented owner/pack anywhere in it), whose

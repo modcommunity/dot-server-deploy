@@ -100,7 +100,7 @@ if (!port && gamePort) {
 if (!port) {
   // rcon_port 0 means "the game port + 1", which is what DotServerConfig does.
   const declared = Number(readCfg(rconFile, 'rcon_port')) || 0;
-  port = declared || (Number(readCfg(path.join(configDir, 'net.yml'), 'net_port')) || 6064) + 1;
+  port = declared || (Number(readCfg(path.join(configDir, 'net.yml'), 'net_port')) || Number(readCfg(path.join(configDir, 'server.yml'), 'net_port')) || 6064) + 1;
 }
 
 function packet(id, type, body) {

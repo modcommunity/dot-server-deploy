@@ -79,6 +79,11 @@ function Show-Usage {
     check               Boot, load the game, shut down. Exit 0 if it all worked.
     config              Print the resolved configuration and exit.
     games               List what is in the content directory and exit.
+    cfg-migrate         Move the flat cfg\*.yml files of an older install under
+                        cfg\addons\<addon>\, cfg\packs.yml and cfg\game_rotation.yml;
+                        net.yml into server.yml, content.yml's games: into
+                        cfg\game\<game>\server.yml. Copies go to cfg.bak\.
+                        --dry-run lists the moves.
     pack <id>           Publish content\<id> as a signed dot-cloud pack.
     export-web          Build the browser client into web\build, plus the
                         loader website-city uploads. Takes --base.
@@ -90,7 +95,7 @@ function Show-Usage {
                         deployment change, not a rebuild.
 
   Options                                    (-Port and --port both work)
-    --port N            Listen here instead of what cfg\net.yml says.
+    --port N            Listen here instead of what cfg\server.yml says.
     --bind ADDR         Interface to bind. * or 0.0.0.0 is every one.
     --name TEXT         Server name shown in listings.
     --max-players N
@@ -372,7 +377,7 @@ function Get-Tail($Items, [int]$From) {
 
 if ($rest.Count -gt 0) {
     switch -Regex ($rest[0]) {
-        '^(run|check|config|games|export-web|export-native|stamp-loader)$' {
+        '^(run|check|config|games|cfg-migrate|export-web|export-native|stamp-loader)$' {
             $Command = $rest[0]; $rest = Get-Tail $rest 1
         }
         '^pack$' {
@@ -442,6 +447,117 @@ while ($i -lt $rest.Count) {
 
     Die "unknown option: $token  (.\server.ps1 --help)"
 }
+
+# --- cfg-migrate -----------------------------------------------------------
+#
+# The same moves as ./server cfg-migrate, and it needs no Godot runtime. Never overwrites a file
+# at the new path; the original goes to <cfg>.bak first.
+function Invoke-CfgMigrate {
+    $dir = if ([System.IO.Path]::IsPathRooted($ConfigDir)) { $ConfigDir } else { Join-Path $Project $ConfigDir }
+    if (-not (Test-Path -LiteralPath $dir -PathType Container)) { Die "no config directory at $dir" 2 }
+    $bak = "$dir.bak"
+    $moved = 0
+
+    function Save-Backup([string]$Src) {
+        New-Item -ItemType Directory -Path $bak -Force | Out-Null
+        $copy = Join-Path $bak (Split-Path -Leaf $Src)
+        if (-not (Test-Path -LiteralPath $copy)) { Copy-Item -LiteralPath $Src -Destination $copy }
+    }
+
+    $moves = @(
+        @('log.yml', 'addons\dot_log\log.yml'), @('auth.yml', 'addons\dot_auth\auth.yml'),
+        @('vote.yml', 'addons\dot_vote\vote.yml'), @('loading.yml', 'addons\dot_core\loading.yml'),
+        @('rcon.yml', 'addons\dot_console\rcon.yml'), @('groups.yml', 'addons\dot_server\groups.yml'),
+        @('permissions.yml', 'addons\dot_server\permissions.yml'),
+        @('security.yml', 'addons\dot_server_security\security.yml'),
+        @('party.yml', 'addons\dot_party\party.yml'),
+        @('matchmaking.yml', 'addons\dot_matchmaking\matchmaking.yml'),
+        @('replay.yml', 'addons\dot_replay\replay.yml'),
+        @('admin_menu.yml', 'addons\dot_menu\admin_menu.yml'), @('maps.yml', 'addons\dot_map\maps.yml'),
+        @('addons.yml', 'packs.yml'), @('games.yml', 'game_rotation.yml')
+    )
+    foreach ($m in $moves) {
+        $src = Join-Path $dir $m[0]
+        $dst = Join-Path $dir $m[1]
+        if (-not (Test-Path -LiteralPath $src)) { continue }
+        if (Test-Path -LiteralPath $dst) { Note "kept $($m[1]); delete the old $($m[0]) by hand"; continue }
+        if ($DryRun) { Note "would move $($m[0]) -> $($m[1])" }
+        else {
+            Save-Backup $src
+            New-Item -ItemType Directory -Path (Split-Path -Parent $dst) -Force | Out-Null
+            Move-Item -LiteralPath $src -Destination $dst
+            Note "moved $($m[0]) -> $($m[1]) (copy in $bak\)"
+        }
+        $moved++
+    }
+
+    # net.yml into server.yml: appended whole unless server.yml already names one of its keys.
+    $net = Join-Path $dir 'net.yml'
+    $server = Join-Path $dir 'server.yml'
+    if (Test-Path -LiteralPath $net) {
+        $clash = $null
+        if (Test-Path -LiteralPath $server) {
+            $have = Get-Content -LiteralPath $server
+            foreach ($line in (Get-Content -LiteralPath $net)) {
+                if ($line -match '^([A-Za-z_]+):') {
+                    $key = $Matches[1]
+                    if ($have | Where-Object { $_ -match "^$key\s*:" }) { $clash = $key; break }
+                }
+            }
+        }
+        if ($clash) { Note "kept net.yml: server.yml already sets $clash; merge them by hand" }
+        else {
+            if ($DryRun) { Note 'would append net.yml to server.yml' }
+            else {
+                Save-Backup $net
+                $text = "`n# Network (moved from net.yml)`n" + ((Get-Content -LiteralPath $net) -join "`n") + "`n"
+                Add-Content -LiteralPath $server -Value $text -NoNewline
+                Remove-Item -LiteralPath $net
+                Note "moved net.yml -> server.yml (copy in $bak\)"
+            }
+            $moved++
+        }
+    }
+
+    # content.yml's games: entries into game\<game>\server.yml, dedented; defaults: stays.
+    $content = Join-Path $dir 'content.yml'
+    if ((Test-Path -LiteralPath $content) -and (Select-String -LiteralPath $content -Pattern '^games:' -Quiet)) {
+        $inGames = $false
+        $current = $null
+        $sections = [ordered]@{}
+        $rest = New-Object System.Collections.Generic.List[string]
+        foreach ($line in (Get-Content -LiteralPath $content)) {
+            if ($line -match '^games:') { $inGames = $true; $rest.Add('games: {}'); continue }
+            if ($inGames -and $line -match '^[A-Za-z_]') { $inGames = $false }
+            if (-not $inGames) { $rest.Add($line); continue }
+            if ($line -match '^  ([^ #][^:]*):\s*$') {
+                $current = $Matches[1].Trim('"', "'")
+                $sections[$current] = New-Object System.Collections.Generic.List[string]
+                continue
+            }
+            if ($null -ne $current) { $sections[$current].Add(($line -replace '^  ', '')) }
+        }
+        $clash = $sections.Keys | Where-Object { Test-Path -LiteralPath (Join-Path $dir "game\$_\server.yml") } | Select-Object -First 1
+        if ($clash) { Note "kept game\$clash\server.yml; its entry stays in content.yml" }
+        else {
+            if (-not $DryRun) { Save-Backup $content }
+            foreach ($g in $sections.Keys) {
+                if ($DryRun) { Note "would write game\$g\server.yml from content.yml"; continue }
+                $target = Join-Path $dir "game\$g"
+                New-Item -ItemType Directory -Path $target -Force | Out-Null
+                Set-Content -LiteralPath (Join-Path $target 'server.yml') -Value $sections[$g]
+                Note "wrote game\$g\server.yml from content.yml"
+            }
+            if (-not $DryRun) { Set-Content -LiteralPath $content -Value $rest }
+            $moved++
+        }
+    }
+
+    if ($moved -eq 0) { Note "nothing to move: $dir already uses the new layout" }
+    exit 0
+}
+
+if ($Command -eq 'cfg-migrate') { Invoke-CfgMigrate }
 
 # --- The runtime -----------------------------------------------------------
 
@@ -551,7 +667,9 @@ if ($Command -eq 'run') {
         # casting a missing key straight to an int would end the script with a type
         # conversion error where a server with no `net_port` line should simply start on
         # its default. Matched as digits first, cast second.
+        # net.yml (the old home of net_*) is read after server.yml by the server, so it wins here too.
         $declared = Read-Cfg (Join-Path $configPath 'net.yml') 'net_port'
+        if (-not $declared) { $declared = Read-Cfg (Join-Path $configPath 'server.yml') 'net_port' }
         if ($declared -match '^\d+$') { $port = [int]$declared }
     }
     if ($port -and (Test-PortBusy $port)) {

@@ -1,7 +1,7 @@
 class_name TmcGameConfig
 extends RefCounted
 
-## What a server OWNER says about each game, from `cfg/content.yml`, laid over the game's
+## What a server OWNER says about each game, from `cfg/game/<game>/server.yml` and the older `cfg/content.yml`, laid over the game's
 ## own `game.yml`.
 ##
 ## [codeblock]
@@ -66,6 +66,12 @@ const CHANNEL := "tmc.content"
 
 ## The owner's file, under the config directory.
 const FILE := "content.yml"
+
+## A game's own file, `cfg/game/<game>/server.yml` (the successor of its `games:` entry).
+const GAME_FILE := "server.yml"
+
+## The generic `server.yml` spellings a game's file also takes.
+const GAME_ALIASES := {"sv_name": "name", "sv_maxplayers": "max_players"}
 
 ## The installer's answers for every unpinned map, under the data directory:
 ## `{"maps": {"<owner>/<map>": "<version>"}}`.
@@ -132,6 +138,11 @@ static func load_from(config_dir: String, data_dir: String) -> DotResult:
 		if not read.ok:
 			return read.wrap("%s:" % path)
 
+	var per_game := out.read_game_files(config_dir)
+
+	if not per_game.ok:
+		return per_game
+
 	var cache := "%s/%s" % [data_dir.rstrip("/"), RESOLVED_FILE]
 
 	if FileAccess.file_exists(cache):
@@ -144,6 +155,63 @@ static func load_from(config_dir: String, data_dir: String) -> DotResult:
 			out.collections = (body as Dictionary)["collections"]
 
 	return DotResult.success(out)
+
+
+## Reads `cfg/game/<game>/server.yml` for every game directory, laid over what `content.yml` said
+## for that game (key by key: `cvars` and `metadata` merge, the rest replace). The same keys as a
+## `games:` entry, plus `sv_name` and `sv_maxplayers` for `name` and `max_players`, so the file reads like
+## the generic `server.yml`. `defaults:` has no per-game home and stays in `content.yml`.
+func read_game_files(config_dir: String) -> DotResult:
+	var root := "%s/game" % config_dir.rstrip("/")
+	var dir := DirAccess.open(root)
+
+	if dir == null:
+		return DotResult.success(null)
+
+	var names := Array(dir.get_directories())
+	names.sort()
+
+	for game: String in names:
+		var path := "%s/%s/%s" % [root, game, GAME_FILE]
+
+		if not FileAccess.file_exists(path):
+			continue
+
+		var parsed := TmcYaml.parse_file(path)
+
+		if not parsed.ok:
+			return parsed.wrap("Could not read %s" % path)
+
+		if not (parsed.value is Dictionary):
+			return DotResult.fail(DotError.CODE_PARSE, "%s must contain a mapping." % path)
+
+		var raw := (parsed.value as Dictionary).duplicate()
+
+		for alias in GAME_ALIASES:
+			if raw.has(alias):
+				raw[GAME_ALIASES[alias]] = raw[alias]
+				raw.erase(alias)
+
+		var section := _read_section(path, raw)
+
+		if not section.ok:
+			return section
+
+		var merged: Dictionary = (games.get(game, {}) as Dictionary).duplicate(true)
+
+		if merged.is_empty():
+			games[game] = section.value
+			continue
+
+		for key: String in raw:
+			if key in ["cvars", "metadata"]:
+				(merged[key] as Dictionary).merge(section.value[key], true)
+			else:
+				merged[key] = section.value[key]
+
+		games[game] = merged
+
+	return DotResult.success(null)
 
 
 ## Takes a parsed `content.yml` apart. Refuses anything it would otherwise have to guess

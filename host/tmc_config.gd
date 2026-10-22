@@ -166,6 +166,14 @@ const LAYERED := {
 	"loading.yml": "dot-core",
 }
 
+## Key prefix in `server.yml` -> the addon folder that owns it now (`cfg/addons/<addon>/`). Still
+## applied from `server.yml` until DotCfgLegacy's cutoff, with one WARN naming the keys.
+## `rcon_password` stays where it is: a secret may live in `server.yml` or the addon's folder.
+const LEGACY_KEYS := {
+	"log_": "dot_log",
+	"rcon_": "dot_console",
+}
+
 ## Keys that exist and are handled somewhere other than a config object.
 ##
 ## Listed so they are not reported as unknown. A key that is silently ignored *and* not
@@ -446,6 +454,10 @@ static func load_dir(directory: String) -> DotResult:
 			)
 
 		config.files_read.append(name)
+		if name == "net.yml":
+			config._warn_legacy_file(path, "cfg/server.yml (the same net_* keys)")
+		if name == "server.yml":
+			config._warn_legacy_keys(path, tree as Dictionary)
 		var applied := config._apply(name, tree as Dictionary)
 
 		if not applied.ok:
@@ -461,6 +473,32 @@ static func load_dir(directory: String) -> DotResult:
 		return valid.wrap("The configuration in %s is not usable" % base)
 
 	return DotResult.success(config)
+
+
+## One WARN per file that moved but is merged, not replaced, so DotCfgLegacy.find (which picks one) does not fit.
+func _warn_legacy_file(path: String, new_home: String) -> void:
+	if DotCfgLegacy._warned.has(path):
+		return
+	DotCfgLegacy._warned[path] = true
+	DotLog.warn("cfg", "legacy config file %s: still read after server.yml; move its keys to %s before %s" % [
+		path, new_home, DotCfgLegacy.REMOVE_AFTER], {"old": path, "remove_after": DotCfgLegacy.REMOVE_AFTER})
+
+
+## One WARN naming the subsystem keys of `server.yml` that have an addon folder ([constant LEGACY_KEYS]).
+func _warn_legacy_keys(path: String, tree: Dictionary) -> void:
+	var moved := PackedStringArray()
+	for key in tree.keys():
+		var name := String(key)
+		if name == "rcon_password":
+			continue
+		for prefix: String in LEGACY_KEYS:
+			if name.begins_with(prefix):
+				moved.append("%s -> cfg/addons/%s/" % [name, LEGACY_KEYS[prefix]])
+	if moved.is_empty() or DotCfgLegacy._warned.has(path + "#keys"):
+		return
+	DotCfgLegacy._warned[path + "#keys"] = true
+	DotLog.warn("cfg", "%s: subsystem keys still read here until %s: %s" % [
+		path, DotCfgLegacy.REMOVE_AFTER, ", ".join(moved)], {"path": path})
 
 
 ## The environment and the command line over `vote.yml`, like every DotConfig.

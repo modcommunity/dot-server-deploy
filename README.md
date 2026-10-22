@@ -122,7 +122,7 @@ Anything it does can be done on its own afterwards: the three scripts above take
 ## What it gives a server owner
 
 - **One command to start.** `./setup.sh` finds a Godot runtime — or downloads the pinned one, verified — wires in the addons, writes a commented `cfg/` from `cfg.example/`, and writes `./server`. It never overwrites a config file that already exists, and it names any setting the templates have gained that your files do not mention, so an upgrade that adds one is visible rather than skipped. `cfg/` is not in this repository: it is what one deployment decided, and a tracked copy is one `git pull` on a running server stops on. RCON reaches loopback only until you widen `rcon_allowed`; `cfg/addons/dot_console/rcon.yml` says how.
-- **Configuration in YAML**, in files split by subject: `server.yml` and `net.yml`, plus one folder per addon under `cfg/addons/` (`dot_console/rcon.yml`, `dot_auth/auth.yml`, `dot_server/groups.yml` and the rest; `cfg/server/addons/` overrides them). `./server cfg-migrate` moves the flat files of an older install; they are still read, with a WARN, until 2026-12-31. Anything dot-server exposes as a console variable can go in them under its own name.
+- **Configuration in YAML**, in files split by subject: `server.yml` (which also holds the `net_*` keys), plus one folder per addon under `cfg/addons/` (`dot_console/rcon.yml`, `dot_auth/auth.yml`, `dot_server/groups.yml` and the rest; `cfg/server/addons/` overrides them). `./server cfg-migrate` (and `.\server.ps1 cfg-migrate`) moves the flat files, `net.yml` and `content.yml`'s `games:` of an older install; they are still read, with a WARN, until 2026-12-31. Anything dot-server exposes as a console variable can go in them under its own name.
 - **Roles, not flags.** dot-server's permission model is flags, deliberately; `groups.yml` is the translation, so an operator writes `admin: [kick, ban, mute]` and a player gets the flags.
 - **Moderation.** Bans, kicks, mutes, votes and an audit log, all dot-server's, all reachable from the console or over RCON.
 - **An admin menu.** `/admin` in chat opens a menu on the admin's screen: kick, ban, warn, mute, gag, player info with their record, the fun commands and powers the loaded game can actually do (slay, slap, set on fire, freeze, blind, beacon, rename, noclip, god, health, speed, gravity, give, strip), teleports, change game, change map, announce. Games add their own entries. Pick with 1–7 or the mouse; 8 is back, 9 is more, 0 closes. Each admin sees exactly the part they have the flags for, and every item ends as the console command they could have typed, so immunity, the audit log and the replies are the console's own. What is on it, in what order, with which reasons and durations, plus items of your own, is `cfg/addons/dot_menu/admin_menu.yml`. See [The admin menu](#the-admin-menu).
@@ -160,9 +160,9 @@ Anything it does can be done on its own afterwards: the three scripts above take
 cfg.example/         the defaults, tracked. Copied into cfg/ by setup.sh, never read by a running server
 
 cfg/                 what an operator edits. Written on first run, and not in this repository
-  server.yml           name, slots, tickrate, the game to boot
-  net.yml              bind address, port, bandwidth
-  content.yml          your settings per game over its author's: cvars, maps, votes, slots
+  server.yml           name, slots, tickrate, the game to boot, bind address, port, bandwidth
+  game/<game>/server.yml  your settings for one game over its author's: cvars, maps, votes, slots
+  content.yml          the same for every game (`defaults:`) and the stock map lists
   packs.yml            extra packs you add to a game, delivered to its players
   game_rotation.yml    which games play, and in what order
   addons/<addon>/      one folder per addon, the file named after what it sets:

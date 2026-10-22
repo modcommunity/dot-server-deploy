@@ -1,0 +1,3 @@
+sv_name: "Moved"
+net_port: 27055
+net_bind_ip: "127.0.0.1"

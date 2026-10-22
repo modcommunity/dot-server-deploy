@@ -1,0 +1,8 @@
+sv_maxplayers: 8
+cvars:
+  a: "2"
+  b: "3"
+map_owner: me
+maps:
+  add:
+    - me/new_map

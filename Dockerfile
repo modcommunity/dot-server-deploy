@@ -166,7 +166,7 @@ WORKDIR /srv/tmc
 # `USER 1000:1000` here is the fallback for a plain `docker run`.
 USER 1000:1000
 
-# The game port, and RCON on the next one up. Both are what cfg/net.yml says by
+# The game port, and RCON on the next one up. Both are what cfg/server.yml says by
 # default; change them there and change the mapping in docker-compose.yml to match.
 EXPOSE 6064/tcp 6065/tcp
 

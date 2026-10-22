@@ -17,7 +17,7 @@ const CFG := "res://examples/fixtures"
 ## A loaded game with rounds and no match the game vote can find. See the section that uses it.
 const RoundsWithoutMatch := preload("res://examples/fixtures/rounds_without_match.gd")
 
-const CHECKS := 398
+const CHECKS := 404
 
 var _passed := 0
 var _failed := 0
@@ -1434,6 +1434,20 @@ defaults:
 		_check(g2g_adds.size() == 26 and g2g_adds.has("gamemann/surf_mesa")
 			and every.has("gamemann/mg-wipeout-maps") and every.has("gamemann/game-playground-maps"),
 			"the template offers g2gfast's 26 courses (%d) and every other game's maps pack" % g2g_adds.size())
+
+	var moved_dir := "res://examples/fixtures/cfg_move"
+	var moved := TmcConfig.load_dir(moved_dir)
+	if _check(moved.ok, "a cfg/ with net_* in server.yml and no net.yml loads", str(moved.error) if not moved.ok else ""):
+		_check((moved.value as TmcConfig).server.port == 27055 and (moved.value as TmcConfig).server.bind_address == "127.0.0.1",
+			"net_port and net_bind_ip in server.yml reach the boot config")
+	var per_game := TmcGameConfig.load_from(moved_dir, "res://examples/fixtures/nothing")
+	if _check(per_game.ok, "cfg/game/<game>/server.yml reads", str(per_game.error) if not per_game.ok else ""):
+		var section: Dictionary = (per_game.value as TmcGameConfig).games.get("game-x", {})
+		_check(section.get("max_players") == 8, "sv_maxplayers in a game's file overrides content.yml's max_players", str(section))
+		_check(section.get("cvars", {}).get("a") == "2" and section.get("cvars", {}).get("keep") == "yes"
+			and section.get("cvars", {}).get("b") == "3", "cvars merge key by key, the game's file winning", str(section.get("cvars")))
+		_check(section.get("maps", {}).get("add") == PackedStringArray(["me/new_map"]) and section.get("map_owner") == "me",
+			"maps replace whole, as the other keys do", str(section.get("maps")))
 
 	_done()
 

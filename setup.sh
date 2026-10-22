@@ -382,6 +382,10 @@ cfg_get() {
 # What cfg/ already says, or a default when it says nothing. Every question in the
 # guided install is built on this: the answer in the brackets is the answer that is
 # already true, so a re-run changes nothing unless somebody types something.
+# net_* lives in server.yml; a box that still has a net.yml keeps writing there, because the
+# server reads net.yml after server.yml and a new value in server.yml would lose to the old one.
+net_cfg_file() { [ -f cfg/net.yml ] && echo cfg/net.yml || echo cfg/server.yml; }
+
 cfg_or() {
     local v
     v="$(cfg_get "$1" "$2" 2>/dev/null)"
@@ -562,7 +566,7 @@ if [ "$DO_FULL" -eq 1 ]; then
     FULL_GAME="$(ask       "Game to boot" "$(cfg_or cfg/server.yml sv_game arena)")"
     FULL_MAXPLAYERS="$(ask "Player slots" "$(cfg_or cfg/server.yml sv_maxplayers 64)")"
     FULL_TICKRATE="$(ask   "Tickrate" "$(cfg_or cfg/server.yml sv_tickrate 60)")"
-    FULL_PORT="$(ask       "Port the server listens on" "$(cfg_or cfg/net.yml net_port 6064)")"
+    FULL_PORT="$(ask       "Port the server listens on" "$(cfg_or "$(net_cfg_file)" net_port 6064)")"
 
     case "$FULL_MAXPLAYERS" in ''|*[!0-9]*) die "player slots must be a number: $FULL_MAXPLAYERS" 2 ;; esac
     case "$FULL_TICKRATE"   in ''|*[!0-9]*) die "tickrate must be a number: $FULL_TICKRATE" 2 ;; esac
@@ -698,7 +702,7 @@ if [ "$DO_FULL" -eq 1 ]; then
     plan "set up the project: runtime, addons, games, cfg/, ./server"
     plan "cfg/server.yml: $FULL_NAME, game $FULL_GAME, $FULL_MAXPLAYERS slots, $FULL_TICKRATE tick"
     if [ "$FULL_NGINX" -eq 1 ]; then
-        plan "cfg/net.yml: port $FULL_PORT, bound to 127.0.0.1 (nginx is the way in)"
+        plan "$(net_cfg_file): port $FULL_PORT, bound to 127.0.0.1 (nginx is the way in)"
         if find_nginx >/dev/null 2>&1; then
             plan "use the nginx that is already on this box, adding one server block to it"
         else
@@ -719,7 +723,7 @@ if [ "$DO_FULL" -eq 1 ]; then
             plan "nginx: wss://${LE_DOMAINS[0]}:$FULL_PUBLIC_PORT -> 127.0.0.1:$FULL_PORT"
         fi
     else
-        plan "cfg/net.yml: port $FULL_PORT, bound to 0.0.0.0"
+        plan "$(net_cfg_file): port $FULL_PORT, bound to 0.0.0.0"
         [ -n "$FULL_FIREWALL" ] && plan "open $FULL_PORT in $FULL_FIREWALL"
     fi
     [ "${FULL_SYSTEMD:-0}" -eq 1 ] && plan "install and start the ${FULL_UNIT}.service unit, running as $FULL_RUN_USER"
@@ -2414,15 +2418,15 @@ if [ "$DO_FULL" -eq 1 ]; then
     set_and_say cfg/server.yml sv_game       "\"$FULL_GAME\""    "$FULL_GAME"
     set_and_say cfg/server.yml sv_maxplayers "$FULL_MAXPLAYERS"  "$FULL_MAXPLAYERS"
     set_and_say cfg/server.yml sv_tickrate   "$FULL_TICKRATE"    "$FULL_TICKRATE"
-    set_and_say cfg/net.yml    net_port      "$FULL_PORT"        "$FULL_PORT"
+    set_and_say "$(net_cfg_file)" net_port      "$FULL_PORT"        "$FULL_PORT"
 
     # Loopback when nginx is in front, and this is the line that makes the proxy a
     # boundary instead of a decoration. Left on 0.0.0.0, the game port stays open to
     # the internet beside the TLS one, and every client that finds it connects in
     # plaintext past everything nginx is there to do.
     if [ "$FULL_NGINX" -eq 1 ]; then
-        set_and_say cfg/net.yml net_bind_ip "\"127.0.0.1\"" "127.0.0.1"
-        set_and_say cfg/net.yml net_public_ip "\"${LE_DOMAINS[0]}\"" "${LE_DOMAINS[0]}"
+        set_and_say "$(net_cfg_file)" net_bind_ip "\"127.0.0.1\"" "127.0.0.1"
+        set_and_say "$(net_cfg_file)" net_public_ip "\"${LE_DOMAINS[0]}\"" "${LE_DOMAINS[0]}"
     fi
 
     [ "$cfg_changed" -eq 0 ] && ok "cfg/ already said all of that"
