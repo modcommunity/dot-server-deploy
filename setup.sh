@@ -94,6 +94,8 @@
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=tools/content_lists.sh
+. "$ROOT/tools/content_lists.sh"
 cd "$ROOT" || exit 1
 
 # [b]No git clone here may ever ask a human for anything.[/b] A repository that is
@@ -930,6 +932,10 @@ repo_url() {
 ADDONS_LOCK="$ROOT/addons.lock"
 
 lock_ref() {
+    # A pin the operator wrote in cfg/content/addons.yml wins over the lock.
+    local _p
+    _p="$(printf '%s' "${ADDON_OPERATOR_PINS:-}" | awk -v r="$1" '$1 == r { print $2; exit }')"
+    if [ -n "$_p" ]; then printf '%s\n' "$_p"; return 0; fi
     [ "${TMC_ADDONS_LOCK:-on}" != "off" ] || return 1
     [ -f "$ADDONS_LOCK" ] || return 1
     awk -v r="$1" '$1 == r && $2 != "" { print $2; found = 1; exit } END { exit !found }' \
@@ -1097,7 +1103,7 @@ clone_repos() {
 
 step "games"
 
-# repository:content id, read from games.list -- THE list of what this project publishes.
+# repository:content id, read from cfg/content/games.yml (shipped default content-lists/games.yml) -- THE list of what this project publishes.
 #
 # It used to be an array written out here, and six games were finished, packed and tested
 # while it still named seven: a game missing from a hand-kept list is a game a fresh box
@@ -1109,14 +1115,12 @@ step "games"
 # A stale repository name is a hard failure rather than a warning: "skipping a game"
 # scrolls past and a server with no games does not.
 GAMES=()
-[ -f "$ROOT/games.list" ] || die "games.list is missing: it is the list of games this project publishes" 4
-while read -r _repo _dir _rest; do
-    case "$_repo" in ''|'#'*) continue ;; esac
-    [ -n "$_dir" ] && [ -z "$_rest" ] \
-        || die "games.list: '$_repo $_dir $_rest' is not '<repository> <content directory>'" 5
-    GAMES+=("$_repo:$_dir")
-done < "$ROOT/games.list"
-[ ${#GAMES[@]} -gt 0 ] || die "games.list names no games" 5
+content_legacy_notice
+_list="$(content_game_entries)" || die "the games list (cfg/content/games.yml) could not be read; see the message above" 5
+while IFS= read -r _entry; do
+    [ -n "$_entry" ] && GAMES+=("$_entry")
+done <<< "$_list"
+[ ${#GAMES[@]} -gt 0 ] || die "cfg/content/games.yml names no games" 5
 
 # --- Or none of them -------------------------------------------------------
 #
@@ -1440,17 +1444,26 @@ fi
 # build wires in -- and it is what a build with no game sources at all wires in, because
 # a published pack in dist/ does not say which classes it parses against. When the games
 # ARE here, the list below is derived from them instead: see ADDONS_SHELL.
-ADDONS_ALL=(dot_core dot_log dot_net dot_game dot_entity dot_server dot_server_query dot_server_security dot_2d dot_ui dot_auth dot_cloud dot_user
-        dot_user_avatar dot_platform dot_loadout dot_match
-        dot_player_controller dot_timer dot_map dot_leaderboard dot_stats
-        dot_props dot_vote dot_combat dot_chat dot_voice dot_moderation
-        dot_browser dot_npc dot_npc_ai dot_npc_ai_director dot_vehicle
-        dot_achievements dot_objective dot_effects dot_spectate dot_economy
-        dot_settings dot_console dot_audio dot_fx dot_lighting dot_weather
-        dot_procedural_generation dot_inventory dot_peer_to_peer dot_weapon
-        dot_physics dot_spawn dot_team dot_player dot_player_class
-        dot_player_char zee_weapons dot_party dot_matchmaking dot_locale
-        dot_replay dot_friends dot_sql dot_menu dot_bot zed_weapons)
+# From cfg/content/addons.yml (shipped default content-lists/addons.yml), repository names mapped back
+# to addon names. An unreadable list is fatal: an empty one would build a server with no addons.
+## The addon name (underscored) for a repository: the inverse of addon_repo.
+addon_name() {
+    case "$1" in
+        zee-dot-weapons) printf 'zee_weapons\n' ;;
+        zed-dot-weapons) printf 'zed_weapons\n' ;;
+        *)               printf '%s\n' "${1//-/_}" ;;
+    esac
+}
+
+_list="$(content_list addons)" || die "the addons list (cfg/content/addons.yml) could not be read; see the message above" 5
+ADDONS_ALL=()
+ADDON_OPERATOR_PINS=""
+while IFS=$'\t' read -r _kind _id _pin _c _layer; do
+    [ "$_kind" = repo ] || continue
+    ADDONS_ALL+=("$(addon_name "$_id")")
+    [ "$_layer" = operator ] && [ -n "$_pin" ] && ADDON_OPERATOR_PINS="$ADDON_OPERATOR_PINS$_id $_pin"$'\n'
+done <<< "$_list"
+[ ${#ADDONS_ALL[@]} -gt 0 ] || die "cfg/content/addons.yml names no addons" 5
 
 # What THIS project's own scripts name, whatever games it carries.
 #

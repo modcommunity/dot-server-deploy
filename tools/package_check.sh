@@ -92,13 +92,13 @@ echo "staging"
 # `addon_repo` in setup.sh -- and `dot_` alone never matched it either.
 mapfile -t STAGE_REPOS < <(
     {
-        sed -n '/^ADDONS_ALL=(/,/)/p' "$ROOT/setup.sh" | grep -oE '(dot|zee|zed)_[a-z0-9_]+' \
-            | sed 's/^zee_weapons$/zee-dot-weapons/; s/^zed_weapons$/zed-dot-weapons/' | tr '_' '-'
-        awk '!/^[[:space:]]*(#|$)/ { print $1 }' "$ROOT/games.list"
+        . "$ROOT/tools/content_lists.sh"
+        content_addon_repos
+        content_game_entries | cut -d: -f1
     } | sort -u
 )
 
-[ ${#STAGE_REPOS[@]} -gt 0 ] || fail "could not read the repository list out of setup.sh"
+[ ${#STAGE_REPOS[@]} -gt 0 ] || fail "could not read the repository lists (cfg/content/addons.yml, games.yml)"
 
 for repo in "${STAGE_REPOS[@]}"; do
     if [ -d "$ROOT/../$repo" ]; then

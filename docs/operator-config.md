@@ -1,6 +1,6 @@
-# Changing your server's settings: edit `cfg/` and nothing else
+# Changing your server's settings: edit `cfg/server/` only
 
-Everything you tune lives in the `cfg/` folder beside your server. **Never edit a file inside `addons/`, `content/` or the game itself**: an upgrade replaces those and your change is gone. Put your changes in `cfg/` and an upgrade keeps them.
+Everything you tune lives in the `cfg/server/` folder beside your server (create it if it is not there). The rest of `cfg/` is what the addons, the games and this project ship; edit it and an upgrade may overwrite you, or your file may be ignored. **Never edit a file inside `addons/`, `content/` or the game itself**: an upgrade replaces those and your change is gone. Put your changes in `cfg/` and an upgrade keeps them.
 
 ## Where a setting can live
 
@@ -31,7 +31,18 @@ maps: [dm_new_map]
 
 **Change one game only.** Put the file under `cfg/server/game/<game>/<addon>/` instead, for example `cfg/server/game/game-arena/dot_map/maps.yml`. Other games on the box are unaffected.
 
-**Choose what gets downloaded.** `cfg/content/addons.yml` and `cfg/content/games.yml` list the addon repositories and the games or packs this server installs, see [content-lists.md](content-lists.md).
+**Choose what gets downloaded, and how it rotates.** `cfg/server/content/games.yml` lists the games and packs this server installs, and `cfg/server/content/addons.yml` the addon repositories, see [content-lists.md](content-lists.md). The same list is the rotation, so most servers need no rotation file at all:
+
+```yaml
+entries:
+  - repo: game-arena
+    maps: [dm_one, dm_two]
+  - mg-deathrun
+```
+
+With no rotation file the games play in the order written here, and each game's maps rotate in the order of its `maps:` (no `maps:` means every installed map, sorted by name). One game means no game rotation. `rotation: sequential|random|vote` picks how a game's maps are chosen. A map or game id that is not installed is an error naming it, not a skip.
+
+**Which one wins.** A rotation file (`cfg/server/addons/dot_map/maps.yml` for maps, `cfg/games.yml` for games) beats `games.yml`'s order, which beats the default of "everything installed, sorted". Use a rotation file only for what the list cannot say (weights, per-map settings, named rotations).
 
 ## Which layer won, and what loaded
 

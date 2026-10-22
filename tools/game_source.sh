@@ -83,7 +83,7 @@ game_source() {
 ## setup.sh drifted from the games themselves; setup.sh, this function and
 ## tools/package_check.sh all read the file, and tools/check_lists.sh checks it against
 ## content/ and the repositories beside this one.
-game_entries() {
-    [ -f "$TMC_ROOT/games.list" ] || return 1
-    awk '!/^[[:space:]]*(#|$)/ { print $1 ":" $2 }' "$TMC_ROOT/games.list"
+game_entries() {  # reads cfg/content/games.yml (docs/content-lists.md)
+    . "$TMC_ROOT/tools/content_lists.sh"
+    content_game_entries
 }

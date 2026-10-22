@@ -151,6 +151,7 @@ cfg/                 what an operator edits. Written on first run, and not in th
   content.yml          your settings per game over its author's: cvars, maps, votes, slots
   addons.yml           extra packs you add to a game, delivered to its players
   permissions.yml      who is in which group
+  server/content/games.yml  games and packs to install, their order and maps: (docs/operator-config.md)
   content/<id>/        per-game configuration
 
 content/             what the server serves

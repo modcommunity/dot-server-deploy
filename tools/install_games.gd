@@ -98,6 +98,15 @@ func _init() -> void:
 	)
 
 	var wanted := _list(str(opts.get("games", "")))
+	if wanted.is_empty():
+		# --games / TMC_GAMES wins; otherwise the operator's own cfg/content/games.yml (never the shipped default,
+		# which would download every game on a box that asked for none).
+		var from_list := _wanted_from_content_list(str(opts.get("config", "cfg")))
+		if not from_list.ok:
+			printerr("  cfg/content/games.yml: %s" % from_list.error)
+			quit(EXIT_USAGE)
+			return
+		wanted = from_list.value
 	var content_dir := str(opts.get("content", "content"))
 	var data_dir := str(opts.get("data", "data"))
 	var config_dir := str(opts.get("config", "cfg"))
@@ -1810,6 +1819,23 @@ func _descriptor_path(content_dir: String, id: String) -> String:
 ##
 ## Comma-separated rather than a repeated flag because what is on the other end of it is a
 ## panel text box and a unit file's `Environment=`, and neither can repeat a flag.
+## The ids install-games fetches for the operator's games.yml: a repository's content directory, a pack's id.
+## Value is empty when the operator wrote no such file.
+static func _wanted_from_content_list(config_dir: String) -> DotResult:
+	var base := config_dir.rstrip("/")
+	if not (FileAccess.file_exists(base + "/content/games.yml") or FileAccess.file_exists(base + "/server/content/games.yml")):
+		return DotResult.success(PackedStringArray())
+	var listed := TmcContentLists.load_list("games", config_dir)
+	if not listed.ok:
+		return listed
+	var out := PackedStringArray()
+	for e: Dictionary in listed.value:
+		var id := String(e["content"]) if e["content"] != "" else String(e["id"])
+		if not out.has(id):
+			out.append(id)
+	return DotResult.success(out)
+
+
 static func _list(raw: String) -> PackedStringArray:
 	var out := PackedStringArray()
 
