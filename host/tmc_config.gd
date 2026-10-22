@@ -148,42 +148,17 @@ const LOG_KEYS := {
 	"log_rate_per_channel": "per_channel_rate",
 }
 
-## Operator-facing name -> [code]DotSecurityConfig[/code] property.
-const SECURITY_KEYS := {
-	"sec_enabled": "enabled",
-	"sec_dryrun": "dry_run",
-	"sec_rules_file": "rules_file",
-	"sec_notify_subject": "notify_subject",
-	"sec_notify_admins": "notify_admins",
-	"sec_notify_flag": "notify_flag",
-	"sec_announce_removals": "announce_removals",
-	"sec_caps_min_length": "caps_min_length",
-	"sec_caps_ratio": "caps_ratio",
-	"sec_duplicate_memory_sec": "duplicate_memory_sec",
-	"sec_duplicate_depth": "duplicate_depth",
-	"sec_link_allow": "link_allow",
-	"sec_churn_window_sec": "churn_window_sec",
-	"sec_ledger_size": "ledger_size",
-}
-
-## Operator-facing name -> [code]DotAntiCheatConfig[/code] property.
-##
-## Separate from [constant SECURITY_KEYS] because the anti-cheat has its **own** dry run,
-## and that separation is the addon's own decision rather than this file's: an operator
-## commonly trusts the chat rules long before a movement threshold they have not measured
-## on their own maps.
-const ANTICHEAT_KEYS := {
-	"ac_enabled": "enabled",
-	"ac_dryrun": "dry_run",
-	"ac_watch_movement": "watch_movement",
-	"ac_max_speed": "max_horizontal_speed",
-	"ac_max_vertical_speed": "max_vertical_speed",
-	"ac_max_tick_distance": "max_tick_distance",
-	"ac_max_airborne_sec": "max_airborne_sec",
-	"ac_watch_timing": "watch_timing",
-	"ac_max_time_ratio": "max_time_ratio",
-	"ac_watch_fire_rate": "watch_fire_rate",
-	"ac_fire_interval_tolerance": "fire_interval_tolerance",
+## The files each addon reads itself, through its own layered loader (`cfg/addons/<addon>/`, the
+## game's, the operator's `cfg/server/addons/<addon>/`, then the flat file here until 2026-12-31).
+## Each addon owns its key table, so this file keeps no second copy that goes stale.
+const LAYERED := {
+	"security.yml": "dot-server-security",
+	"party.yml": "dot-party",
+	"replay.yml": "dot-replay",
+	"matchmaking.yml": "dot-matchmaking",
+	"groups.yml": "dot-server",
+	"permissions.yml": "dot-server",
+	"admin_menu.yml": "dot-menu",
 }
 
 ## Keys that exist and are handled somewhere other than a config object.
@@ -226,10 +201,10 @@ var log: DotLogConfig = DotLogConfig.new()
 ## nothing else, which is a legitimate and much smaller thing to have running.
 var log_router: String = "auto"
 
-## The guard, after every file has been applied. See [constant SECURITY_KEYS].
+## The guard, after every file has been applied. Its keys are [constant DotSecurityConfig.CFG_KEYS].
 var security: DotSecurityConfig = DotSecurityConfig.new()
 
-## The detectors. Separate dry run, deliberately. See [constant ANTICHEAT_KEYS].
+## The detectors. Separate dry run, deliberately. Its keys are [constant DotAntiCheatConfig.CFG_KEYS].
 var anticheat: DotAntiCheatConfig = DotAntiCheatConfig.new()
 
 ## `party.yml`: the timings both party nodes read. Every [DotPartyConfig] property,
@@ -438,8 +413,15 @@ var files_missing: PackedStringArray = PackedStringArray()
 static func load_dir(directory: String) -> DotResult:
 	var config := TmcConfig.new()
 	var base := directory.rstrip("/")
+	DotAddonConfig.config_root = base
 
 	for name in FILES:
+		if LAYERED.has(name):
+			var layered := config._load_layered(name, base)
+			if not layered.ok:
+				return layered
+			continue
+
 		var path := "%s/%s" % [base, name]
 
 		if not FileAccess.file_exists(path):
@@ -554,6 +536,86 @@ func net_ceiling() -> Dictionary:
 	return out
 
 
+## One file in [constant LAYERED], read through its addon's loaders over every tier.
+func _load_layered(name: String, base: String) -> DotResult:
+	var addon: String = LAYERED[name]
+	var found := true
+	match name:
+		"groups.yml":
+			var g := DotAdminCfg.load_groups(base)
+			if not g.ok:
+				return g
+			groups = g.value as Dictionary
+			found = not groups.is_empty()
+		"permissions.yml":
+			var u := DotAdminCfg.load_users(base)
+			if not u.ok:
+				return u
+			users = u.value as Dictionary
+			found = not users.is_empty()
+		"admin_menu.yml":
+			var m := DotMenuCfg.load_admin_menu(base)
+			if not m.ok:
+				return m
+			admin_menu = m.value as Dictionary
+			found = not admin_menu.is_empty()
+		_:
+			var merged := _merged_tree(addon, name, base)
+			if not merged.ok:
+				return merged
+			found = merged.value["found"] as bool
+			if found:
+				var typed := _apply_typed(name, base)
+				if not typed.ok:
+					return typed
+				var applied := _apply(name, merged.value["tree"] as Dictionary)
+				if not applied.ok:
+					return applied
+	if found:
+		files_read.append(name)
+	else:
+		files_missing.append(name)
+	return DotResult.success(null)
+
+
+## Value: {tree, found}, every tier of [param file] merged, for the keys that are this deployment's.
+func _merged_tree(addon: String, file: String, base: String) -> DotResult:
+	var tree := {}
+	var res := DotAddonConfig.apply_file(
+		addon, file, base,
+		func(values: Dictionary, path: String) -> PackedStringArray:
+			DotAddonConfig.merge(tree, values)
+			return PackedStringArray([path])
+	)
+	if not res.ok:
+		return res
+	return DotResult.success({"tree": tree, "found": not (res.value as PackedStringArray).is_empty()})
+
+
+## The addon's own typed properties, from its own loader.
+func _apply_typed(name: String, base: String) -> DotResult:
+	match name:
+		"security.yml":
+			var sec := security.apply_cfg_file(name, base)
+			if not sec.ok:
+				return sec
+			return anticheat.apply_cfg_file(name, base)
+		"party.yml":
+			return _note_unknown(party, name, party.apply_cfg_file(name, base))
+		"replay.yml":
+			return _note_unknown(replay, name, replay.apply_cfg_file(name, base))
+		"matchmaking.yml":
+			return _note_unknown(matchmaking, name, matchmaking.apply_cfg_file(name, base))
+	return DotResult.success(null)
+
+
+func _note_unknown(cfg: DotConfig, file: String, res: DotResult) -> DotResult:
+	for k in cfg.unknown_keys:
+		unknown.append("%s: %s" % [file, k])
+	cfg.unknown_keys = PackedStringArray()
+	return res
+
+
 func _apply(file: String, tree: Dictionary) -> DotResult:
 	match file:
 		"replay.yml":
@@ -562,17 +624,8 @@ func _apply(file: String, tree: Dictionary) -> DotResult:
 			return _apply_party(tree)
 		"matchmaking.yml":
 			return _apply_matchmaking(tree)
-		"groups.yml":
-			groups = TmcYaml.at(tree, "groups", {}) as Dictionary
-			return DotResult.success(null)
-		"permissions.yml":
-			users = TmcYaml.at(tree, "users", {}) as Dictionary
-			return DotResult.success(null)
 		"auth.yml":
 			auth = tree
-			return DotResult.success(null)
-		"admin_menu.yml":
-			admin_menu = tree
 			return DotResult.success(null)
 		"loading.yml":
 			loading = tree
@@ -636,11 +689,8 @@ func _apply_party(tree: Dictionary) -> DotResult:
 				unknown.append("party.yml: %s (%s)" % [name, applied_policy.error.message])
 			continue
 
-		if name.begins_with("party_"):
-			var applied := _set_on(party, name.trim_prefix("party_"), value)
-			if not applied.ok:
-				unknown.append("party.yml: %s" % name)
-			continue
+		if name.begins_with("party_") and party.config_keys().has(name.trim_prefix("party_")):
+			continue  # Applied by the addon's own loader.
 
 		unknown.append("party.yml: %s" % name)
 
@@ -691,11 +741,8 @@ func _apply_replay(tree: Dictionary) -> DotResult:
 				replay_keep_mib = maxi(int(value), 1)
 				continue
 
-		if name.begins_with("replay_"):
-			var applied := _set_on(replay, name.trim_prefix("replay_"), value)
-			if not applied.ok:
-				unknown.append("replay.yml: %s" % name)
-			continue
+		if name.begins_with("replay_") and replay.config_keys().has(name.trim_prefix("replay_")):
+			continue  # Applied by the addon's own loader.
 
 		unknown.append("replay.yml: %s" % name)
 
@@ -733,11 +780,8 @@ func _apply_matchmaking(tree: Dictionary) -> DotResult:
 					return built.wrap("matchmaking.yml")
 				continue
 
-		if name.begins_with("mm_"):
-			var applied := _set_on(matchmaking, name.trim_prefix("mm_"), value)
-			if not applied.ok:
-				unknown.append("matchmaking.yml: %s" % name)
-			continue
+		if name.begins_with("mm_") and matchmaking.config_keys().has(name.trim_prefix("mm_")):
+			continue  # Applied by the addon's own loader.
 
 		unknown.append("matchmaking.yml: %s" % name)
 
@@ -1009,20 +1053,10 @@ func _apply_settings(file: String, tree: Dictionary) -> DotResult:
 
 			continue
 
-		if SECURITY_KEYS.has(name):
-			var applied_sec := _set_on(security, String(SECURITY_KEYS[name]), value)
-
-			if not applied_sec.ok:
-				return applied_sec.wrap("%s: %s" % [file, name])
-
-			continue
-
-		if ANTICHEAT_KEYS.has(name):
-			var applied_ac := _set_on(anticheat, String(ANTICHEAT_KEYS[name]), value)
-
-			if not applied_ac.ok:
-				return applied_ac.wrap("%s: %s" % [file, name])
-
+		if DotSecurityConfig.CFG_KEYS.has(name) or DotAntiCheatConfig.CFG_KEYS.has(name):
+			# security.yml went through the addons' loaders already; the keys are theirs alone.
+			if file != "security.yml":
+				unknown.append("%s: %s (belongs in security.yml)" % [file, name])
 			continue
 
 		if BOOT_KEYS.has(name):

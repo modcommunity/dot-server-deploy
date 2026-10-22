@@ -186,6 +186,8 @@ Three directories, and the split is the point: `cfg/` and `content/` are read, `
 
 ## Configuration
 
+Changing a setting, replacing a list, or tuning one game: [docs/operator-config.md](docs/operator-config.md) (edit `cfg/` only; the layers and worked examples). Which addons and games get downloaded is `cfg/content/addons.yml` and `games.yml`: [docs/content-lists.md](docs/content-lists.md).
+
 `cfg/*.yml` is a **surface over dot-server's own vocabulary**, not a second one.
 
 Where a key names something the console already knows, it is compiled into a `.cfg` and handed to the console, which is the parser, the validator, the range clamp and the audit trail. Where it names something fixed before the console exists (the port, the bind address) it goes to the boot config. Everything else, such as groups, per-user permissions and the auth backend, is handed to whatever owns it.

@@ -17,7 +17,7 @@ const CFG := "res://examples/fixtures"
 ## A loaded game with rounds and no match the game vote can find. See the section that uses it.
 const RoundsWithoutMatch := preload("res://examples/fixtures/rounds_without_match.gd")
 
-const CHECKS := 356
+const CHECKS := 376
 
 var _passed := 0
 var _failed := 0
@@ -42,6 +42,8 @@ func _run() -> void:
 	_test_yaml_refusals()
 	_test_config()
 	_test_admins()
+	_test_layered_cfg()
+	_test_content_lists()
 	_test_content()
 	_test_owner_maps()
 	await _test_map_collections()
@@ -583,8 +585,9 @@ func _test_replay() -> void:
 
 	# A setting the addon refuses refuses the file, rather than a ring quietly not built.
 	var bad := TmcConfig.new()
+	bad.replay.apply_dictionary({"compression": "zip"}, "test")
 	_check(
-		not bad._apply_replay({"replay_compression": "zip"}).ok,
+		not bad._apply_replay({}).ok,
 		"a compression the addon does not have refuses replay.yml"
 	)
 
@@ -894,6 +897,73 @@ func _test_security() -> void:
 	_check(DotSecurityConfig.new().dry_run, "a guard nobody configured is in dry run")
 
 	_done()
+
+
+func _test_layered_cfg() -> void:
+	_section("party, groups and security through the addons' layered loaders")
+	var root := "user://selftest_layered_cfg"
+	DotPaths.remove_tree(root)
+	DotCfgLegacy.reset()
+	_put(root + "/party.yml", "party_enabled: false\nparty_seat_hold_sec: 30\nparty_reserve_empty_only: true\n")
+	_put(root + "/security.yml", "sec_enabled: true\nsec_caps_ratio: 0.5\nac_max_speed: 33.0\nsec_nonsense: 1\n")
+	_put(root + "/groups.yml", "groups:\n  a:\n    permissions: [x]\n")
+	var loaded := TmcConfig.load_dir(root)
+	_check(loaded.ok, "the flat files still load (shim)")
+	var flat: TmcConfig = loaded.value
+	_check(not flat.party_enabled and is_equal_approx(flat.party.seat_hold_sec, 30.0) and flat.party_policy.empty_only, "party.yml: the deployment's switch, the addon's key and the policy")
+	_check(flat.security.enabled and is_equal_approx(flat.security.caps_ratio, 0.5) and is_equal_approx(flat.anticheat.max_horizontal_speed, 33.0), "security.yml reaches both configs")
+	_check("\n".join(flat.console_lines).contains("sec_nonsense"), "a sec_ key the addons do not know falls through as before")
+	_check(flat.groups.has("a"), "groups.yml through DotAdminCfg")
+	_put(root + "/addons/dot_party/party.yml", "party_seat_hold_sec: 40\n")
+	_put(root + "/server/addons/dot_party/party.yml", "party_seat_hold_sec: 50\n")
+	loaded = TmcConfig.load_dir(root)
+	_check(loaded.ok and is_equal_approx((loaded.value as TmcConfig).party.seat_hold_sec, 50.0), "the operator's cfg/server/addons tier wins over addons and the flat file")
+	_put(root + "/server/addons/dot_server/groups.yml", "groups:\n  b:\n    permissions: [y]\n")
+	var g: TmcConfig = TmcConfig.load_dir(root).value
+	_check(g.groups.has("b") and not g.groups.has("a"), "a new-layout groups.yml wins whole over the flat file")
+	DotPaths.remove_tree(root)
+	DotAddonConfig.config_root = ""
+	_done()
+
+
+func _test_content_lists() -> void:
+	_section("content lists: shipped default, operator replace or merge, bad entry, pin")
+	var root := "user://selftest_content_lists"
+	DotPaths.remove_tree(root)
+	var shipped := TmcContentLists.load_list("addons", root)
+	_check(shipped.ok and (shipped.value as Array).size() > 40, "the shipped addons list loads")
+	_check(TmcContentLists.pin_for(shipped.value, "dot-core") != "", "and carries the pins of addons.lock")
+	var games := TmcContentLists.load_list("games", root)
+	_check(games.ok and (games.value as Array).size() > 10 and games.value[0]["content"] != "", "the shipped games list loads with its content directories")
+	_put(root + "/content/addons.yml", "entries:\n  - dot-core@v9\n  - pack: gamemann/surf_mesa@1.2.0\n")
+	var own := TmcContentLists.load_list("addons", root)
+	_check(own.ok and (own.value as Array).size() == 2, "the operator's file replaces the default")
+	_check(TmcContentLists.pin_for(own.value, "dot-core") == "v9" and TmcContentLists.pin_for(own.value, "gamemann/surf_mesa") == "1.2.0", "pins are respected, in both spellings")
+	_check(own.value[1]["kind"] == "pack", "a pack id is told from a repository")
+	_put(root + "/content/addons.yml", "merge: true\nremove: [dot-voice]\nentries:\n  - repo: dot-extra\n  - repo: dot-core\n    pin: v9\n")
+	var merged := TmcContentLists.load_list("addons", root)
+	var ids: Array = (merged.value as Array).map(func(e: Dictionary) -> String: return e["id"])
+	_check(merged.ok and ids.has("dot-extra") and not ids.has("dot-voice") and ids.count("dot-core") == 1, "merge: true adds, removes, and replaces by id")
+	_check(TmcContentLists.pin_for(merged.value, "dot-core") == "v9", "a merged entry's pin wins")
+	_put(root + "/server/content/addons.yml", "entries:\n  - dot-only\n")
+	var srv := TmcContentLists.load_list("addons", root)
+	_check(srv.ok and (srv.value as Array).size() == 1, "the server tier overrides the operator's file")
+	_put(root + "/server/content/addons.yml", "entries:\n  - repo: a\n    pack: b/c\n")
+	var bad := TmcContentLists.load_list("addons", root)
+	_check(not bad.ok and bad.error.code == DotError.CODE_INVALID and bad.error.message.contains("entry 1"), "a bad entry fails with CODE_INVALID naming it")
+	_put(root + "/server/content/addons.yml", "entries:\n  - dot-x@bad pin!\n")
+	_check(TmcContentLists.load_list("addons", root).error.code == DotError.CODE_INVALID, "a pin with odd characters is refused")
+	_put(root + "/server/content/addons.yml", "entries: [\n")
+	_check(not TmcContentLists.load_list("addons", root).ok, "a file that is not yml fails")
+	_check(TmcContentLists.load_list("nope", root).error.code == DotError.CODE_INVALID, "an unknown list is refused")
+	DotPaths.remove_tree(root)
+	_done()
+
+
+func _put(path: String, text: String) -> void:
+	DirAccess.make_dir_recursive_absolute(path.get_base_dir())
+	var f := FileAccess.open(path, FileAccess.WRITE)
+	f.store_string(text)
 
 
 func _test_admins() -> void:

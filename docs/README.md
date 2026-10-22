@@ -6,6 +6,8 @@ The reasoning behind [../CLAUDE.md](../CLAUDE.md)'s rules. The operator's view o
 | --- | --- |
 | [delivery-constraint.md](delivery-constraint.md) | Why every game is a pack, the seven forms of the mount constraint, `rebase()`, publishing and stale packs |
 | [configuration.md](configuration.md) | `cfg/` vs `cfg.example/`, the layers and `TMC_*`, YAML as a console surface, config fields, prefixes, roles to flags, `cfg/content.yml`, `cfg/addons.yml` |
+| [operator-config.md](operator-config.md) | the operator's guide to `cfg/`: layers, worked examples, which layer wins |
+| [content-lists.md](content-lists.md) | `cfg/content/addons.yml` and `games.yml`: the download lists, their schema and layers |
 | [installing-games.md](installing-games.md) | `install-games` and `index`, descriptors, `owner/name@version`, `@latest`, the three pack lists, `--no-games` |
 | [setup.md](setup.md) | `setup.sh`: one fact one place, addons and games inside the tree, `--only-games`, the runtime fetcher, Windows |
 | [pterodactyl.md](pterodactyl.md) | The egg, and every way a panel install hung or died |

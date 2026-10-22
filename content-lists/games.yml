@@ -1,0 +1,45 @@
+# The games and data packs this project publishes, with their content directories.
+# Shipped default; an operator replaces it with cfg/content/games.yml (see docs/content-lists.md).
+entries:
+  - repo: game-hungario
+    content: hungry_classic
+  - repo: game-g2gfast
+    content: g2gfast
+  - repo: game-playground-maps
+    content: playground_maps
+  - repo: game-playground
+    content: playground
+  - repo: game-arena
+    content: arena
+  - repo: mg-buses-from-hell
+    content: buses
+  - repo: mg-smash-copter
+    content: smash
+  - repo: mg-wipeout-maps
+    content: wipeout_maps
+  - repo: mg-wipeout
+    content: wipeout
+  - repo: mg-deathrun-maps
+    content: deathrun_maps
+  - repo: mg-deathrun
+    content: deathrun
+  - repo: mg-dangerous-delivery
+    content: delivery
+  - repo: mg-look-at-me
+    content: lookatme
+  - repo: mg-prop-hunt-maps
+    content: prophunt_maps
+  - repo: mg-prop-hunt
+    content: prophunt
+  - repo: hide-n-seek-maps
+    content: hideseek_maps
+  - repo: game-hide-n-seek
+    content: hideseek
+  - repo: zombie-zone-maps
+    content: zombiezone_maps
+  - repo: game-zombie-zone
+    content: zombiezone
+  - repo: murder-mystery-maps
+    content: murdermystery_maps
+  - repo: game-murder-mystery
+    content: murdermystery
