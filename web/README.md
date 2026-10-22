@@ -15,27 +15,27 @@ index.html?server=ws://your-host:6064
 
 `embed.html` replaces Godot's generated `index.html`: it is smaller, it handles the device-pixel-ratio and touch-action problems, and it takes the server from the query string so **one export serves every server**.
 
-## Shipping a client change: which shape you are on, and what it costs
+## Shipping a client change
 
-**Read this before exporting anything.** `./server export-web` writes `web/build/` and publishes nothing. Which of the three shapes below you are on decides what happens next, and getting it wrong looks exactly like the change not working: the browser keeps running the previous build and every console message stays byte-for-byte identical, because it *is* the previous build.
+**The web-shell workflow publishes the shell** ([docs/releases.md](../docs/releases.md#publishing-the-web-build)). Push a change to a shell input (`addons.lock`, `client/`, `project.godot`, the presets, `web/embed.html`, the engine pin) to `main`; CI exports, uploads, pins, tags and releases it, and the site's `web-build-register` job writes the `WebGameBuild` row once a server reports the build. Nobody exports or uploads a shell by hand while the workflow is up.
 
-**Ten seconds to find out which one you are on.** In DevTools → Network, find `index.pck` and read its Request URL:
+`./server export-web` on a developer box writes `web/build/` for local testing and **publishes nothing**. A change that was never published is indistinguishable from a fix that did not work, because the browser runs the previous build and prints the previous errors byte for byte.
 
-| Request URL | Shape | Deploying a change |
-| --- | --- | --- |
-| `<game origin>/game/<app>/<build id>/…` | **site-published** | `./server export-web --zip`, then upload `web/build.zip` on **App → Party → Web game build**. Every time. |
-| `<game origin>/game/…` | **self-hosted** | `./server export-web --base <game origin>/game/`, then copy `web/build/` to the web root. |
-| a bucket URL | **bucket** | `./server export-web --base <public base>`, then `./deploy/publish-web-s3.sh` |
-
-Or from a shell, which needs nobody's browser:
+**Ten seconds to find out which build a page runs.** In DevTools -> Network, find `index.pck` and read its Request URL, or from a shell:
 
 ```bash
 curl -sI https://<game origin>/game/index.pck | grep -i last-modified
 ```
 
-If that timestamp is older than your export, the build you are testing is not the build you made — whatever the export printed.
+If that timestamp is older than your export, the build you are testing is not the build you made.
 
-**Yes, a site-published build is one upload per change, and that is the deal it makes.** The site writes every build to its own immutable prefix `game/<app>/<build id>/` and hands the loader a `boot.game` naming it. Nothing is ever overwritten, so a CDN caches it forever, a deploy swaps atomically, and a rollback is a build id — but there is no directory to `rsync` into, and the engine cannot change without a new build id. That is what an immutable prefix *is*. If you would rather deploy by copying a directory, use the self-hosted shape; you trade the atomic swap and the long cache for an `rsync`.
+| Request URL | Shape | Publishing it |
+| --- | --- | --- |
+| `<game origin>/game/<app>/<build id>/...` | **site-published** (the normal shape) | The workflow. Fallback only: [releases.md](../docs/releases.md#publishing-the-web-build) ("By hand, the fallback"), or upload `./server export-web --zip`'s `web/build.zip` on **App -> Party -> Web game build** |
+| `<game origin>/game/...` | **self-hosted** | `./server export-web --base <game origin>/game/`, then copy `web/build/` to the web root |
+| a bucket URL | **bucket** | `./server export-web --base <public base>`, then `./deploy/publish-web-s3.sh` |
+
+A site-published build lives in its own immutable prefix `game/<app>/<build id>/`: a CDN caches it forever, a deploy swaps atomically and a rollback is a build id, but there is no directory to `rsync` into. Use the self-hosted shape if you would rather deploy by copying a directory.
 
 **The one thing that is the same in all three:** `web/build` is the output, never the deployment. Nothing that writes into it makes a browser see it.
 
@@ -124,23 +124,15 @@ Then point the loader at it and re-upload it. This does not rebuild the engine:
 
 For this deployment the game is on `games.example.net` and the site on `example.com` — separate registrable domains. website-city's session cookies set no `Domain=`, so they are host-only and would not reach even a subdomain; the separate domain closes the reverse direction, where a sibling can *set* a `Domain=` cookie the site then receives.
 
-## Letting the site publish it instead
+## Letting the site publish it
 
-The third shape, and the one that needs no stamping at all: upload the export to website-city (App → Party → **Web game build**) and let it publish. It writes every build to its own immutable prefix on the game content origin and hands the loader a `boot.game` block naming that build — which the loader now PREFERS over the stamped `@ENGINE_BASE@`.
+The normal shape, and the one that needs no stamping at all: the site publishes the export. It writes every build to its own immutable prefix on the game content origin and hands the loader a `boot.game` block naming that build — which the loader now PREFERS over the stamped `@ENGINE_BASE@`.
 
 That ordering is not a preference, it is a correctness requirement. A published build lives at `game/<app>/<build id>/`, so a baked base names one particular build and goes stale on the next publish — pointing at the previous one, with nothing anywhere saying so.
 
-So for a site-published game:
+In CI the workflow does this; `web/build.zip` (`./server export-web --zip`, entries at the top level, which is what the publisher expects) is the by-hand fallback only, uploaded on the **Web game build** field. No `--base` is needed; the site supplies it.
 
-```bash
-./server export-web --zip                    # no --base needed; the site supplies it
-```
-
-`--zip` writes `web/build.zip` with the entries at the top level, which is what the publisher expects — zipped from one directory up it would find no entry point in a perfectly good archive. Upload it on the **Web game build** field.
-
-and upload `web/tmc-loader.js` **as-is**, placeholder and all, on the loader field above it. The stamp stays the fallback for the two deployments below, where there is no site to ask.
-
-**The loader needs no hand upload once the deploy repository holds the key.** The web-shell workflow's `loader` job sends `web/tmc-loader.js` to the site as-is on every run, through the same checks as the loader field, labelled after the last commit that changed it; the site answers a version it already has as unchanged. Issue the key in the admin panel (Game → **Loader publish key**) and add it as the repository secret `TMC_LOADER_PUBLISH_KEY`; set the variable `TMC_SITE_URL` when the site is not `WEB_SHELL_BACKBONE_URL`. Without the key the job skips with a notice and the field above is still the way. Details: [docs/releases.md](../docs/releases.md#publishing-the-web-build).
+**The loader needs no hand upload once the deploy repository holds the key.** The workflow's `loader` job sends `web/tmc-loader.js` to the site as-is on every run, labelled after the last commit that changed it; the site answers a version it already has as unchanged. Issue the key in the admin panel (Game -> **Loader publish key**) and add it as the repository secret `TMC_LOADER_PUBLISH_KEY`; set the variable `TMC_SITE_URL` when the site is not `WEB_SHELL_BACKBONE_URL`. Without the key the job skips with a notice and the loader field (upload `web/tmc-loader.js` as-is, placeholder and all) is the fallback. The stamp stays the fallback for the two deployments below, where there is no site to ask. Details: [docs/releases.md](../docs/releases.md#publishing-the-web-build).
 
 The loader refuses either way if the resolved location is same-origin with the site — that check is what holds the frame sandbox up, and it does not care which source won. If `NEXT_PUBLIC_GAME_ORIGIN` is unset or points at the site's own domain, the game does not start and says so.
 
