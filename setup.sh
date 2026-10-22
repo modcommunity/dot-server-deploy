@@ -40,6 +40,13 @@
 #                               time with an answer already in the brackets
 #   ./setup.sh --full --yes     the same install, every default taken, nobody typing
 #
+#   ./setup.sh --mode compose --out DIR     write a Docker Compose deployment instead of
+#   ./setup.sh --mode pterodactyl --out DIR installing here: the files for a panel's egg.
+#                               host is the default. Both take --name, --game, --games,
+#                               --port, --max-players, --rcon-port and --dry-run (write
+#                               nothing, list the files); compose also --domain. They
+#                               never write a password. docs/deploy-modes.md
+#
 # WHAT IT DOES, AND WHY EACH STEP IS HERE
 #
 #   1. Finds a Godot 4.7+ runtime, and DOWNLOADS the pinned one when the machine has
@@ -217,6 +224,12 @@ DROPPED_DIRS=()
 DO_FULL=0
 ASSUME_YES=0
 
+# host installs on this machine (the default); the other modes only write files, through
+# tools/deploy-modes.sh, and install nothing.
+DEPLOY_MODE="host"
+MODE_OUT=""
+MODE_ARGS=()
+
 # TLS. Nothing here happens without --letsencrypt; the rest only says what.
 DO_LETSENCRYPT=0
 LE_DOMAINS=()
@@ -245,6 +258,11 @@ while [ $# -gt 0 ]; do
                       ONLY_GAMES+=("${_g[@]}"); shift 2 ;;
         --skip-games) _v="${2:?--skip-games needs a value}"; read -r -a _g <<<"${_v//,/ }"
                       SKIP_GAMES+=("${_g[@]}"); shift 2 ;;
+        --mode)      DEPLOY_MODE="${2:?--mode needs host, compose or pterodactyl}"; shift 2 ;;
+        --out)       MODE_OUT="${2:?--out needs a value}"; shift 2 ;;
+        --name|--game|--games|--port|--max-players|--rcon-port)
+                     MODE_ARGS+=("$1" "${2:?$1 needs a value}"); shift 2 ;;
+        --dry-run)   MODE_ARGS+=("--dry-run"); shift ;;
         --letsencrypt) DO_LETSENCRYPT=1; shift ;;
         --domain)    LE_DOMAINS+=("${2:?--domain needs a value}"); shift 2 ;;
         --email)     LE_EMAIL="${2:?--email needs a value}"; shift 2 ;;
@@ -260,7 +278,7 @@ while [ $# -gt 0 ]; do
         # 2..78 is the comment block at the top of this file, printed as help so
         # there is one copy of it rather than two that drift. The range moves when
         # that block grows; it ends at the last line of step 8.
-        -h|--help)   sed -n '2,78p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        -h|--help)   sed -n '2,92p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
         *) printf 'unknown option: %s\n' "$1" >&2; exit 2 ;;
     esac
 done
@@ -276,6 +294,19 @@ warn() { printf '    %s!!%s   %s\n' "$YLW" "$OFF" "$1"; }
 # reads as broken.
 note() { printf '    %s--%s   %s\n' "$DIM" "$OFF" "$1"; }
 die()  { printf '\n    %s%s%s\n\n' "$RED" "$1" "$OFF" >&2; exit "${2:-1}"; }
+
+# --- Not on this machine: write the files for another way of running it -----
+case "$DEPLOY_MODE" in
+    host) [ -z "$MODE_OUT" ] && [ "${#MODE_ARGS[@]}" -eq 0 ] \
+              || die "--out, --name, --game, --games, --port, --max-players, --rcon-port and
+    --dry-run are for --mode compose or pterodactyl; a host install asks for them
+    in --full and reads the rest from cfg/." 2 ;;
+    compose|pterodactyl)
+        [ -n "$MODE_OUT" ] || die "--mode $DEPLOY_MODE needs --out DIR" 2
+        [ "${#LE_DOMAINS[@]}" -gt 0 ] && [ "$DEPLOY_MODE" = compose ] && MODE_ARGS+=(--domain "${LE_DOMAINS[0]}")
+        exec "$ROOT/tools/deploy-modes.sh" --mode "$DEPLOY_MODE" --out "$MODE_OUT" "${MODE_ARGS[@]}" ;;
+    *) die "--mode must be host, compose or pterodactyl: $DEPLOY_MODE" 2 ;;
+esac
 
 # --- Asking, and the rules it follows --------------------------------------
 #
@@ -490,6 +521,24 @@ if [ "$DO_FULL" -eq 1 ]; then
 
     printf '\n%s  A server on this machine, in about ten questions.%s\n' "$BLD" "$OFF"
     printf '  %sReturn takes the answer in the brackets. Nothing happens until the end.%s\n\n' "$DIM" "$OFF"
+
+    # --- where it runs ---
+    # Asked first: the other two ways only write files, so the rest of this wizard (runtime,
+    # packages, nginx on this box) does not apply to them. Flags beat the question.
+    if [ "$DEPLOY_MODE" = "host" ]; then
+        DEPLOY_MODE="$(ask "Run it on this machine, in Docker Compose, or on a Pterodactyl panel? (host, compose, pterodactyl)" host)"
+    fi
+    case "$DEPLOY_MODE" in
+        host) ;;
+        compose|pterodactyl)
+            [ -n "$MODE_OUT" ] || MODE_OUT="$(ask "Directory to write the files into" "./tmc-$DEPLOY_MODE")"
+            _n="$(ask "Server name" "My TMC server")"
+            _p="$(ask "Port the server listens on" 6064)"
+            _m="$(ask "Player slots" 64)"
+            exec "$ROOT/tools/deploy-modes.sh" --mode "$DEPLOY_MODE" --out "$MODE_OUT" \
+                --name "$_n" --port "$_p" --max-players "$_m" "${MODE_ARGS[@]}" ;;
+        *) die "that was not host, compose or pterodactyl: $DEPLOY_MODE" 2 ;;
+    esac
 
     # --- what the server is ---
     FULL_NAME="$(ask       "Server name" "$(cfg_or cfg/server.yml sv_name 'TMC Test Server')")"

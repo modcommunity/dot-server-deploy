@@ -13,6 +13,7 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first; this file is what is specifi
 | [docs/installing-games.md](docs/installing-games.md) | `install-games`, `index`, `TmcContent`, `TmcGameRef`, a game's pack lists |
 | [docs/setup.md](docs/setup.md) | `setup.sh`, `setup.ps1`, `tools/server.in`, the addon or game lists, the runtime fetcher |
 | [docs/pterodactyl.md](docs/pterodactyl.md) | the egg, anything run non-interactively |
+| [docs/deploy-modes.md](docs/deploy-modes.md) | `setup.sh --mode`, `tools/deploy-modes.sh`, the compose and egg files it writes |
 | [docs/releases.md](docs/releases.md) | any release: addon, game or shell; `addons.lock`; `web/shell-build`; exporting |
 | [docs/addon-packs.md](docs/addon-packs.md) | `client/boot.tscn`, `_advertise_addons`, the update-and-restart path |
 | [docs/native-client.md](docs/native-client.md) | `export-native`, launch arguments, presets |

@@ -15,7 +15,7 @@
     "file_denylist": [],
     "startup": "./server --port {{SERVER_PORT}}",
     "config": {
-        "files": "{}",
+        "files": "{\"cfg/server.yml\": {\"parser\": \"yaml\", \"find\": {\"sv_name\": \"{{env.TMC_NAME}}\", \"sv_maxplayers\": \"{{env.TMC_MAX_PLAYERS}}\", \"sv_allow_web\": \"{{env.TMC_ALLOW_WEB}}\", \"sv_allow_desktop\": \"{{env.TMC_ALLOW_DESKTOP}}\", \"sv_allow_mobile\": \"{{env.TMC_ALLOW_MOBILE}}\"}}}",
         "startup": "{\"done\": \"server   ready\"}",
         "logs": "{}",
         "stop": "quit"

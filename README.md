@@ -712,6 +712,8 @@ cp -a ../cfg.mine/. cfg/       # and it is yours again, now untracked
 
 ## Docker
 
+`./setup.sh --mode compose --out DIR` writes a ready compose deployment (and `--mode pterodactyl` the panel's egg); worked examples in [docs/deploy-modes.md](docs/deploy-modes.md).
+
 ```bash
 docker compose up -d
 docker compose logs -f

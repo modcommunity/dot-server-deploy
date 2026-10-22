@@ -10,6 +10,7 @@ The reasoning behind [../CLAUDE.md](../CLAUDE.md)'s rules. The operator's view o
 | [content-lists.md](content-lists.md) | `cfg/content/addons.yml` and `games.yml`: the download lists, their schema and layers |
 | [installing-games.md](installing-games.md) | `install-games` and `index`, descriptors, `owner/name@version`, `@latest`, the three pack lists, `--no-games` |
 | [setup.md](setup.md) | `setup.sh`: one fact one place, addons and games inside the tree, `--only-games`, the runtime fetcher, Windows |
+| [deploy-modes.md](deploy-modes.md) | `./setup.sh --mode compose` or `--mode pterodactyl`: files for Docker Compose or a panel, with a worked example each |
 | [pterodactyl.md](pterodactyl.md) | The egg, and every way a panel install hung or died |
 | [releases.md](releases.md) | Release orders, what needs a new shell, `addons.lock`, self-update, `sv_web_build`, `sv_web_loader`, publishing the web build |
 | [addon-packs.md](addon-packs.md) | Addon releases reaching players by a restart, and the end-to-end proof |
