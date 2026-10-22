@@ -424,7 +424,11 @@ static func load_dir(directory: String) -> DotResult:
 
 		var path := "%s/%s" % [base, name]
 
-		if not FileAccess.file_exists(path):
+		# rcon.yml moved under its addon; the flat file is read until DotCfgLegacy's cutoff.
+		if name == "rcon.yml":
+			path = DotCfgLegacy.find(path, "%s/addons/dot_console/%s" % [base, name])
+
+		if path == "" or not FileAccess.file_exists(path):
 			config.files_missing.append(name)
 			continue
 

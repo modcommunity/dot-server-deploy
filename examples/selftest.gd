@@ -17,7 +17,7 @@ const CFG := "res://examples/fixtures"
 ## A loaded game with rounds and no match the game vote can find. See the section that uses it.
 const RoundsWithoutMatch := preload("res://examples/fixtures/rounds_without_match.gd")
 
-const CHECKS := 386
+const CHECKS := 387
 
 var _passed := 0
 var _failed := 0
@@ -1166,6 +1166,11 @@ func _test_game_refs() -> void:
 	bare["dependencies"] = ["surf_mesa"]
 	_check(not TmcContent.new()._build("demo", bare).ok,
 		"a dependency with no owner is refused")
+
+	_check(installer.pointer_hint("a/b", "<Error><Code>AccessDenied</Code></Error>").contains("misspelled")
+			and installer.pointer_hint("a/b", "HTTP 404").contains("not published")
+			and installer.pointer_hint("a/b", "connection refused") == "",
+		"a forbidden or missing latest.json says the id may be misspelled; an outage does not")
 
 	# A renamed repository's old latest.json carries moved_to; exactly one hop is followed.
 	var plain: DotResult = installer.follow_pointer("a/old", {"version": "1.0.0"}, 0)

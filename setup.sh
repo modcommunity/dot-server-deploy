@@ -2157,14 +2157,17 @@ while IFS= read -r template; do
     rel="${template#cfg.example/}"
     target="cfg/$rel"
     [ -f "$target" ] && continue
+    # A server set up before rcon.yml moved keeps its password in the flat file, which is
+    # still read (DotCfgLegacy); a second, generated one would win over it.
+    [ "$rel" = "addons/dot_console/rcon.yml" ] && [ -f cfg/rcon.yml ] && continue
     mkdir -p "$(dirname "$target")"
 
-    if [ "$rel" = "rcon.yml" ]; then
+    if [ "$rel" = "addons/dot_console/rcon.yml" ]; then
         RCON_PASSWORD="$(head -c 24 /dev/urandom | base64 | tr -d '/+=' | head -c 24)"
-        # The password is substituted into a file that is never tracked. The template
-        # holds a placeholder, so a checkout has nothing to leak and a half-finished
-        # run leaves no password anybody else also has.
-        sed "s|@RCON_PASSWORD@|$RCON_PASSWORD|" "$template" > "$target"
+        # The password is written into a file that is never tracked. The template holds
+        # an empty one (listener off), so a checkout has nothing to leak and a
+        # half-finished run leaves no password anybody else also has.
+        sed "s|^rcon_password: \"\"|rcon_password: \"$RCON_PASSWORD\"|" "$template" > "$target"
         NEW_RCON=1
     else
         cat "$template" > "$target"
@@ -2675,7 +2678,7 @@ fi
 # --- Done ------------------------------------------------------------------
 
 if [ "${NEW_RCON:-0}" -eq 1 ]; then
-    printf '\n%s  RCON password (printed once, it is in cfg/rcon.yml):%s\n' "$BLD" "$OFF"
+    printf '\n%s  RCON password (printed once, it is in cfg/addons/dot_console/rcon.yml):%s\n' "$BLD" "$OFF"
     printf '      %s\n' "$RCON_PASSWORD"
 fi
 

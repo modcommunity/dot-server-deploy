@@ -46,6 +46,11 @@ ORIG_ARGS=("$@")
 # that silently stops working is worse than a search that takes a millisecond.
 GODOT="${TMC_GODOT:-@GODOT@}"
 
+# Libraries the egg bundled for a runtime image that lacks them (libfontconfig.so.1).
+if [ -d "$PROJECT/.runtime/lib" ]; then
+    export LD_LIBRARY_PATH="$PROJECT/.runtime/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+fi
+
 # Where the exported engine will be served from. Baked into the loader by
 # `export-web`; see web/tmc-loader.js for why it cannot be discovered at runtime.
 ENGINE_BASE="${TMC_ENGINE_BASE:-}"

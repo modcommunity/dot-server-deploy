@@ -324,6 +324,7 @@ foreach ($template in (Get-ChildItem -LiteralPath $templates -Recurse -File |
     $rel = $template.FullName.Substring($templates.Length + 1)
     $target = Join-Path 'cfg' $rel
     if (Test-Path -LiteralPath $target) { continue }
+    if ($rel -eq 'addons\dot_console\rcon.yml' -and (Test-Path -LiteralPath 'cfg\rcon.yml')) { continue }
 
     New-Item -ItemType Directory -Force -Path (Split-Path -Parent (Join-Path $Root $target)) | Out-Null
 
@@ -334,11 +335,11 @@ foreach ($template in (Get-ChildItem -LiteralPath $templates -Recurse -File |
     # the encoding is stated rather than inherited.
     $text = [System.IO.File]::ReadAllText($template.FullName)
 
-    if ($rel -eq 'rcon.yml') {
+    if ($rel -eq 'addons\dot_console\rcon.yml') {
         $bytes = New-Object byte[] 18
         [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
         $rcon = [Convert]::ToBase64String($bytes) -replace '[/+=]', ''
-        $text = $text.Replace('@RCON_PASSWORD@', $rcon)
+        $text = $text.Replace('rcon_password: ""', "rcon_password: `"$rcon`"")
         $newRcon = $true
     }
 
@@ -466,7 +467,7 @@ Ok "server.cmd written, forwarding to server.ps1"
 
 if ($newRcon) {
     Write-Host ""
-    Write-Host "  RCON password (printed once, it is in cfg\rcon.yml):" -ForegroundColor White
+    Write-Host "  RCON password (printed once, it is in cfg\addons\dot_console\rcon.yml):" -ForegroundColor White
     Write-Host "      $rcon"
 }
 

@@ -15,7 +15,7 @@
 # loopback only, which means an SSH tunnel by default and a deliberate edit to widen
 # it. These servers face the internet and a remote console is the whole machine.
 
-rcon_password: "@RCON_PASSWORD@"
+rcon_password: ""
 rcon_port: 0                  # 0 uses the game port + 1
 rcon_allowed: ["127.0.0.1"]   # localhost only; empty allows any address
 rcon_websocket: false         # for a browser-based admin panel

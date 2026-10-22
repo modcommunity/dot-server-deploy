@@ -79,8 +79,10 @@ function readCfg(file, key) {
   } catch { return ''; }
 }
 
+const rconFile = [path.join(configDir, 'addons', 'dot_console', 'rcon.yml'), path.join(configDir, 'rcon.yml')]
+  .find((f) => fs.existsSync(f)) || path.join(configDir, 'rcon.yml');
 const password = process.env.TMC_RCON_PASSWORD
-  || readCfg(path.join(configDir, 'rcon.yml'), 'rcon_password');
+  || readCfg(rconFile, 'rcon_password');
 
 if (!password) {
   console.error(`no RCON password in ${configDir}/rcon.yml and TMC_RCON_PASSWORD is unset`);
@@ -97,7 +99,7 @@ if (!port && gamePort) {
 
 if (!port) {
   // rcon_port 0 means "the game port + 1", which is what DotServerConfig does.
-  const declared = Number(readCfg(path.join(configDir, 'rcon.yml'), 'rcon_port')) || 0;
+  const declared = Number(readCfg(rconFile, 'rcon_port')) || 0;
   port = declared || (Number(readCfg(path.join(configDir, 'net.yml'), 'net_port')) || 6064) + 1;
 }
 

@@ -1485,9 +1485,23 @@ func _fetch_pointer(content_id: String, bases: PackedStringArray, hop: int) -> D
 	return DotResult.fail(
 		DotError.CODE_IO,
 		"Could not find out which version of %s is newest." % content_id,
-		("name one explicitly -- %s@1.0.0 -- or publish %s beside its versions. %s"
-			% [content_id, LATEST_FILE, last])
+		("%s name one explicitly -- %s@1.0.0 -- or publish %s beside its versions. %s"
+			% [pointer_hint(content_id, last), content_id, LATEST_FILE, last]).strip_edges()
 	)
+
+
+## Says what a missing `latest.json` usually is. A bucket without public listing answers
+## AccessDenied, not 404, for a key that does not exist, so a misspelt id reads as a
+## permissions error.
+static func pointer_hint(content_id: String, last: String) -> String:
+	var l := last.to_lower()
+
+	if l.contains("accessdenied") or l.contains("403") or l.contains("404") \
+			or l.contains("not found") or l.contains("forbidden"):
+		return "No %s for %s: the pack is not published or the id is misspelled (check owner/name)." \
+			% [LATEST_FILE, content_id]
+
+	return ""
 
 
 ## Reads one `latest.json` body; the logic lives in [TmcSolo] because the client build
