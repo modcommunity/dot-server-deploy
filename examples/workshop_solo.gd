@@ -75,8 +75,9 @@ func _run() -> void:
 	for line in _failures:
 		print("  FAIL  %s" % line)
 
-	if _passed + _failed != CHECKS:
-		print("ERROR: %d checks ran, %d expected. A section aborted part-way." % [_passed + _failed, CHECKS])
+	var expected := CHECKS if _shots_dir() != "" else CHECKS - 1  # the cover check runs only with --shots
+	if _passed + _failed != expected:
+		print("ERROR: %d checks ran, %d expected. A section aborted part-way." % [_passed + _failed, expected])
 		get_tree().quit(1)
 		return
 
