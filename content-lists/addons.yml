@@ -8,7 +8,7 @@ entries:
   - repo: dot-audio
     pin: v0.1.5
   - repo: dot-auth
-    pin: v0.1.8
+    pin: v0.1.9
   - repo: dot-bot
     pin: v0.1.2
   - repo: dot-browser
@@ -54,7 +54,7 @@ entries:
   - repo: dot-matchmaking
     pin: v0.1.6
   - repo: dot-menu
-    pin: v0.1.9
+    pin: v0.1.10
   - repo: dot-moderation
     pin: v0.1.5
   - repo: dot-net
@@ -128,4 +128,4 @@ entries:
   - repo: zed-dot-weapons
     pin: v0.1.5
   - repo: zee-dot-weapons
-    pin: v0.1.16
+    pin: v0.1.17
