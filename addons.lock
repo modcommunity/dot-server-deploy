@@ -43,7 +43,7 @@ dot-player-class	v0.1.5
 dot-player-controller	v0.1.9
 dot-procedural-generation	v0.1.4
 dot-props	v0.1.8
-dot-replay	v0.1.6
+dot-replay	v0.1.7
 dot-server	v0.1.17
 dot-server-query	v0.1.6
 dot-server-security	v0.1.4
@@ -54,7 +54,7 @@ dot-sql	v0.1.3
 dot-stats	v0.1.5
 dot-team	v0.1.5
 dot-timer	v0.1.7
-dot-ui	v0.1.8
+dot-ui	v0.1.9
 dot-user	v0.1.5
 dot-user-avatar	v0.1.6
 dot-vehicle	v0.1.5

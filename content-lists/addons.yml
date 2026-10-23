@@ -88,7 +88,7 @@ entries:
   - repo: dot-props
     pin: v0.1.8
   - repo: dot-replay
-    pin: v0.1.6
+    pin: v0.1.7
   - repo: dot-server
     pin: v0.1.17
   - repo: dot-server-query
@@ -110,7 +110,7 @@ entries:
   - repo: dot-timer
     pin: v0.1.7
   - repo: dot-ui
-    pin: v0.1.8
+    pin: v0.1.9
   - repo: dot-user
     pin: v0.1.5
   - repo: dot-user-avatar
