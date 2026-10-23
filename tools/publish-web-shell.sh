@@ -66,6 +66,7 @@ Usage: publish-web-shell.sh --zip FILE [options]
                     SHELL_REGISTERED_URL names a page that lists the
                     site's current build ids, until it shows this id.
                     Exits 1 saying what is missing. Needs --origin
+  --manifest-only   print the latest.json that --pin would write and exit  (needs --app)
   --dry-run         print what would be uploaded, upload nothing
   -h, --help
 EOF
@@ -83,6 +84,7 @@ PIN=${SHELL_PIN:-0}
 NO_PUSH=${SHELL_NO_PUSH:-0}
 REPO=${SHELL_DEPLOY_REPO:-$(cd "$HERE/.." && pwd)}
 DRY=0
+MANIFEST_ONLY=0
 WAIT=${SHELL_WAIT_REGISTERED:-}
 REGISTERED_URL=${SHELL_REGISTERED_URL:-}
 
@@ -103,6 +105,7 @@ while [ $# -gt 0 ]; do
         --wait-registered)
             if [[ ${2:-} =~ ^[0-9]+$ ]]; then WAIT=$2; shift 2; else WAIT=300; shift; fi ;;
         --dry-run) DRY=1; shift ;;
+        --manifest-only) MANIFEST_ONLY=1; shift ;;
         -h|--help) usage; exit 0 ;;
         *) echo "unknown option: $1" >&2; usage >&2; exit 2 ;;
     esac
@@ -127,6 +130,24 @@ mkdir "$work/build"
 unzip -qo "$ZIP" -d "$work/build"
 [ -f "$work/build/embed.html" ] && ENTRY=embed.html || ENTRY=index.html
 [ -f "$work/build/$ENTRY" ] || die "the zip has no embed.html or index.html at its root"
+
+NOTES=${NOTES:-Shell uploaded from $(basename "$ZIP")}
+
+# The pointer the site's web-build-register job reads (game/<app>/latest.json) so a shell
+# that no game server runs is still registered. "lock" is the sha256 of the record the
+# build carries, so the pointer names the tree the build was exported from.
+manifest_json() {
+    local lock=
+    [ -f "$work/build/shell-inputs.txt" ] && lock=$(sha256sum "$work/build/shell-inputs.txt" | cut -d' ' -f1)
+    python3 -I -c 'import json,sys;print(json.dumps(dict(zip(("build","entry","notes","lock"),sys.argv[1:])),indent=2))' \
+        "$BUILD" "$ENTRY" "$NOTES" "$lock"
+}
+
+if [ "$MANIFEST_ONLY" = 1 ]; then
+    [ -n "$APP" ] || die "--manifest-only needs --app"
+    manifest_json
+    exit 0
+fi
 
 # Checked before a byte is uploaded, so a pin that cannot happen does not leave a
 # build in the bucket that nothing points at.
@@ -242,6 +263,10 @@ done < <(find "$work/build" -type f -print0 | sort -z)
 
 if [ "$DRY" = 1 ]; then
     echo "dry run: $count files, nothing uploaded"
+    if [ "$PIN" = 1 ]; then
+        echo "would write game/$APP/latest.json (with --pin):"
+        manifest_json
+    fi
 else
     echo "uploaded $count files to s3://$BUCKET/$PREFIX"
 fi
@@ -266,14 +291,22 @@ if [ "$DRY" = 0 ] && [ -n "$ORIGIN" ]; then
     echo "served  $url/$ENTRY"
 fi
 
-NOTES=${NOTES:-Shell uploaded from $(basename "$ZIP")}
+# [b]The pointer comes last and only with --pin[/b]: it is the one mutable document in an
+# otherwise immutable tree, and it names the build the site should serve to solo play.
+# Short cache so the job sees a new pin within a minute; no brotli, the job reads it as is.
+if [ "$DRY" = 0 ] && [ "$PIN" = 1 ]; then
+    manifest_json > "$work/latest.json"
+    aws s3 cp "$work/latest.json" "s3://$BUCKET/game/$APP/latest.json" --only-show-errors \
+        --content-type application/json --cache-control "public, max-age=60"
+    echo "manifest  game/$APP/latest.json -> $BUILD"
+fi
+
 cat <<EOT
 
 -- Registration is automatic but not immediate: website-city's web-build-register cron job
--- (every minute) writes the WebGameBuild row only once a game SERVER reports this id as
--- sv_web_build (servers read web/shell-build, so one must restart or update onto the pinned
--- shell) AND the entry answers on the content origin. Until then the site keeps serving the
--- previous build. Check with --wait-registered, or in Admin > Apps > Play (builds list).
+-- (every minute) writes the WebGameBuild row once the entry answers on the content origin
+-- AND either a game SERVER reports this id as sv_web_build or, with --pin, game/<app>/latest.json
+-- names it (no server needed). Without --pin only a server's report registers it. Check with --wait-registered, or in Admin > Apps > Play (builds list).
 -- Only if that job is off, register it by hand (website-city prod database):
 INSERT INTO "WebGameBuild" (id, "appId", build, entry, status, notes, "createdAt", "updatedAt")
 SELECT 'wgb' || substr(md5(random()::text), 1, 22), id, '$BUILD', '$ENTRY', 'ACTIVE',
@@ -305,7 +338,7 @@ if [ -n "$WAIT" ]; then
     done
     if [ "$served" != yes ] || [ "$listed" = no ]; then
         die "$BUILD is not live after ${WAIT}s: origin serves $ENTRY: $served; listed by ${REGISTERED_URL:-(no SHELL_REGISTERED_URL)}: $listed.
-       The WebGameBuild row appears only when a game server reports sv_web_build=$BUILD and the
+       The WebGameBuild row appears when a game server reports sv_web_build=$BUILD or (with --pin) game/$APP/latest.json names it, and the
        web-build-register job (every minute) finds the entry on the origin. Restart or update a
        server onto the pinned shell, check the job is enabled (Admin > Cron), or insert the row above."
     fi

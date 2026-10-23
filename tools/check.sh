@@ -62,6 +62,7 @@ bash tools/check_lists.sh || fails=$((fails + 1))
 echo
 echo "the deploy modes (compose, pterodactyl)"
 bash tools/check_deploy_modes.sh || fails=$((fails + 1))
+bash tools/check_publish_manifest.sh || fails=$((fails + 1))
 bash tools/check_self_update.sh || fails=$((fails + 1))
 
 echo
