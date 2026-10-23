@@ -25,6 +25,7 @@ on:
         # machinery. It only decides when to look; the job compares the fingerprint.
         paths:
             - addons.lock
+            - content-lists/addons.yml
             - 'client/**'
             - project.godot
             - export_presets.example.cfg
