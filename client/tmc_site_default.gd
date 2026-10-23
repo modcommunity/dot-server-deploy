@@ -42,6 +42,20 @@ static func resolve(auth_text: String, env_value: String, argv: PackedStringArra
 	return url if url.begins_with("http://") or url.begins_with("https://") else ""
 
 
+## The audiences in the site's `play/first-party` answer, as a PackedStringArray, or a
+## failure when the answer is not that shape (the caller keeps the shipped list).
+static func first_party_from(answer: Variant) -> DotResult:
+	var list: Variant = (answer as Dictionary).get("audiences") if answer is Dictionary else null
+	if not (list is Array):
+		return DotResult.fail(DotError.CODE_PARSE, "The site sent no first-party server list.")
+
+	var out := PackedStringArray()
+	for entry in list:
+		if DotAuthConfig.is_audience(str(entry)):
+			out.append(str(entry))
+	return DotResult.success(out)
+
+
 ## Publishes the shipped site to the process environment. Returns what it set, or "".
 static func apply(auth_path: String) -> String:
 	if not FileAccess.file_exists(auth_path):

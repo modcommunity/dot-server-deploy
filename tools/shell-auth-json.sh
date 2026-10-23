@@ -3,8 +3,8 @@
 #
 #   tools/shell-auth-json.sh BACKBONE_URL [AUDIENCES] > client/auth.json
 #
-# AUDIENCES is a comma list of `server:<id>` / `app:<id>`: the servers the shell treats as
-# first-party and mints a single-use join token for. Empty, every INTROSPECT server is refused.
+# AUDIENCES is an optional comma list of `server:<id>` / `app:<id>`, used only when the site
+# cannot answer `play/first-party` at sign-in; normally leave it empty and let the site decide.
 set -euo pipefail
 url=${1:?usage: shell-auth-json.sh BACKBONE_URL [AUDIENCES]}
 list=()

@@ -426,7 +426,8 @@ do_up() {
     # Without this the demo signed in against dot-auth's exported default, which is the
     # production site -- so a development page was starting an auth flow against
     # production, and did so on every load.
-    # FIRST_PARTY_AUDIENCES (server:<id>,...) are the INTROSPECT servers it signs in to.
+    # The shell asks the site which servers are first-party; FIRST_PARTY_AUDIENCES
+    # (server:<id>,...) is only the fallback for a site that cannot answer.
     tools/shell-auth-json.sh "$SITE_URL" "${FIRST_PARTY_AUDIENCES:-}" > client/auth.json
     ok "web player signs in against $SITE_URL"
 

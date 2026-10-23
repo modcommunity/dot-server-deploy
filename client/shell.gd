@@ -418,6 +418,25 @@ func _sign_in(resumed: Dictionary = {}) -> void:
 
 	_build_party(identity)
 	_build_friends()
+	_refresh_first_party()
+
+
+## Asks the site which INTROSPECT servers this shell may hand a join token to. The site
+## also enforces the list when minting, so a server it adds works without a new build;
+## when it cannot answer, the list from `client/auth.json` (if any) stays.
+func _refresh_first_party() -> void:
+	var res: DotResult = await _auth.get_app("play/first-party")
+	if res.ok:
+		res = TmcSiteDefault.first_party_from(res.value)
+
+	if not res.ok:
+		DotLog.warn(CHANNEL, "the site's first-party servers are unavailable; keeping the shipped list", {
+			"why": res.code(), "shipped": _auth.config.first_party_audiences,
+		})
+		return
+
+	_auth.config.first_party_audiences = res.value
+	DotLog.debug(CHANNEL, "first-party servers from the site", {"audiences": res.value})
 
 
 ## The shell's translator, from the shipped messages and the player's language.

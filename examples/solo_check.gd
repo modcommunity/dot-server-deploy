@@ -15,7 +15,7 @@ extends Node
 ## trailing comment on a read field disagrees with TmcYaml); and deleting a game from
 ## `client/solo.json` (the drift check names it).
 
-const CHECKS := 44
+const CHECKS := 47
 
 ## Every game repository, beside this project or in games/: the repositories of cfg/content/games.yml (shipped content-lists/games.yml).
 
@@ -124,6 +124,12 @@ func _test_first_party() -> void:
 	shipped.config = DotAuthConfig.new()
 	shipped.config.apply_json_file("res://client/auth.json")
 	_check(not shipped.is_first_party("server:999999999"), "the shipped file does not trust an arbitrary server")
+
+	var site := TmcSiteDefault.first_party_from({"audiences": ["server:7", "app:3", "global", "server:0", 5]})
+	_check(site.ok and site.value == PackedStringArray(["server:7", "app:3"]), "the site's play/first-party answer keeps only server and app audiences")
+	_check(not TmcSiteDefault.first_party_from({}).ok and not TmcSiteDefault.first_party_from(null).ok \
+		and not TmcSiteDefault.first_party_from({"audiences": "server:7"}).ok, "a malformed answer fails, so the shell keeps the shipped list")
+	_check(TmcSiteDefault.first_party_from({"audiences": []}).ok, "an empty answer is an answer: the site trusts no server")
 
 	client.free()
 	shipped.free()

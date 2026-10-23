@@ -56,7 +56,6 @@ jobs:
             WEB_SHELL_APP: ${{ vars.WEB_SHELL_APP || 'godot' }}
             WEB_SHELL_ORIGIN: ${{ vars.WEB_SHELL_ORIGIN }}
             WEB_SHELL_BACKBONE_URL: ${{ vars.WEB_SHELL_BACKBONE_URL }}
-            WEB_SHELL_FIRST_PARTY_AUDIENCES: ${{ vars.WEB_SHELL_FIRST_PARTY_AUDIENCES }}
         steps:
             - uses: actions/checkout@v4
               with:
@@ -155,8 +154,9 @@ jobs:
               if: steps.need.outputs.build == 'true'
               run: |
                   set -euo pipefail
-                  # A deployment's answer, untracked; the same file demo.sh writes.
-                  tools/shell-auth-json.sh "$WEB_SHELL_BACKBONE_URL" "${WEB_SHELL_FIRST_PARTY_AUDIENCES:-}" > client/auth.json
+                  # A deployment's answer, untracked; the same file demo.sh writes. No
+                  # first-party list: the shell asks the site (play/first-party) at sign-in.
+                  tools/shell-auth-json.sh "$WEB_SHELL_BACKBONE_URL" > client/auth.json
                   ./server export-web --zip
                   cat web/build/shell-inputs.txt
 
