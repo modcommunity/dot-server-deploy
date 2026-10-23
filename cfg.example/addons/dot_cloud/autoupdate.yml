@@ -1,0 +1,14 @@
+# Server auto-update (dot-cloud): a running server checks for a newer published version of
+# the packs it runs and restarts itself to install it. Every key is optional; the values
+# below are the defaults. Override per box in cfg/server/addons/dot_cloud/autoupdate.yml,
+# with DOT_CLOUD_AUTOUPDATE_<KEY>, --autoupdate-<key>=value, or live with sv_autoupdate_* cvars.
+# The restart is exit code 75; systemd, docker compose and the panel restart on it.
+
+# enabled: true            # sv_autoupdate
+# check_interval: 600      # seconds between checks; sv_autoupdate_check_interval
+# when_empty: true         # wait until nobody is connected; sv_autoupdate_when_empty
+# max_wait: 3600           # ...but no longer than this, then warn and restart (0 = wait forever); sv_autoupdate_max_wait_seconds
+# warn_seconds: 300        # countdown players see before a restart; sv_autoupdate_warn_seconds
+# warn_steps: [300, 60, 10, 5]   # sv_autoupdate_warn_steps
+# message: "Server restarting in {seconds}s to update to {version}."   # sv_autoupdate_message
+# ignore: []               # content ids never checked

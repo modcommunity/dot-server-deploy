@@ -90,6 +90,9 @@ WorkingDirectory=$ROOT
 ExecStart=$ROOT/server
 Restart=on-failure
 RestartSec=5s
+# 75 is dot-cloud's auto-update asking for a restart (docs/auto-update.md in dot-cloud);
+# restarted whatever Restart= says, since the next start installs the update.
+RestartForceExitStatus=75
 
 # ProtectSystem=full, not strict. Full makes /usr, /boot and /etc read-only, which
 # this never writes to. Strict would make the WHOLE filesystem read-only bar what is
