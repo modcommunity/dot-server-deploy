@@ -22,6 +22,7 @@ nomination_slots: 1
 include_extend: false
 cooldown: 0
 min_players_to_vote: 1
+allow_single_voter_auto: true
 
 apply: end_of_time
 apply_delay_sec: 0
