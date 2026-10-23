@@ -60,6 +60,12 @@ Usage: publish-web-shell.sh --zip FILE [options]
   --no-push         with --pin: commit and tag, push nothing      (SHELL_NO_PUSH=1)
   --repo DIR        dot-server-deploy checkout for --pin         (SHELL_DEPLOY_REPO,
                                                                  this script's own)
+  --wait-registered [SEC]
+                    after the upload, poll read-only (default 300 s)  (SHELL_WAIT_REGISTERED)
+                    until the origin serves the build and, when
+                    SHELL_REGISTERED_URL names a page that lists the
+                    site's current build ids, until it shows this id.
+                    Exits 1 saying what is missing. Needs --origin
   --dry-run         print what would be uploaded, upload nothing
   -h, --help
 EOF
@@ -77,6 +83,8 @@ PIN=${SHELL_PIN:-0}
 NO_PUSH=${SHELL_NO_PUSH:-0}
 REPO=${SHELL_DEPLOY_REPO:-$(cd "$HERE/.." && pwd)}
 DRY=0
+WAIT=${SHELL_WAIT_REGISTERED:-}
+REGISTERED_URL=${SHELL_REGISTERED_URL:-}
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -92,6 +100,8 @@ while [ $# -gt 0 ]; do
         --pin) PIN=1; shift ;;
         --no-push) NO_PUSH=1; shift ;;
         --repo) REPO=$2; shift 2 ;;
+        --wait-registered)
+            if [[ ${2:-} =~ ^[0-9]+$ ]]; then WAIT=$2; shift 2; else WAIT=300; shift; fi ;;
         --dry-run) DRY=1; shift ;;
         -h|--help) usage; exit 0 ;;
         *) echo "unknown option: $1" >&2; usage >&2; exit 2 ;;
@@ -257,17 +267,51 @@ if [ "$DRY" = 0 ] && [ -n "$ORIGIN" ]; then
 fi
 
 NOTES=${NOTES:-Shell uploaded from $(basename "$ZIP")}
-cat <<EOF
+cat <<EOT
 
--- The site registers this build itself (website-city's web-build-register job, every
--- minute) once a server reports it as sv_web_build and its entry answers on the origin.
+-- Registration is automatic but not immediate: website-city's web-build-register cron job
+-- (every minute) writes the WebGameBuild row only once a game SERVER reports this id as
+-- sv_web_build (servers read web/shell-build, so one must restart or update onto the pinned
+-- shell) AND the entry answers on the content origin. Until then the site keeps serving the
+-- previous build. Check with --wait-registered, or in Admin > Apps > Play (builds list).
 -- Only if that job is off, register it by hand (website-city prod database):
 INSERT INTO "WebGameBuild" (id, "appId", build, entry, status, notes, "createdAt", "updatedAt")
 SELECT 'wgb' || substr(md5(random()::text), 1, 22), id, '$BUILD', '$ENTRY', 'ACTIVE',
        '${NOTES//\'/\'\'}', now(), now()
 FROM "App" WHERE url = '$APP'
 ON CONFLICT ("appId", build) DO NOTHING;
-EOF
+EOT
+
+if [ -n "$WAIT" ] && [ "$DRY" = 1 ]; then
+    echo "dry run: would wait up to ${WAIT}s for $BUILD to be registered"
+    WAIT=
+fi
+if [ -n "$WAIT" ]; then
+    [ -n "$ORIGIN" ] || die "--wait-registered needs --origin (nowhere to read the build back from)"
+    echo
+    echo "waiting up to ${WAIT}s for $BUILD ..."
+    deadline=$((SECONDS + WAIT))
+    served=no; listed=n/a
+    [ -z "$REGISTERED_URL" ] || listed=no
+    while :; do
+        code=$(curl -s -o /dev/null -w '%{http_code}' -r 0-0 "$ORIGIN/$APP/$BUILD/$ENTRY" || true)
+        if [ "$code" = 200 ] || [ "$code" = 206 ]; then served=yes; else served="no (HTTP $code)"; fi
+        if [ -n "$REGISTERED_URL" ]; then
+            if curl -fsS --max-time 20 "$REGISTERED_URL" 2>/dev/null | grep -qF "$BUILD"; then listed=yes; else listed=no; fi
+        fi
+        if [ "$served" = yes ] && [ "$listed" != no ]; then break; fi
+        [ "$SECONDS" -lt "$deadline" ] || break
+        sleep 10
+    done
+    if [ "$served" != yes ] || [ "$listed" = no ]; then
+        die "$BUILD is not live after ${WAIT}s: origin serves $ENTRY: $served; listed by ${REGISTERED_URL:-(no SHELL_REGISTERED_URL)}: $listed.
+       The WebGameBuild row appears only when a game server reports sv_web_build=$BUILD and the
+       web-build-register job (every minute) finds the entry on the origin. Restart or update a
+       server onto the pinned shell, check the job is enabled (Admin > Cron), or insert the row above."
+    fi
+    echo "live: origin serves $ORIGIN/$APP/$BUILD/$ENTRY; site listing: $listed"
+    [ "$listed" != n/a ] || echo "-- (set SHELL_REGISTERED_URL to also confirm the site lists it; the row itself is not readable without admin)"
+fi
 
 if [ "$PIN" = 0 ] || [ "$DRY" = 1 ]; then
     echo
