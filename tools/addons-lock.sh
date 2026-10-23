@@ -35,6 +35,14 @@ url_of() {
     esac
 }
 
+YML="$ROOT/content-lists/addons.yml"
+
+# repo<TAB>pin of the shipped yml, for the entries that have one. setup.sh prefers these
+# pins over the lock, so the two must say the same thing.
+yml_pins() {
+    awk '/^[[:space:]]*-[[:space:]]*repo:/ { r = $NF; next } /^[[:space:]]*pin:/ && r != "" { print r "\t" $NF; r = "" }' "$YML"
+}
+
 export GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/bin/echo
 
 cmd_write() {
@@ -72,6 +80,18 @@ cmd_write() {
     fi
 
     mv "$tmp" "$LOCK"
+
+    # The shipped yml's pins win over the lock in setup.sh, so they move with it.
+    if [ -f "$YML" ]; then
+        local ytmp
+        ytmp="$(mktemp "$ROOT/.addons.yml.XXXXXX")"
+        awk -v lock="$LOCK" '
+            BEGIN { while ((getline l < lock) > 0) if (l !~ /^#/) { split(l, f, "\t"); want[f[1]] = f[2] } }
+            /^[[:space:]]*-[[:space:]]*repo:/ { r = $NF }
+            /^[[:space:]]*pin:/ && (r in want) { sub(/pin:.*/, "pin: " want[r]); r = "" }
+            { print }' "$YML" > "$ytmp" && cat "$ytmp" > "$YML"
+        rm -f "$ytmp"
+    fi
     echo "addons.lock: ${#REPOS[@]} repositories"
     awk '!/^#/ { print $2 }' "$LOCK" | sort | uniq -c | sed 's/^/  /'
 }
@@ -79,7 +99,17 @@ cmd_write() {
 cmd_check() {
     [ -f "$LOCK" ] || { echo "no addons.lock; run: tools/addons-lock.sh write" >&2; exit 2; }
 
-    local repo name ref dir root want have bad=0
+    local repo name ref dir root want have bad=0 ypin
+
+    if [ -f "$YML" ]; then
+        while IFS=$'\t' read -r repo ypin; do
+            ref="$(awk -v r="$repo" '$1 == r { print $2 }' "$LOCK")"
+            if [ -n "$ref" ] && [ "$ref" != "$ypin" ]; then
+                echo "  !!    $repo: content-lists/addons.yml pins $ypin, the lock says $ref (setup.sh prefers the pin)"
+                bad=1
+            fi
+        done < <(yml_pins)
+    fi
 
     for repo in "${REPOS[@]}"; do
         ref="$(awk -v r="$repo" '$1 == r { print $2 }' "$LOCK")"
