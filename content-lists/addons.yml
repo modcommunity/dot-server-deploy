@@ -22,7 +22,7 @@ entries:
   - repo: dot-console
     pin: v0.1.7
   - repo: dot-core
-    pin: v0.1.17
+    pin: v0.1.19
   - repo: dot-economy
     pin: v0.1.5
   - repo: dot-effects
@@ -32,9 +32,9 @@ entries:
   - repo: dot-friends
     pin: v0.1.5
   - repo: dot-fx
-    pin: v0.1.7
+    pin: v0.2.0
   - repo: dot-game
-    pin: v0.1.17
+    pin: v0.1.19
   - repo: dot-inventory
     pin: v0.1.4
   - repo: dot-leaderboard
@@ -48,7 +48,7 @@ entries:
   - repo: dot-log
     pin: v0.1.5
   - repo: dot-map
-    pin: v0.1.13
+    pin: v0.1.29
   - repo: dot-match
     pin: v0.1.5
   - repo: dot-matchmaking
@@ -62,7 +62,7 @@ entries:
   - repo: dot-npc
     pin: v0.1.6
   - repo: dot-npc-ai
-    pin: v0.1.6
+    pin: v0.1.7
   - repo: dot-npc-ai-director
     pin: v0.1.6
   - repo: dot-objective
@@ -82,13 +82,13 @@ entries:
   - repo: dot-player-class
     pin: v0.1.5
   - repo: dot-player-controller
-    pin: v0.1.9
+    pin: v0.2.3
   - repo: dot-procedural-generation
     pin: v0.1.4
   - repo: dot-props
     pin: v0.1.8
   - repo: dot-replay
-    pin: v0.1.7
+    pin: v0.1.8
   - repo: dot-server
     pin: v0.1.17
   - repo: dot-server-query
@@ -122,7 +122,7 @@ entries:
   - repo: dot-vote
     pin: v0.1.13
   - repo: dot-weapon
-    pin: v0.1.8
+    pin: v0.1.14
   - repo: dot-weather
     pin: v0.1.1
   - repo: zed-dot-weapons
