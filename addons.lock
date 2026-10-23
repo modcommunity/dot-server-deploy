@@ -16,14 +16,14 @@ dot-effects	v0.1.6
 dot-entity	v0.1.6
 dot-friends	v0.1.5
 dot-fx	v0.2.0
-dot-game	v0.1.19
+dot-game	v0.1.21
 dot-inventory	v0.1.4
 dot-leaderboard	v0.1.5
 dot-lighting	v0.1.8
 dot-loadout	v0.1.4
 dot-locale	v0.1.5
 dot-log	v0.1.5
-dot-map	v0.1.29
+dot-map	v0.1.30
 dot-match	v0.1.5
 dot-matchmaking	v0.1.6
 dot-menu	v0.1.10
