@@ -15,7 +15,7 @@ extends Node
 ## trailing comment on a read field disagrees with TmcYaml); and deleting a game from
 ## `client/solo.json` (the drift check names it).
 
-const CHECKS := 39
+const CHECKS := 44
 
 ## Every game repository, beside this project or in games/: the repositories of cfg/content/games.yml (shipped content-lists/games.yml).
 
@@ -42,6 +42,7 @@ func _ready() -> void:
 	_test_descriptor_reader()
 	_test_map_list()
 	_test_site_default()
+	_test_first_party()
 	await _test_session()
 	_test_skip_maps()
 
@@ -97,6 +98,36 @@ func _test_site_default() -> void:
 	_check(TmcSiteDefault.resolve('{"backbone_url": "javascript:x"}', "", none, "") == "", "a non-http value is refused")
 	_check(TmcSiteDefault.resolve(FileAccess.get_file_as_string("res://client/auth.json"), "", none, "").begins_with("http"), "the shipped client/auth.json yields a site")
 
+	_done()
+
+
+func _test_first_party() -> void:
+	_section("client/auth.json names the servers the shell signs in to, and only those")
+
+	var out := []
+	var tool := ProjectSettings.globalize_path("res://tools/shell-auth-json.sh")
+	var code := OS.execute("bash", [tool, "https://site.example", "server:3550523, app:113"], out, true)
+	var path := "user://solo_check_auth.json"
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	file.store_string(str(out[0]) if not out.is_empty() else "")
+	file.close()
+
+	var client := DotAuthClient.new()
+	client.config = DotAuthConfig.new()
+	var applied := client.config.apply_json_file(path)
+	_check(code == 0 and applied.ok, "tools/shell-auth-json.sh writes a file DotAuthConfig reads")
+	_check(client.is_first_party("server:3550523") and client.is_first_party("app:113"), "a listed server or app is first-party")
+	_check(not client.is_first_party("server:3550524") and not client.is_first_party(""), "an unlisted or unannounced server is not")
+	_check(OS.execute("bash", [tool, "https://site.example", "server:x"], [], true) != 0, "an entry that is not server:<id> or app:<id> fails the write")
+
+	var shipped := DotAuthClient.new()
+	shipped.config = DotAuthConfig.new()
+	shipped.config.apply_json_file("res://client/auth.json")
+	_check(not shipped.is_first_party("server:999999999"), "the shipped file does not trust an arbitrary server")
+
+	client.free()
+	shipped.free()
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 	_done()
 
 

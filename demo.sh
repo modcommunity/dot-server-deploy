@@ -426,7 +426,8 @@ do_up() {
     # Without this the demo signed in against dot-auth's exported default, which is the
     # production site -- so a development page was starting an auth flow against
     # production, and did so on every load.
-    printf '{\n  "backbone_url": "%s"\n}\n' "$SITE_URL" > client/auth.json
+    # FIRST_PARTY_AUDIENCES (server:<id>,...) are the INTROSPECT servers it signs in to.
+    tools/shell-auth-json.sh "$SITE_URL" "${FIRST_PARTY_AUDIENCES:-}" > client/auth.json
     ok "web player signs in against $SITE_URL"
 
     # [b]Rebuilt when the game is newer than the build, not only when it is missing.[/b]

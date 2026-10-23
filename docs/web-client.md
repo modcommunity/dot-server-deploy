@@ -4,7 +4,7 @@
 
 ## What the web player signs in against
 
-`client/auth.json`, shipped inside the export, read by `_sign_in()`, gitignored because it is a deployment's answer. `demo.sh` writes it before the export.
+`client/auth.json`, shipped inside the export, read by `_sign_in()`, gitignored because it is a deployment's answer. `demo.sh` writes it before the export. It also lists `first_party_audiences`, the INTROSPECT servers (`server:<id>`, the target of the server's site credential) the shell mints a single-use join token for; any other INTROSPECT server is refused with "only gives to its own servers". `tools/shell-auth-json.sh` writes it, from `WEB_SHELL_FIRST_PARTY_AUDIENCES` in CI and `FIRST_PARTY_AUDIENCES` in `demo.sh`.
 
 - **A browser has no environment and no argv**, so `DOT_AUTH_BACKBONE_URL` cannot reach a web client. Without the file it gets `DotAuthConfig`'s exported default.
 - **A shipped file, not the page's query string**, for the same reason as `client/content.json`: this URL decides where a single-use sign-in code is redeemed, and a link that could aim it elsewhere would be a credential-forwarding link.
