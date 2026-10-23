@@ -12,7 +12,7 @@ extends Node
 ## a socket this suite serves itself, because the fetch is the half most likely to be
 ## wrong and least likely to be noticed.
 
-const CHECKS := 182
+const CHECKS := 184
 
 var _passed := 0
 var _failed := 0
@@ -1038,6 +1038,14 @@ func _test_slice_preload() -> void:
 	_check(res.ok, "the slice loader loads them without threads", "" if res.ok else str(res.error))
 	_check(ResourceLoader.has_cached(deps[0]) if not deps.is_empty() else false,
 		"the first is in the cache, so the plain load() is a hit")
+
+	# The solo path's warm: forced (this runner has threads), an unknown key warms nothing and
+	# still returns the loader the shell reads frames_yielded from.
+	var cloud := DotCloudClient.new()
+	_check(cloud.has_method("warm_content"), "the cloud client offers warm_content")
+	var warmed: DotCloudSliceLoader = await cloud.warm_content(get_tree(), PackedStringArray(["no/such@0"]), true)
+	_check(warmed != null and warmed.frames_yielded >= 0, "warm_content returns its loader for a key it does not hold")
+	cloud.free()
 	_done()
 
 

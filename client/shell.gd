@@ -1938,7 +1938,7 @@ func _load_solo(content_id: String, version: String) -> DotResult:
 		session.workshop_summary = await _sync_workshop(content_id)
 
 	var path := mount.path_join(safe.value)
-	await _slice_load(_pack_script_paths(slice_keys))
+	await _warm_pack(slice_keys)
 	var packed: Variant = load(path)
 
 	if not (packed is PackedScene):
@@ -2226,6 +2226,27 @@ func _pack_script_paths(keys: Array[String]) -> PackedStringArray:
 				others.append(res_path)
 
 	return scripts + others
+
+
+## Compiles a delivered pack's scripts a slice per frame with dot-cloud's warm_content, then
+## slice-loads its scenes and resources. An addon without warm_content falls back to
+## [method _slice_load] for everything. Both are no-ops where threads exist.
+func _warm_pack(keys: Array[String]) -> void:
+	if _cloud == null or not _cloud.has_method("warm_content") or DotPlatform.has_threads():
+		await _slice_load(_pack_script_paths(keys))
+		return
+
+	if loading != null:
+		loading.set_progress(0.0, _text("shell.loading.scripts", {}, "Preparing the game…"))
+	var warmed: Variant = await _cloud.call("warm_content", get_tree(), PackedStringArray(keys))
+	if warmed != null:
+		slice_frames_yielded = warmed.frames_yielded
+
+	var rest := PackedStringArray()
+	for res_path in _pack_script_paths(keys):
+		if res_path.get_extension() != "gd":
+			rest.append(res_path)
+	await _slice_load(rest)
 
 
 ## What a scene in this build pulls in, scripts first.
