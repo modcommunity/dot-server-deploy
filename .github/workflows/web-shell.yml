@@ -32,6 +32,7 @@ on:
             - web/embed.html
             - web/tmc-loader.js
             - tools/fetch-godot.sh
+            - tools/shell-auth-json.sh
             - tools/shell-inputs.sh
             - .github/workflows/web-shell.yml
     workflow_dispatch:
