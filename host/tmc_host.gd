@@ -984,21 +984,28 @@ func _build_logging() -> void:
 ## from that credential, so a second client on another token would mint keys in another
 ## scope. Without one, an introspecting server can admit nobody signed in, and says so.
 func _hand_backbone_to_auth() -> void:
-	if auth == null or auth.config == null \
-			or auth.config.strategy != DotAuthConfig.Strategy.INTROSPECT:
+	if auth == null or auth.config == null:
+		return
+	var adopting := auth.config.adopt_ticket_trust
+	if auth.config.strategy != DotAuthConfig.Strategy.INTROSPECT and not adopting:
 		return
 
 	var client: DotBackboneClient = listing.backbone if listing != null else null
 
 	if client == null:
-		if auth.scoped_only:
+		if adopting and auth.config.server_id == "":
+			DotLog.warn(CHANNEL, "this server does not know its site id yet; signed-in players wait", {
+				"fix": "enroll (data/listing.json), or set server_id in auth.yml",
+			})
+		elif auth.scoped_only:
 			DotLog.warn(CHANNEL, "introspection has no integration credential; signed-in players will be refused", {
 				"fix": "put an integration token with the USER_LOOKUP scope in data/listing.json",
 			})
 		return
 
 	auth.backbone = client
-	DotLog.info(CHANNEL, "sign-ins are verified by the site, as this server")
+	if not adopting:
+		DotLog.info(CHANNEL, "sign-ins are verified by the site, as this server")
 
 
 ## The site issued a credential after the boot stopped waiting for it.
@@ -1291,7 +1298,7 @@ func _build_security() -> void:
 
 
 func _build_auth() -> bool:
-	var built := TmcAuth.build(config.auth, _config_dir)
+	var built := TmcAuth.build(config.auth, _config_dir, _absolute(_data_dir))
 
 	if not built.ok:
 		_die(EXIT_CONFIG, str(built.error))

@@ -10,53 +10,36 @@
 # local console is the only administrator. That is correct, and it looks exactly
 # like the file being ignored.
 
-# On for a new install, introspecting, with guests allowed: a member who is signed into
-# the site arrives as themselves -- their name, their avatar, permissions.yml applying
-# to them -- and anybody else still plays as a guest. With no integration token in
-# data/listing.json it behaves exactly like `enabled: false`, plus one WARN at boot.
+# On for a new install, in ticket mode with nothing to fill in: the server learns its
+# site id and the site's public key from the site it enrolled with (data/listing.json),
+# over HTTPS, and keeps them in data/ticket_trust.json. A member signed in to the site
+# arrives as themselves; anybody else plays as a guest. Override any of this in
+# cfg/server/addons/dot_auth/auth.yml.
 enabled: true
 
 # ticket | introspect | local | anonymous
 #
-#   ticket       The client presents a short-lived, server-scoped ticket signed by an
-#                issuer, and this server verifies it OFFLINE against the issuer's
-#                public key. No network call per join, and the player's account token
-#                never reaches the server. THE RIGHT CHOICE FOR A PUBLIC SERVER, and
-#                the only one that is safe to hand to an operator you do not employ.
-#
-#   introspect   The client sends its site access token and this server asks the site,
-#                AS THIS SERVER (the integration token in data/listing.json, which needs
-#                the USER_LOOKUP scope), who it belongs to. The answer is the player's
-#                key in this server's scope -- never their account id -- which is the
-#                key the site's avatar and profile routes resolve. A round trip per
-#                join, and the token does pass through this server, so prefer `ticket`
-#                for servers run by operators you do not know.
-#
-#   local        Accounts in a file on this server. No backbone involved.
-#   anonymous    Nobody is authenticated. The same as leaving this file disabled.
-strategy: introspect
+#   ticket       The client asks the site for a short-lived ticket for the address it
+#                dialled, and this server verifies it OFFLINE against the site's public
+#                key. The player's account token never reaches the server. Safe for a
+#                server run by somebody the players do not know.
+#   introspect   The game's own servers only (set first_party: true): the client sends a
+#                single-use join token and this server asks the site who it is. Without
+#                first_party and server_id it is read as ticket, with a warning.
+#   local        Accounts in a file on this server. No site involved.
+#   anonymous    Nobody is authenticated. The same as enabled: false.
+strategy: ticket
 
-# Introspect as this server (above), and refuse a signed-in join until the integration
-# client is up rather than resolving it through /me, which answers with the account id.
-# false is the old first-party behaviour.
-# introspect_scoped: true
-
-# What tickets must name as their audience, and how this server is known.
-#
-# A ticket minted for one server id must not be accepted by another, or a ticket
-# captured on one server is a login on every server -- which is the whole thing
-# tickets exist to prevent. Required by `ticket`.
+# The site's id for this server, the audience every ticket must name. Empty: learnt from
+# the site at boot. Set it only to pin it; a pinned id wins over the site's.
 server_id: ""
 
-# The issuer's PUBLIC half, relative to this directory.
-#
-# A public key verifies a ticket and cannot mint one, which is what makes a
-# third-party server safe to allow at all. NEVER a shared secret: a secret that
-# verifies also mints, so every operator holding it could forge any player's
-# identity. This file refuses anything that is not a public key.
-issuer_public_key_file: "issuer.pub.pem"
+# The issuer's PUBLIC key as a file, relative to this directory. Empty: fetched from the
+# site this server enrolled with. A file named here wins over the fetched keys; a private
+# key is refused.
+issuer_public_key_file: ""
 
-# Where `introspect` resolves a token. Ignored by every other strategy.
+# The site: where tickets come from, where this server enrolled, where keys are fetched.
 backbone_url: "https://moddingcommunity.com"
 
 # Admit players whose authentication failed or was unavailable, as guests.

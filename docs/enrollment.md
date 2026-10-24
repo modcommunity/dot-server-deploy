@@ -21,6 +21,10 @@ The challenge is public once published, so it completes nothing alone; the secre
 - **Only a command-line boot enrolls** (`enroll_with_site`, set by `_run`, not under `--selftest`). The suites embed the host through `start()` with fixture data and would otherwise each ask the production site who they are. `TMC_ENROLL=off` turns it off.
 - **`TmcReport` defaults its config's strategy to `introspect`.** The listing borrows `DotAuthConfig` for its URL and token, and the default `ticket` strategy demands a `server_id` and key, so a file holding only a token (what enrollment writes) was refused.
 
+## The same credential gives ticket mode its id and key
+
+In `ticket` mode with no `server_id` or key file (the shipped `auth.yml`), `_hand_backbone_to_auth` hands the listing's client to the auth server, which asks `integration/v1/me` for its own server id, and fetches the issuer's public keys from `<backbone_url>/api/app/v1/auth/ticket-keys` over verified HTTPS. Both land in `data/ticket_trust.json`, so the next boot verifies tickets before the site answers; a cache written for another `backbone_url` is ignored. The keys are refetched every six hours and when a ticket names an unknown `kid` (at most once a minute). Never from a client and never from a game server being dialled: the URL is this server's own configured site. dot-auth's [tickets](https://github.com/modcommunity/dot-auth/blob/main/docs/tickets.md#the-backbones-own-issuer-by-dialled-address) has the mechanism; website-city's `docs/api/connect-tickets.md` the threat model.
+
 ## Verified, and what is not
 
 Verified against a real `./server` over real UDP, with the site's routes served by its own enrollment code on the dev database: enrolled at the first completion, token saved 0600, listing started; a restart with the token did not enroll; a second enrollment revoked the first; a completion with nothing answering got 202 `no_answer`, a made-up secret 404, an unregistered port 404 with the boot carrying on.

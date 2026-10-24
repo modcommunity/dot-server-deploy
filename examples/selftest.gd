@@ -17,7 +17,7 @@ const CFG := "res://examples/fixtures"
 ## A loaded game with rounds and no match the game vote can find. See the section that uses it.
 const RoundsWithoutMatch := preload("res://examples/fixtures/rounds_without_match.gd")
 
-const CHECKS := 404
+const CHECKS := 408
 
 var _passed := 0
 var _failed := 0
@@ -2396,9 +2396,8 @@ func _test_auth() -> void:
 		str(unknown.error)
 	)
 
-	# TICKET without a server_id is the replay hole: a ticket that names no audience is
-	# a ticket every server accepts. DotAuthConfig.validate refuses it and this is the
-	# check that the refusal reaches an operator rather than being swallowed here.
+	# TICKET with no server_id adopts it from the site. dot-auth refuses every signed-in
+	# join until then: a ticket verified with no audience is valid on every server.
 	var work := "user://tmc_auth_test"
 	DotPaths.remove_tree(work)
 	DotPaths.ensure_dir(work)
@@ -2408,8 +2407,33 @@ func _test_auth() -> void:
 
 	var no_id := TmcAuth.build({
 		"enabled": true, "strategy": "ticket", "issuer_public_key_file": "issuer.pub.pem",
-	}, work)
-	_check(not no_id.ok, "a ticket server with no server_id is refused")
+	}, work, work)
+	var no_id_server: DotAuthServer = no_id.value if no_id.ok else null
+	_check(
+		no_id_server != null and no_id_server.config.adopt_ticket_trust
+			and no_id_server.config.ticket_public_key.contains("PUBLIC KEY")
+			and no_id_server.config.ticket_trust_cache == work.path_join("ticket_trust.json"),
+		"a ticket server with no server_id learns it from the site, keeping its key file",
+		str(no_id.error)
+	)
+	_check(no_id_server != null and not no_id_server.ticket_trust_ready(),
+		"and verifies nothing until it has")
+	if no_id_server != null:
+		no_id_server.free()
+
+	var shipped := TmcYaml.parse_file("res://cfg.example/addons/dot_auth/auth.yml")
+	var shipped_built := TmcAuth.build(shipped.value if shipped.ok else {}, work)
+	var shipped_cfg: DotAuthConfig = (shipped_built.value as DotAuthServer).config \
+		if shipped_built.ok and shipped_built.value != null else null
+	_check(
+		shipped_cfg != null and shipped_cfg.strategy == DotAuthConfig.Strategy.TICKET
+			and shipped_cfg.adopt_ticket_trust and shipped_cfg.ticket_public_key == ""
+			and shipped_cfg.backbone_url.begins_with("https://"),
+		"the shipped auth.yml is ticket mode with nothing to fill in",
+		str(shipped_built.error)
+	)
+	if shipped_built.ok and shipped_built.value != null:
+		(shipped_built.value as Node).free()
 
 	# [b]A private key here would verify AND mint.[/b] Every operator holding one could
 	# forge any player's identity, which is the one thing the whole ticket design exists
@@ -2427,7 +2451,14 @@ func _test_auth() -> void:
 		"enabled": true, "strategy": "ticket", "server_id": "eu-1",
 		"issuer_public_key_file": "nope.pem",
 	}, work)
-	_check(not missing.ok, "a key file that is not there names the path it looked at")
+	_check(
+		missing.ok and (missing.value as DotAuthServer).config.adopt_ticket_trust
+			and (missing.value as DotAuthServer).config.server_id == "eu-1",
+		"a key file that is not there falls back to the site's keys, keeping the pinned id",
+		str(missing.error)
+	)
+	if missing.ok:
+		(missing.value as Node).free()
 
 	var good := TmcAuth.build({
 		"enabled": true, "strategy": "ticket", "server_id": "eu-1",
@@ -2459,7 +2490,7 @@ func _test_auth() -> void:
 	# through `/me` would be keyed by the account id instead, and the same player would be
 	# two people depending on whether they joined before the listing came up.
 	var scoped := TmcAuth.build({
-		"enabled": true, "strategy": "introspect",
+		"enabled": true, "strategy": "introspect", "first_party": true,
 		"backbone_url": "https://site.example", "allow_guests": true,
 		# The template names one whatever the strategy; introspection must not need it.
 		"issuer_public_key_file": "not-here.pem",
@@ -2474,7 +2505,7 @@ func _test_auth() -> void:
 		scoped_node.free()
 
 	var legacy_introspect := TmcAuth.build({
-		"enabled": true, "strategy": "introspect", "introspect_scoped": false,
+		"enabled": true, "strategy": "introspect", "introspect_scoped": false, "first_party": true,
 		"backbone_url": "https://site.example",
 	}, work)
 	_check(
@@ -2483,6 +2514,27 @@ func _test_auth() -> void:
 	)
 	if legacy_introspect.ok:
 		(legacy_introspect.value as Node).free()
+
+	# The flat legacy file every server got: introspect, no server_id, no first_party.
+	# Read as ticket, with one WARN naming the file, instead of guests only.
+	DotPaths.write_text(work.path_join("auth.yml"), "enabled: true\nstrategy: introspect\n")
+	var migrated := TmcAuth.build({
+		"enabled": true, "strategy": "introspect", "server_id": "",
+		"backbone_url": "https://site.example", "allow_guests": true,
+	}, work)
+	var migrated_cfg: DotAuthConfig = (migrated.value as DotAuthServer).config if migrated.ok else null
+	_check(
+		migrated_cfg != null and migrated_cfg.strategy == DotAuthConfig.Strategy.TICKET
+			and migrated_cfg.adopt_ticket_trust,
+		"a legacy introspect auth.yml with no server_id runs in ticket mode",
+		str(migrated.error)
+	)
+	_check(
+		TmcAuth.auth_files(work) == PackedStringArray([work.path_join("auth.yml")]),
+		"and the warning names the file to fix"
+	)
+	if migrated.ok:
+		(migrated.value as Node).free()
 
 	# [b]The roster report[/b]: the URL from the YAML, the key from a file beside it, and a
 	# key written inline refused by name, because a secret in the YAML is a secret in every

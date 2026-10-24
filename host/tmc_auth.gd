@@ -47,7 +47,10 @@ const STRATEGIES := {
 ## Fails only on a configuration that is WRONG. Absent and disabled are both success with
 ## a null value, because a server without authentication is a supported deployment and the
 ## simplest one there is.
-static func build(auth: Dictionary, config_dir: String) -> DotResult:
+##
+## [param data_dir] holds the adopted server id and issuer keys between boots
+## (`ticket_trust.json`); empty keeps nothing.
+static func build(auth: Dictionary, config_dir: String, data_dir: String = "") -> DotResult:
 	if auth.is_empty():
 		return DotResult.success(null)
 
@@ -77,11 +80,21 @@ static func build(auth: Dictionary, config_dir: String) -> DotResult:
 
 	var cfg := DotAuthConfig.new()
 	cfg.strategy = STRATEGIES[named]
-	cfg.server_id = str(auth.get("server_id", ""))
+	cfg.server_id = str(auth.get("server_id", "")).strip_edges()
 	cfg.allow_guests = bool(auth.get("allow_guests", false))
 
 	if auth.has("backbone_url"):
 		cfg.backbone_url = str(auth["backbone_url"])
+
+	# The old shipped default: introspect hands this server the player's sign-in, which
+	# clients give only to the game's own servers, so everybody else arrived as a guest.
+	if named == "introspect" and cfg.server_id == "" and not bool(auth.get("first_party", false)):
+		named = "ticket"
+		cfg.strategy = DotAuthConfig.Strategy.TICKET
+		DotLog.warn(CHANNEL, "auth.yml asks for introspect, which only the game's own servers get; using ticket", {
+			"files": ", ".join(auth_files(config_dir)),
+			"fix": "set strategy: ticket there (or delete the line), or first_party: true to keep introspect",
+		})
 
 	# [b]A PATH in the YAML and a PEM on the config.[/b] `ticket_public_key` is the key
 	# itself, and a multi-line PEM inside a YAML value is the kind of thing that survives
@@ -93,16 +106,15 @@ static func build(auth: Dictionary, config_dir: String) -> DotResult:
 	var key_file := str(auth.get("issuer_public_key_file", "")) \
 		if cfg.strategy == DotAuthConfig.Strategy.TICKET else ""
 
+	var path := ""
 	if key_file != "":
-		var path := key_file if key_file.is_absolute_path() else config_dir.path_join(key_file)
-
+		path = key_file if key_file.is_absolute_path() else config_dir.path_join(key_file)
+		# The old template named a file nobody was given; the site's keys replace it.
 		if not FileAccess.file_exists(path):
-			return DotResult.fail(
-				DotError.CODE_IO,
-				"auth.yml: the issuer public key is not there.",
-				path
-			)
+			DotLog.info(CHANNEL, "no issuer key file; the site's keys are fetched instead", {"path": path})
+			path = ""
 
+	if path != "":
 		cfg.ticket_public_key = FileAccess.get_file_as_string(path)
 
 		if not cfg.ticket_public_key.contains("PUBLIC KEY"):
@@ -157,6 +169,14 @@ static func build(auth: Dictionary, config_dir: String) -> DotResult:
 		if auth.has("session_report_interval_sec"):
 			cfg.session_report_interval_sec = float(auth["session_report_interval_sec"])
 
+	# Ticket mode with no id or key adopts them from the site this server enrolled with:
+	# the id from integration/v1/me, the keys from its ticket-keys route over HTTPS.
+	if cfg.strategy == DotAuthConfig.Strategy.TICKET \
+			and (cfg.server_id == "" or cfg.ticket_public_key == ""):
+		cfg.adopt_ticket_trust = true
+		if data_dir != "":
+			cfg.ticket_trust_cache = data_dir.path_join("ticket_trust.json")
+
 	var valid := cfg.validate()
 
 	if not valid.ok:
@@ -182,9 +202,19 @@ static func build(auth: Dictionary, config_dir: String) -> DotResult:
 
 	DotLog.info(CHANNEL, "authentication is on", {
 		"strategy": named,
-		"server_id": cfg.server_id,
+		"server_id": cfg.server_id if cfg.server_id != "" else "(from the site)",
+		"issuer_key": "file" if cfg.ticket_public_key != "" else "from the site",
 		"guests": cfg.allow_guests,
 		"session_report": cfg.session_report_url != "",
 	})
 
 	return DotResult.success(node)
+
+
+## The auth.yml files that exist under [param config_dir], lowest tier first.
+static func auth_files(config_dir: String) -> PackedStringArray:
+	var found := PackedStringArray()
+	for rel in ["addons/dot_auth/auth.yml", "server/addons/dot_auth/auth.yml", "auth.yml"]:
+		if FileAccess.file_exists(config_dir.path_join(rel)):
+			found.append(config_dir.path_join(rel))
+	return found
