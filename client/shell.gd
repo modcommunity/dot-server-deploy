@@ -1463,6 +1463,16 @@ func _connect_to(address: String) -> void:
 	loading.begin(TmcLoadingScreen.REASON_GAME)
 	loading.set_progress(-1.0, _text("shell.loading.connecting", {"server": target}, "Connecting to %s…" % target))
 
+	# Avatar files the server requires come down before the socket opens, for every game. Bounded and
+	# never fatal: a dead CDN costs the stock figures, not the join.
+	var prejoin := DotGamePrejoin.new()
+	prejoin.site_url = _workshop_site()
+	prejoin.progress_fn = func(fraction: float, text: String) -> void:
+		loading.set_progress(fraction, text)
+	await prejoin.prepare(self, target)
+	if not _joining:
+		return
+
 	# Off a solo game first: a server's game goes under the same root, and a solo session
 	# left registered would hand the server's game the solo maps and the menu's Leave.
 	if _solo_session != null:
