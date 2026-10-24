@@ -42,6 +42,11 @@ issuer_public_key_file: ""
 # The site: where tickets come from, where this server enrolled, where keys are fetched.
 backbone_url: "https://moddingcommunity.com"
 
+# Refuse a ticket that is not bound to the connection it arrives on. Current clients
+# always bind theirs, so a ticket copied off the network is useless elsewhere; an older
+# client asks for an unbound one, which this refuses. Turn on once those are gone.
+# require_ticket_binding: false
+
 # Admit players whose authentication failed or was unavailable, as guests.
 #
 # Sensible for a casual server that would rather have players than identities. Off

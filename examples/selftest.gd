@@ -17,7 +17,7 @@ const CFG := "res://examples/fixtures"
 ## A loaded game with rounds and no match the game vote can find. See the section that uses it.
 const RoundsWithoutMatch := preload("res://examples/fixtures/rounds_without_match.gd")
 
-const CHECKS := 408
+const CHECKS := 410
 
 var _passed := 0
 var _failed := 0
@@ -2432,8 +2432,16 @@ func _test_auth() -> void:
 		"the shipped auth.yml is ticket mode with nothing to fill in",
 		str(shipped_built.error)
 	)
+	_check(shipped_cfg != null and not shipped_cfg.require_ticket_binding,
+		"and accepts unbound tickets until the operator says otherwise")
 	if shipped_built.ok and shipped_built.value != null:
 		(shipped_built.value as Node).free()
+	var strict := TmcAuth.build({"enabled": true, "strategy": "ticket", "require_ticket_binding": true}, work)
+	_check(strict.ok and strict.value != null
+			and (strict.value as DotAuthServer).config.require_ticket_binding,
+		"require_ticket_binding reaches the auth server", str(strict.error))
+	if strict.ok and strict.value != null:
+		(strict.value as Node).free()
 
 	# [b]A private key here would verify AND mint.[/b] Every operator holding one could
 	# forge any player's identity, which is the one thing the whole ticket design exists

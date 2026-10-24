@@ -82,6 +82,7 @@ static func build(auth: Dictionary, config_dir: String, data_dir: String = "") -
 	cfg.strategy = STRATEGIES[named]
 	cfg.server_id = str(auth.get("server_id", "")).strip_edges()
 	cfg.allow_guests = bool(auth.get("allow_guests", false))
+	cfg.require_ticket_binding = bool(auth.get("require_ticket_binding", false))
 
 	if auth.has("backbone_url"):
 		cfg.backbone_url = str(auth["backbone_url"])
