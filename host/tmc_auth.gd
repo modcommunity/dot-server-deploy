@@ -44,15 +44,16 @@ const STRATEGIES := {
 ## it resolve, so an operator writes `issuer.pub.pem` and not an absolute path that only
 ## works on the box it was typed on.
 ##
-## Fails only on a configuration that is WRONG. Absent and disabled are both success with
-## a null value, because a server without authentication is a supported deployment and the
-## simplest one there is.
+## Fails only on a configuration that is WRONG. Disabled is success with a null value,
+## because a server without authentication is a supported deployment; absent means TMC's.
 ##
 ## [param data_dir] holds the adopted server id and issuer keys between boots
 ## (`ticket_trust.json`); empty keeps nothing.
 static func build(auth: Dictionary, config_dir: String, data_dir: String = "") -> DotResult:
+	# No auth.yml is TMC's own sign-in (ticket strategy, guests allowed, the site's keys
+	# adopted on first boot); a server only writes the file to change that or to turn it off.
 	if auth.is_empty():
-		return DotResult.success(null)
+		auth = {"enabled": true, "strategy": "ticket", "allow_guests": true}
 
 	# [b]The shape this file used to have, which named a shared secret.[/b] It is still
 	# on disk wherever somebody copied the old example, and reading it as "disabled" and
@@ -63,7 +64,7 @@ static func build(auth: Dictionary, config_dir: String, data_dir: String = "") -
 			"fix": "see cfg.example/auth.yml: strategy, server_id and issuer_public_key",
 		})
 
-	if not bool(auth.get("enabled", false)):
+	if not bool(auth.get("enabled", not auth.has("backend"))):
 		DotLog.info(CHANNEL, "authentication is off; everybody is a guest", {
 			"consequence": "cfg/permissions.yml cannot apply; the console is the only admin",
 		})
@@ -81,7 +82,7 @@ static func build(auth: Dictionary, config_dir: String, data_dir: String = "") -
 	var cfg := DotAuthConfig.new()
 	cfg.strategy = STRATEGIES[named]
 	cfg.server_id = str(auth.get("server_id", "")).strip_edges()
-	cfg.allow_guests = bool(auth.get("allow_guests", false))
+	cfg.allow_guests = bool(auth.get("allow_guests", true))
 	cfg.require_ticket_binding = bool(auth.get("require_ticket_binding", false))
 
 	if auth.has("backbone_url"):

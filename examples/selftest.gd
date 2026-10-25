@@ -17,7 +17,7 @@ const CFG := "res://examples/fixtures"
 ## A loaded game with rounds and no match the game vote can find. See the section that uses it.
 const RoundsWithoutMatch := preload("res://examples/fixtures/rounds_without_match.gd")
 
-const CHECKS := 410
+const CHECKS := 422
 
 var _passed := 0
 var _failed := 0
@@ -2419,7 +2419,7 @@ func _test_auth() -> void:
 	# everybody arrived as a guest, and `permissions.yml` did nothing -- which is
 	# indistinguishable from a deployment that chose not to authenticate.
 	var off := TmcAuth.build({}, "cfg")
-	_check(off.ok and off.value == null, "no auth.yml at all is a guest server, not an error")
+	_check(off.ok and off.value != null, "no auth.yml at all is TMC's sign-in (ticket, guests allowed), not a guest server")
 
 	var disabled := TmcAuth.build({"enabled": false, "strategy": "ticket"}, "cfg")
 	_check(
