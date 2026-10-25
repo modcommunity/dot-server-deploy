@@ -6,7 +6,7 @@ entries:
   - repo: dot-achievements
     pin: v0.1.5
   - repo: dot-audio
-    pin: v0.1.6
+    pin: v0.1.7
   - repo: dot-auth
     pin: v0.1.11
   - repo: dot-bot
@@ -16,13 +16,13 @@ entries:
   - repo: dot-chat
     pin: v0.1.5
   - repo: dot-cloud
-    pin: v0.1.17
+    pin: v0.1.18
   - repo: dot-combat
     pin: v0.1.11
   - repo: dot-console
     pin: v0.1.7
   - repo: dot-core
-    pin: v0.1.20
+    pin: v0.1.21
   - repo: dot-economy
     pin: v0.1.5
   - repo: dot-effects
@@ -34,7 +34,7 @@ entries:
   - repo: dot-fx
     pin: v0.3.0
   - repo: dot-game
-    pin: v0.1.26
+    pin: v0.1.27
   - repo: dot-inventory
     pin: v0.1.4
   - repo: dot-leaderboard
@@ -54,7 +54,7 @@ entries:
   - repo: dot-matchmaking
     pin: v0.1.6
   - repo: dot-menu
-    pin: v0.1.12
+    pin: v0.1.13
   - repo: dot-moderation
     pin: v0.1.5
   - repo: dot-net
@@ -114,7 +114,7 @@ entries:
   - repo: dot-user
     pin: v0.1.5
   - repo: dot-user-avatar
-    pin: v0.1.6
+    pin: v0.1.7
   - repo: dot-vehicle
     pin: v0.1.5
   - repo: dot-voice
