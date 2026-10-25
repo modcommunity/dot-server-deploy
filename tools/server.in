@@ -452,6 +452,21 @@ cfg_lists() {
     done
 }
 
+## The packs a cfg games list names (`pack: owner/name` with an optional `pin:`, or a bare owner/name), comma-joined
+## like TMC_GAMES. A server whose games come from the file must offer only those, not every game left in content/.
+listed_pack_games() {
+    local f
+    f="$(cfg_lists games)"
+    [ -n "$f" ] || return 0
+    grep -vE '^[[:space:]]*#' "$(abs "$CONFIG_DIR")/$f" | awk '
+        function flush() { if (id != "") { out = out (out == "" ? "" : ",") id (pin != "" ? "@" pin : ""); id = ""; pin = "" } }
+        /^[[:space:]]*-[[:space:]]+pack:/ { flush(); id = $0; sub(/^[^:]*:[[:space:]]*/, "", id); sub(/[[:space:]#].*$/, "", id); next }
+        /^[[:space:]]*-[[:space:]]+[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+/ { flush(); id = $0; sub(/^[[:space:]]*-[[:space:]]+/, "", id); sub(/[[:space:]#].*$/, "", id); next }
+        /^[[:space:]]*-/ { flush(); next }
+        /^[[:space:]]+pin:/ && id != "" { pin = $0; sub(/^[^:]*:[[:space:]]*/, "", pin); sub(/[[:space:]#].*$/, "", pin); gsub(/["\047]/, "", pin) }
+        END { flush(); print out }'
+}
+
 info() { printf '  INFO %s\n' "$1"; }
 
 ## An egg or container variable (TMC_*) never overwrites a cfg file: when a file sets the key the file
@@ -518,7 +533,9 @@ yield_to_file OPT_GAMES games --games TMC_GAMES "$(cfg_lists games)"
 # checkout of this repository has all of them -- so a panel that says "arena, g2gfast"
 # would be describing a server whose vote menu offered ten. `keep` is the one mode that
 # deliberately does not narrow it.
-[ -n "$OPT_GAMES" ] && [ "$GAMES_MODE" != "keep" ] && OVERRIDES+=(--games "$OPT_GAMES")
+HIDE_GAMES="$OPT_GAMES"
+[ -n "$HIDE_GAMES" ] || HIDE_GAMES="$(listed_pack_games)"
+[ -n "$HIDE_GAMES" ] && [ "$GAMES_MODE" != "keep" ] && OVERRIDES+=(--games "$HIDE_GAMES")
 
 # --- The runtime -----------------------------------------------------------
 
