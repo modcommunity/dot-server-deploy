@@ -759,7 +759,7 @@ do_pack() {
   Then put the PUBLIC half in client/content.json under trusted_keys." 5
 
     local args=(--headless --path "$PROJECT" --script "$PACK_TOOL" --
-                --content "$(abs "$CONTENT_DIR")" --out "$PROJECT/dist" --key "$SIGNING_KEY")
+                --content "$(abs "$CONTENT_DIR")" --out "$PROJECT/dist" --key "$SIGNING_KEY" --key-id "${TMC_SIGNING_KEY_ID:-local}")
 
     if [ "$PACK_ID" = "--all" ] || [ "$PACK_ID" = "all" ]; then
         args+=(--all)

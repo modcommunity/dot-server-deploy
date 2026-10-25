@@ -113,6 +113,10 @@ const NET_KEYS := {
 	"net_mtu": "mtu",
 	"net_interp_buffer": "interpolation_buffer",
 	"net_max_entities": "max_entities_per_snapshot",
+	# Relevance: who is sent what. The radius is a ceiling on the game's, the far pair replaces it.
+	"net_interest_radius": "interest_radius",
+	"net_far_every": "far_every",
+	"net_far_distance": "far_distance",
 }
 
 ## Operator-facing name -> [code]DotLogConfig[/code] property.
@@ -1321,8 +1325,34 @@ func note_console_result(console: DotConsole) -> void:
 		var name := line.split(" ")[0]
 
 		if console.find_cvar(name) == null and console.find_command(name) == null:
-			DotLog.warn(CHANNEL, "a setting names nothing this server has", {"setting": name})
-			unknown.append("cfg: %s" % name)
+			var near := nearest_names(name, console)
+			DotLog.warn(CHANNEL, "a setting names nothing this server has", {"setting": name, "did_you_mean": near})
+			unknown.append("cfg: %s%s" % [name, " (did you mean %s?)" % ", ".join(near) if not near.is_empty() else ""])
+
+
+## The settings this server does have that [param name] most resembles, best first (at most 3).
+##
+## Godot's bigram [method String.similarity] rather than a prefix test: a typo like
+## `net_intrest_radius` shares no useful prefix with the key it meant.
+func nearest_names(name: String, console: DotConsole = null) -> PackedStringArray:
+	var pool := PackedStringArray()
+	for keys: Dictionary in [BOOT_KEYS, NET_KEYS, LOG_KEYS]:
+		pool.append_array(PackedStringArray(keys.keys()))
+	if console != null:
+		pool.append_array(console.cvar_names())
+	var scored: Array = []
+	for candidate in pool:
+		var score := name.to_lower().similarity(String(candidate).to_lower())
+		if score >= 0.6 and candidate != name:
+			scored.append([score, String(candidate)])
+	scored.sort_custom(func(a: Array, b: Array) -> bool: return a[0] > b[0] or (a[0] == b[0] and a[1] < b[1]))
+	var out := PackedStringArray()
+	for entry in scored:
+		if not out.has(entry[1]):
+			out.append(entry[1])
+		if out.size() >= 3:
+			break
+	return out
 
 
 ## Turns a scalar or a sequence into a list of strings.

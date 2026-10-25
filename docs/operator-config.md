@@ -54,6 +54,26 @@ entries:
 
 A `maps.yml` rotation file (weights, per-map settings) still wins when it exists.
 
+## Threads and who is sent what
+
+Two groups of settings decide how much a busy server costs. All of them go in `cfg/server/server.yml` (the server's own file; restart to apply), and the first group is also live at the console and in dot-workbench's **Server threads** panel.
+
+```yaml
+# threads: the count, then the opt-ins (nothing is threaded until its own switch is on)
+sv_worker_threads: -1      # -1 cores less one (at most 8), 0 everything on the main thread; set it when several servers share a machine
+sv_threads_net: 1          # build each player's snapshot on the workers (not on the web)
+sv_threads_npc: 0          # NPC decisions and path searches, for brains that support it
+
+# relevance: what a player is sent
+net_interest_radius: 150   # metres; at most this far from a player is sent to them (0 keeps the game's own)
+net_far_every: 4           # anything farther than net_far_distance is sent in one snapshot of 4
+net_far_distance: 60       # metres; 0 is never far
+```
+
+`net_interest_radius` is a ceiling on the game's own radius (the smaller wins; 0 means no limit from you). `net_far_every` and `net_far_distance` replace the game's values when written. `sv_threads_npc` is read by no game yet. Zombie Zone's `zz_net_far_every` and `zz_net_far_distance` are the same two settings under the game's own names and keep working; where a game sets its own, the game's wins.
+
+Where the files live: the server's own settings are `cfg/server/server.yml`; an addon's are `cfg/server/addon/<addon>/<file>.yml` (singular `addon`, the folder is the addon name with `-` as `_`) and one game's `cfg/server/game/<game>/`. The workbench's Save for the thread cvars writes `cfg/server/addon/dot_server/threads/server.yml` and applies it at the next start. `cfg/server/addons/` (plural) and `cfg/addons/` are the old layout: read, with a warning, and not documented anywhere else. A name the server does not know is listed at boot as `unrecognised setting`, with the nearest known names (`did you mean net_interest_radius?`).
+
 ## Which layer won, and what loaded
 
 Read `data/from_yaml.cfg`, written on every boot: it is exactly what your files became. A key the server does not know is listed at boot as unknown and never stops the server. Developers: [dot-core's addon-config.md](../../dot-core/docs/addon-config.md).

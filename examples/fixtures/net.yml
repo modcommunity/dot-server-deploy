@@ -6,3 +6,6 @@ net_max_bps: 1000000
 net_max_pps: 0
 net_max_update_rate: 0
 net_mtu: 1100
+net_interest_radius: 150
+net_far_every: 4
+net_far_distance: 60

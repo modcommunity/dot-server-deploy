@@ -17,7 +17,7 @@ const CFG := "res://examples/fixtures"
 ## A loaded game with rounds and no match the game vote can find. See the section that uses it.
 const RoundsWithoutMatch := preload("res://examples/fixtures/rounds_without_match.gd")
 
-const CHECKS := 422
+const CHECKS := 425
 
 var _passed := 0
 var _failed := 0
@@ -312,6 +312,15 @@ func _test_config() -> void:
 		"net_ceiling carries what cfg wrote, 0 meaning no limit (%s)" % str(ceiling)
 	)
 	_check(not ceiling.has("max_entities_per_snapshot"), "and not what it left to the default")
+	_check(
+		is_equal_approx(float(ceiling.get("interest_radius", -1)), 150.0)
+			and int(ceiling.get("far_every", -1)) == 4
+			and is_equal_approx(float(ceiling.get("far_distance", -1)), 60.0),
+		"net_interest_radius, net_far_every and net_far_distance reach the ceiling (%s)" % str(ceiling)
+	)
+	var near := config.nearest_names("net_intrest_radius")
+	_check(near.has("net_interest_radius"), "an unknown setting is offered its nearest known name (%s)" % str(near))
+	_check(config.nearest_names("zzzz_nothing").is_empty(), "and nothing when nothing is near")
 	_check(config.public_address == "203.0.113.7", "net_public_ip is kept for the join line")
 	_check(config.initial_game == "buses", "sv_game names the boot game")
 	# [b]Its own key, and not a console line.[/b] `sv_map` has no cvar and no command

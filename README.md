@@ -174,7 +174,7 @@ cfg/                 what an operator edits. Written on first run, and not in th
     dot_menu/admin_menu.yml   what /admin offers, and to whom
     dot_core/loading.yml   the picture, music and tips over a game or map change
     dot_log/log.yml, dot_server_security/security.yml, dot_map/maps.yml
-  server/addons/<addon>/   the same files again: your overrides, the strongest layer
+  server/addon/<addon>/    the same files again: your overrides, the strongest layer
   content/<id>/        per-game configuration
 
 content/             what the server serves

@@ -244,7 +244,7 @@ while [ $# -gt 0 ]; do
         --no-import) DO_IMPORT=0; shift ;;
         --no-download) DO_DOWNLOAD=0; shift ;;
         --no-clone)    DO_CLONE=0; shift ;;
-        --no-games)    NO_GAMES=1; shift ;;
+        --no-games)    NO_GAMES=1; NO_GAMES_FLAG=1; shift ;;
         --update)      DO_UPDATE=1; shift ;;
         --check)     DO_CHECK=1; shift ;;
         --vendor)    VENDOR=1; shift ;;
@@ -2015,7 +2015,9 @@ step "publishing games"
 # [b]The private half never leaves this machine and is gitignored before it exists.[/b]
 # Anyone holding it can publish content that every client trusting this key will mount
 # and RUN. The public half goes in client/content.json, which is shipped on purpose.
-if [ "${PUBLISHED_GAMES:-0}" -ne 1 ] && [ ! -f "$ROOT/keys/content.key" ]; then
+# `--no-games` typed on the command line is a developer who will `./server pack` their own game,
+# which needs the key; the TMC_NO_GAMES environment (a box that only installs) still gets none.
+if { [ "${PUBLISHED_GAMES:-0}" -ne 1 ] || [ "${NO_GAMES_FLAG:-0}" -eq 1 ]; } && [ ! -f "$ROOT/keys/content.key" ]; then
     mkdir -p "$ROOT/keys"
     "$GODOT" --headless --path "$ROOT" \
         --script res://addons/dot_cloud/publish/dot_cloud_cli.gd -- \
@@ -2056,6 +2058,7 @@ if [ "${PUBLISHED_GAMES:-0}" -ne 1 ]; then
 fi
 
 published_any=0
+UNPUBLISHED_GAMES=()
 [ "${PUBLISHED_GAMES:-0}" -eq 1 ] && published_any=1
 
 for entry in "${GAMES[@]}"; do
@@ -2084,8 +2087,12 @@ for entry in "${GAMES[@]}"; do
         # Shown rather than swallowed: the run above is quiet so the install reads as
         # a list of steps, and a failure with no output is the one thing worse than
         # noise.
-        "$GODOT" "${pack_args[@]}" || true
-        die "could not publish $id from $repo" 4
+        "$GODOT" "${pack_args[@]}" 2>&1 | tail -8 || true
+        # One game that cannot be packed must not stop the rest of the install (a
+        # stranger's first `./setup.sh` died on the reference game and never wrote
+        # `./server`). Nothing published at all is still fatal, just below.
+        warn "could not publish $id from $repo: skipped (see above)"
+        UNPUBLISHED_GAMES+=("$id")
     fi
 done
 
@@ -2772,6 +2779,12 @@ elif [ "$DO_LETSENCRYPT" -eq 0 ]; then
     ./deploy/issue-letsencrypt.sh --help     every certificate method
 
 TLS
+fi
+
+if [ ${#UNPUBLISHED_GAMES[@]} -gt 0 ]; then
+    warn "not published, and not playable here: ${UNPUBLISHED_GAMES[*]}"
+    printf '    fix the game (its error is printed above) and run ./server pack <name> --source <dir>,\n'
+    printf '    or leave games out entirely with ./setup.sh --no-games\n'
 fi
 
 # A run that was asked for a certificate and has none did not do what it was told,
