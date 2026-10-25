@@ -85,6 +85,8 @@ entries:
     pin: v0.2.4
   - repo: dot-procedural-generation
     pin: v0.1.4
+  - repo: dot-profile
+    pin: v0.1.20
   - repo: dot-props
     pin: v0.1.8
   - repo: dot-replay
@@ -124,6 +126,8 @@ entries:
   - repo: dot-weapon
     pin: v0.1.14
   - repo: dot-weather
+    pin: v0.1.1
+  - repo: dot-workbench
     pin: v0.1.1
   - repo: zed-dot-weapons
     pin: v0.1.5
