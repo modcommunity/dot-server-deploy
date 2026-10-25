@@ -6,9 +6,9 @@ entries:
   - repo: dot-achievements
     pin: v0.1.5
   - repo: dot-audio
-    pin: v0.1.5
+    pin: v0.1.6
   - repo: dot-auth
-    pin: v0.1.9
+    pin: v0.1.11
   - repo: dot-bot
     pin: v0.1.2
   - repo: dot-browser
@@ -18,11 +18,11 @@ entries:
   - repo: dot-cloud
     pin: v0.1.17
   - repo: dot-combat
-    pin: v0.1.10
+    pin: v0.1.11
   - repo: dot-console
     pin: v0.1.7
   - repo: dot-core
-    pin: v0.1.19
+    pin: v0.1.20
   - repo: dot-economy
     pin: v0.1.5
   - repo: dot-effects
@@ -32,13 +32,13 @@ entries:
   - repo: dot-friends
     pin: v0.1.5
   - repo: dot-fx
-    pin: v0.2.0
+    pin: v0.3.0
   - repo: dot-game
-    pin: v0.1.21
+    pin: v0.1.26
   - repo: dot-inventory
     pin: v0.1.4
   - repo: dot-leaderboard
-    pin: v0.1.5
+    pin: v0.3.0
   - repo: dot-lighting
     pin: v0.1.8
   - repo: dot-loadout
@@ -48,21 +48,21 @@ entries:
   - repo: dot-log
     pin: v0.1.5
   - repo: dot-map
-    pin: v0.1.30
+    pin: v0.1.54
   - repo: dot-match
     pin: v0.1.5
   - repo: dot-matchmaking
     pin: v0.1.6
   - repo: dot-menu
-    pin: v0.1.10
+    pin: v0.1.12
   - repo: dot-moderation
     pin: v0.1.5
   - repo: dot-net
-    pin: v0.1.18
+    pin: v0.1.19
   - repo: dot-npc
-    pin: v0.1.6
-  - repo: dot-npc-ai
     pin: v0.1.7
+  - repo: dot-npc-ai
+    pin: v0.1.9
   - repo: dot-npc-ai-director
     pin: v0.1.6
   - repo: dot-objective
@@ -82,7 +82,7 @@ entries:
   - repo: dot-player-class
     pin: v0.1.5
   - repo: dot-player-controller
-    pin: v0.2.3
+    pin: v0.2.4
   - repo: dot-procedural-generation
     pin: v0.1.4
   - repo: dot-props
@@ -90,7 +90,7 @@ entries:
   - repo: dot-replay
     pin: v0.1.8
   - repo: dot-server
-    pin: v0.1.17
+    pin: v0.1.21
   - repo: dot-server-query
     pin: v0.1.6
   - repo: dot-server-security
@@ -106,7 +106,7 @@ entries:
   - repo: dot-stats
     pin: v0.1.5
   - repo: dot-team
-    pin: v0.1.5
+    pin: v0.1.6
   - repo: dot-timer
     pin: v0.1.7
   - repo: dot-ui
