@@ -57,7 +57,7 @@ gen_compose() {
     tcp="\${TMC_PORT:-$PORT}:\${TMC_PORT:-$PORT}/tcp"
     [ -n "$DOMAIN" ] && tcp="127.0.0.1:$tcp"
     put .env <<EOF
-# Non-secret settings only. Passwords live in cfg/ (cfg/rcon.yml is written once on first start).
+# Non-secret settings only. Passwords live in cfg/ (cfg/server/addon/dot_console/rcon.yml is written once on first start).
 TMC_NAME=$NAME
 TMC_MAX_PLAYERS=$MAXP
 TMC_GAME=$GAME
@@ -147,7 +147,7 @@ Allocations to give the server on the panel (Admin > Servers > Build Configurati
 
 Leave the Port variable empty: the startup command already passes the primary allocation.
 Nginx in front of the primary allocation is unchanged: deploy/install-server-tls.sh --domain <name> --backend <node>:$PORT
-Passwords are never startup variables. Put them in cfg/rcon.yml in the server's file manager.
+Passwords are never startup variables. Put them in cfg/server/addon/dot_console/rcon.yml in the server's file manager.
 EOF
 }
 

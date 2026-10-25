@@ -1,7 +1,7 @@
 class_name TmcGameRotation
 extends RefCounted
 
-## Which GAMES this server plays: `cfg/game_rotation.yml`.
+## Which GAMES this server plays: `cfg/content/games.yml`.
 ##
 ## The same format as `cfg/maps.yml` (named rotations, `random` or `cycle`, a cooldown, a plain
 ## list as shorthand for `main`, wildcards), and the same code: parsing, layering and the
@@ -24,8 +24,9 @@ extends RefCounted
 ## [/codeblock]
 
 const CHANNEL := "tmc.games_rotation"
-const FILE := "game_rotation.yml"
-## The name before the cfg/ move; read through DotCfgLegacy until its cutoff.
+## Beside the download list of the same name: this reads `games:`, `rotations:` and the rest, that reads `entries:`.
+const FILE := "content/games.yml"
+## Before the cfg/ move; read through DotCfgLegacy until its cutoff.
 const LEGACY_FILE := "games.yml"
 
 var spec: Dictionary = {}

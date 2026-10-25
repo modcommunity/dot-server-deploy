@@ -1,6 +1,6 @@
 # The game vote: players choose the next game
 
-`cfg/addons/dot_vote/vote.yml` and `host/tmc_vote.gd`. dot-map votes for maps inside a game; this votes for what the SERVER runs next, which only exists because this project runs more than one game per server.
+`cfg/addon/dot_vote/vote.yml` and `host/tmc_vote.gd`. dot-map votes for maps inside a game; this votes for what the SERVER runs next, which only exists because this project runs more than one game per server.
 
 ```
 !game_nominate g2gfast   !game_rtv   !game_vote 2      !game_timeleft   !game_next

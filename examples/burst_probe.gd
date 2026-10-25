@@ -289,7 +289,8 @@ func _write_config() -> void:
 			text = "log_level: warn\nlog_file: false\n"
 		DotPaths.write_text(cfg.path_join(name), text)
 	# The course pack wipeout plays from (the shared fixtures name none), as game_vote_all has it.
-	DotPaths.write_text(cfg.path_join("content.yml"),
+	DirAccess.make_dir_recursive_absolute(cfg.path_join("server/content"))
+	DotPaths.write_text(cfg.path_join("server/content/overrides.yml"),
 		FileAccess.get_file_as_string("res://examples/fixtures/game_vote_all/content.yml"))
 
 

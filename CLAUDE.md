@@ -9,7 +9,7 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first; this file is what is specifi
 | Read | Before |
 | --- | --- |
 | [docs/delivery-constraint.md](docs/delivery-constraint.md) | anything about how a game is packed, mounted or referenced; a new game in `content/` |
-| [docs/configuration.md](docs/configuration.md) | `cfg.example/`, a new setting, `TmcConfig`, `TmcAdmins`, `cfg/content.yml` |
+| [docs/configuration.md](docs/configuration.md) | `cfg.example/`, a new setting, `TmcConfig`, `TmcAdmins`, `cfg/server/content/overrides.yml` |
 | [docs/installing-games.md](docs/installing-games.md) | `install-games`, `index`, `TmcContent`, `TmcGameRef`, a game's pack lists |
 | [docs/setup.md](docs/setup.md) | `setup.sh`, `setup.ps1`, `tools/server.in`, the addon or game lists, the runtime fetcher |
 | [docs/pterodactyl.md](docs/pterodactyl.md) | the egg, anything run non-interactively |
@@ -18,8 +18,8 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first; this file is what is specifi
 | [docs/addon-packs.md](docs/addon-packs.md) | `client/boot.tscn`, `_advertise_addons`, the update-and-restart path |
 | [docs/native-client.md](docs/native-client.md) | `export-native`, launch arguments, presets |
 | [docs/web-client.md](docs/web-client.md) | `client/shell.gd`, sign-in, clearing downloads, TLS |
-| [docs/game-vote.md](docs/game-vote.md) | `host/tmc_vote.gd`, `cfg/addons/dot_vote/vote.yml`, the notice overlay |
-| [docs/admin-menu.md](docs/admin-menu.md) | `/admin`, `cfg/addons/dot_menu/admin_menu.yml`, the loading screen |
+| [docs/game-vote.md](docs/game-vote.md) | `host/tmc_vote.gd`, `cfg/addon/dot_vote/vote.yml`, the notice overlay |
+| [docs/admin-menu.md](docs/admin-menu.md) | `/admin`, `cfg/addon/dot_menu/admin_menu.yml`, the loading screen |
 | [docs/operator-services.md](docs/operator-services.md) | logging, the security guard, party, matchmaking, replay, friends |
 | [docs/enrollment.md](docs/enrollment.md) | `host/tmc_enroll.gd`, `data/listing.json` |
 | [docs/testing.md](docs/testing.md) | adding or trusting a suite |
@@ -80,7 +80,7 @@ Exit codes: `2` usage, `3` no runtime, `4` no project (`install-games`: addons b
 - `cfg/*.yml` reaches dot-server as console lines; a setting whose cvar does not exist yet at that point is a config field the host applies. [config](docs/configuration.md#the-configuration-is-a-surface-not-a-second-parser)
 - `TmcYaml` reads `on`/`off` as bools; a word-valued setting must accept a bool. [config](docs/configuration.md#the-configuration-is-a-surface-not-a-second-parser)
 - The game vote's prefix is `DOT_GAME_VOTE_*`, never `DOT_VOTE_*` (the loaded game's map vote). [config](docs/configuration.md#prefixes-that-keep-two-copies-of-an-addon-apart)
-- `cfg/content.yml` refuses identity keys and unknown keys by name; unpinned maps resolve per start into `data/content-maps.json`, never per join. [config](docs/configuration.md#a-server-owners-settings-per-game-cfgcontentyml)
+- `cfg/server/content/overrides.yml` refuses identity keys and unknown keys by name; unpinned maps resolve per start into `data/content-maps.json`, never per join. [config](docs/configuration.md#a-server-owners-settings-per-game-cfgservercontentoverridesyml)
 - Admin roles grant nothing to an unauthenticated session, by design. [config](docs/configuration.md#roles-in-flags-out)
 
 **Games and installing**

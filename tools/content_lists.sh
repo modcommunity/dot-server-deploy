@@ -61,7 +61,7 @@ content_list() {
         else if (k == "content") content = v
     }
     FNR == 1 {
-        flush(); nd++; nent = 0; mode = ""; edash = -1; dm[nd] = 0
+        flush(); nd++; nent = 0; mode = ""; edash = -1; dm[nd] = 0; dh[nd] = 0
         dl[nd] = (index(FILENAME, root) == 1) ? "default" : "operator"
         dr[nd] = ""
     }
@@ -71,11 +71,13 @@ content_list() {
         flush(); mode = ""
         if (line ~ /^merge:[[:space:]]*true/) dm[nd] = 1
         else if (line ~ /^remove:/) {
+            dh[nd] = 1
             v = line; sub(/^remove:[[:space:]]*/, "", v)
             if (v ~ /^\[/) { gsub(/[\[\]]/, "", v); n = split(v, parts, ","); for (i = 1; i <= n; i++) { t = trim(parts[i]); sub(/@.*/, "", t); if (t != "") dr[nd] = dr[nd] " " t " " } }
             else mode = "remove"
         }
         else if (line ~ /^entries:/) {
+            dh[nd] = 1
             v = line; sub(/^entries:[[:space:]]*/, "", v); sub(/[[:space:]]+$/, "", v)
             if (v == "") { mode = "entries"; edash = -1 }
             else if (v ~ /^\[.*\]$/) { gsub(/[\[\]]/, "", v); n = split(v, parts, ","); for (i = 1; i <= n; i++) { t = trim(parts[i]); if (t != "") addbare(t) } flush() }
@@ -99,8 +101,9 @@ content_list() {
         if (bad) exit 1
         flush()
         start = 1
-        for (d = nd; d >= 1; d--) if (!dm[d]) { start = d; break }
+        for (d = nd; d >= 1; d--) if (dh[d] && !dm[d]) { start = d; break }
         for (d = start; d <= nd; d++) {
+            if (!dh[d]) continue
             for (j = 1; j <= n_out; j++) if (index(dr[d], " " oid[j] " ")) { odel[j] = 1 }
             for (e = 1; e <= dn[d]; e++) {
                 at = 0

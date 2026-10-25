@@ -3,15 +3,15 @@
 **For**: a server operator choosing which addons and games are downloaded. **Quick start**:
 
 ```bash
-mkdir -p cfg/server/content
-printf 'merge: true\nentries: [game-arena]\n' > cfg/server/content/games.yml
+mkdir -p cfg/content
+printf 'merge: true\nentries: [game-arena]\n' > cfg/content/games.yml
 ./setup.sh && ./server
 ```
 
-**Edit** `cfg/server/content/addons.yml` and `games.yml`. **Never edit** the shipped `content-lists/*.yml` or `addons.lock`. `entries:` takes a block list or a one-line flow list; a `repo:` is a bare repository name and a slash in it is refused (use `pack: owner/name` for a dot-cloud pack).
+**Edit** `cfg/content/addons.yml` and `games.yml`. **Never edit** the shipped `content-lists/*.yml` or `addons.lock`. `entries:` takes a block list or a one-line flow list; a `repo:` is a bare repository name and a slash in it is refused (use `pack: owner/name` for a dot-cloud pack).
 
 
-Which addon repositories and which games or packs a server installs is data you own. The shipped defaults are `content-lists/addons.yml` (the pinned addon repositories, from `addons.lock`) and `content-lists/games.yml` (the games `setup.sh` publishes); `host/tmc_content_lists.gd` (`TmcContentLists`) owns the schema and reads them. `cfg/content/` is a folder of its own, not a tier, so it never clashes with `cfg/addons/<addon>/`.
+Which addon repositories and which games or packs a server installs is data you own. The shipped defaults are `content-lists/addons.yml` (the pinned addon repositories, from `addons.lock`) and `content-lists/games.yml` (the games `setup.sh` publishes); `host/tmc_content_lists.gd` (`TmcContentLists`) owns the schema and reads them. `cfg/content/` is a folder of its own, not a tier, so it never clashes with `cfg/addon/<addon>/`.
 
 ```yaml
 merge: true            # absent or false: this file REPLACES the list below it
@@ -26,14 +26,14 @@ entries:
     pin: 1.2.0
 ```
 
-Layers, weakest first: the shipped default, `cfg/content/<file>`, then `cfg/server/content/<file>`. Without `merge: true` the strongest file is the whole list. A pin is respected as written; an unpinned entry follows the origin's newest. A pack is still checked against its signature by dot-cloud, this only says what to fetch.
+Layers, weakest first: the shipped default, `cfg/content/<file>`, then the operator's `cfg/server/content/<file>` (still read). Without `merge: true` the strongest file is the whole list. A pin is respected as written; an unpinned entry follows the origin's newest. A pack is still checked against its signature by dot-cloud, this only says what to fetch.
 
 A bad entry (both or neither of `repo` and `pack`, a name with a path in it, a pin with odd characters) fails with `DotError.CODE_INVALID` naming the file and entry number; a file that is not yml fails with `CODE_PARSE`. `examples/selftest.gd` covers the default, replace, merge, server override, pin and bad entries.
 
-A `games.yml` entry may also carry `maps: [id, ...]` (the rotation, in that order) and `rotation: sequential|random|vote`; absent means every installed map sorted by name, sequential. `TmcContentLists.game_order` (games.yml order, then unlisted installed games sorted) and `map_rotation` (one game's maps and mode) give these, and fail with `CODE_INVALID` naming an unknown game or a listed map that is not installed. A rotation file such as `cfg/addons/dot_map/maps.yml` wins when it exists.
+A `games.yml` entry may also carry `maps: [id, ...]` (the rotation, in that order) and `rotation: sequential|random|vote`; absent means every installed map sorted by name, sequential. `TmcContentLists.game_order` (games.yml order, then unlisted installed games sorted) and `map_rotation` (one game's maps and mode) give these, and fail with `CODE_INVALID` naming an unknown game or a listed map that is not installed. A rotation file such as `cfg/addon/dot_map/maps.yml` wins when it exists.
 
 **Who reads them:** `setup.sh`, `tools/check_lists.sh`, `tools/package_check.sh`, `tools/addons-lock.sh`, `tools/game_source.sh` (`game_entries`, so `check.sh` and `play.sh`) read them from bash through `tools/content_lists.sh`; `install-games` fetches the `pack:` entries when it is given no `--games`. A pin in `addons.yml` is what `setup.sh` checks out; an entry without one falls back to `addons.lock`. `addons.lock` is still what the shell build writes and checks.
 
-**The old `games.list`** (`<repository> <content directory>` per line) was removed. A box that still has its own copy at the project root and no `games.yml` keeps working with one WARN until 2026-12-31; after that it is ignored with an ERROR. Move it to `cfg/server/content/games.yml`.
+**The old `games.list`** (`<repository> <content directory>` per line) was removed. A box that still has its own copy at the project root and no `games.yml` keeps working with one WARN until 2026-12-31; after that it is ignored with an ERROR. Move it to `cfg/content/games.yml`.
 
-**Not the same as per-game settings.** `cfg/content/games.yml` and `addons.yml` say what is downloaded. What a server says about one game (name, cvars, the maps it offers) is `cfg/game/<game>/server.yml`; the older `cfg/content.yml` keeps `defaults:` and is still read. For game-arena the maps block is `maps: add:` with one `gamemann/<map id>` per map in arena-surf-dm-maps' `maps.json`; arena-surf-dm-maps is not a `repo:` entry here, because each map is its own pack. `cfg.example` does not carry it until those packs are published.
+**Not the same as per-game settings.** `cfg/content/games.yml` and `addons.yml` say what is downloaded. What a server says about one game (name, cvars, the maps it offers) is `cfg/game/<game>/server.yml`; `cfg/server/content/overrides.yml` keeps `defaults:` and the per-game `games:` entries (the old `cfg/content.yml` is read through the shim until 2026-12-31). For game-arena the maps block is `maps: add:` with one `gamemann/<map id>` per map in arena-surf-dm-maps' `maps.json`; arena-surf-dm-maps is not a `repo:` entry here, because each map is its own pack. `cfg.example` does not carry it until those packs are published.

@@ -179,7 +179,7 @@ func _nav(menu: TmcAdminMenu, who: DotClientSession, path: String) -> void:
 func _test_menu_config() -> void:
 	_section("admin_menu.yml")
 
-	var parsed := TmcYaml.parse_file("res://cfg.example/addons/dot_menu/admin_menu.yml")
+	var parsed := TmcYaml.parse_file("res://cfg.example/addon/dot_menu/admin_menu.yml")
 	_check(parsed.ok, "the shipped admin_menu.yml parses", str(parsed.error) if not parsed.ok else "")
 	var shipped := TmcAdminMenu.new().configure(parsed.value if parsed.ok else {})
 	_check(shipped.problems.is_empty(), "and configures with nothing to report", ", ".join(shipped.problems))
@@ -833,7 +833,7 @@ func _test_panel() -> void:
 func _test_loading_server() -> void:
 	_section("loading.yml")
 
-	var parsed := TmcYaml.parse_file("res://cfg.example/addons/dot_core/loading.yml")
+	var parsed := TmcYaml.parse_file("res://cfg.example/addon/dot_core/loading.yml")
 	_check(parsed.ok, "the shipped loading.yml parses", str(parsed.error) if not parsed.ok else "")
 	var shipped := TmcLoading.new().configure(parsed.value if parsed.ok else {})
 	_check(shipped.problems.is_empty() and shipped.enabled and shipped.is_empty(),

@@ -58,7 +58,7 @@ P="$T/ptero"
 check "pterodactyl writes the egg, install script and allocations" test -s "$P/egg-tmc-server.json" -a -s "$P/install.sh" -a -s "$P/allocations.txt"
 check "install.sh parses" bash -n "$P/install.sh"
 for egg in "$P/egg-tmc-server.json" deploy/pterodactyl-egg.json; do
-    python3 -I - "$egg" cfg.example/server.yml <<'PY' && good "egg shape: $egg" || bad "egg shape: $egg"
+    python3 -I - "$egg" <<'PY' && good "egg shape: $egg" || bad "egg shape: $egg"
 import json, sys
 d = json.load(open(sys.argv[1]))
 def need(c, m):
@@ -84,15 +84,8 @@ for v in d["variables"]:
     need(v["field_type"] == "text", "field_type")
     need(v["env_variable"] not in seen, "duplicate " + v["env_variable"]); seen.add(v["env_variable"])
     need(not any(w in v["env_variable"] for w in ("PASSWORD", "SECRET", "TOKEN")), "secret as a startup variable: " + v["env_variable"])
-# Every file the panel edits is a file we ship, and every key it sets is in it.
-yml = open(sys.argv[2]).read()
-for path, spec in json.loads(d["config"]["files"]).items():
-    need(path == "cfg/server.yml" and spec["parser"] == "yaml", "unexpected config file " + path)
-    for key, val in spec["find"].items():
-        need(("\n" + yml).count("\n" + key + ":") == 1, "cfg.example/server.yml has no " + key)
-        env = val[len("{{env."):-2]
-        need(env in seen, key + " maps to an undefined variable " + env)
-need(json.loads(d["config"]["files"]), "config.files maps no variable onto cfg/")
+# The egg never writes a variable into a cfg file: the file the operator edits always wins.
+need(json.loads(d["config"]["files"]) == {}, "config.files must be empty: an egg that rewrites cfg/ overwrites the operator")
 PY
 done
 python3 -I -c "

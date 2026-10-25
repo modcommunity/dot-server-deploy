@@ -941,15 +941,62 @@ func _test_layered_cfg() -> void:
 	_put(root + "/server/addons/dot_core/loading.yml", "loading_title: Operator\n")
 	var ld := TmcConfig.merged_file("dot-core", "loading.yml", root)
 	_check(ld.ok and String((ld.value as Dictionary).get("loading_title", "")) == "Operator", "loading.yml layers, the operator tier last")
+	DotCfgLegacy.reset()
 	_put(root + "/addons.yml", "defaults:\n  add: [dev/extra@1.2.0]\n")
 	var old_packs := TmcAddonsConfig.load_from(root, root + "/data")
-	_check(old_packs.ok, "an old addons.yml is still read for packs", str(old_packs.error))
-	_put(root + "/packs.yml", "defaults:\n  add: [dev/extra@1.2.0]\n")
+	_check(old_packs.ok and (old_packs.value as TmcAddonsConfig).defaults_add == PackedStringArray(["dev/extra@1.2.0"]),
+		"an old cfg/addons.yml is still read for packs", str(old_packs.error))
+	_check(DotCfgLegacy.warned_count() == 1, "and warns once")
+	_put(root + "/content/addons.yml", "defaults:\n  add: [dev/new@2.0.0]\nentries: [dot-core]\n")
 	var new_packs := TmcAddonsConfig.load_from(root, root + "/data")
-	_check(new_packs.ok, "and packs.yml wins when both exist", str(new_packs.error))
-	_check(DotCfgLegacy.find(root + "/games.yml", root + "/game_rotation.yml") == "", "no games.yml and no game_rotation.yml is no rotation file")
-	_put(root + "/games.yml", "rotation: main\n")
-	_check(DotCfgLegacy.find(root + "/games.yml", root + "/game_rotation.yml") == root + "/games.yml", "games.yml is found through the shim")
+	_check(new_packs.ok and (new_packs.value as TmcAddonsConfig).defaults_add == PackedStringArray(["dev/new@2.0.0"]),
+		"cfg/content/addons.yml wins whole when both exist, and shares its file with the download list", str(new_packs.error))
+	_put(root + "/games.yml", "rotation: old\n")
+	var legacy_rot := DotCfgLegacy.find(root + "/" + TmcGameRotation.LEGACY_FILE, root + "/" + TmcGameRotation.FILE)
+	_check(legacy_rot == root + "/games.yml", "cfg/games.yml is found through the shim")
+	_put(root + "/content/games.yml", "rotation: main\ngames: [a/b]\n")
+	_check(DotCfgLegacy.find(root + "/games.yml", root + "/" + TmcGameRotation.FILE) == root + "/content/games.yml",
+		"cfg/content/games.yml wins when both exist")
+	var rot := TmcGameRotation.load_file(root + "/content/games.yml")
+	_check(rot.ok and (rot.value as TmcGameRotation).has_rotations(), "and reads as a rotation")
+	# The same file as a download list: rotation keys alone are not a list, entries are.
+	var shipped := TmcContentLists.load_list("games", root, "res://content-lists")
+	_check(shipped.ok and (shipped.value as Array).size() > 1, "a rotation-only content/games.yml leaves the shipped download list alone")
+	_put(root + "/content/games.yml", "rotation: main\nentries: [only-this]\n")
+	var listed := TmcContentLists.load_list("games", root, "res://content-lists")
+	_check(listed.ok and (listed.value as Array).size() == 1 and listed.value[0]["id"] == "only-this",
+		"a content/games.yml with entries replaces it, beside the rotation keys")
+	var rot2 := TmcGameRotation.load_file(root + "/content/games.yml")
+	_check(rot2.ok and (rot2.value as TmcGameRotation).spec.get("rotations", {}).size() >= 0, "and still reads as a rotation")
+
+	# server.yml: cfg/server/server.yml, the flat file through the shim, new wins whole, extras applied.
+	DotCfgLegacy.reset()
+	_put(root + "/server.yml", "sv_name: Flat\nsv_maxplayers: 5\n")
+	var flat_srv: TmcConfig = TmcConfig.load_dir(root).value
+	_check(flat_srv.server.hostname == "Flat" and flat_srv.server.max_players == 5, "the flat cfg/server.yml is still read")
+	_check(DotCfgLegacy.warned_count() >= 1, "and warns")
+	_put(root + "/server/server.yml", "sv_name: Operator\n")
+	var nested: TmcConfig = TmcConfig.load_dir(root).value
+	_check(nested.server.hostname == "Operator" and nested.server.max_players != 5, "cfg/server/server.yml wins whole over the flat file")
+	_put(root + "/server/more.yml", "sv_maxplayers: 7\n")
+	var extra: TmcConfig = TmcConfig.load_dir(root).value
+	_check(extra.server.max_players == 7 and extra.server.hostname == "Operator", "another cfg/server/*.yml adds keys")
+
+	# overrides: cfg/server/content/overrides.yml, the flat content.yml through the shim, new wins whole.
+	DotCfgLegacy.reset()
+	_put(root + "/content.yml", "games:\n  game-x:\n    max_players: 3\n")
+	var old_ov := TmcGameConfig.load_from(root, root + "/data")
+	_check(old_ov.ok and (old_ov.value as TmcGameConfig).games.get("game-x", {}).get("max_players") == 3, "cfg/content.yml is still read through the shim")
+	_put(root + "/server/content/overrides.yml", "games:\n  game-x:\n    max_players: 4\n")
+	var new_ov := TmcGameConfig.load_from(root, root + "/data")
+	_check(new_ov.ok and (new_ov.value as TmcGameConfig).games.get("game-x", {}).get("max_players") == 4, "cfg/server/content/overrides.yml wins whole")
+	_put(root + "/game/game-x/server.yml", "sv_maxplayers: 6\ncvars:\n  a: \"1\"\n")
+	_put(root + "/server/game/game-x/server.yml", "sv_maxplayers: 9\n")
+	var tiers := TmcGameConfig.load_from(root, root + "/data")
+	var gx: Dictionary = (tiers.value as TmcGameConfig).games.get("game-x", {}) if tiers.ok else {}
+	_check(gx.get("max_players") == 9 and gx.get("cvars", {}).get("a") == "1",
+		"cfg/server/game/<g>/server.yml layers over the shipped cfg/game/<g>/server.yml", str(gx) + (tiers.error.message if not tiers.ok else ""))
+
 	DotPaths.remove_tree(root)
 	DotAddonConfig.config_root = ""
 	_done()
@@ -2220,7 +2267,7 @@ func _test_vote_limit_waits_for_a_change() -> void:
 func _test_vote_notices() -> void:
 	_section("the game vote on the shell's HUD")
 
-	var parsed := TmcYaml.parse_file("res://cfg.example/addons/dot_vote/vote.yml")
+	var parsed := TmcYaml.parse_file("res://cfg.example/server/addon/dot_vote/vote.yml")
 
 	if not _check(parsed.ok, "the shipped vote.yml template parses", str(parsed.error)):
 		_done()
@@ -2421,7 +2468,7 @@ func _test_auth() -> void:
 	if no_id_server != null:
 		no_id_server.free()
 
-	var shipped := TmcYaml.parse_file("res://cfg.example/addons/dot_auth/auth.yml")
+	var shipped := TmcYaml.parse_file("res://cfg.example/addon/dot_auth/auth.yml")
 	var shipped_built := TmcAuth.build(shipped.value if shipped.ok else {}, work)
 	var shipped_cfg: DotAuthConfig = (shipped_built.value as DotAuthServer).config \
 		if shipped_built.ok and shipped_built.value != null else null

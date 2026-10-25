@@ -42,7 +42,7 @@ This project's most repeated bug is two copies of one list ([setup.md](setup.md#
 
 ## Addons installed and never built
 
-`dot_server_security` was linked and compiled against for every game and nothing constructed one; dot-log was not in the list while `cfg/addons/dot_log/log.yml` documented its settings. Then dot-party, dot-matchmaking and dot-locale arrived with suites and READMEs and no caller; then an audit found dot-replay and dot-friends constructed nowhere in the family. All are built here now ([operator-services.md](operator-services.md)). Building the guard found three bugs: a `server_ref` of `"../Server"` for a child of the server; `./server check` asserting nothing about the console; and, in dot-server-security, the guard latching the moderation store at attach and never finding it on this deployment.
+`dot_server_security` was linked and compiled against for every game and nothing constructed one; dot-log was not in the list while `cfg/addon/dot_log/log.yml` documented its settings. Then dot-party, dot-matchmaking and dot-locale arrived with suites and READMEs and no caller; then an audit found dot-replay and dot-friends constructed nowhere in the family. All are built here now ([operator-services.md](operator-services.md)). Building the guard found three bugs: a `server_ref` of `"../Server"` for a child of the server; `./server check` asserting nothing about the console; and, in dot-server-security, the guard latching the moderation store at attach and never finding it on this deployment.
 
 ## Installs on a real panel
 

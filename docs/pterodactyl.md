@@ -40,3 +40,7 @@ The Docker image does not need the panel: `docker-entrypoint.sh` holds a FIFO op
 ## What the egg installs
 
 `setup.sh --no-games` (a box that installs its games at runtime must build none: [installing-games.md](installing-games.md#a-server-that-installs-its-games-must-build-none-of-them)), then `--update` on reinstall, which moves the addons to `addons.lock`. "Update addons automatically" is `TMC_AUTO_UPDATE` ([releases.md](releases.md#a-game-that-needs-newer-addons)), and "Web loader version" is `TMC_WEB_LOADER`.
+
+## The config file beats the egg's variables, always
+
+A key set in any `cfg/` file wins over the matching egg variable (`TMC_PORT`, `TMC_NAME`, `TMC_MAX_PLAYERS`, ...) on every boot, not only the first, and the server logs at INFO which source won for each key. The egg's `config.files` is empty on purpose: a panel rewrites those files at every start and would overwrite the operator's edits. The entrypoint, `setup.sh` and `upgrade.sh` never write an egg value into an existing cfg file and never replace an operator-edited one; they only create a missing file. `tools/cfg_sync.sh` overwrites the shipped defaults under `cfg/game/` and `cfg/addon/` and never touches `cfg/server/`. Checked by `tools/check_cfg_precedence.sh`.

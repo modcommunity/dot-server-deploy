@@ -7,32 +7,28 @@
 # the direction a container reaches it: an image rebuild must not throw away the
 # settings and the RCON password an operator has been using.
 #
-# What it is populated FROM is cfg.example/, which is in the image because it is in the
+# Only a missing file is written (cfg/server/ and cfg/content/ are never overwritten); cfg/addon/
+# and cfg/game/ are shipped defaults and are refreshed. It is populated FROM cfg.example/, which is in the image because it is in the
 # repository. cfg/ is not in either: it is one deployment's answers, and the volume is
 # where they live.
 
 set -uo pipefail
 cd /srv/tmc || exit 1
 
-if [ ! -f cfg/server.yml ]; then
+if [ ! -f cfg/server/server.yml ] && [ ! -f cfg/server.yml ]; then
     printf '\n  First run: writing cfg/ into the mounted volume.\n'
     # --no-import because the image was imported at build time, and --no-check because
     # a first boot is what is about to happen anyway.
     ./setup.sh --godot /usr/local/bin/godot --no-import
+else
+    # A new image brings new shipped defaults (cfg/addon, cfg/game); cfg/server and cfg/content are the volume's own.
+    tools/cfg_sync.sh /srv/tmc /srv/tmc/cfg
 fi
 
-# Environment overrides, for the compose file. Deliberately only the three that a
-# container genuinely has to decide from outside -- a port mapping and a name are
-# properties of the deployment, not of the game.
-#
-# There is no TMC_RCON_PASSWORD and there will not be: an environment variable is
-# readable by every other process in the container and shows up in `docker inspect`,
-# which is exactly why DotConfig refuses secrets from the environment.
-ARGS=()
-[ -n "${TMC_PORT:-}" ]        && ARGS+=(--port "$TMC_PORT")
-[ -n "${TMC_NAME:-}" ]        && ARGS+=(--name "$TMC_NAME")
-[ -n "${TMC_MAX_PLAYERS:-}" ] && ARGS+=(--max-players "$TMC_MAX_PLAYERS")
-[ -n "${TMC_GAME:-}" ]        && ARGS+=(--game "$TMC_GAME")
+# TMC_PORT, TMC_NAME, TMC_MAX_PLAYERS and the rest are read by ./server itself, which lets a cfg
+# file that sets the same key win; passing them here as flags would beat the file on every boot.
+# There is no TMC_RCON_PASSWORD and there will not be: an environment variable is readable by
+# every other process in the container and shows up in `docker inspect`.
 
 # --- Saying goodbye on `docker stop` -------------------------------------------------
 #
@@ -48,13 +44,13 @@ ARGS=()
 # last writer is what ends the read. The server is a child here, not exec'd, so this
 # script is PID 1 and forwards the signal -- and returns the server's own status.
 FIFO=$(mktemp -u /tmp/tmc-stdin.XXXXXX)
-mkfifo "$FIFO" || exec ./server "$@" "${ARGS[@]}"
+mkfifo "$FIFO" || exec ./server "$@"
 exec 3<>"$FIFO"
 
 # The environment layer of DotServerConfig, not a `+sv_stdin_console_pipes` console line:
 # the line runs after the stdin reader has already decided, and it is too late. Exported
 # only for the child, and only on this path (see the mkfifo fallback above).
-DOT_SERVER_STDIN_CONSOLE_PIPES=1 ./server "$@" "${ARGS[@]}" <"$FIFO" 3>&- &
+DOT_SERVER_STDIN_CONSOLE_PIPES=1 ./server "$@" <"$FIFO" 3>&- &
 CHILD=$!
 
 goodbye() {

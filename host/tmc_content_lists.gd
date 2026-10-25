@@ -53,6 +53,9 @@ static func load_list(kind: String, config_dir: String, default_dir: String = DE
 			continue
 		if not (parsed.value is Dictionary):
 			return DotResult.fail(DotError.CODE_INVALID, "%s must hold a mapping at the top level." % path)
+		# A file with neither key is the rotation or pack settings that share its name, not a list.
+		if not ((parsed.value as Dictionary).has("entries") or (parsed.value as Dictionary).has("remove")):
+			continue
 		var entries := _entries_of(parsed.value as Dictionary, kind, path)
 		if not entries.ok:
 			return entries

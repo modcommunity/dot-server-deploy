@@ -9,7 +9,7 @@
 ./server
 ```
 
-**Edit** `cfg/server/` only; **never edit** `addons/`, `games/`, `dist/` or the generated `./server`. Which games and addons exist is `cfg/server/content/` ([content-lists.md](content-lists.md)).
+**Edit** `cfg/server/` only; **never edit** `addons/`, `games/`, `dist/` or the generated `./server`. Which games and addons exist is `cfg/content/` ([content-lists.md](content-lists.md)).
 
 
 `setup.sh` (and `setup.ps1` for Windows) fetches the runtime, puts the addons and games where the build can see them, publishes the packs, and writes `./server` from `tools/server.in`. **`./server` is generated: regenerate it (re-run `setup.sh`) after editing `tools/server.in`**, or an export runs the old launcher without the new checks.
@@ -55,7 +55,7 @@ They filter the `GAMES` array and nothing else; everything below walks only `GAM
 - **The addons are derived, so there is no `--skip-addons`.** Each project declares `/addons/<name>` lines in its own `.gitignore`; a filtered build links the remaining games' union plus `ADDONS_SHELL` (the addons this project's own scripts name). For the full set the derivation reproduces `ADDONS_ALL` name for name, and it runs only when a game was actually dropped.
 - **`ADDONS_SHELL` may be small because a mistake in it is loud**: this project's own scripts fail to compile on the next import.
 - **An addon the build no longer needs is unlinked, and where it pointed is recorded in `addons/.unlinked` first**, because `addon_source` finds a sibling only through its existing link; the first version without the record re-cloned 26 addons on the next unfiltered run. Only symlinks are ever removed.
-- **A filtered build narrows what the server offers**: `vote_exclude` is seeded into a newly created `cfg/addons/dot_vote/vote.yml` (named, not edited, when the file exists) and covers every content directory sharing the dropped `content_id`.
+- **A filtered build narrows what the server offers**: `vote_exclude` is seeded into a newly created `cfg/addon/dot_vote/vote.yml` (named, not edited, when the file exists) and covers every content directory sharing the dropped `content_id`.
 
 ## Addons only this project names
 

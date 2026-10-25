@@ -20,7 +20,7 @@ const CHECKS := 47
 ## Every game repository, beside this project or in games/: the repositories of cfg/content/games.yml (shipped content-lists/games.yml).
 
 ## The stock per-game map packs a server ships with.
-const STOCK_CONTENT := "res://cfg.example/content.yml"
+const STOCK_CONTENT := "res://cfg.example/server/content/overrides.yml"
 
 ## Games whose maps are NOT fetched by the shell before a solo game starts, and why. Each
 ## one is a map list the shell deliberately does not copy, so the drift check skips it.
@@ -186,10 +186,10 @@ func _test_descriptor_reader() -> void:
 
 
 func _test_map_list() -> void:
-	_section("client/solo.json carries every stock map list from cfg.example/content.yml")
+	_section("client/solo.json carries every stock map list from cfg.example/server/content/overrides.yml")
 
 	var stock := TmcYaml.parse_file(STOCK_CONTENT)
-	if not _check(stock.ok, "cfg.example/content.yml parses", str(stock.error) if not stock.ok else ""):
+	if not _check(stock.ok, "cfg.example/server/content/overrides.yml parses", str(stock.error) if not stock.ok else ""):
 		_done()
 		return
 
@@ -214,7 +214,7 @@ func _test_map_list() -> void:
 			drift.append("%s: solo.json %s, cfg.example %s" % [repo, have, want])
 
 	_check(compared >= 4, "the stock list names map packs to compare", "compared %d" % compared)
-	_check(drift.is_empty(), "solo.json and cfg.example/content.yml agree", "\n".join(drift))
+	_check(drift.is_empty(), "solo.json and cfg.example/server/content/overrides.yml agree", "\n".join(drift))
 
 	# And nothing in solo.json names a game this project does not publish.
 	var known := _games()

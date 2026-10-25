@@ -384,7 +384,8 @@ cfg_get() {
 # already true, so a re-run changes nothing unless somebody types something.
 # net_* lives in server.yml; a box that still has a net.yml keeps writing there, because the
 # server reads net.yml after server.yml and a new value in server.yml would lose to the old one.
-net_cfg_file() { [ -f cfg/net.yml ] && echo cfg/net.yml || echo cfg/server.yml; }
+server_yml() { if [ ! -f cfg/server/server.yml ] && [ -f cfg/server.yml ]; then echo cfg/server.yml; else echo cfg/server/server.yml; fi; }
+net_cfg_file() { [ -f cfg/net.yml ] && echo cfg/net.yml || server_yml; }
 
 cfg_or() {
     local v
@@ -401,7 +402,7 @@ cfg_set() {
 
     # A key the file has never heard of is APPENDED, not refused. cfg/ is written
     # once and then belongs to the operator, so a server set up a year ago has the
-    # keys of a year ago -- and this box's cfg/server.yml really is missing
+    # keys of a year ago -- and this box's cfg/server/server.yml really is missing
     # sv_tickrate, which step 5 reports and nobody has acted on. Refusing there
     # means the installer asked a question, was answered, and then quietly did
     # nothing with it, which is worse than either doing it or not asking.
@@ -549,7 +550,7 @@ if [ "$DO_FULL" -eq 1 ]; then
     esac
 
     # --- what the server is ---
-    FULL_NAME="$(ask       "Server name" "$(cfg_or cfg/server.yml sv_name 'TMC Test Server')")"
+    FULL_NAME="$(ask       "Server name" "$(cfg_or "$(server_yml)" sv_name 'TMC Test Server')")"
 
     # The games are published out of games/ in step 3, so on a first run this directory
     # may hold nothing at all. Offering what is here is therefore a hint rather
@@ -563,9 +564,9 @@ if [ "$DO_FULL" -eq 1 ]; then
     done
     [ -n "$installed_games" ] && printf '    %sgames here now:%s%s\n' "$DIM" "$OFF" "$installed_games" >&2
 
-    FULL_GAME="$(ask       "Game to boot" "$(cfg_or cfg/server.yml sv_game arena)")"
-    FULL_MAXPLAYERS="$(ask "Player slots" "$(cfg_or cfg/server.yml sv_maxplayers 64)")"
-    FULL_TICKRATE="$(ask   "Tickrate" "$(cfg_or cfg/server.yml sv_tickrate 60)")"
+    FULL_GAME="$(ask       "Game to boot" "$(cfg_or "$(server_yml)" sv_game arena)")"
+    FULL_MAXPLAYERS="$(ask "Player slots" "$(cfg_or "$(server_yml)" sv_maxplayers 64)")"
+    FULL_TICKRATE="$(ask   "Tickrate" "$(cfg_or "$(server_yml)" sv_tickrate 60)")"
     FULL_PORT="$(ask       "Port the server listens on" "$(cfg_or "$(net_cfg_file)" net_port 6064)")"
 
     case "$FULL_MAXPLAYERS" in ''|*[!0-9]*) die "player slots must be a number: $FULL_MAXPLAYERS" 2 ;; esac
@@ -700,7 +701,7 @@ if [ "$DO_FULL" -eq 1 ]; then
     # Printed in full and confirmed once. This is the last moment at which nothing
     # has happened, and it is the only screen in the install that matters.
     plan "set up the project: runtime, addons, games, cfg/, ./server"
-    plan "cfg/server.yml: $FULL_NAME, game $FULL_GAME, $FULL_MAXPLAYERS slots, $FULL_TICKRATE tick"
+    plan "$(server_yml): $FULL_NAME, game $FULL_GAME, $FULL_MAXPLAYERS slots, $FULL_TICKRATE tick"
     if [ "$FULL_NGINX" -eq 1 ]; then
         plan "$(net_cfg_file): port $FULL_PORT, bound to 127.0.0.1 (nginx is the way in)"
         if find_nginx >/dev/null 2>&1; then
@@ -2143,11 +2144,11 @@ fi
 # running server. This copies what is missing and touches nothing that exists.
 
 step "configuration"
-mkdir -p cfg cfg/content content/global data
+mkdir -p cfg cfg/content cfg/server content/global data
 
 [ -d cfg.example ] || die "cfg.example/ is missing; this is not a complete checkout" 1
 
-if [ -f cfg/server.yml ]; then
+if [ -f cfg/server/server.yml ] || [ -f cfg/server.yml ]; then
     NEW_CONFIG=0
 else
     NEW_CONFIG=1
@@ -2159,37 +2160,45 @@ umask 077
 
 # `cat >` rather than `cp`, deliberately: cp copies the template's own mode bits and
 # would publish a 644 rcon.yml. A redirect creates through the umask above.
+# cfg/addon/ and cfg/game/ are shipped defaults: an update overwrites them. Everything else
+# (cfg/server/, cfg/content/) is the operator's and is only ever created when missing.
+tools/cfg_sync.sh "$ROOT" "$ROOT/cfg"
+
 while IFS= read -r template; do
     rel="${template#cfg.example/}"
     target="cfg/$rel"
+    case "$rel" in addon/*|game/*) continue ;; esac
     [ -f "$target" ] && continue
-    # A server set up before the files moved under cfg/addons/ keeps its edits in the flat
-    # file, which is still read (DotCfgLegacy); a fresh template beside it would win whole
-    # and hide them. Same for packs.yml and game_rotation.yml, which were addons.yml and games.yml.
+    # A server set up before the move keeps its edits in the older files, which are still read
+    # (DotCfgLegacy); a fresh template beside one would win whole and hide them.
+    base="$(basename "$rel")"
     case "$rel" in
-        addons/*/*.yml) [ -f "cfg/$(basename "$rel")" ] && continue ;;
-        packs.yml) [ -f cfg/addons.yml ] && continue ;;
-        game_rotation.yml) [ -f cfg/games.yml ] && continue ;;
+        server/server.yml) [ -f cfg/server.yml ] && continue ;;
+        content/addons.yml) [ -f cfg/addons.yml ] && continue ;;
+        content/games.yml) [ -f cfg/games.yml ] && continue ;;
+        server/content/overrides.yml) [ -f cfg/content.yml ] && continue ;;
+        server/addon/*/*.yml)
+            addon="$(basename "$(dirname "$rel")")"
+            { [ -f "cfg/$base" ] || [ -f "cfg/addons/$addon/$base" ] || [ -f "cfg/server/addons/$addon/$base" ]; } && continue ;;
     esac
     mkdir -p "$(dirname "$target")"
 
-    if [ "$rel" = "addons/dot_console/rcon.yml" ]; then
+    if [ "$rel" = "server/addon/dot_console/rcon.yml" ]; then
         RCON_PASSWORD="$(head -c 24 /dev/urandom | base64 | tr -d '/+=' | head -c 24)"
-        # The password is written into a file that is never tracked. The template holds
-        # an empty one (listener off), so a checkout has nothing to leak and a
-        # half-finished run leaves no password anybody else also has.
+        # The password goes into a file that is never tracked and never overwritten by an update.
         sed "s|^rcon_password: \"\"|rcon_password: \"$RCON_PASSWORD\"|" "$template" > "$target"
         NEW_RCON=1
     else
         cat "$template" > "$target"
-        [ "$rel" = "addons/dot_vote/vote.yml" ] && NEW_VOTE=1
+        [ "$rel" = "server/addon/dot_vote/vote.yml" ] && NEW_VOTE=1
     fi
 
     printf '    %s+%s    %s\n' "$GRN" "$OFF" "$target"
 done < <(find cfg.example -type f \( -name '*.yml' -o -name '*.md' \) | sort)
+[ -d cfg/addons ] && printf '    %s!%s    cfg/addons/ is the old layout; run ./server cfg-migrate (edits belong in cfg/server/addon/)\n' "$YLW" "$OFF"
 
 # The vote file an exclusion goes into: the flat one while an older box still has it.
-VOTE_YML=cfg/addons/dot_vote/vote.yml
+VOTE_YML=cfg/server/addon/dot_vote/vote.yml
 [ -f cfg/vote.yml ] && VOTE_YML=cfg/vote.yml
 
 # [b]A game this build did not publish must not be OFFERED, and that is not the same
@@ -2337,6 +2346,7 @@ umask "$umask_old"
 # not asking to be reminded of it every run.
 for template in $(find cfg.example -name '*.yml' | sort); do
     target="cfg/${template#cfg.example/}"
+    case "$target" in cfg/addon/*|cfg/game/*) continue ;; esac
     [ -f "$target" ] || target="cfg/$(basename "$template")"
     [ -f "$target" ] || continue
     added=""
@@ -2416,10 +2426,10 @@ if [ "$DO_FULL" -eq 1 ]; then
         fi
     }
 
-    set_and_say cfg/server.yml sv_name       "\"$FULL_NAME\""    "$FULL_NAME"
-    set_and_say cfg/server.yml sv_game       "\"$FULL_GAME\""    "$FULL_GAME"
-    set_and_say cfg/server.yml sv_maxplayers "$FULL_MAXPLAYERS"  "$FULL_MAXPLAYERS"
-    set_and_say cfg/server.yml sv_tickrate   "$FULL_TICKRATE"    "$FULL_TICKRATE"
+    set_and_say "$(server_yml)" sv_name       "\"$FULL_NAME\""    "$FULL_NAME"
+    set_and_say "$(server_yml)" sv_game       "\"$FULL_GAME\""    "$FULL_GAME"
+    set_and_say "$(server_yml)" sv_maxplayers "$FULL_MAXPLAYERS"  "$FULL_MAXPLAYERS"
+    set_and_say "$(server_yml)" sv_tickrate   "$FULL_TICKRATE"    "$FULL_TICKRATE"
     set_and_say "$(net_cfg_file)" net_port      "$FULL_PORT"        "$FULL_PORT"
 
     # Loopback when nginx is in front, and this is the line that makes the proxy a
@@ -2445,7 +2455,7 @@ if [ "$DO_FULL" -eq 1 ]; then
         done
         warn "no content/$FULL_GAME/game.yml, so the server will fall back to the default game.
        This build has:$have
-       Fix it with: sed -i 's/^sv_game:.*/sv_game: \"<one of those>\"/' cfg/server.yml"
+       Fix it with: sed -i 's/^sv_game:.*/sv_game: \"<one of those>\"/' $(server_yml)"
     fi
 fi
 
@@ -2694,7 +2704,7 @@ fi
 # --- Done ------------------------------------------------------------------
 
 if [ "${NEW_RCON:-0}" -eq 1 ]; then
-    printf '\n%s  RCON password (printed once, it is in cfg/addons/dot_console/rcon.yml):%s\n' "$BLD" "$OFF"
+    printf '\n%s  RCON password (printed once, it is in cfg/server/addon/dot_console/rcon.yml):%s\n' "$BLD" "$OFF"
     printf '      %s\n' "$RCON_PASSWORD"
 fi
 

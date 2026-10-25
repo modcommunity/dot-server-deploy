@@ -97,7 +97,7 @@ static func dirs_in(raw: String) -> PackedStringArray:
 	return out
 
 
-## A map entry of `cfg/content.yml`, qualified with [param owner] when it is bare.
+## A map entry of `cfg/server/content/overrides.yml`, qualified with [param owner] when it is bare.
 ##
 ## [b]The one place a bare map name becomes an id.[/b] `install-games` pins versions under
 ## the id this returns and the host looks them up under the same one; two spellings of

@@ -36,6 +36,11 @@ const FILES := [
 	"replay.yml", "admin_menu.yml", "loading.yml",
 ]
 
+## The operator's base directory under `cfg/`: `server.yml` and any other flat server file. Never touched by an update.
+const SERVER_DIR := "server"
+## Files in it that another loader reads.
+const SERVER_DIR_OWNED := ["content.yml"]
+
 ## Operator-facing name -> boot config property.
 ##
 ## [b]These are the ones the console cannot reach.[/b] Two vocabularies is a cost and it is
@@ -435,9 +440,9 @@ static func load_dir(directory: String) -> DotResult:
 				return layered
 			continue
 
-		var path := "%s/%s" % [base, name]
+		var path := config._flat_path(name, base)
 
-		if not FileAccess.file_exists(path):
+		if path == "":
 			config.files_missing.append(name)
 			continue
 
@@ -455,13 +460,17 @@ static func load_dir(directory: String) -> DotResult:
 
 		config.files_read.append(name)
 		if name == "net.yml":
-			config._warn_legacy_file(path, "cfg/server.yml (the same net_* keys)")
+			config._warn_legacy_file(path, "cfg/server/server.yml (the same net_* keys)")
 		if name == "server.yml":
 			config._warn_legacy_keys(path, tree as Dictionary)
 		var applied := config._apply(name, tree as Dictionary)
 
 		if not applied.ok:
 			return applied
+
+	var extra := config._load_server_extras(base)
+	if not extra.ok:
+		return extra
 
 	config._layer_vote_overrides()
 	config._layer_party_overrides()
@@ -473,6 +482,39 @@ static func load_dir(directory: String) -> DotResult:
 		return valid.wrap("The configuration in %s is not usable" % base)
 
 	return DotResult.success(config)
+
+
+## `server.yml` lives in `cfg/server/` now; the flat `cfg/server.yml` is read until DotCfgLegacy's cutoff, and the new one wins whole.
+func _flat_path(name: String, base: String) -> String:
+	if name == "server.yml":
+		return DotCfgLegacy.find("%s/%s" % [base, name], "%s/%s/%s" % [base, SERVER_DIR, name])
+	var path := "%s/%s" % [base, name]
+	return path if FileAccess.file_exists(path) else ""
+
+
+## Every other `cfg/server/*.yml` the loaders below do not own: more flat server keys, applied after `net.yml` in name order.
+func _load_server_extras(base: String) -> DotResult:
+	var dir := DirAccess.open("%s/%s" % [base, SERVER_DIR])
+	if dir == null:
+		return DotResult.success(null)
+	var names := Array(dir.get_files())
+	names.sort()
+	for file: String in names:
+		if not file.ends_with(".yml") or file in FILES or file in SERVER_DIR_OWNED:
+			continue
+		var path := "%s/%s/%s" % [base, SERVER_DIR, file]
+		var parsed := TmcYaml.parse_file(path)
+		if not parsed.ok:
+			return parsed.wrap("Could not read %s" % path)
+		if parsed.value == null:
+			continue
+		if not (parsed.value is Dictionary):
+			return DotResult.fail(DotError.CODE_PARSE, "%s must contain a mapping." % path)
+		files_read.append("%s/%s" % [SERVER_DIR, file])
+		var applied := _apply("server.yml", parsed.value as Dictionary)
+		if not applied.ok:
+			return applied
+	return DotResult.success(null)
 
 
 ## One WARN per file that moved but is merged, not replaced, so DotCfgLegacy.find (which picks one) does not fit.

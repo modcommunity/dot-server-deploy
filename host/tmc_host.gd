@@ -632,7 +632,7 @@ func _apply_overrides(args: PackedStringArray) -> void:
 			})
 
 
-## The owner's per-game settings from `cfg/content.yml` -- cvars, metadata, player
+## The owner's per-game settings from `cfg/server/content/overrides.yml` -- cvars, metadata, player
 ## counts, maps -- laid over each game's own `game.yml` before anything reads a
 ## descriptor. Here rather than in TmcContent.scan because the scan knows a content
 ## directory and nothing about cfg/ or data/; see TmcGameConfig.
@@ -875,7 +875,7 @@ func _boot() -> bool:
 	var rotation_read := TmcGameRotation.load_file(DotCfgLegacy.find(
 		"%s/%s" % [_config_dir, TmcGameRotation.LEGACY_FILE], "%s/%s" % [_config_dir, TmcGameRotation.FILE]))
 	if not rotation_read.ok:
-		DotLog.error(CHANNEL, "game_rotation.yml could not be read; every installed game plays", {
+		DotLog.error(CHANNEL, "cfg/content/games.yml could not be read; every installed game plays", {
 			"why": str(rotation_read.error),
 		})
 	var games_rotation: TmcGameRotation = rotation_read.value if rotation_read.ok else null

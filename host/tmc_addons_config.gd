@@ -1,7 +1,7 @@
 class_name TmcAddonsConfig
 extends RefCounted
 
-## The extra packs a server OWNER adds to a game, from `cfg/packs.yml`.
+## The extra packs a server OWNER adds to a game, from `cfg/content/addons.yml`.
 ##
 ## [codeblock]
 ## defaults:                            # every game on this server
@@ -15,7 +15,7 @@ extends RefCounted
 ## [b]A pack is delivered as one more dependency of the game, for this server.[/b] The
 ## server mounts it before the game loads and every client downloads and mounts it before
 ## the game, in the one content sync it already gets (`content_extra`). Nothing about the
-## game's identity moves: `content.yml` still refuses `dependencies:`, because a
+## game's identity moves: `overrides.yml` still refuses `dependencies:`, because a
 ## dependency list there would be the owner rewriting which game this is. Here the owner
 ## ADDS to what the author listed, after it, and a pack the game already lists is not
 ## listed twice.
@@ -35,8 +35,9 @@ extends RefCounted
 const CHANNEL := "tmc.content"
 
 ## The owner's file, under the config directory.
-const FILE := "packs.yml"
-## The name before the cfg/ move; read through DotCfgLegacy until its cutoff.
+## Shares its file with the download list, which reads `entries:`; this reads `defaults:` and `games:`.
+const FILE := "content/addons.yml"
+## Before the cfg/ move; read through DotCfgLegacy until its cutoff.
 const LEGACY_FILE := "addons.yml"
 
 ## The installer's answers, under the data directory: `{"packs": {"<owner>/<pack>": "<version>"}}`.
@@ -57,7 +58,7 @@ var resolved: Dictionary = {}
 var warnings: PackedStringArray = PackedStringArray()
 
 
-## Reads `cfg/packs.yml` and the installer's cache. A missing file is no extra packs.
+## Reads `cfg/content/addons.yml` and the installer's cache. A missing file is no extra packs.
 static func load_from(config_dir: String, data_dir: String) -> DotResult:
 	var out := TmcAddonsConfig.new()
 	var dir := config_dir.rstrip("/")
@@ -85,10 +86,10 @@ static func load_from(config_dir: String, data_dir: String) -> DotResult:
 	return DotResult.success(out)
 
 
-## Takes a parsed `packs.yml` apart, refusing what it would otherwise have to guess at.
+## Takes a parsed `content/addons.yml` apart, refusing what it would otherwise have to guess at.
 func read(tree: Dictionary) -> DotResult:
 	for key: String in tree:
-		if not key in ["defaults", "games"]:
+		if not key in ["defaults", "games", "entries", "merge", "remove"]:
 			return DotResult.fail(
 				DotError.CODE_INVALID,
 				"Unknown top-level key '%s'." % key,

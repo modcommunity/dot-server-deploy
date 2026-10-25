@@ -1,7 +1,7 @@
 class_name TmcGameConfig
 extends RefCounted
 
-## What a server OWNER says about each game, from `cfg/game/<game>/server.yml` and the older `cfg/content.yml`, laid over the game's
+## What a server OWNER says about each game, from `cfg/game/<game>/server.yml` and the older `cfg/server/content/overrides.yml`, laid over the game's
 ## own `game.yml`.
 ##
 ## [codeblock]
@@ -65,7 +65,9 @@ extends RefCounted
 const CHANNEL := "tmc.content"
 
 ## The owner's file, under the config directory.
-const FILE := "content.yml"
+const FILE := "server/content/overrides.yml"
+## Before the cfg/ move; read through DotCfgLegacy until its cutoff.
+const LEGACY_FILE := "content.yml"
 
 ## A game's own file, `cfg/game/<game>/server.yml` (the successor of its `games:` entry).
 const GAME_FILE := "server.yml"
@@ -121,13 +123,14 @@ func _init() -> void:
 	defaults = _read_section("defaults", {}).value
 
 
-## Reads `cfg/content.yml` and the installer's cache. A missing file is no overrides, not
+## Reads `cfg/server/content/overrides.yml` and the installer's cache. A missing file is no overrides, not
 ## an error: a server that takes every game as its author shipped it needs nothing here.
 static func load_from(config_dir: String, data_dir: String) -> DotResult:
 	var out := TmcGameConfig.new()
-	var path := "%s/%s" % [config_dir.rstrip("/"), FILE]
+	var dir := config_dir.rstrip("/")
+	var path := DotCfgLegacy.find("%s/%s" % [dir, LEGACY_FILE], "%s/%s" % [dir, FILE])
 
-	if FileAccess.file_exists(path):
+	if path != "" and FileAccess.file_exists(path):
 		var parsed := TmcYaml.parse_file(path)
 
 		if not parsed.ok:
@@ -157,64 +160,76 @@ static func load_from(config_dir: String, data_dir: String) -> DotResult:
 	return DotResult.success(out)
 
 
-## Reads `cfg/game/<game>/server.yml` for every game directory, laid over what `content.yml` said
+## Reads `cfg/game/<game>/server.yml` (the game's shipped tier) then `cfg/server/game/<game>/server.yml`
+## (the operator's, never touched by an update) for every game directory, laid over what `overrides.yml` said
 ## for that game (key by key: `cvars` and `metadata` merge, the rest replace). The same keys as a
 ## `games:` entry, plus `sv_name` and `sv_maxplayers` for `name` and `max_players`, so the file reads like
-## the generic `server.yml`. `defaults:` has no per-game home and stays in `content.yml`.
+## the generic `server.yml`. `defaults:` has no per-game home and stays in `overrides.yml`.
 func read_game_files(config_dir: String) -> DotResult:
-	var root := "%s/game" % config_dir.rstrip("/")
-	var dir := DirAccess.open(root)
+	var base := config_dir.rstrip("/")
+	var names := {}
 
-	if dir == null:
-		return DotResult.success(null)
+	for root in ["%s/game" % base, "%s/server/game" % base]:
+		var dir := DirAccess.open(root)
 
-	var names := Array(dir.get_directories())
-	names.sort()
+		if dir != null:
+			for n in dir.get_directories():
+				names[n] = true
 
-	for game: String in names:
-		var path := "%s/%s/%s" % [root, game, GAME_FILE]
+	var sorted := names.keys()
+	sorted.sort()
 
-		if not FileAccess.file_exists(path):
-			continue
+	for game: String in sorted:
+		for root in ["%s/game" % base, "%s/server/game" % base]:
+			var done := _read_game_file("%s/%s/%s" % [root, game, GAME_FILE], game)
 
-		var parsed := TmcYaml.parse_file(path)
-
-		if not parsed.ok:
-			return parsed.wrap("Could not read %s" % path)
-
-		if not (parsed.value is Dictionary):
-			return DotResult.fail(DotError.CODE_PARSE, "%s must contain a mapping." % path)
-
-		var raw := (parsed.value as Dictionary).duplicate()
-
-		for alias in GAME_ALIASES:
-			if raw.has(alias):
-				raw[GAME_ALIASES[alias]] = raw[alias]
-				raw.erase(alias)
-
-		var section := _read_section(path, raw)
-
-		if not section.ok:
-			return section
-
-		var merged: Dictionary = (games.get(game, {}) as Dictionary).duplicate(true)
-
-		if merged.is_empty():
-			games[game] = section.value
-			continue
-
-		for key: String in raw:
-			if key in ["cvars", "metadata"]:
-				(merged[key] as Dictionary).merge(section.value[key], true)
-			else:
-				merged[key] = section.value[key]
-
-		games[game] = merged
+			if not done.ok:
+				return done
 
 	return DotResult.success(null)
 
 
-## Takes a parsed `content.yml` apart. Refuses anything it would otherwise have to guess
+func _read_game_file(path: String, game: String) -> DotResult:
+	if not FileAccess.file_exists(path):
+		return DotResult.success(null)
+
+	var parsed := TmcYaml.parse_file(path)
+
+	if not parsed.ok:
+		return parsed.wrap("Could not read %s" % path)
+
+	if not (parsed.value is Dictionary):
+		return DotResult.fail(DotError.CODE_PARSE, "%s must contain a mapping." % path)
+
+	var raw := (parsed.value as Dictionary).duplicate()
+
+	for alias in GAME_ALIASES:
+		if raw.has(alias):
+			raw[GAME_ALIASES[alias]] = raw[alias]
+			raw.erase(alias)
+
+	var section := _read_section(path, raw)
+
+	if not section.ok:
+		return section
+
+	var merged: Dictionary = (games.get(game, {}) as Dictionary).duplicate(true)
+
+	if merged.is_empty():
+		games[game] = section.value
+		return DotResult.success(null)
+
+	for key: String in raw:
+		if key in ["cvars", "metadata"]:
+			(merged[key] as Dictionary).merge(section.value[key], true)
+		else:
+			merged[key] = section.value[key]
+
+	games[game] = merged
+	return DotResult.success(null)
+
+
+## Takes a parsed `overrides.yml` apart. Refuses anything it would otherwise have to guess
 ## about, naming the key: an override that is silently ignored is the bug this replaces.
 func read(tree: Dictionary) -> DotResult:
 	for key: String in tree:
