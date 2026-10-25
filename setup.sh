@@ -883,6 +883,8 @@ repo_url() {
     if [ "$GIT_BASE" = "$GIT_BASE_DEFAULT" ]; then
         case "$repo" in
             # The addons, and this project. Falls through to $GIT_BASE below.
+            # An addon that is the author's own, not the organisation's.
+            dot-radio) printf '%s/%s.git\n' "$GAMES_GIT_BASE" "$repo"; return ;;
             dot-*) ;;
             # Renamed on GitHub while the directory (and the pack id) kept the old
             # name; GitHub redirects the old URL, but a redirect is not a contract.
