@@ -1118,7 +1118,8 @@ step "games"
 GAMES=()
 content_legacy_notice "$ROOT/cfg" || true
 mapfile -t GAMES < <(content_game_entries "$ROOT/cfg") || die "cfg/content/games.yml: could not be read" 5
-[ ${#GAMES[@]} -gt 0 ] || die "cfg/content/games.yml names no games" 5
+# --no-games boxes install their games from packs (`pack:` entries), which are not source checkouts and so are not in GAMES.
+[ "$NO_GAMES" -eq 1 ] || [ ${#GAMES[@]} -gt 0 ] || die "cfg/content/games.yml names no games" 5
 
 # --- Or none of them -------------------------------------------------------
 #
