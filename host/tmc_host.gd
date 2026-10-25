@@ -84,6 +84,9 @@ var parties: TmcParty = null
 ## [TmcReplay].
 var replay: TmcReplay = null
 
+## dot-radio, when the addon is linked and `radio.yml` turns it on; null otherwise. See [TmcRadio].
+var radio: TmcRadio = null
+
 var _config_dir := "cfg"
 var _content_dir := "content"
 
@@ -903,6 +906,8 @@ func _boot() -> bool:
 	# the registry for each game's dot-moderation itself, so it does not have to be built
 	# before the module that registers one.
 	replay = TmcReplay.install(self, server, config, _data_dir)
+
+	radio = TmcRadio.install(self, server, config, _absolute(_data_dir))
 
 	# After the first game, so the menu's first look at the console sees the game's own
 	# commands -- though it looks again on every page, which is what keeps it right across

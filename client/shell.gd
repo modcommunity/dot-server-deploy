@@ -125,6 +125,9 @@ var admin_menu: TmcAdminMenuPanel = null
 ## The server owner's screen over a game or map change. See [TmcLoadingScreen].
 var loading: TmcLoadingScreen = null
 
+## dot-radio's client, made when a server that runs a station says where it is. See [TmcRadioLink].
+var radio_link: TmcRadioLink = null
+
 ## Whether this connection has put a game on screen yet.
 var _has_spawned := false
 
@@ -213,6 +216,10 @@ func _ready() -> void:
 	loading.in_game_fn = func() -> bool:
 		return _joining or (_has_spawned and _menu != null and not _menu.visible)
 	add_child(loading)
+
+	radio_link = TmcRadioLink.new()
+	radio_link.name = "RadioLink"
+	add_child(radio_link)
 
 	# Claims the covering job for every DotLoadGate a game makes under the game root, so
 	# only the loading screen shows, never the gate's own cover as well.
@@ -2592,6 +2599,8 @@ func _on_notice(notice: DotNotice) -> void:
 				admin_menu.show_page(page if page is Dictionary else {})
 		TmcLoadingScreen.TOPIC:
 			loading.adopt(notice.data)
+		TmcRadioLink.TOPIC:
+			radio_link.adopt(notice.data)
 		_:
 			notices.show_notice(notice)
 
@@ -2605,6 +2614,8 @@ func _leave_game_ui() -> void:
 		admin_menu.close()
 	if loading != null:
 		loading.reset()
+	if radio_link != null:
+		radio_link.reset()
 
 
 ## Notes when the link entered a phase, for [method _log_join].

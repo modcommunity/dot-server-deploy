@@ -33,7 +33,7 @@ const CHANNEL := "tmc.config"
 const FILES := [
 	"server.yml", "net.yml", "log.yml", "rcon.yml", "auth.yml", "groups.yml",
 	"permissions.yml", "vote.yml", "security.yml", "party.yml", "matchmaking.yml",
-	"replay.yml", "admin_menu.yml", "loading.yml",
+	"replay.yml", "admin_menu.yml", "loading.yml", "radio.yml",
 ]
 
 ## The operator's base directory under `cfg/`: `server.yml` and any other flat server file. Never touched by an update.
@@ -175,6 +175,7 @@ const LAYERED := {
 	"auth.yml": "dot-auth",
 	"vote.yml": "dot-vote",
 	"loading.yml": "dot-core",
+	"radio.yml": "dot-radio",
 }
 
 ## Key prefix in `server.yml` -> the addon folder that owns it now (`cfg/addons/<addon>/`). Still
@@ -338,6 +339,10 @@ var admin_menu: Dictionary = {}
 
 ## `loading.yml`, as parsed. Handed to [TmcLoading], for the same reason.
 var loading: Dictionary = {}
+
+## `radio.yml` (dot-radio, optional): the `radio_*` keys, validated by [method _apply_radio]. Off by default; handed to [TmcRadio].
+var radio: Dictionary = {}
+var radio_enabled: bool = false
 
 ## Game ids `vote.yml` says are never on a ballot.
 ##
@@ -733,6 +738,8 @@ func _apply(file: String, tree: Dictionary) -> DotResult:
 		"loading.yml":
 			loading = tree
 			return DotResult.success(null)
+		"radio.yml":
+			return _apply_radio(tree)
 		"vote.yml":
 			return _apply_vote(tree)
 		_:
@@ -805,6 +812,28 @@ func _apply_party(tree: Dictionary) -> DotResult:
 		# the feature failing while looking configured.
 		return valid.wrap("party.yml")
 
+	return DotResult.success(null)
+
+
+## Every key `radio.yml` accepts, with its type; anything else is reported as unknown.
+const RADIO_KEYS := {
+	"radio_enabled": TYPE_BOOL, "radio_port": TYPE_INT, "radio_bind": TYPE_STRING,
+	"radio_dir": TYPE_STRING, "radio_token_file": TYPE_STRING, "radio_max_track_mb": TYPE_FLOAT,
+	"radio_base": TYPE_STRING, "radio_upload_timeout_sec": TYPE_FLOAT, "radio_autostart": TYPE_BOOL,
+	"radio_public_url": TYPE_STRING,
+}
+
+
+## `radio.yml`: kept as a tree for [TmcRadio]; the addon may be absent, so nothing here names its classes.
+func _apply_radio(tree: Dictionary) -> DotResult:
+	radio = {}
+	for key in tree.keys():
+		var name := String(key)
+		if not RADIO_KEYS.has(name):
+			unknown.append("radio.yml: %s" % name)
+			continue
+		radio[name] = tree[key]
+	radio_enabled = _truthy(radio.get("radio_enabled", false))
 	return DotResult.success(null)
 
 
@@ -1416,6 +1445,9 @@ func describe_lines() -> PackedStringArray:
 		"off" if not mm_enabled else "on, %d playlist(s), region %s, %d server(s)" % [
 			mm_playlists.size(), mm_region, mm_servers.size()
 		]))
+	out.append("radio    : %s" % (
+		"off" if not radio_enabled else "on, port %d, %s" % [
+			int(radio.get("radio_port", 8791)), str(radio.get("radio_bind", "127.0.0.1"))]))
 	out.append("replay   : %s" % (
 		"off" if not replay_enabled else "ring %ss (%d MiB max)%s, clips %s, keep %d files / %d MiB each" % [
 			replay.ring_seconds, replay.ring_max_mib,

@@ -17,7 +17,7 @@ const CFG := "res://examples/fixtures"
 ## A loaded game with rounds and no match the game vote can find. See the section that uses it.
 const RoundsWithoutMatch := preload("res://examples/fixtures/rounds_without_match.gd")
 
-const CHECKS := 426
+const CHECKS := 436
 
 var _passed := 0
 var _failed := 0
@@ -60,6 +60,7 @@ func _run() -> void:
 	_test_party()
 	await _test_replay()
 	await _test_friends()
+	_test_radio()
 
 	print("")
 	_check(
@@ -763,6 +764,48 @@ func _test_replay() -> void:
 ## dot-friends was linked here and built nowhere. What this asserts: a site with no friends
 ## routes turns the client off, once, and a presence says where the player is as the
 ## connection comes and goes -- read back from the site's rules, not from what was posted.
+func _test_radio() -> void:
+	_section("dot-radio, optional")
+	var root := "user://selftest_radio_cfg"
+	DotPaths.remove_tree(root)
+	DotCfgLegacy.reset()
+	var template := TmcYaml.parse_file("res://cfg.example/addon/dot_radio/radio.yml")
+	_check(template.ok and template.value is Dictionary, "the shipped radio.yml parses")
+	var shipped: Dictionary = template.value if template.ok else {}
+	var keys_known := true
+	for k in shipped:
+		keys_known = keys_known and TmcConfig.RADIO_KEYS.has(String(k))
+	_check(keys_known and shipped.get("radio_enabled", true) == false, "every shipped key is known and the radio is off")
+	_check(not TmcConfig.new().radio_enabled, "no radio.yml means no radio")
+	_put(root + "/radio.yml", "radio_enabled: true\nradio_port: 9911\nradio_token_file: t.token\nradio_typo: 1\n")
+	var cfg: TmcConfig = TmcConfig.load_dir(root).value
+	_check(cfg.radio_enabled and int(cfg.radio.get("radio_port", 0)) == 9911, "radio.yml turns it on and carries its keys")
+	_check("\n".join(cfg.unknown).contains("radio_typo"), "an unknown radio_ key is reported")
+	var present := TmcRadio.available()
+	var host := Node.new()
+	var off := TmcRadio.install(host, null, TmcConfig.new(), root)
+	_check(off == null and host.get_child_count() == 0, "disabled builds nothing")
+	var absent: TmcRadio = null if present else TmcRadio.install(host, null, cfg, root)
+	_check(present or (absent == null and host.get_child_count() == 0), "enabled without the addon is a warning, not a crash")
+	var link := TmcRadioLink.new()
+	_check(not link.adopt({}) and link.radio == null, "the shell ignores a notice with no url")
+	_check(present or not link.adopt({"url": "http://x"}), "and without the addon in the shell build builds no client")
+	var live := false
+	if present:
+		_put(root + "/t.token", "secret-token\n")
+		cfg.radio["radio_token_file"] = ProjectSettings.globalize_path(root + "/t.token")
+		cfg.radio["radio_port"] = 0
+		cfg.radio["radio_dir"] = ProjectSettings.globalize_path(root + "/lib")
+		var on := TmcRadio.install(host, null, cfg, ProjectSettings.globalize_path(root))
+		live = on != null and DotRegistry.get_service(TmcRadio.SERVICE) != null and on.api.authenticate("secret-token").ok
+		if on != null:
+			on.free()
+	_check(not present or live, "with the addon: the station starts, registers, and the token file is the admin token")
+	host.free()
+	link.free()
+	_done()
+
+
 func _test_friends() -> void:
 	_section("the friends client")
 

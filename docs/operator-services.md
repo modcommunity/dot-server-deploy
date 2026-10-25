@@ -53,3 +53,14 @@ Each of these is operator- or shell-level: a game should not have to know about 
 - **"Join my friend" prefers the party**, and falls back to a server only when this shell has been on it and knows its address: a presence that carried an address would bypass the site's `showNetInfo` gate. Anything else is refused with the site's `friends.join.deny.unsupported`.
 - **A bare 404 turns it off for the session, once**; a 404 the site explained is a refusal. The node is kept with its backend nulled, because in-flight requests resume into it.
 - The UI sits under the party line and is hidden for a guest. Rows are all the button's height (found by rendering it).
+
+## The radio (optional)
+
+`host/tmc_radio.gd` (`TmcRadio.install`, after `TmcReplay`) on the server and `client/tmc_radio_link.gd` (`TmcRadioLink`) in the shell, from `cfg/addon/dot_radio/radio.yml`. Listing `- repo: dot-radio` in `cfg/content/addons.yml` only clones the addon; `radio_enabled: true` is what builds a `DotRadioLibrary`, `DotRadioStation`, `DotRadioApi` and `DotRadioHttp`, registers the api in `DotRegistry` as `dot_radio`, and polls the HTTP side from the node's `_process`.
+
+- **The addon is reached through `ProjectSettings.get_global_class_list()`, never by name**, so the host and the shell parse in a build that does not carry dot-radio. Enabled with the addon absent is one WARN naming what to add, not a failure. Every other failure (a missing token file, a port in use) is an ERROR and the server runs without the radio.
+- **The admin token is read from `radio_token_file` only**, by the addon; there is no environment or argv path. Without a token file the radio refuses to start. `radio_bind` is loopback unless the operator says otherwise; put TLS in front before binding wider.
+- **The client is told by notice.** On `client_spawned` the server sends one `tmc.radio` notice carrying `radio_public_url` (nothing is sent when it is empty). The shell makes a `DotRadioClient` with a `DotRadioSinkGodot` and the url; the client's own input handler turns `radio_toggle` (F8) into `tune_in()`, so nothing plays before a key press and nothing starts from `_ready`. Leaving the game frees it.
+- **Needs a new shell build.** `client/shell.gd` gained the notice case, and the client needs dot-radio in the shell's addon set (`addons.lock`), which is not bumped here. A shell built before that ignores the notice and the station still works for anything that opens the admin page or `GET /now`.
+- **Not built**: `!radio`, `!song`, `!request` chat commands (`DotRadioCommands` exists but nothing hands it a console), a listener HUD, and a tab in the workbench.
+- **Rights**: the operator uploads the audio and is responsible for the right to broadcast it.

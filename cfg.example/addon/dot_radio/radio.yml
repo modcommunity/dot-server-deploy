@@ -1,0 +1,37 @@
+# The radio: one shared station. You upload MP3 or OGG tracks; every player who presses the
+# radio key (F8 by default) hears the same track, at the same moment.
+#
+# Needs the dot-radio addon: add `- repo: dot-radio` to cfg/content/addons.yml, run setup, restart.
+# Off until radio_enabled is true. You provide the tracks and are responsible for having the
+# rights to broadcast them; the addon ships no audio.
+#
+# The admin page is at http://<radio_bind>:<radio_port>/ and takes the token in radio_token_file.
+# Put TLS and a public name in front of it (nginx), and set radio_public_url to that address so
+# the game client learns where to listen. With no radio_public_url the station runs and the
+# admin page works, but players are not told where it is.
+radio_enabled: false
+
+# Where the HTTP side listens. Loopback by default; bind a public address only behind TLS.
+radio_port: 8791
+radio_bind: 127.0.0.1
+
+# What players are told to fetch from, e.g. https://example.com/radio . No trailing path needed
+# beyond what your proxy adds.
+radio_public_url: ""
+
+# A FILE holding the admin token (one line). Secrets are never read from the environment or
+# the command line. Required: the radio refuses to start without it.
+radio_token_file: cfg/radio.token
+
+# Where tracks and the schedule are kept. Empty means data/radio/.
+radio_dir: ""
+
+# Largest accepted upload in MiB, and how long a slow upload may take in seconds.
+radio_max_track_mb: 20
+radio_upload_timeout_sec: 120
+
+# Start playing when the server starts.
+radio_autostart: true
+
+# Mount every route under a prefix (e.g. /radio) instead of the root.
+radio_base: ""
