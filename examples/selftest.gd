@@ -17,7 +17,7 @@ const CFG := "res://examples/fixtures"
 ## A loaded game with rounds and no match the game vote can find. See the section that uses it.
 const RoundsWithoutMatch := preload("res://examples/fixtures/rounds_without_match.gd")
 
-const CHECKS := 425
+const CHECKS := 426
 
 var _passed := 0
 var _failed := 0
@@ -318,6 +318,7 @@ func _test_config() -> void:
 			and is_equal_approx(float(ceiling.get("far_distance", -1)), 60.0),
 		"net_interest_radius, net_far_every and net_far_distance reach the ceiling (%s)" % str(ceiling)
 	)
+	_check(bool(ceiling.get("stagger_snapshots", false)), "net_stagger_snapshots reaches the ceiling (%s)" % str(ceiling))
 	var near := config.nearest_names("net_intrest_radius")
 	_check(near.has("net_interest_radius"), "an unknown setting is offered its nearest known name (%s)" % str(near))
 	_check(config.nearest_names("zzzz_nothing").is_empty(), "and nothing when nothing is near")

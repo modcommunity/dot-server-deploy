@@ -9,3 +9,4 @@ net_mtu: 1100
 net_interest_radius: 150
 net_far_every: 4
 net_far_distance: 60
+net_stagger_snapshots: true

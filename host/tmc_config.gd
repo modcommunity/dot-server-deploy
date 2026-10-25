@@ -117,6 +117,8 @@ const NET_KEYS := {
 	"net_interest_radius": "interest_radius",
 	"net_far_every": "far_every",
 	"net_far_distance": "far_distance",
+	# Replaces the game's value (off unless written): peers spread over the ticks between snapshots.
+	"net_stagger_snapshots": "stagger_snapshots",
 }
 
 ## Operator-facing name -> [code]DotLogConfig[/code] property.
