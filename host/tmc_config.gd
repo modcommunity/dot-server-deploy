@@ -193,6 +193,11 @@ const HANDLED_ELSEWHERE := ["sv_content_dir"]
 ## The boot configuration, after every file has been applied.
 var server: DotServerConfig = DotServerConfig.new()
 
+
+func _init() -> void:
+	# TMC's scanner speaks A2S, so a server with no cfg file naming it must still answer.
+	server.a2s_enabled = true
+
 ## The operator's net settings as written in cfg (a [DotNetConfig] with its defaults
 ## for the rest). Nothing reads this directly: a game builds its own [DotNetConfig], so
 ## these numbers only matter through [method net_ceiling].
