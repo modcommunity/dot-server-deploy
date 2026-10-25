@@ -2418,6 +2418,12 @@ if [ "$DO_FULL" -eq 1 ]; then
         local file="$1" key="$2" value="$3" shown="$4" current
         current="$(cfg_get "$file" "$key" 2>/dev/null)"
         [ "$current" = "$shown" ] && return 0
+        # A panel's TMC_* variable only applies while no cfg file sets the key (tools/server.in).
+        case "$key" in
+            sv_name) _egg="${TMC_NAME:-}" ;; sv_game) _egg="${TMC_GAME:-}" ;;
+            sv_maxplayers) _egg="${TMC_MAX_PLAYERS:-}" ;; *) _egg="" ;;
+        esac
+        [ -n "$_egg" ] && [ -z "$current" ] && return 0
         if cfg_set "$file" "$key" "$value"; then
             printf '    %s~%s    %s %s -> %s\n' "$GRN" "$OFF" "$key" "${current:-unset}" "$shown"
             cfg_changed=1

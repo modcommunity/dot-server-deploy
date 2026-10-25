@@ -5,8 +5,9 @@
 # is the parser and the validator. data/from_yaml.cfg is what it became; read that
 # when a setting appears not to work.
 
-sv_name: "TMC Test Server"
-sv_maxplayers: 64
+# Left commented so a panel's TMC_NAME / TMC_MAX_PLAYERS apply: a key set in any cfg/server file beats the egg variable.
+#sv_name: "TMC Test Server"
+#sv_maxplayers: 64
 
 # The characters that make a chat line a command: `!rtv`, `/rtv`. The FIRST one is what help
 # and the game vote's ballot line tell players to type, so list yours first. maps.yml and
