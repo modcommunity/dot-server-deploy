@@ -5,6 +5,7 @@ tools/check.sh                # parse, shell syntax, every suite, then a real bo
 tools/check.sh --long         # the same, then the long suites (tools/enet_relay_all_games.sh, about 16 minutes)
 tools/check_deploy_modes.sh   # dry run, compose and egg validity for setup.sh --mode compose|pterodactyl
 tools/check_cfg_precedence.sh   # a cfg file beats the egg env var on every boot; updates overwrite only cfg/game and cfg/addon
+tools/check_channels.sh       # TMC_CHANNEL latest/stable and the host-commit trigger of lock_moved, on a local origin
 tools/check_boot_failures.sh  # two boots whose game cannot compile; ./server check must refuse both
 tools/package_check.sh        # the same in the shape an operator unpacks
 node tools/browser_check.mjs  # the export in a real Chromium against a real server

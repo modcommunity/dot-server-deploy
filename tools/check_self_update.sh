@@ -17,8 +17,9 @@ bad() { printf '  %sFAIL%s %s\n' "$RED" "$OFF" "$1"; fails=$((fails + 1)); }
 
 g() { git -c user.name=t -c user.email=t@t.invalid "$@"; }
 # self_update and clear_for_update, without the rest of the launcher.
-eval "$(sed -n '/^clear_for_update() {/,/^}/p;/^self_update() {/,/^}/p' "$SRC")"
+eval "$(sed -n '/^clear_for_update() {/,/^}/p;/^fetch_target() {/,/^}/p;/^self_update() {/,/^}/p' "$SRC")"
 warn() { :; }; note() { :; }
+CHANNEL=latest; TARGET_REF=""
 
 origin="$W/origin"; mkdir "$origin"
 g -C "$origin" init -q -b main

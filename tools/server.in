@@ -97,6 +97,7 @@ OPT_GAME="${TMC_GAME:-}"
 OPT_MAP="${TMC_MAP:-}"
 OPT_WEB_LOADER="${TMC_WEB_LOADER:-}"
 AUTO_UPDATE="${TMC_AUTO_UPDATE:-when-needed}"
+CHANNEL="${TMC_CHANNEL:-latest}"
 
 # --- What this box installs, and where from ---------------------------------
 #
@@ -320,6 +321,7 @@ usage() {
     TMC_ALLOW_WEB       +sv_allow_web         TMC_ALLOW_DESKTOP +sv_allow_desktop
     TMC_ALLOW_MOBILE    +sv_allow_mobile      (1 admits, 0 refuses; empty = the YAML)
     TMC_WEB_LOADER      --web-loader          TMC_AUTO_UPDATE   --auto-update
+    TMC_CHANNEL         --channel             (latest = the branch head, stable = newest v* release)
 
   So a TMC_PORT left in an environment file never hides an edit to the YAML: the
   file that sets net_port is used and the INFO line names it. deploy/env.example
@@ -374,6 +376,7 @@ while [ $# -gt 0 ]; do
         --map)         [ $# -ge 2 ] || die "$1 needs a value"; OPT_MAP="$2";         shift 2 ;;
         --web-loader)  [ $# -ge 2 ] || die "$1 needs a value"; OPT_WEB_LOADER="$2";  shift 2 ;;
         --auto-update) [ $# -ge 2 ] || die "$1 needs a value"; AUTO_UPDATE="$2";     shift 2 ;;
+        --channel)     [ $# -ge 2 ] || die "$1 needs a value"; CHANNEL="$2";         shift 2 ;;
         --base)    ENGINE_BASE="${2:-}"; shift 2 ;;
         --platform) [ $# -ge 2 ] || die "$1 needs a value"; NATIVE_PLATFORM="$2"; shift 2 ;;
         --build-version) [ $# -ge 2 ] || die "$1 needs a value"; BUILD_VERSION="$2"; shift 2 ;;
@@ -1546,6 +1549,25 @@ clear_for_update() {
     note "kept in git stash (git -C $dir stash list)"
 }
 
+## Fetches what the channel follows and sets TARGET_REF to it. `latest` is the branch head;
+## `stable` is the newest v* tag of the host (the lock at a tag names the addon release tags).
+## origin/$branch is fetched either way: it is what tells a deployment from a developer's own
+## commits. Fails when it cannot fetch, or when `stable` finds no tag.
+TARGET_REF=""
+fetch_target() {
+    local branch="$1" tag
+    local fetch=(git -C "$PROJECT" fetch --quiet --depth 1 origin)
+    command -v timeout >/dev/null 2>&1 && fetch=(timeout 20 "${fetch[@]}")
+    GIT_TERMINAL_PROMPT=0 "${fetch[@]}" "$branch" 2>/dev/null || return 1
+    TARGET_REF="origin/$branch"
+    [ "$CHANNEL" = "stable" ] || return 0
+    tag="$(GIT_TERMINAL_PROMPT=0 git -C "$PROJECT" ls-remote --tags --refs origin 'v*' 2>/dev/null \
+        | awk '{ sub("refs/tags/", "", $2); print $2 }' | sort -V | tail -1)"
+    [ -n "$tag" ] || return 1
+    GIT_TERMINAL_PROMPT=0 "${fetch[@]}" "+refs/tags/$tag:refs/tags/$tag" 2>/dev/null || return 1
+    TARGET_REF="refs/tags/$tag"
+}
+
 self_update() {
     command -v git >/dev/null 2>&1 \
         || { warn "TMC_AUTO_UPDATE: git is not installed here; reinstall the server to update its addons"; return 1; }
@@ -1557,9 +1579,8 @@ self_update() {
     [ -n "$branch" ] && [ "$branch" != "HEAD" ] \
         || { warn "TMC_AUTO_UPDATE: this checkout is not on a branch; not touching it"; return 1; }
 
-    note "updating this checkout (origin/$branch) and moving the addons to its lock"
-    GIT_TERMINAL_PROMPT=0 git -C "$PROJECT" fetch --quiet --depth 1 origin "$branch" \
-        || { warn "TMC_AUTO_UPDATE: could not fetch origin/$branch"; return 1; }
+    note "updating this checkout (origin/$branch, channel $CHANNEL) and moving the addons to its lock"
+    fetch_target "$branch" || { warn "TMC_AUTO_UPDATE: could not fetch origin/$branch ($CHANNEL)"; return 1; }
 
     # A depth-1 fetch cannot say whether HEAD is behind origin or has commits of its own,
     # so a shallow checkout deepens to HEAD's date first; if HEAD is still not contained,
@@ -1578,7 +1599,7 @@ self_update() {
 
     clear_for_update "$PROJECT" "this checkout" || return 1
 
-    git -C "$PROJECT" reset --quiet --hard "origin/$branch" || return 1
+    git -C "$PROJECT" reset --quiet --hard "$TARGET_REF" || return 1
     (cd "$PROJECT" && ./setup.sh --no-games --update) || { warn "TMC_AUTO_UPDATE: setup.sh --update failed"; return 1; }
     note "updated to $(git -C "$PROJECT" rev-parse --short HEAD)"
 }
@@ -1594,7 +1615,8 @@ update_and_restart() {
     return 1
 }
 
-## Whether the addon lock on origin's branch differs from this checkout's.
+## Whether what the channel follows (see fetch_target) differs from this checkout: the host's
+## own commit, the addon lock, or the shell pin.
 ##
 ## [b]An addon release is a lock bump, and a lock bump has to reach a box by a restart.[/b]
 ## Players fetch newer addons as packs when the server they join says it runs them (see
@@ -1617,20 +1639,26 @@ lock_moved() {
     # used to answer "no" for a dirty checkout, silently, on every start.
     git -C "$PROJECT" config core.fileMode false 2>/dev/null
 
-    local fetch=(git -C "$PROJECT" fetch --quiet --depth 1 origin "$branch")
-    command -v timeout >/dev/null 2>&1 && fetch=(timeout 20 "${fetch[@]}")
-    GIT_TERMINAL_PROMPT=0 "${fetch[@]}" 2>/dev/null || return 1
+    fetch_target "$branch" || return 1
 
     if [ "$(git -C "$PROJECT" rev-parse --is-shallow-repository)" != "true" ] \
             && ! git -C "$PROJECT" merge-base --is-ancestor HEAD "origin/$branch" 2>/dev/null; then
         return 1
     fi
 
+    # The host's own code moved: any new commit on the branch (latest) or a newer release
+    # (stable). A ticket-trust fix under host/ changes neither the lock nor the shell, and
+    # servers on `latest` never picked it up on restart.
+    local head target
+    head="$(git -C "$PROJECT" rev-parse HEAD 2>/dev/null)"
+    target="$(git -C "$PROJECT" rev-parse "$TARGET_REF^{commit}" 2>/dev/null)" || return 1
+    [ "$head" != "$target" ] || return 1
+
     # web/shell-build too: it is what this server reports as sv_web_build, so a new shell
     # pinned on the branch without a lock bump used to reach no box until a reinstall,
     # and its players stayed on the previous shell.
-    git -C "$PROJECT" diff --quiet HEAD "origin/$branch" -- addons.lock web/shell-build 2>/dev/null \
-        && return 1
+    git -C "$PROJECT" diff --quiet HEAD "$TARGET_REF" -- addons.lock web/shell-build 2>/dev/null \
+        && return 0
 
     # [b]Not onto a lock whose shell is not pinned yet.[/b] A lock is pushed first and the
     # web-shell workflow exports, uploads and pins its shell some minutes later. A box
@@ -1640,8 +1668,8 @@ lock_moved() {
     # (tools/shell-inputs.sh). A branch with no record predates this and is followed.
     local record lock_sum
     command -v sha256sum >/dev/null 2>&1 || return 0
-    record="$(git -C "$PROJECT" show "origin/$branch:web/shell-build.inputs" 2>/dev/null)" || return 0
-    lock_sum="$(git -C "$PROJECT" show "origin/$branch:addons.lock" 2>/dev/null | sha256sum | cut -d' ' -f1)"
+    record="$(git -C "$PROJECT" show "$TARGET_REF:web/shell-build.inputs" 2>/dev/null)" || return 0
+    lock_sum="$(git -C "$PROJECT" show "$TARGET_REF:addons.lock" 2>/dev/null | sha256sum | cut -d' ' -f1)"
     if ! printf '%s\n' "$record" | grep -qxF "lock	$lock_sum"; then
         # WARN, not a note: if the web-shell workflow is failing, this line on every
         # start is how an operator finds out that no box is taking the new lock.
@@ -1656,6 +1684,12 @@ case "$AUTO_UPDATE" in
     *) die "--auto-update / TMC_AUTO_UPDATE is when-needed, always or never, not '$AUTO_UPDATE'" ;;
 esac
 
+CHANNEL="${CHANNEL#@}"
+case "$CHANNEL" in
+    latest|stable) ;;
+    *) die "--channel / TMC_CHANNEL is latest or stable, not '$CHANNEL'" ;;
+esac
+
 if [ "$AUTO_UPDATE" = "always" ] && [ -z "${TMC_AUTO_UPDATED:-}" ] \
         && { [ "$COMMAND" = "run" ] || [ "$COMMAND" = "check" ]; }; then
     printf '\n  %supdate%s\n' "$BLD" "$OFF"
@@ -1665,7 +1699,7 @@ fi
 if [ "$AUTO_UPDATE" = "when-needed" ] && [ -z "${TMC_AUTO_UPDATED:-}" ] \
         && { [ "$COMMAND" = "run" ] || [ "$COMMAND" = "check" ]; } && lock_moved; then
     printf '\n  %supdate%s\n' "$BLD" "$OFF"
-    note "the addon lock on this checkout's branch has moved; updating so players are offered the new addons"
+    note "this checkout's $CHANNEL channel has moved (host code, addon lock or shell); updating"
     update_and_restart || warn "starting on the addons this box already has"
 fi
 
