@@ -23,7 +23,7 @@ dot-lighting	v0.1.8
 dot-loadout	v0.1.4
 dot-locale	v0.1.5
 dot-log	v0.1.5
-dot-map	v0.1.54
+dot-map	v0.1.55
 dot-match	v0.1.5
 dot-matchmaking	v0.1.6
 dot-menu	v0.1.13
@@ -42,6 +42,7 @@ dot-player-char	v0.1.11
 dot-player-class	v0.1.5
 dot-player-controller	v0.2.4
 dot-procedural-generation	v0.1.4
+dot-radio	v0.1.0
 dot-props	v0.1.8
 dot-replay	v0.1.8
 dot-server	v0.1.21
