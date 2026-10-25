@@ -30,6 +30,7 @@ mapfile -t REPOS < <(content_addon_repos "$ROOT/cfg" | sort -u)
 # pack that is not is its author's.
 url_of() {
     case "$1" in
+        dot-radio) printf 'https://github.com/zees-games/%s.git\n' "$1" ;;
         dot-*) printf 'https://github.com/modcommunity/%s.git\n' "$1" ;;
         *)     printf 'https://github.com/zees-games/%s.git\n' "$1" ;;
     esac
