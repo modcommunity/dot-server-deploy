@@ -107,6 +107,51 @@ games:
         - gamemann/bhop_supernova
         - gamemann/bhop_tesquo_v2
 
+  game-arena:
+    maps:
+      # The combat surf maps, one pack each, from github.com/zees-games/arena-surf-dm-maps.
+      # Its three built-in maps need no pack.
+      add:
+        - gamemann/surf_10x_final
+        - gamemann/surf_10x_reloaded_fixed
+        - gamemann/surf_110b_austinpowers
+        - gamemann/surf_29_12_06
+        - gamemann/surf_adverse
+        - gamemann/surf_akai_final
+        - gamemann/surf_bathroom_final
+        - gamemann/surf_buck_wild
+        - gamemann/surf_dust2_2008_final
+        - gamemann/surf_forbidden_ways_2nd
+        - gamemann/surf_forbidden_ways_reloaded
+        - gamemann/surf_fruits
+        - gamemann/surf_grave_reloaded
+        - gamemann/surf_greatriver
+        - gamemann/surf_greatriver_v4
+        - gamemann/surf_greatriver_xdre4m
+        - gamemann/surf_i_hate_campers
+        - gamemann/surf_japan_ptad
+        - gamemann/surf_legends
+        - gamemann/surf_machine2
+        - gamemann/surf_machine_remix_final
+        - gamemann/surf_mai_remix
+        - gamemann/surf_matrix_v8
+        - gamemann/surf_ny_advance
+        - gamemann/surf_ny_bigloop_2008a
+        - gamemann/surf_parrot_selector
+        - gamemann/surf_pavilion
+        - gamemann/surf_pox
+        - gamemann/surf_rebel_resistance_final3
+        - gamemann/surf_ski_2
+        - gamemann/surf_ski_2_source
+        - gamemann/surf_skyworld
+        - gamemann/surf_snipers_island
+        - gamemann/surf_the_flow
+        - gamemann/surf_the_gloaming
+        - gamemann/surf_thriller
+        - gamemann/surf_torque2
+        - gamemann/surf_velocity
+        - gamemann/surf_xiv_v2a
+
   mg-wipeout:
     maps:
       add:
