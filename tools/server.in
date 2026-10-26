@@ -1775,6 +1775,35 @@ if [ -n "${DRY_RUN:-}" ]; then
     exit 0
 fi
 
+# A Pterodactyl panel (wings sets P_SERVER_UUID) restarts a stopped server only when its
+# crash detection is on and decides the exit was a crash; dot-cloud's auto-update exits 75
+# and is then left "offline". So there the launcher is the supervisor: it runs the engine as
+# a child, forwards TERM/INT, and starts again from the top (install-games installs the new
+# pack version) on 75. TMC_SUPERVISE=1/0 forces it on/off. A restart within 20 s of the last
+# one is not repeated, so a build that exits 75 at boot cannot spin.
+SUPERVISE="${TMC_SUPERVISE:-}"
+[ -z "$SUPERVISE" ] && [ -n "${P_SERVER_UUID:-}" ] && SUPERVISE=1
+if [ "$SUPERVISE" = "1" ]; then
+    "$GODOT" "${ARGS[@]}" &
+    CHILD=$!
+    trap 'kill -TERM "$CHILD" 2>/dev/null' TERM INT
+    while kill -0 "$CHILD" 2>/dev/null; do
+        wait "$CHILD"
+        RC=$?
+    done
+    trap - TERM INT
+    if [ "$RC" = "75" ]; then
+        NOW=$(date +%s)
+        if [ $(( NOW - ${TMC_LAST_RESTART:-0} )) -ge 20 ]; then
+            note "the server exited 75 to apply an update; starting again"
+            export TMC_LAST_RESTART="$NOW"
+            exec "$PROJECT/server" "${ORIG_ARGS[@]}"
+        fi
+        warn "the server exited 75 twice within 20 s; not restarting again"
+    fi
+    exit "$RC"
+fi
+
 # exec, not a subshell: one process, so ctrl-c and SIGTERM reach the server rather than
 # a wrapper that has to forward them — and so a container's PID 1 is the server.
 exec "$GODOT" "${ARGS[@]}"
