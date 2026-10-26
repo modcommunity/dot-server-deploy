@@ -72,7 +72,7 @@ net_far_every: 4           # anything farther than net_far_distance is sent in o
 net_far_distance: 60       # metres; 0 is never far
 ```
 
-`net_interest_radius` is a ceiling on the game's own radius (the smaller wins; 0 means no limit from you). `net_far_every` and `net_far_distance` replace the game's values when written. `sv_threads_npc` is read by no game yet. Zombie Zone's `zz_net_far_every` and `zz_net_far_distance` are the same two settings under the game's own names and keep working; where a game sets its own, the game's wins.
+`net_interest_radius` is a ceiling on the game's own radius (the smaller wins; 0 means no limit from you). `net_far_every` and `net_far_distance` replace the game's values when written. `sv_threads_npc` (off) is read by Zombie Zone, which runs its horde's path searches on worker threads; it stays off on the web, without threads and on one CPU. Zombie Zone's `zz_net_far_every` and `zz_net_far_distance` are the same two settings under the game's own names and keep working; where a game sets its own, the game's wins.
 
 Where the files live: the server's own settings are `cfg/server/server.yml`; an addon's are `cfg/server/addon/<addon>/<file>.yml` (singular `addon`, the folder is the addon name with `-` as `_`) and one game's `cfg/server/game/<game>/`. The workbench's Save for the thread cvars writes `cfg/server/addon/dot_server/threads/server.yml` and applies it at the next start. `cfg/server/addons/` (plural) and `cfg/addons/` are the old layout: read, with a warning, and not documented anywhere else. A name the server does not know is listed at boot as `unrecognised setting`, with the nearest known names (`did you mean net_interest_radius?`).
 
