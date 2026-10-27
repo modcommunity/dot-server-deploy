@@ -176,6 +176,8 @@ usage() {
     install-games       Fetch the descriptors and packs for --games from the
                         content origin, into content/ and data/content_cache.
                         `run` does this for you when TMC_GAMES is set.
+    fetch-lock          Fetch the packs content.lock.json pins (hash-checked, once) into
+                        content/packs/. `run` does this when the lock exists; TMC_NO_LOCK=1 skips it.
     export-web          Build the browser client into web/build, plus the
                         loader website-city uploads. Takes --base and --zip.
     export-native       Build the native client the desktop app installs, into
@@ -344,7 +346,7 @@ USAGE
 
 case "${1:-}" in
     run|check|config|games|export-web|export-native|stamp-loader) COMMAND="$1"; shift ;;
-    install-games|index|cfg-migrate) COMMAND="$1"; shift ;;
+    install-games|index|cfg-migrate|fetch-lock) COMMAND="$1"; shift ;;
     pack|publish)
         COMMAND="pack"; shift
         PACK_ID="${1:-}"
@@ -969,6 +971,19 @@ do_install_games() {
     return $?
 }
 
+## Fetch what content.lock.json pins (hash-checked, once): dot-bootstrap's fetcher, the one shared copy. Packs are mirrored into
+## the content folder's packs/ as published; stores land beside the lock. TMC_NO_LOCK=1 skips it.
+do_fetch_lock() {
+    local lock="$PROJECT/content.lock.json" tool
+    [ -f "$lock" ] || { note "no content.lock.json: nothing pinned"; return 0; }
+    [ -z "${TMC_NO_LOCK:-}" ] || { note "TMC_NO_LOCK is set: not fetching what content.lock.json pins"; return 0; }
+    for tool in "$PROJECT/tools/fetch_lock.sh" "$PROJECT/../dot-bootstrap/tools/fetch_lock.sh"; do
+        [ -x "$tool" ] && { "$tool" "$lock" --root "$PROJECT" --packs "$CONTENT_DIR/packs" --skip store; return $?; }
+    done
+    warn "content.lock.json is here but dot-bootstrap/tools/fetch_lock.sh is not beside this checkout; fetch it and run ./server fetch-lock"
+    return 0
+}
+
 do_index() {
     "$GODOT" --headless --path "$PROJECT" --script "$INDEX_TOOL" -- \
         --content "$(abs "$CONTENT_DIR")" --out "$PROJECT/dist" || exit 7
@@ -1381,6 +1396,7 @@ case "$COMMAND" in
     pack)       do_pack ;;
     cfg-migrate) do_cfg_migrate ;;
     index)      do_index ;;
+    fetch-lock) do_fetch_lock; exit $? ;;
     install-games)
         do_install_games
         exit $?
@@ -1739,6 +1755,10 @@ copy_template server/content/overrides.yml content.yml "this server's settings p
 copy_template server/addon/dot_map/maps.yml maps.yml "which maps play"
 copy_template content/games.yml games.yml "which games play"
 copy_template content/addons.yml addons.yml "extra packs this server adds per game"
+
+if [ "$COMMAND" = "run" ] && [ -z "$NO_INSTALL" ]; then
+    do_fetch_lock || warn "fetching what content.lock.json pins failed; starting with what is here"
+fi
 
 if [ -z "$NO_INSTALL" ] && { [ -n "$OPT_GAMES" ] || has_owner_maps || has_owner_addons; } \
         && { [ "$COMMAND" = "run" ] || [ "$COMMAND" = "check" ]; }; then
