@@ -25,6 +25,10 @@ else
     tools/cfg_sync.sh /srv/tmc /srv/tmc/cfg
 fi
 
+# data/content.json (what the server trusts to mount) is not written by cfg_sync, so a container whose cfg/ volume already
+# existed had none and refused every signed manifest. Public keys come from keys/trusted/*.pub or $TMC_TRUSTED_KEYS_FILE.
+tools/content_trust.sh /srv/tmc
+
 # TMC_PORT, TMC_NAME, TMC_MAX_PLAYERS and the rest are read by ./server itself, which lets a cfg
 # file that sets the same key win; passing them here as flags would beat the file on every boot.
 # There is no TMC_RCON_PASSWORD and there will not be: an environment variable is readable by

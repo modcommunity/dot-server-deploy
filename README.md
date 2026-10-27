@@ -848,3 +848,5 @@ node tools/browser_check.mjs \
 ## Licence
 
 MIT. See [LICENSE](LICENSE).
+
+**Trusting extra publishers in a container.** The entrypoint runs `tools/content_trust.sh`, which creates `data/content.json` from `client/content.json` when it is missing and adds every PUBLIC key in `keys/trusted/*.pub` or at `$TMC_TRUSTED_KEYS_FILE` (a file, or a directory of `.pub` files; the path is an environment value, the key never is). A private key is refused. `tools/check_content_trust.sh` covers it.

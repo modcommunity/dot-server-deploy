@@ -44,7 +44,7 @@ done < <(find host client examples -name '*.gd' 2>/dev/null | sort)
 
 echo
 echo "shell scripts"
-for f in setup.sh tools/server.in docker-entrypoint.sh docker-healthcheck.sh tools/check.sh tools/check_boot_failures.sh tools/check_lists.sh tools/check_deploy_modes.sh tools/check_self_update.sh tools/check_supervise.sh tools/check_channels.sh tools/deploy-modes.sh tools/enet_relay_all_games.sh; do
+for f in setup.sh tools/server.in docker-entrypoint.sh docker-healthcheck.sh tools/content_trust.sh tools/check_content_trust.sh tools/check.sh tools/check_boot_failures.sh tools/check_lists.sh tools/check_deploy_modes.sh tools/check_self_update.sh tools/check_supervise.sh tools/check_channels.sh tools/deploy-modes.sh tools/enet_relay_all_games.sh; do
     [ -f "$f" ] || continue
     if bash -n "$f" 2>/dev/null; then
         printf '  %sok%s   %s\n' "$GRN" "$OFF" "$f"
@@ -58,6 +58,7 @@ echo
 echo "the lists written down twice"
 # setup.ps1's addon list and every copy of addon_repo()'s exceptions against setup.sh.
 bash tools/check_lists.sh || fails=$((fails + 1))
+bash tools/check_content_trust.sh || fails=$((fails + 1))
 
 echo
 echo "the deploy modes (compose, pterodactyl)"
