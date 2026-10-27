@@ -907,6 +907,11 @@ func _boot() -> bool:
 	# before the module that registers one.
 	replay = TmcReplay.install(self, server, config, _data_dir)
 
+	# The recorder's settings for whichever game declares a schema; it builds the recorder.
+	if config.bot_record.path == "":
+		config.bot_record.path = _absolute(_data_dir).path_join("bot/demos")
+	DotRegistry.register(&"bot_record_config", config.bot_record)
+
 	radio = TmcRadio.install(self, server, config, _absolute(_data_dir))
 
 	# After the first game, so the menu's first look at the console sees the game's own

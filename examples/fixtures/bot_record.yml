@@ -1,0 +1,5 @@
+bot_record: false
+bot_record_kinds: ride
+bot_record_rate: 8
+bot_record_cap: 50
+bot_record_store: memory

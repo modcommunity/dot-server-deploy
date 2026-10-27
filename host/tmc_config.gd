@@ -33,7 +33,7 @@ const CHANNEL := "tmc.config"
 const FILES := [
 	"server.yml", "net.yml", "log.yml", "rcon.yml", "auth.yml", "groups.yml",
 	"permissions.yml", "vote.yml", "security.yml", "party.yml", "matchmaking.yml",
-	"replay.yml", "admin_menu.yml", "loading.yml", "radio.yml",
+	"replay.yml", "admin_menu.yml", "loading.yml", "radio.yml", "bot_record.yml",
 ]
 
 ## The operator's base directory under `cfg/`: `server.yml` and any other flat server file. Never touched by an update.
@@ -166,6 +166,7 @@ const LAYERED := {
 	"security.yml": "dot-server-security",
 	"party.yml": "dot-party",
 	"replay.yml": "dot-replay",
+	"bot_record.yml": "dot-bot-record",
 	"matchmaking.yml": "dot-matchmaking",
 	"groups.yml": "dot-server",
 	"permissions.yml": "dot-server",
@@ -286,6 +287,11 @@ var mm_servers: Dictionary = {}
 ## runs it -- outside `data/`, so outside the one directory a container mounts writable and
 ## a unit file names in `ReadWritePaths`. A clip written there is evidence nobody can find.
 var replay: DotReplayConfig = _replay_defaults()
+
+## `bot_record.yml`: the demonstration recorder's settings, every [DotBotDemoConfig] property
+## written `bot_record_<name>` (`record` is `bot_record`). Empty `path` means `<data>/bot/demos`.
+## Handed to the game through [DotRegistry] as `bot_record_config`; see [TmcHost].
+var bot_record: DotBotDemoConfig = DotBotDemoConfig.new()
 
 ## Whether the replay ring is built at all. On: see [TmcReplay] for what it costs.
 var replay_enabled: bool = true
@@ -491,6 +497,7 @@ static func load_dir(directory: String) -> DotResult:
 	config._layer_vote_overrides()
 	config._layer_party_overrides()
 	config._layer_replay_overrides()
+	config._layer_bot_record_overrides()
 
 	var valid := config.server.validate()
 
@@ -608,6 +615,15 @@ func _layer_replay_overrides() -> void:
 	replay.apply_cli()
 	for i in range(before, replay.unknown_keys.size()):
 		unknown.append("%s: %s" % [replay.cli_prefix(), replay.unknown_keys[i]])
+
+
+## The environment and the command line over `bot_record.yml`; the token stays file-only.
+func _layer_bot_record_overrides() -> void:
+	var before := bot_record.unknown_keys.size()
+	bot_record.apply_env()
+	bot_record.apply_cli()
+	for i in range(before, bot_record.unknown_keys.size()):
+		unknown.append("%s: %s" % [bot_record.cli_prefix(), bot_record.unknown_keys[i]])
 
 
 static func _replay_defaults() -> DotReplayConfig:
@@ -732,6 +748,8 @@ func _apply(file: String, tree: Dictionary) -> DotResult:
 			return _apply_party(tree)
 		"matchmaking.yml":
 			return _apply_matchmaking(tree)
+		"bot_record.yml":
+			return _apply_bot_record(tree)
 		"auth.yml":
 			auth = tree
 			return DotResult.success(null)
@@ -883,6 +901,28 @@ func _apply_replay(tree: Dictionary) -> DotResult:
 	if not valid.ok:
 		return valid.wrap("replay.yml")
 
+	return DotResult.success(null)
+
+
+## `bot_record.yml`: `bot_record` and `bot_record_<property>`, onto [member bot_record]. A value the
+## addon refuses refuses the boot, like `replay.yml`.
+func _apply_bot_record(tree: Dictionary) -> DotResult:
+	var own := {}
+	var keys := bot_record.config_keys()
+	for raw in tree:
+		var name := String(raw)
+		var prop := "record" if name == "bot_record" else name.trim_prefix("bot_record_")
+		if (name == "bot_record" or name.begins_with("bot_record_")) and keys.has(prop):
+			own[prop] = tree[raw]
+		else:
+			unknown.append("bot_record.yml: %s" % name)
+	bot_record.apply_dictionary(own, "bot_record.yml")
+	for k in bot_record.unknown_keys:
+		unknown.append("bot_record.yml: %s" % k)
+	bot_record.unknown_keys = PackedStringArray()
+	var valid := bot_record.validate()
+	if not valid.ok:
+		return valid.wrap("bot_record.yml")
 	return DotResult.success(null)
 
 
@@ -1455,6 +1495,8 @@ func describe_lines() -> PackedStringArray:
 			"on punishment" if replay_clip_on_punish else "on request only",
 			replay_keep_files, replay_keep_mib,
 		]))
+	out.append("bot rec  : %s" % (
+		"off" if not bot_record.record else "on, store %s, rate %s Hz" % [bot_record.store, bot_record.rate]))
 	out.append("cvars    : %d queued" % console_lines.size())
 
 	for line in unknown:

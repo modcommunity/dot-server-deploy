@@ -1,0 +1,45 @@
+# Bot demonstration recorder: the server records anonymous movement (where players move, how
+# they ride ramps, how quickly they react in a fight) so its bots can learn from it. Only a game
+# that declares a schema records anything; for the others this file changes nothing.
+#
+# Rules text for your server's rules page and server info (also in dot-bot-record's docs):
+#
+#   This server records anonymous movement (where players move and how they ride ramps, and
+#   how quickly they react in a fight) to teach its bots. No names, account ids, addresses or
+#   chat are recorded, and recordings are stored by map and date only. The server owner can
+#   turn this off with `bot_record 0`.
+#
+# Never stored: a name, an account id, a peer number, an address, a team roster, chat, voice,
+# or a time finer than a day.
+#
+# Every key is a DotBotDemoConfig property with a `bot_record_` prefix (`record` alone is
+# `bot_record`). DOT_BOT_RECORD_* and --bot-record-* override them; the console cvars of the
+# same names change them while the server runs.
+
+# On by default. 0 stops recording and flushes what is queued.
+bot_record: true
+
+# Comma list of kinds to record (for example ride,place,engage); empty is every kind the game declares.
+bot_record_kinds: ""
+
+# Base sample rate in Hz, and the rate while a key has few episodes (0 is the host's tick rate).
+bot_record_rate: 16
+bot_record_rate_max: 0
+
+# Verified episodes per key at which the rate is back at base, and episodes kept per key.
+bot_record_target: 40
+bot_record_cap: 200
+
+# json, sqlite, postgres, mysql, memory or off.
+bot_record_store: json
+
+# The JSON store's directory, or the SQLite file. Empty is under data/ (data/bot/demos).
+bot_record_path: ""
+
+# The dot-sql gateway for postgres and mysql. A credential belongs here and nowhere else:
+# the environment and the command line refuse it.
+bot_record_url: ""
+bot_record_token: ""
+
+# Seconds between writes of the queued episodes.
+bot_record_flush: 10

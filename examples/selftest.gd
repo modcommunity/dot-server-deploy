@@ -58,6 +58,7 @@ func _run() -> void:
 	_test_logging()
 	_test_security()
 	_test_party()
+	_test_bot_record()
 	await _test_replay()
 	await _test_friends()
 	_test_radio()
@@ -564,6 +565,38 @@ static func _count_replays(dir: String) -> int:
 ##
 ## Driven with no server: [TmcReplay] keeps everything a server is needed for in
 ## `install()`, and `./server check` asserts that half on a server that booted.
+func _test_bot_record() -> void:
+	_section("the bot demonstration recorder")
+	var config := TmcConfig.load_dir(CFG).value as TmcConfig
+	_check(config.files_read.has("bot_record.yml"), "bot_record.yml is read")
+	_check(
+		not config.bot_record.record and config.bot_record.rate == 8.0 and config.bot_record.cap == 50
+			and config.bot_record.store == "memory" and config.bot_record.kinds == "ride",
+		"bot_record, bot_record_rate, _cap, _store and _kinds reach DotBotDemoConfig"
+	)
+	var stray := PackedStringArray()
+	for entry in config.unknown:
+		if String(entry).contains("bot_record"):
+			stray.append(String(entry))
+	_check(stray.is_empty(), "and none fell through as unknown", " / ".join(Array(stray)))
+	var shipped := TmcConfig.new()
+	_check(shipped.bot_record.record and shipped.bot_record.validate().ok, "shipped: on, and valid")
+	# The shipped template parses to the shipped defaults.
+	var tpl := TmcYaml.parse_file("res://cfg.example/addon/dot_bot_record/bot_record.yml")
+	_check(tpl.ok and (tpl.value as Dictionary).has("bot_record_token"), "the template documents every key")
+	if tpl.ok:
+		var probe := TmcConfig.new()
+		var applied := probe._apply_bot_record(tpl.value as Dictionary)
+		_check(applied.ok and probe.unknown.is_empty(), "and the template is accepted whole", str(probe.unknown))
+		var missing := PackedStringArray()
+		for k in probe.bot_record.config_keys():
+			var key := "bot_record" if k == "record" else "bot_record_" + k
+			if not (tpl.value as Dictionary).has(key):
+				missing.append(key)
+		_check(missing.is_empty(), "no DotBotDemoConfig property is missing from it", ", ".join(missing))
+	_done()
+
+
 func _test_replay() -> void:
 	_section("the replay ring")
 
