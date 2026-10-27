@@ -126,7 +126,7 @@ func _boot() -> bool:
 
 	_ws = _shell.call("_ensure_workshop")
 	_ws.config_file = ""
-	_ws.config.workshop_timeout_sec = 1.0
+	_ws.config.workshop_timeout_sec = 8.0
 	_ws.cache_dir = WORK.path_join("workshop")
 	_ws.force_metered = 0
 	_shell.set("restart_fn", func() -> void: _restarts[0] += 1)
