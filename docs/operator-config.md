@@ -64,8 +64,8 @@ sv_worker_threads: -1      # -1 cores less one (at most 8), 0 everything on the 
 sv_threads_net: 1          # build each player's snapshot on the workers (not on the web)
 sv_threads_npc: 0          # NPC decisions and path searches, for brains that support it
 map_load_threads: 0       # worker threads for the CPU-only stages of a map load (0 inline, -1 automatic, never on the web; needs dot-map)
-net_native: 0              # build snapshots in dot-net's native library (same bytes; GDScript where it cannot load)
-net_native_interest: 0     # with net_native, also pick each player's relevant entities natively (GDScript for a strategy it cannot port)
+net_native: 1              # build snapshots in dot-net's native library (same bytes; GDScript where it cannot load)
+net_native_interest: 1     # with net_native, also pick each player's relevant entities natively (GDScript for a strategy it cannot port)
 
 # relevance: what a player is sent
 net_interest_radius: 150   # metres; at most this far from a player is sent to them (0 keeps the game's own)
