@@ -1,0 +1,22 @@
+# duplication
+# Baselines only shrink: scripts/<gate> --update lowers or drops entries and refuses to add.
+examples/admin_live.gd	32
+examples/admin_loading_selftest.gd	30
+examples/deathrun_client.gd	158
+examples/delivery_client.gd	122
+examples/game_vote_all.gd	58
+examples/game_vote_rounds.gd	47
+examples/hideseek_client.gd	168
+examples/live_switch.gd	32
+examples/lookatme_client.gd	104
+examples/multigame.gd	32
+examples/party_live.gd	30
+examples/playground_client.gd	112
+examples/prophunt_client.gd	207
+examples/reconnect.gd	34
+examples/return_to_game.gd	38
+examples/selftest.gd	30
+examples/shell_notice.gd	30
+examples/smash_client.gd	41
+examples/wipeout_client.gd	122
+examples/zombiezone_client.gd	169
