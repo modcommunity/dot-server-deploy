@@ -454,7 +454,7 @@ echo "the game vote on the shell's HUD"
 "$GODOT" --headless --path . res://examples/shell_notice.tscn < /dev/null || fails=$((fails + 1))
 
 # Solo play (client/tmc_solo.gd): what a page may name, the shell's game.yml reader against
-# TmcYaml on every game, client/solo.json against cfg.example/content.yml, and the session a
+# TmcYaml on every game, client/solo.json against cfg.example/server/content/overrides.yml, and the session a
 # solo game reads its map packs and its way back from. Armed: an id check that accepts
 # upper case, a reader that appends to a copy, and a game dropped from solo.json each fail.
 echo

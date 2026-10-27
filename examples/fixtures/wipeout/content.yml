@@ -1,4 +1,4 @@
-# The courses, named by the server owner rather than by the game (see cfg.example/content.yml).
+# The courses, named by the server owner rather than by the game (see cfg.example/server/content/overrides.yml).
 # Pinned, so the suite needs no installer run to resolve a version.
 games:
   wipeout:

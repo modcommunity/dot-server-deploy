@@ -118,7 +118,7 @@ func _init() -> void:
 	if wanted.is_empty():
 		# Not an error, and this is the ordinary case for a hand-run server: no list
 		# means "run what is in the content directory", which needs no installer at all
-		# -- except for the maps an owner added in cfg/content.yml, which still need a
+		# -- except for the maps an owner added in cfg/server/content/overrides.yml, which still need a
 		# version each (see _resolve_owner_maps).
 		print("  no games list; nothing to install")
 
@@ -1117,7 +1117,7 @@ static func stamp_dependencies(
 	return DotResult.success(result)
 
 
-## Resolves every unpinned map in `cfg/content.yml` to the origin's newest version and
+## Resolves every unpinned map in `cfg/server/content/overrides.yml` to the origin's newest version and
 ## writes the answers to `data/content-maps.json`, which TmcGameConfig reads at boot.
 ##
 ## [b]Every start, not once.[/b] The point of a server-side map list is that a new upload

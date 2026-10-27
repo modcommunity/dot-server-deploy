@@ -163,7 +163,7 @@ cfg.example/         the defaults, tracked. Copied into cfg/ by setup.sh, never 
 cfg/                 what an operator edits. Written on first run, and not in this repository
   server.yml           name, slots, tickrate, the game to boot, bind address, port, bandwidth
   game/<game>/server.yml  your settings for one game over its author's: cvars, maps, votes, slots
-  content.yml          the same for every game (`defaults:`) and the stock map lists
+  server/content/overrides.yml  the same for every game (`defaults:`) and the stock map lists
   packs.yml            extra packs you add to a game, delivered to its players
   game_rotation.yml    which games play, and in what order
   addons/<addon>/      one folder per addon, the file named after what it sets:
@@ -310,7 +310,7 @@ The order is the game's `game.yml`, then `defaults:`, then the game's own sectio
 
 **When a map is downloaded is the game's choice**, written as `metadata: maps_delivery:` in its own `game.yml`: `lazy` (the default) fetches a map when the server changes to it, for games whose maps are large scenes (game-g2gfast, game-arena); `server` fetches them all before the game loads, for games whose maps are small documents the server sends players itself (the minigames); `client` does the same and also sends each pack to every player, for a game whose client builds a map from its pack (game-playground).
 
-A box without the file gets the template's on its next start. The template lists the stock maps for every game (game-g2gfast's 26 courses, and the maps pack of mg-wipeout, mg-deathrun, mg-prop-hunt and game-playground), so a server offers them until its owner takes them out. A file that already exists is never rewritten, so a box that got an older template keeps it: compare it with `cfg.example/content.yml` after an update, or delete it to take the new one.
+A box without the file gets the template's on its next start. The template lists the stock maps for every game (game-g2gfast's 26 courses, and the maps pack of mg-wipeout, mg-deathrun, mg-prop-hunt and game-playground), so a server offers them until its owner takes them out. A file that already exists is never rewritten, so a box that got an older template keeps it: compare it with `cfg.example/server/content/overrides.yml` after an update, or delete it to take the new one.
 
 ### Extra packs for a game: `cfg/packs.yml`
 

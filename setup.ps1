@@ -305,7 +305,7 @@ if (-not $NoImport) {
 # and says nothing.
 
 Step "configuration"
-foreach ($dir in 'cfg','cfg\content','content\global','data') {
+foreach ($dir in 'cfg','cfg\content','cfg\server','content\global','data') {
     New-Item -ItemType Directory -Force -Path $dir | Out-Null
 }
 
@@ -314,7 +314,7 @@ if (-not (Test-Path -LiteralPath $templates)) {
     Die "cfg.example\ is missing; this is not a complete checkout" 1
 }
 
-$newConfig = -not (Test-Path -LiteralPath 'cfg\server.yml')
+$newConfig = -not ((Test-Path -LiteralPath 'cfg\server\server.yml') -or (Test-Path -LiteralPath 'cfg\server.yml'))
 $newRcon = $false
 $rcon = $null
 
@@ -323,11 +323,26 @@ foreach ($template in (Get-ChildItem -LiteralPath $templates -Recurse -File |
 
     $rel = $template.FullName.Substring($templates.Length + 1)
     $target = Join-Path 'cfg' $rel
+    # cfg\addon\ and cfg\game\ are shipped defaults (setup.sh runs tools/cfg_sync.sh): an update
+    # overwrites them when they differ. Everything else is the operator's and is only created when missing.
+    if ($rel -like 'addon\*' -or $rel -like 'game\*') {
+        if ((Test-Path -LiteralPath $target) -and ([System.IO.File]::ReadAllText($target) -eq [System.IO.File]::ReadAllText($template.FullName))) { continue }
+        New-Item -ItemType Directory -Force -Path (Split-Path -Parent (Join-Path $Root $target)) | Out-Null
+        Copy-Item -LiteralPath $template.FullName -Destination $target -Force
+        Write-Host "    ~    $target (shipped default)" -ForegroundColor Green
+        continue
+    }
     if (Test-Path -LiteralPath $target) { continue }
     # A flat file from before the move is still read; a fresh template beside it would win whole.
-    if ($rel -like 'addons\*\*.yml' -and (Test-Path -LiteralPath (Join-Path 'cfg' (Split-Path -Leaf $rel)))) { continue }
-    if ($rel -eq 'packs.yml' -and (Test-Path -LiteralPath 'cfg\addons.yml')) { continue }
-    if ($rel -eq 'game_rotation.yml' -and (Test-Path -LiteralPath 'cfg\games.yml')) { continue }
+    $base = Split-Path -Leaf $rel
+    if ($rel -like 'server\addon\*\*.yml') {
+        $addon = Split-Path -Leaf (Split-Path -Parent $rel)
+        if ((Test-Path -LiteralPath "cfg\$base") -or (Test-Path -LiteralPath "cfg\addons\$addon\$base") -or (Test-Path -LiteralPath "cfg\server\addons\$addon\$base")) { continue }
+    }
+    if ($rel -eq 'server\server.yml' -and (Test-Path -LiteralPath 'cfg\server.yml')) { continue }
+    if ($rel -eq 'content\addons.yml' -and (Test-Path -LiteralPath 'cfg\addons.yml')) { continue }
+    if ($rel -eq 'content\games.yml' -and (Test-Path -LiteralPath 'cfg\games.yml')) { continue }
+    if ($rel -eq 'server\content\overrides.yml' -and (Test-Path -LiteralPath 'cfg\content.yml')) { continue }
 
     New-Item -ItemType Directory -Force -Path (Split-Path -Parent (Join-Path $Root $target)) | Out-Null
 
@@ -338,7 +353,7 @@ foreach ($template in (Get-ChildItem -LiteralPath $templates -Recurse -File |
     # the encoding is stated rather than inherited.
     $text = [System.IO.File]::ReadAllText($template.FullName)
 
-    if ($rel -eq 'addons\dot_console\rcon.yml') {
+    if ($rel -eq 'server\addon\dot_console\rcon.yml') {
         $bytes = New-Object byte[] 18
         [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
         $rcon = [Convert]::ToBase64String($bytes) -replace '[/+=]', ''
@@ -382,6 +397,7 @@ if ((-not (Test-Path -LiteralPath 'data\content.json')) -and (Test-Path -Literal
 # answered -- deleting a setting on purpose is not a question.
 foreach ($template in (Get-ChildItem -LiteralPath $templates -File -Recurse -Filter '*.yml' | Sort-Object FullName)) {
     $target = Join-Path 'cfg' $template.FullName.Substring($templates.Length + 1)
+    if ($target -like 'cfg\addon\*' -or $target -like 'cfg\game\*') { continue }
     if (-not (Test-Path -LiteralPath $target)) { $target = Join-Path 'cfg' $template.Name }
     if (-not (Test-Path -LiteralPath $target)) { continue }
 
@@ -471,7 +487,7 @@ Ok "server.cmd written, forwarding to server.ps1"
 
 if ($newRcon) {
     Write-Host ""
-    Write-Host "  RCON password (printed once, it is in cfg\addons\dot_console\rcon.yml):" -ForegroundColor White
+    Write-Host "  RCON password (printed once, it is in cfg\server\addon\dot_console\rcon.yml):" -ForegroundColor White
     Write-Host "      $rcon"
 }
 

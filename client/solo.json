@@ -1,5 +1,5 @@
 {
-    "about": "The map packs a solo game fetches before it starts: the shell's copy of the stock per-game lists in cfg.example/content.yml, keyed by the game's content id. A server names its maps in its own cfg/content.yml; a tab with no server has only this. examples/solo_check.gd fails when the two drift. See client/tmc_solo.gd.",
+    "about": "The map packs a solo game fetches before it starts: the shell's copy of the stock per-game lists in cfg.example/server/content/overrides.yml, keyed by the game's content id. A server names its maps in its own cfg/content.yml; a tab with no server has only this. examples/solo_check.gd fails when the two drift. See client/tmc_solo.gd.",
     "maps": {
         "gamemann/game-playground": ["gamemann/game-playground-maps"],
         "gamemann/mg-wipeout": ["gamemann/mg-wipeout-maps"],

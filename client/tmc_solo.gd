@@ -25,7 +25,7 @@ extends RefCounted
 ##
 ## [b]The map packs.[/b] A server names its games' map packs in its own configuration
 ## (`cfg/content.yml`), which a tab with no server does not have. `client/solo.json` is the
-## shell's copy of the stock list (`cfg.example/content.yml`), and `tools/check.sh` fails
+## shell's copy of the stock list (`cfg.example/server/content/overrides.yml`), and `tools/check.sh` fails
 ## when the two drift. Each pack in it is fetched and mounted before the game starts, and
 ## its roots are published in [DotRegistry] under [constant MAPS_SERVICE] for a game whose
 ## offline catalogue reads delivered maps.

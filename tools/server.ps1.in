@@ -80,9 +80,9 @@ function Show-Usage {
     config              Print the resolved configuration and exit.
     games               List what is in the content directory and exit.
     cfg-migrate         Move the flat cfg\*.yml files of an older install under
-                        cfg\addons\<addon>\, cfg\packs.yml and cfg\game_rotation.yml;
-                        net.yml into server.yml, content.yml's games: into
-                        cfg\game\<game>\server.yml. Copies go to cfg.bak\.
+                        cfg\server\addon\<addon>\, the lists into cfg\content\;
+                        net.yml into server\server.yml, content.yml's games: into
+                        cfg\server\game\<game>\server.yml. Copies go to cfg.bak\.
                         --dry-run lists the moves.
     pack <id>           Publish content\<id> as a signed dot-cloud pack.
     export-web          Build the browser client into web\build, plus the
@@ -144,7 +144,7 @@ function Show-Usage {
 
   Secrets are deliberately NOT options. argv is readable by every other process on
   the machine and ends up in pasted bug reports, which is why DotConfig refuses
-  secrets from argv and the environment too. rcon_password lives in cfg\rcon.yml.
+  secrets from argv and the environment too. rcon_password lives in cfg\server\addon\dot_console\rcon.yml.
 '@ | Write-Host
 }
 
@@ -416,7 +416,7 @@ while ($i -lt $rest.Count) {
     if ($name -in @('h', 'help', '?')) { Show-Usage; exit 0 }
 
     if ($name -in @('rcon-password', 'password')) {
-        Die "secrets are not accepted on a command line; put it in $ConfigDir\server.yml"
+        Die "secrets are not accepted on a command line; put it in $ConfigDir\server\server.yml"
     }
 
     if ($name -in @('verbose')) { $Verbose = $true; $i += 1; continue }
@@ -465,16 +465,18 @@ function Invoke-CfgMigrate {
     }
 
     $moves = @(
-        @('log.yml', 'addons\dot_log\log.yml'), @('auth.yml', 'addons\dot_auth\auth.yml'),
-        @('vote.yml', 'addons\dot_vote\vote.yml'), @('loading.yml', 'addons\dot_core\loading.yml'),
-        @('rcon.yml', 'addons\dot_console\rcon.yml'), @('groups.yml', 'addons\dot_server\groups.yml'),
-        @('permissions.yml', 'addons\dot_server\permissions.yml'),
-        @('security.yml', 'addons\dot_server_security\security.yml'),
-        @('party.yml', 'addons\dot_party\party.yml'),
-        @('matchmaking.yml', 'addons\dot_matchmaking\matchmaking.yml'),
-        @('replay.yml', 'addons\dot_replay\replay.yml'),
-        @('admin_menu.yml', 'addons\dot_menu\admin_menu.yml'), @('maps.yml', 'addons\dot_map\maps.yml'),
-        @('addons.yml', 'packs.yml'), @('games.yml', 'game_rotation.yml')
+        @('log.yml', 'server\addon\dot_log\log.yml'), @('auth.yml', 'server\addon\dot_auth\auth.yml'),
+        @('vote.yml', 'server\addon\dot_vote\vote.yml'), @('loading.yml', 'server\addon\dot_core\loading.yml'),
+        @('rcon.yml', 'server\addon\dot_console\rcon.yml'), @('groups.yml', 'server\addon\dot_server\groups.yml'),
+        @('permissions.yml', 'server\addon\dot_server\permissions.yml'),
+        @('security.yml', 'server\addon\dot_server_security\security.yml'),
+        @('party.yml', 'server\addon\dot_party\party.yml'),
+        @('matchmaking.yml', 'server\addon\dot_matchmaking\matchmaking.yml'),
+        @('replay.yml', 'server\addon\dot_replay\replay.yml'),
+        @('admin_menu.yml', 'server\addon\dot_menu\admin_menu.yml'), @('maps.yml', 'server\addon\dot_map\maps.yml'),
+        @('addons.yml', 'content\addons.yml'), @('games.yml', 'content\games.yml'),
+        @('packs.yml', 'content\addons.yml'), @('game_rotation.yml', 'content\games.yml'),
+        @('content.yml', 'server\content\overrides.yml'), @('server.yml', 'server\server.yml')
     )
     foreach ($m in $moves) {
         $src = Join-Path $dir $m[0]
@@ -491,9 +493,30 @@ function Invoke-CfgMigrate {
         $moved++
     }
 
-    # net.yml into server.yml: appended whole unless server.yml already names one of its keys.
+    # The plural addons\<addon>\ and server\addons\<addon>\ folders and game\<game>\server.yml are the operator's now.
+    $olds = @()
+    foreach ($pat in 'addons\*\*.yml', 'server\addons\*\*.yml') {
+        $olds += Get-ChildItem -Path (Join-Path $dir $pat) -File -ErrorAction SilentlyContinue | ForEach-Object { @($_.FullName, ("server\addon\" + (Split-Path -Leaf (Split-Path -Parent $_.FullName)) + "\" + $_.Name)) -join '|' }
+    }
+    $olds += Get-ChildItem -Path (Join-Path $dir 'game\*\server.yml') -File -ErrorAction SilentlyContinue | ForEach-Object { @($_.FullName, ("server\game\" + (Split-Path -Leaf (Split-Path -Parent $_.FullName)) + "\server.yml")) -join '|' }
+    foreach ($o in $olds) {
+        $srcFull, $rel = $o -split '\|', 2
+        $dst = Join-Path $dir $rel
+        $shown = $srcFull.Substring($dir.Length + 1)
+        if (Test-Path -LiteralPath $dst) { Note "kept $rel; delete the old $shown by hand"; continue }
+        if ($DryRun) { Note "would move $shown -> $rel" }
+        else {
+            Save-Backup $srcFull
+            New-Item -ItemType Directory -Path (Split-Path -Parent $dst) -Force | Out-Null
+            Move-Item -LiteralPath $srcFull -Destination $dst
+            Note "moved $shown -> $rel (copy in $bak\)"
+        }
+        $moved++
+    }
+
+    # net.yml into server\server.yml: appended whole unless it already names one of its keys.
     $net = Join-Path $dir 'net.yml'
-    $server = Join-Path $dir 'server.yml'
+    $server = Join-Path $dir 'server\server.yml'
     if (Test-Path -LiteralPath $net) {
         $clash = $null
         if (Test-Path -LiteralPath $server) {
@@ -507,20 +530,24 @@ function Invoke-CfgMigrate {
         }
         if ($clash) { Note "kept net.yml: server.yml already sets $clash; merge them by hand" }
         else {
-            if ($DryRun) { Note 'would append net.yml to server.yml' }
+            if ($DryRun) { Note 'would append net.yml to server\server.yml' }
             else {
                 Save-Backup $net
+                New-Item -ItemType Directory -Path (Split-Path -Parent $server) -Force | Out-Null
+                if (-not (Test-Path -LiteralPath $server)) { New-Item -ItemType File -Path $server | Out-Null }
                 $text = "`n# Network (moved from net.yml)`n" + ((Get-Content -LiteralPath $net) -join "`n") + "`n"
                 Add-Content -LiteralPath $server -Value $text -NoNewline
                 Remove-Item -LiteralPath $net
-                Note "moved net.yml -> server.yml (copy in $bak\)"
+                Note "moved net.yml -> server\server.yml (copy in $bak\)"
             }
             $moved++
         }
     }
 
-    # content.yml's games: entries into game\<game>\server.yml, dedented; defaults: stays.
-    $content = Join-Path $dir 'content.yml'
+    # The overrides' games: entries into server\game\<game>\server.yml, dedented; defaults: stays.
+    $content = Join-Path $dir 'server\content\overrides.yml'
+    if (-not (Test-Path -LiteralPath $content)) { $content = Join-Path $dir 'content.yml' }
+    $contentName = $content.Substring($dir.Length + 1)
     if ((Test-Path -LiteralPath $content) -and (Select-String -LiteralPath $content -Pattern '^games:' -Quiet)) {
         $inGames = $false
         $current = $null
@@ -537,16 +564,16 @@ function Invoke-CfgMigrate {
             }
             if ($null -ne $current) { $sections[$current].Add(($line -replace '^  ', '')) }
         }
-        $clash = $sections.Keys | Where-Object { Test-Path -LiteralPath (Join-Path $dir "game\$_\server.yml") } | Select-Object -First 1
-        if ($clash) { Note "kept game\$clash\server.yml; its entry stays in content.yml" }
+        $clash = $sections.Keys | Where-Object { Test-Path -LiteralPath (Join-Path $dir "server\game\$_\server.yml") } | Select-Object -First 1
+        if ($clash) { Note "kept server\game\$clash\server.yml; its entry stays in $contentName" }
         else {
             if (-not $DryRun) { Save-Backup $content }
             foreach ($g in $sections.Keys) {
-                if ($DryRun) { Note "would write game\$g\server.yml from content.yml"; continue }
-                $target = Join-Path $dir "game\$g"
+                if ($DryRun) { Note "would write server\game\$g\server.yml from $contentName"; continue }
+                $target = Join-Path $dir "server\game\$g"
                 New-Item -ItemType Directory -Path $target -Force | Out-Null
                 Set-Content -LiteralPath (Join-Path $target 'server.yml') -Value $sections[$g]
-                Note "wrote game\$g\server.yml from content.yml"
+                Note "wrote server\game\$g\server.yml from $contentName"
             }
             if (-not $DryRun) { Set-Content -LiteralPath $content -Value $rest }
             $moved++
@@ -669,6 +696,7 @@ if ($Command -eq 'run') {
         # its default. Matched as digits first, cast second.
         # net.yml (the old home of net_*) is read after server.yml by the server, so it wins here too.
         $declared = Read-Cfg (Join-Path $configPath 'net.yml') 'net_port'
+        if (-not $declared) { $declared = Read-Cfg (Join-Path $configPath 'server\server.yml') 'net_port' }
         if (-not $declared) { $declared = Read-Cfg (Join-Path $configPath 'server.yml') 'net_port' }
         if ($declared -match '^\d+$') { $port = [int]$declared }
     }
