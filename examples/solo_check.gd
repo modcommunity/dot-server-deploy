@@ -28,6 +28,7 @@ const NOT_PREFETCHED := {
 	# One pack per map, about 50 MB each: the game fetches the one it changes to itself
 	# (`g2g: fetching a map this build does not have`), as a server does.
 	"game-g2gfast": "one large pack per map, fetched by the game when it changes to it",
+	"game-arena": "39 combat surf packs, lazy delivery like game-g2gfast: fetched when the game changes to a map",
 }
 
 var _passed := 0
