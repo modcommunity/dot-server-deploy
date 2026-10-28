@@ -36,6 +36,11 @@ printf 'net_port: 28123\n' > "$C/net.yml"
 out="$(run TMC_PORT=29999)"
 check "net.yml's net_port beats TMC_PORT" bash -c '! grep -q -- "--port" <<<"$1"' _ "$out"
 rm -f "$C/net.yml"
+# An old egg rewrites the flat cfg/server.yml every start; the host ignores it beside cfg/server/server.yml.
+printf 'sv_maxplayers: 99\n' > "$C/server.yml"
+out="$(run TMC_MAX_PLAYERS=12)"
+check "an ignored flat cfg/server.yml does not drop TMC_MAX_PLAYERS" grep -q -- "--max-players 12" <<<"$out"
+rm -f "$C/server.yml"
 
 # The same run again: still the file, so it is every boot and not the first.
 out="$(run TMC_NAME="From the egg")"

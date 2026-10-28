@@ -435,6 +435,8 @@ cfg_key_file() {
     local d f
     d="$(abs "$CONFIG_DIR")"
     for f in "$d"/server/*.yml "$d/net.yml" "$d/server.yml"; do
+        # TmcConfig ignores the flat server.yml beside cfg/server/server.yml; an old egg still rewrites it every start.
+        [ "$f" = "$d/server.yml" ] && [ -f "$d/server/server.yml" ] && continue
         if grep -qE "^[[:space:]]*$1[[:space:]]*:" "$f" 2>/dev/null; then
             printf '%s' "${f#"$d"/}"
             return 0
