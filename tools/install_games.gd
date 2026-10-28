@@ -1798,7 +1798,11 @@ func _write_state(data_dir: String, state: Dictionary) -> void:
 ## reads the same key out of the same file with the same parser, and nothing else.
 static func _bases_from_config(config_dir: String) -> PackedStringArray:
 	var out := PackedStringArray()
-	var path := config_dir.path_join("server.yml")
+	# The singular layout keeps it in cfg/server/server.yml; the flat cfg/server.yml is the old one.
+	var path := config_dir.path_join("server/server.yml")
+
+	if not FileAccess.file_exists(path):
+		path = config_dir.path_join("server.yml")
 
 	if not FileAccess.file_exists(path):
 		return out

@@ -17,7 +17,7 @@ const CFG := "res://examples/fixtures"
 ## A loaded game with rounds and no match the game vote can find. See the section that uses it.
 const RoundsWithoutMatch := preload("res://examples/fixtures/rounds_without_match.gd")
 
-const CHECKS := 436
+const CHECKS := 443
 
 var _passed := 0
 var _failed := 0
