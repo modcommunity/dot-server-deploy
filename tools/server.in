@@ -1804,7 +1804,8 @@ fi
 SUPERVISE="${TMC_SUPERVISE:-}"
 [ -z "$SUPERVISE" ] && [ -n "${P_SERVER_UUID:-}" ] && SUPERVISE=1
 if [ "$SUPERVISE" = "1" ]; then
-    "$GODOT" "${ARGS[@]}" &
+    # <&0: bash gives a background job /dev/null as stdin, which loses the panel's `quit`.
+    "$GODOT" "${ARGS[@]}" <&0 &
     CHILD=$!
     trap 'kill -TERM "$CHILD" 2>/dev/null' TERM INT
     while kill -0 "$CHILD" 2>/dev/null; do
