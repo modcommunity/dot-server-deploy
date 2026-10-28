@@ -8,7 +8,7 @@ entries:
   - repo: dot-achievements
     pin: v0.1.5
   - repo: dot-audio
-    pin: v0.1.7
+    pin: v0.1.8
   - repo: dot-auth
     pin: v0.1.11
   - repo: dot-bot
@@ -36,9 +36,9 @@ entries:
   - repo: dot-friends
     pin: v0.1.5
   - repo: dot-fx
-    pin: v0.3.0
+    pin: v0.3.1
   - repo: dot-game
-    pin: v0.1.27
+    pin: v0.1.28
   - repo: dot-inventory
     pin: v0.1.4
   - repo: dot-leaderboard
@@ -62,7 +62,7 @@ entries:
   - repo: dot-moderation
     pin: v0.1.5
   - repo: dot-net
-    pin: v0.1.19
+    pin: v0.1.20
   - repo: dot-npc
     pin: v0.1.7
   - repo: dot-npc-ai
@@ -82,7 +82,7 @@ entries:
   - repo: dot-player
     pin: v0.1.5
   - repo: dot-player-char
-    pin: v0.1.11
+    pin: v0.1.12
   - repo: dot-player-class
     pin: v0.1.5
   - repo: dot-player-controller
@@ -118,7 +118,7 @@ entries:
   - repo: dot-timer
     pin: v0.1.7
   - repo: dot-ui
-    pin: v0.1.9
+    pin: v0.1.11
   - repo: dot-user
     pin: v0.1.5
   - repo: dot-user-avatar
@@ -130,7 +130,7 @@ entries:
   - repo: dot-vote
     pin: v0.1.14
   - repo: dot-weapon
-    pin: v0.1.14
+    pin: v0.1.16
   - repo: dot-weather
     pin: v0.1.1
   - repo: zed-dot-weapons
