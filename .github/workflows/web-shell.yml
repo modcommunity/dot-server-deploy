@@ -34,6 +34,7 @@ on:
             - tools/fetch-godot.sh
             - tools/shell-auth-json.sh
             - tools/shell-inputs.sh
+            - tools/addons-lock.sh
             - .github/workflows/web-shell.yml
     workflow_dispatch:
         inputs:
