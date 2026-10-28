@@ -145,7 +145,7 @@ var _join_marks: Dictionary = {}
 
 ## Whose packs may replace this build's addons: the organisation's, and the one addon that
 ## is not theirs (the weapons pack, published under its author). See [DotCloudAddonSet].
-const ADDON_NAMESPACES := ["modcommunity/", "gamemann/zee-dot-weapons"]
+const ADDON_NAMESPACES := ["modcommunity/", "gamemann/zee-dot-weapons", "gamemann/arena-weapons"]
 
 ## Set while newer addons are being fetched for the server just left.
 var _addons_updating := false
