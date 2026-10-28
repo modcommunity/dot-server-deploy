@@ -151,7 +151,8 @@ cmd_check() {
         elif [ "$have" != "$want" ]; then
             echo "  !!    $repo is at ${have:0:9}, the lock says $ref (${want:0:9})"
             bad=1
-        elif [ -n "$(git -C "$root" status --porcelain 2>/dev/null)" ]; then
+        # An untracked .uid is what --import writes for a script a tag shipped without one; it is not a change.
+        elif [ -n "$(git -C "$root" status --porcelain 2>/dev/null | grep -v '^?? .*\.uid$')" ]; then
             echo "  !!    $repo is at $ref with uncommitted changes"
             bad=1
         fi
