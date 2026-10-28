@@ -24,7 +24,7 @@ entries:
   - repo: dot-console
     pin: v0.1.7
   - repo: dot-core
-    pin: v0.1.21
+    pin: v0.1.22
   - repo: dot-economy
     pin: v0.1.5
   - repo: dot-effects
@@ -87,6 +87,8 @@ entries:
     pin: v0.2.4
   - repo: dot-procedural-generation
     pin: v0.1.4
+  - repo: dot-profile
+    pin: v0.1.21
   - repo: dot-props
     pin: v0.1.8
   - repo: dot-radio
@@ -94,7 +96,7 @@ entries:
   - repo: dot-replay
     pin: v0.1.8
   - repo: dot-server
-    pin: v0.1.21
+    pin: v0.1.23
   - repo: dot-server-query
     pin: v0.1.6
   - repo: dot-server-security

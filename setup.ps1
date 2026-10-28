@@ -215,7 +215,7 @@ Ok "$exe ($version)"
 # at dot_friends, nineteen names long, while setup.sh's kept growing.
 $addons = @('dot_core','dot_log','dot_net','dot_game','dot_entity','dot_server','dot_server_query','dot_server_security',
             'dot_2d','dot_ui','dot_auth','dot_cloud','dot_user','dot_user_avatar','dot_platform','dot_loadout',
-            'dot_match','dot_player_controller','dot_timer','dot_map','dot_leaderboard','dot_stats','dot_props','dot_vote',
+            'dot_match','dot_player_controller','dot_timer','dot_map','dot_leaderboard','dot_stats','dot_props','dot_profile','dot_vote',
             'dot_combat','dot_chat','dot_voice','dot_moderation','dot_browser','dot_npc','dot_npc_ai','dot_npc_ai_director',
             'dot_vehicle','dot_achievements','dot_objective','dot_effects','dot_spectate','dot_economy','dot_settings','dot_console',
             'dot_audio','dot_fx','dot_lighting','dot_weather','dot_procedural_generation','dot_inventory','dot_peer_to_peer','dot_weapon','dot_physics',
