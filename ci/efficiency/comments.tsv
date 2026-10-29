@@ -9,8 +9,6 @@ client/menu_backdrop.gd::long_block	2
 client/notice_overlay.gd::banner	4
 client/notice_overlay.gd::long_block	7
 client/shell.gd::banner	1
-client/shell.gd::history	5
-client/shell.gd::long_block	70
 client/shell_version.gd::long_block	1
 client/tmc_addon_entry.gd::long_block	1
 client/tmc_friends.gd::banner	3
@@ -112,8 +110,7 @@ host/tmc_admin_menu.gd::long_block	12
 host/tmc_admins.gd::long_block	7
 host/tmc_auth.gd::history	1
 host/tmc_auth.gd::long_block	8
-host/tmc_config.gd::history	2
-host/tmc_config.gd::long_block	43
+host/tmc_config.gd::history	1
 host/tmc_content.gd::history	1
 host/tmc_content.gd::long_block	14
 host/tmc_content_lists.gd::long_block	2
@@ -123,8 +120,6 @@ host/tmc_game_config.gd::banner	2
 host/tmc_game_config.gd::long_block	8
 host/tmc_game_ref.gd::long_block	8
 host/tmc_game_rotation.gd::long_block	1
-host/tmc_host.gd::history	2
-host/tmc_host.gd::long_block	63
 host/tmc_loading.gd::banner	3
 host/tmc_loading.gd::long_block	1
 host/tmc_party.gd::banner	6

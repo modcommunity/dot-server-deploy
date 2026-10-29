@@ -1,24 +1,8 @@
 extends Node
 
-## The client shell: connect to a server, be sent a game, play it.
-##
-## [b]This is the whole client.[/b] It knows nothing about any particular game — it opens a
-## connection, lets dot-server take it through signon, and instantiates whatever scene the
-## server said to load. A game shipped inside this build is instantiated by path; a game
-## delivered as a dot-cloud pack is mounted first and instantiated out of the mount.
-##
-## In a browser the server comes from the query string (`?server=wss://host:port`), because
-## a tab cannot listen and a person who followed a link has already chosen where they are
-## going.
-##
-## [b]What a delivered game may not do.[/b] A game pack mounts at its own prefix and brings
-## no class list, so its `class_name` globals are not registered in this process — measured,
-## not assumed — and every cross-file type reference inside it fails to compile: the pack
-## mounts, its scenes load, and every script in it is dead. A game meant to be delivered
-## references its own files by path (`preload("res://x.gd")`, `extends "res://x.gd"`), both
-## of which resolve out of a mount. (Newer ADDONS are different: they are laid over
-## `res://addons/` at boot with the class list swapped in, before anything is compiled —
-## see [DotCloudAddonSet] and [method _on_server_info].)
+## The client shell: connect to a server, be sent a game, play it. It knows no particular game.
+## A delivered pack brings no class list, so its scripts must reference each other by path (`preload("res://x.gd")`);
+## addons are laid over `res://addons/` at boot instead, see [DotCloudAddonSet] and [method _on_server_info].
 
 const CHANNEL := "tmc.shell"
 
@@ -27,9 +11,7 @@ const CHANNEL := "tmc.shell"
 const GAME_ROOT := &"Game"
 
 ## Where an operator puts the public key a delivered game's manifest is signed with.
-##
-## Shipped inside the export beside the shell, because it must not be settable from the
-## page — see [method _ensure_cloud].
+## Shipped beside the shell and not settable from the page, see [method _ensure_cloud].
 const CONTENT_CONFIG := "res://client/content.json"
 
 ## Where an operator names the backbone this build signs in against. See [method _sign_in].
@@ -131,11 +113,8 @@ var radio_link: TmcRadioLink = null
 ## Whether this connection has put a game on screen yet.
 var _has_spawned := false
 
-## Between pressing Connect and the first spawn. The loading screen covers this too: a
-## browser join is half a minute of downloading and a script load that blocks the page, and
-## the menu behind it (a status line and a bar) was a grey screen to the player. It is the
-## other half of the screen's rule, with [member _has_spawned]: a join, or a change under
-## a player.
+## Between pressing Connect and the first spawn; the loading screen covers it (a browser join blocks the page for half a minute).
+## The other half of the screen's rule, with [member _has_spawned].
 var _joining := false
 
 ## Time.get_ticks_usec() at each stage of the current join, by name, for [method _log_join].
@@ -156,11 +135,8 @@ var _addons_skipped := {}
 
 
 func _ready() -> void:
-	# Scoped to this subtree, for the reason the host scopes its own: Godot addresses an
-	# RPC by the receiver's node path relative to its MultiplayerAPI root, and with the
-	# default root of `/root` the two ends would have to agree on what each other's scene
-	# is *called*. Scoped, both send and expect "Server" and neither knows the other's
-	# tree.
+	# Scoped to this subtree: an RPC is addressed by node path relative to the MultiplayerAPI root, so with `/root`
+	# both ends would have to agree on what each other's scene is called.
 	get_tree().set_multiplayer(
 		MultiplayerAPI.create_default_interface(), get_path()
 	)
@@ -235,22 +211,11 @@ func _ready() -> void:
 	# next time. See [DotCloudAddonSet].
 	DotCloudAddonSet.confirm_boot()
 
-	# Who is playing, before anything is dialled.
-	#
-	# Awaited rather than fired off, because the answer changes the name the
-	# connection is opened with, and a name that arrives after the join is a
-	# player who appears as "Guest 812" and is renamed a second later in front of
-	# everybody. It costs one round trip inside the TMC player and nothing at all
-	# anywhere else — `sign_in()` falls through immediately when there is no page
-	# handoff to redeem.
-	# Read before signing in: a restart onto newer addons says who was signed in, and the
-	# sign-in needs that (see [method _sign_in]).
+	# Awaited, because the answer changes the name the connection is opened with; one arriving after the join renames a "Guest 812" in front of everybody.
+	# Read before signing in: a restart onto newer addons says who was signed in (see [method _sign_in]).
 	var resumed := _take_resume()
 
-	# The box shows where this start is going BEFORE the sign-in is awaited: the sign-in
-	# can take a round trip or two (more after an update restart, where the page's spent
-	# code is refused before the stored session is tried), and for all of it the box
-	# showed the scene's localhost placeholder, then jumped.
+	# Show where this start is going BEFORE the sign-in is awaited; it can take round trips and the box showed the localhost placeholder meanwhile.
 	var going := _requested_server()
 	if going == "":
 		going = str(resumed.get("server", ""))
@@ -286,23 +251,12 @@ func _ready() -> void:
 		wanted = str(resumed.get("server", ""))
 
 	if wanted != "":
-		# The box shows what we ACTUALLY dialled, before we dial it.
-		#
-		# It was seeded with a hardcoded localhost default, which is fine for
-		# somebody who opened the shell cold and actively misleading for
-		# everybody else: a failed auto-connect drops back to this menu, and the
-		# address on screen was then not the address that failed. Every report of
-		# "it says it cannot reach 127.0.0.1:6064" was about a connection to
-		# somewhere else entirely — and pressing Connect retried the wrong thing.
+		# The box shows what we ACTUALLY dialled: a hardcoded default made a failed auto-connect show an address that was not the one that failed.
 		_address.text = wanted
 		_connect_to(wanted)
 
 
-## Where to connect: the command line, or the page's query string.
-##
-## The query string is how a browser player arrives. They followed a link that already
-## named a server; asking them to type an address they were never shown is asking them to
-## leave.
+## Where to connect: the command line, or the page's query string (a browser player followed a link that already named a server).
 func _requested_server() -> String:
 	var args := OS.get_cmdline_user_args()
 	var index := args.find("--connect")
@@ -325,23 +279,9 @@ func _user_arg(name: String) -> String:
 	return ""
 
 
-## Signs in against the backbone, when the page we are embedded in offers a way.
-##
-## [b]Deliberately not a login screen.[/b] The only sign-in this shell performs is
-## the one that needs no interaction: inside the TMC player, the site hands the
-## frame a single-use code saying who pressed Play, and `DotAuthClient` redeems it
-## ([DotAuthWebHandoff]). Opened anywhere else — a bare link, a desktop build —
-## there is no code, `sign_in()` fails immediately, and the player stays the guest
-## they already were.
-##
-## A device-code flow would be the alternative and it is the wrong trade here: it
-## puts a code to read and a browser tab to open in front of somebody who wanted
-## to press Play, on a shell whose whole job is to get out of the way.
-##
-## [b]The name this produces is a LABEL, not a proof.[/b] It travels to the
-## server as `player_name` does, and a server that needs to know who somebody
-## really is verifies that itself — a scope key handed over on join, or a
-## `dot-auth` ticket. Nothing here asks a server to trust us.
+## Signs in against the backbone when the page offers a way: inside the TMC player the site hands over a single-use code ([DotAuthWebHandoff]);
+## elsewhere `sign_in()` fails at once and the player stays a guest, because a device-code flow puts a code to read in front of someone who wanted Play.
+## The name is a LABEL, not proof: a server that needs to know who somebody is verifies that itself.
 func _sign_in(resumed: Dictionary = {}) -> void:
 	if not DotAuthWebHandoff.supported():
 		return
@@ -354,18 +294,8 @@ func _sign_in(resumed: Dictionary = {}) -> void:
 	_auth.config = DotAuthConfig.new()
 	_auth.config.client_name = "TMC Web Player"
 
-	# [b]Which backbone, from a file that ships in the build.[/b] `DotAuthClient.start`
-	# layers a JSON file, then the environment, then argv — and a browser has neither of
-	# the last two, so without this a web player gets whatever `DotAuthConfig`'s exported
-	# default happens to be and has no way to be told otherwise. That default was a
-	# domain nobody owned; it is now the real site, and a deployment that is not the real
-	# site still has to say so.
-	#
-	# Same file convention and the same reasoning as `client/content.json` below: a
-	# shipped file rather than the page's query string, because this URL decides where a
-	# single-use sign-in code is redeemed and a link that could aim it elsewhere would be
-	# a credential-forwarding link. `config_file` defaults to `user://dot_auth.json`,
-	# which on web is an IndexedDB path no operator can put anything in.
+	# The backbone comes from a file shipped in the build, like `client/content.json`: a browser has neither env nor argv, and a query-string URL
+	# would decide where the single-use sign-in code is redeemed, a credential-forwarding link. (`config_file`'s default is an IndexedDB path no operator can fill.)
 	_auth.config_file = AUTH_CONFIG if FileAccess.file_exists(AUTH_CONFIG) else ""
 
 	if _auth.config_file == "":
@@ -377,23 +307,12 @@ func _sign_in(resumed: Dictionary = {}) -> void:
 
 	add_child(_auth)
 
-	# [b]`try_web_handoff`, not `sign_in`.[/b] `sign_in()` tries the page handoff, then a
-	# stored session, and then falls through to `start_device_login()` — so a shell
-	# opened as a bare link, which is every standalone embed and every development page,
-	# started a DEVICE-CODE login: two requests to the backbone on every page load, for a
-	# flow whose code this shell has nowhere to display and nobody will ever read. The
-	# comment above has said "there is no code, sign_in() fails immediately" since it was
-	# written, and that was the intent rather than the behaviour.
-	#
-	# It is also what made the wrong backbone visible: those were the two failing requests
-	# in the browser console, and a device flow nobody wanted is what was making them.
+	# `try_web_handoff`, not `sign_in`: `sign_in()` falls through to a device-code login, which cost every bare-link shell
+	# two backbone requests per page load for a code nobody can read.
 	var res: DotResult = await _auth.try_web_handoff()
 
-	# [b]A restart onto newer addons must not sign a member out.[/b] The page's code is
-	# single-use and was redeemed by the start before this one, so the handoff can fail
-	# here for a player who is signed in -- and the credentials it bought are in the
-	# store. They are used only for the member the update recorded: a stored session from
-	# somebody else on a shared browser is not this player, and a guest stays a guest.
+	# A restart onto newer addons must not sign a member out: the page's code is single-use and already spent, so the handoff fails here;
+	# the stored credentials are used only for the member the update recorded (a guest stays a guest).
 	if not res.ok and str(resumed.get("member", "")) != "":
 		var restored: DotResult = await _auth.restore_session()
 
@@ -446,17 +365,8 @@ func _refresh_first_party() -> void:
 	DotLog.debug(CHANNEL, "first-party servers from the site", {"audiences": res.value})
 
 
-## The shell's translator, from the shipped messages and the player's language.
-##
-## [b]A refusal is a key, and this is what turns one into a sentence.[/b] The site refuses
-## with keys (`party.join.deny.full`) and dot-party carries them in `DotError.detail`;
-## [method DotLocale.explain] renders one when the catalogue has it and falls back to the
-## error's own English message when it does not. So nothing here gets worse for a key the
-## shell ships no translation of -- it gets the message it always showed.
-##
-## Layered like every config here: `--locale-language de` or `--locale-pseudo true` after a
-## `--` on a desktop build, which is how a translator checks a build without a settings
-## screen. A browser has neither argv nor environment and gets the page's language.
+## The shell's translator, from the shipped messages and the player's language (`--locale-language` on desktop, the page's in a browser).
+## A refusal is a key; [method DotLocale.explain] renders it when the catalogue has it, else the error's own English message.
 func _build_locale() -> void:
 	var cfg := DotLocaleConfig.new()
 	cfg.directory = LOCALE_DIR
@@ -474,9 +384,7 @@ func _build_locale() -> void:
 
 
 ## A player's text for [param key], or [param fallback] when no language has the key.
-##
-## The key itself is DotLocale's last resort and is right for a game under development; a
-## player who connects to a server with a stripped build should still read a sentence.
+## The key itself is DotLocale's last resort; a player on a stripped build should still read a sentence.
 func _text(key: String, args: Dictionary, fallback: String) -> String:
 	if _locale == null or not _locale.has(key):
 		return fallback
@@ -490,17 +398,9 @@ func _explain(error: DotError) -> String:
 	return _locale.explain(error) if _locale != null else error.message
 
 
-## The player's party, followed wherever it goes.
-##
-## [b]Only when signed in[/b], because a party is the site's and the site only knows who a
-## signed-in player is. [code]connect_fn[/code] is this shell's own connect path -- the
-## Connect button's -- so following the party to a server is exactly what the player would
-## have done by hand, including dropping the link they are on.
-##
-## [b]The site does not serve the player's party routes yet[/b] (dot-party's
-## docs/backbone-contract.md). Until it does, every poll is a 404; the first one switches
-## this off for the session rather than asking again every twenty seconds for something
-## the site has said it does not have.
+## The player's party, followed wherever it goes. Only when signed in, because the site only knows signed-in players.
+## The site does not serve party routes yet (dot-party's docs/backbone-contract.md), so the first 404 switches polling off for the session.
+## [code]connect_fn[/code] is this shell's Connect path, so following the party is what the player would have done by hand.
 func _build_party(identity: DotAuthIdentity) -> void:
 	if _auth == null or identity == null:
 		return
@@ -521,18 +421,8 @@ func _build_party(identity: DotAuthIdentity) -> void:
 	_party.refresh()
 
 
-## The player's friends list and their own presence. See [TmcFriends].
-##
-## Built at the same moment as the party client and for the same reason -- only a signed-in
-## player has friends -- over the same dot-auth client, so one token and one refresh serve
-## both. Its party route is the party client's own join, and its server route is this
-## shell's Connect, so following a friend is what the player would have done by hand.
-##
-## [b]Quitting waits for "offline".[/b] A presence lives two minutes after its last post;
-## a player who closes the game would otherwise be shown playing, and joinable, to every
-## friend for that long. So the window's close request is taken over while this exists --
-## see [method _notification] -- and given two seconds to say so. A browser tab that is
-## closed never asks, and there the presence simply expires.
+## The player's friends list and presence, built with the party client over the same dot-auth client. See [TmcFriends].
+## Quitting waits two seconds for "offline" (see [method _notification]): a presence lives two minutes and would show a closed game joinable; a closed tab never asks and expires.
 func _build_friends() -> void:
 	if _auth == null:
 		return
@@ -756,11 +646,8 @@ func _on_party_request_failed(what: String, error: DotError) -> void:
 	DotLog.debug(CHANNEL, "a party request failed", {"what": what, "why": _explain(error)})
 
 
-## Tells the server which party this player is in, once per party per connection.
-##
-## A chat command rather than a handshake field -- see `TmcParty` on the server for why --
-## and a slash command, which dot-server runs before any game's chat hook sees the line and
-## never broadcasts. The server checks the party's roster before believing it.
+## Tells the server which party this player is in, once per party per connection, as a chat command (see `TmcParty` on the server).
+## A slash command, which dot-server runs before any game's chat hook and never broadcasts; the server checks the roster before believing it.
 func _claim_party() -> void:
 	if _party == null or _party.party == null or link == null or not link.is_connected_to_server():
 		return
@@ -772,19 +659,12 @@ func _claim_party() -> void:
 	link.send_chat("/party_claim %s" % _party.party.id)
 
 
-## The menu's accent.
-##
-## The same blue the arena rings the local player with, deliberately: the menu and the
-## game are one screen a second apart, and two accents makes them look like two products.
+## The menu's accent: the blue the arena rings the local player with, so menu and game do not look like two products.
 const ACCENT := Color(0.36, 0.68, 1.0)
 
 
 ## The theme every control in the menu inherits.
-##
-## [code]DotUiTheme.space()[/code] rather than a hand-styled widget per control: dot-ui
-## already builds a Panel, a Button, a LineEdit and a ProgressBar out of one palette, and a
-## menu that styled each of them here would drift from the panels the GAME builds for its
-## own pause and settings screens — which use the same palette, on purpose.
+## [code]DotUiTheme.space()[/code], so the menu does not drift from the panels a game builds for its own pause and settings screens.
 
 
 func _build_menu() -> void:
@@ -804,10 +684,7 @@ func _build_menu() -> void:
 	# Which client this is: the first screen a player sees after the page's own progress.
 	TmcShellVersion.add_corner_label(_menu)
 
-	# CENTRED BY A CONTAINER, not by an offset from the middle. The menu used to be a box
-	# placed at (-180, -100) from centre with a fixed width, which is centred at exactly one
-	# window size and hangs off the top of a short one — and the browser player is a panel
-	# whose size the page decides.
+	# CENTRED BY A CONTAINER, not an offset from the middle: an offset is centred at one window size and hangs off a short one.
 	var centre := CenterContainer.new()
 	centre.set_anchors_preset(Control.PRESET_FULL_RECT)
 	centre.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -860,10 +737,8 @@ func _build_menu() -> void:
 	_name.custom_minimum_size = Vector2(0.0, 40.0)
 	box.add_child(_name)
 
-	# Who the backbone says you are, when it said anything. Its own line rather than the
-	# status label: a status is the last thing that happened and this is a standing fact,
-	# and the two were fighting over one label — "Signed in as X" was replaced by
-	# "Connecting…" a frame later, which read as having been signed out.
+	# Its own line rather than the status label: a status is the last thing that happened and the two fought
+	# ("Signed in as X" was replaced by "Connecting…" a frame later, which read as signed out).
 	_identity = Label.new()
 	_identity.visible = false
 	_identity.add_theme_color_override("font_color", ACCENT)
@@ -938,11 +813,7 @@ func _build_menu() -> void:
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(_status)
 
-	# [b]The second line, and it is the one somebody waiting actually reads.[/b] A bar
-	# and a percentage answer "how much"; they do not answer "how much longer" or "of
-	# what", and a player watching a 200 MB map arrive has exactly those two questions.
-	# So: the file being fetched, the bytes, the rate and the estimate -- and an empty
-	# line rather than a stale one when there is nothing to say.
+	# The second line is the one a waiting player reads: file, bytes, rate and estimate answer "how much longer" and "of what"; empty rather than stale.
 	_detail = Label.new()
 	_detail.theme_type_variation = &"DotDim"
 	_detail.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -951,12 +822,8 @@ func _build_menu() -> void:
 	_detail.visible = false
 	box.add_child(_detail)
 
-	# [b]The way out of a client that holds the wrong thing.[/b] A mounted pack cannot be
-	# unmounted on any platform, so a game or map that will not load -- a cached object
-	# that fails its check, a mount that fails, an old copy of something republished --
-	# is fixed by deleting the downloads and starting again. Always here, under the status
-	# line that says what went wrong: this shell has no settings screen, and the moment a
-	# player needs it is the moment that line has just told them something failed.
+	# The way out of a client that holds the wrong thing: a mounted pack cannot be unmounted, so a game or map that will not load is fixed by deleting the downloads.
+	# Always here, under the status line, because that is when a player needs it (this shell has no settings screen).
 	_clear = Button.new()
 	_clear.text = "Clear downloaded content\u2026"
 	_clear.flat = true
@@ -978,14 +845,8 @@ func _build_menu() -> void:
 		note.add_theme_font_size_override("font_size", 12)
 		box.add_child(note)
 
-	# Focused after it is in the tree. Grabbing focus on a node that is not yet there is a
-	# menu that opens with nothing focused — unusable with a gamepad and invisible with a
-	# mouse. game-arena shipped exactly that. Guarded, because a shell told to join at once
-	# (a link, a suite) has taken the panel down again by the time the deferred call runs, and
-	# grab_focus out of the tree is an engine error (shell_notice printed one every run).
-	# A solo launch never shows the form, not even for the moment sign-in takes: the site
-	# sent the player to play one game here, and a "Guest 123" name and a localhost
-	# address under it read as being asked to type something before it starts.
+	# Focused after it is in the tree: grab_focus out of the tree is an engine error, and a shell told to join at once has taken the panel down by the time the deferred call runs.
+	# A solo launch never shows the form: the site sent the player to play one game, not to type a name and address.
 	_show_connect_form(str(TmcSolo.requested()["id"]) == "")
 	_focus_when_shown(_join)
 
@@ -1039,12 +900,8 @@ func _gap(height: float) -> Control:
 	return spacer
 
 
-## Makes a button read as the one thing on screen to press.
-##
-## dot-ui's Button is deliberately quiet — a surface fill and a thin outline — which is
-## right for a settings panel with six of them and wrong for a screen with one. Overridden
-## on the instance rather than in the theme, so every other button in this build keeps the
-## quiet style.
+## Makes a button read as the one thing on screen to press: dot-ui's quiet Button suits a settings panel with six and not a screen with one.
+## Overridden on the instance, not in the theme, so every other button keeps the quiet style.
 func _primary(button: Button) -> void:
 	button.add_theme_stylebox_override("normal", _fill(ACCENT.darkened(0.10)))
 	button.add_theme_stylebox_override("hover", _fill(ACCENT))
@@ -1078,11 +935,7 @@ func _outline(colour: Color, radius: int = 12) -> StyleBoxFlat:
 	return box
 
 
-## Puts the menu into — or out of — "something is happening" state.
-##
-## One place, because the three ways a connection ends (it failed, the server dropped us,
-## the game started) all have to undo the same two things, and a Connect button left
-## disabled after a failure is a dead end with no error attached to it.
+## Puts the menu into or out of "something is happening" state. One place, because every way a connection ends must undo the same two things, and a Connect button left disabled is a dead end.
 func _set_busy(busy: bool) -> void:
 	if _join != null:
 		_join.disabled = busy
@@ -1109,18 +962,8 @@ func _indeterminate(on: bool) -> void:
 
 
 ## Creates the content client, once, before the first connection.
-##
-## [b]The trusted key is the whole of the security here and it comes from a file.[/b]
-## `DotCloudConfig` refuses unsigned manifests by default and `validate()` will not boot
-## without a key, which is deliberate — a mounted pack can contain scripts, so a client
-## that mounts unsigned content runs whatever the server sent. `trusted_keys` is in
-## `sensitive_keys`, so it cannot arrive from the environment or the command line: a
-## page's query string must not be able to make itself a publisher.
-##
-## `res://client/content.json` is where an operator puts it, shipped inside the export
-## beside the shell. With no such file the client boots with no trusted key, which is
-## correct and means "this build plays servers whose games it already has" — and the
-## failure a player then sees names the missing configuration rather than the server.
+## The trusted key comes from a file and is the whole of the security here: a mounted pack can contain scripts. `trusted_keys` is in `sensitive_keys`, so no query string can make itself a publisher;
+## with no `res://client/content.json` the build plays only the games it already has.
 func _ensure_cloud() -> void:
 	if _cloud != null and is_instance_valid(_cloud):
 		return
@@ -1131,21 +974,12 @@ func _ensure_cloud() -> void:
 	# player's cue that this shell, not the server, is the one to update.
 	_cloud.host_role = "client"
 	_cloud.config = DotCloudConfig.new()
-	# The shell is a player's client even when a suite runs it headless, where dot-cloud's
-	# `auto` would read "server" and leave a game's client-only files (API 8) behind, so a
-	# headless test client would load a different game from a player's. A solo game runs
-	# its server in this process too, so [method _start_solo] widens this to both, and
-	# dot-cloud mounts the server-only rest of a pack already mounted for a join.
+	# The shell is a player's client even headless, where dot-cloud's `auto` would read "server" and leave client-only files (API 8) behind.
+	# A solo game runs its server here too, so [method _start_solo] widens this to both.
 	_cloud.config.side = "client"
 
-	# [b]A player may keep nothing.[/b] Downloads are kept between sessions by default --
-	# content-addressed, so a file two games or two versions share is stored once, and a
-	# game played yesterday starts without a download today. `--content-cache off` (the
-	# TMC app's "keep downloaded games" switch) points the store at a session folder
-	# that is emptied now, for whatever the last session left, and again on quit. Where
-	# the cache lives and how big it may grow need nothing here: DotCloudConfig already
-	# reads `--cloud-cache-dir=` and `--cloud-cache-bytes=` off the command line, and an
-	# explicit `--cloud-cache-dir` wins over this.
+	# A player may keep nothing: `--content-cache off` points the store at a session folder emptied now and on quit.
+	# An explicit `--cloud-cache-dir` wins; DotCloudConfig already reads the cache dir and size off the command line.
 	if content_cache_off():
 		_cloud.config.cache_dir = SESSION_CACHE
 		DotPaths.remove_tree(SESSION_CACHE)
@@ -1161,57 +995,21 @@ func _ensure_cloud() -> void:
 		)
 		_cloud.config_file = ""
 
-	# [b]Where this build downloads maps from, and it is an operator's decision.[/b]
-	#
-	# The default is `/content`: the page's own origin, which is the one content layout
-	# with no CORS headers to get right. `DotCloudClient` puts the page origin on the
-	# front of it at request time — it has to, because [HTTPRequest] parses the URL
-	# itself, in C++, before any of the browser sees it, and a root-relative string is
-	# not a URL. That resolution was ASSUMED here for months and did not exist: the
-	# console said `Error parsing URL: '/content/surf_mesa/manifest.json'`, an engine
-	# message naming nothing anybody had configured, and no map ever downloaded.
-	#
-	# A deployment whose content is somewhere else says so in `content.json`, beside the
-	# key it already keeps there:
-	#
-	#     "content_urls": ["https://games.example.net/content"]
-	#
-	# That host then needs `Access-Control-Allow-Origin` for the page, which is the cost
-	# of not being same-origin and the reason the default is what it is.
+	# Maps download from `/content` by default: the page's own origin, with no CORS headers to get right. `DotCloudClient` prepends the origin
+	# because [HTTPRequest] parses the URL in C++ and a root-relative string is not a URL.
+	# Content elsewhere is set in `content.json` (`"content_urls": [...]`) and then needs `Access-Control-Allow-Origin`.
 	var configured := _configured_content_urls()
 	_cloud.http_base_urls = (
 		configured if not configured.is_empty() else PackedStringArray(["/content"])
 	)
 
-	# [b]No version segment, because the published layout has none.[/b] The default
-	# template is `{base}/{id}/{version}/manifest.json`, and `DotCloudPublisher` writes
-	# `<id>/manifest.json` — the version is INSIDE the document, and the mount still
-	# namespaces by it, so nothing is lost by leaving it out of the path. With the
-	# default, `ensure()` asks for `/content/surf_mesa/0.0.0/manifest.json`, gets a 404
-	# from a CDN that is serving the map perfectly well one path segment up, and reports
-	# "could not get surf_mesa's manifest" — which reads as missing content.
-	#
-	# [b]This is the path EVERYTHING takes now, not just maps.[/b] It used to say a
-	# delivered game did not use it, because dot-server handed the client a manifest URL
-	# an operator had written in `game.yml`. `manifest_url` is optional since packs became
-	# findable by content id, and the tracked descriptors carry none -- so a game pack is
-	# resolved through this template against the bases below, exactly as a map is. Getting
-	# the template wrong would now break every game rather than only the maps.
-	#
-	# [b]Versioned first, flat as a fallback, and the same pair the SERVER uses.[/b] A
-	# player is sent to whatever their server mounted, so a client resolving a different
-	# shape from the server that told it what to fetch is a game that loads on one and not
-	# the other. The site publishes `{id}/{version}/`; the flat form is what the imported
-	# map packs were published under and is still asked for by name.
+	# No version segment, because the published layout has none: the version is INSIDE the manifest and the mount namespaces by it; the default template 404ed on a CDN serving the map fine.
+	# This is the path EVERYTHING takes (games resolve through it as maps do).
+	# Versioned first, flat as fallback, the same pair the SERVER uses, so both ends resolve the same shape.
 	_cloud.manifest_url_template = "{base}/{id}/{version}/manifest.json"
 	_cloud.manifest_url_fallbacks = PackedStringArray(["{base}/{id}/manifest.json"])
 
-	# [b]Straight off the content client, not through the link.[/b] DotClientLink
-	# forwards a fraction and a sentence, which is all a join needs -- but the payload
-	# dot-cloud emits carries the file, the rate and the estimate, and that is the
-	# difference between a bar that moves and a wait somebody can sit through. The
-	# shell owns this node, so it can read the richer signal without widening anything
-	# in the addon.
+	# Straight off the content client, not the link: the link forwards a fraction and a sentence, but dot-cloud's payload carries file, rate and estimate.
 	_cloud.phase_changed.connect(_on_cloud_phase)
 	_cloud.failed.connect(_on_cloud_failed)
 	_cloud.progress_changed.connect(_on_cloud_progress_detail)
@@ -1219,19 +1017,8 @@ func _ensure_cloud() -> void:
 	add_child(_cloud)
 
 
-## The headline: what dot-cloud is doing at all.
-##
-## Every phase is worth saying out loud. Mounting a 200 MB pack is not instant and
-## looks identical to a hang, and "Verifying" is the phase that takes the longest with
-## nothing moving on the network -- a bar that sits at 100% through it is how a
-## finished download reads as a freeze.
 ## A pack this client is too old to run (CODE_VERSION), told plainly and passed to the page.
-##
-## [b]Branches on the code, never the sentence.[/b] From dot-cloud API level 3 the refusal
-## comes before the pack is downloaded; on an older addon it comes after, and the player
-## has already waited. Either way the fix is the same -- a newer client -- so the page is
-## told in both cases and `early` only decides whether the loader may say nothing was
-## downloaded.
+## Branches on the code, never the sentence; before dot-cloud API 3 the refusal came after the download, and either way the fix is a newer client.
 func _on_cloud_failed(error: DotError) -> void:
 	if error == null or error.code != DotError.CODE_VERSION:
 		return
@@ -1268,10 +1055,7 @@ func _on_cloud_phase(phase: int, text: String) -> void:
 	if _status != null and text != "":
 		_status.text = _solo_pack_label if _solo_pack_label != "" else text
 
-	# [b]In a game, a failed download or mount has nowhere to be said.[/b] The status line
-	# is on the menu, and the menu is hidden while a game runs -- so a map the server
-	# changed to that would not fetch or mount left a player on the old one with no
-	# reason and no way out. Those are exactly the failures clearing the downloads fixes.
+	# In a game a failed download or mount has nowhere to be said (the menu is hidden), leaving a player on the old map with no way out; clearing downloads fixes exactly those.
 	if phase == DotCloudClient.Phase.FAILED and _menu != null and not _menu.visible:
 		show_content_failed(text)
 
@@ -1322,11 +1106,7 @@ func _on_cloud_progress_detail(p: Dictionary) -> void:
 	if _detail == null:
 		return
 
-	# [b]Two lines, in the order somebody actually asks the questions.[/b] First "how
-	# much longer", then "of what" -- and they are separate lines because one joined
-	# string wrapped three times in a 275 px panel and left the word "left" alone on a
-	# row of its own. That is invisible to every assertion about the text and obvious
-	# in a rendered frame, which is why there is a screenshot of it.
+	# Two lines, "how much longer" then "of what": one joined string wrapped three times in a 275 px panel, which no assertion catches but a rendered frame shows.
 	var numbers := PackedStringArray()
 
 	var total := int(p.get("total_bytes", 0))
@@ -1364,12 +1144,8 @@ func _on_cloud_progress_detail(p: Dictionary) -> void:
 	_detail.visible = _detail.text != ""
 
 
-## `23.5 / 63.0 MiB` rather than `23.5 MiB / 63.0 MiB`.
-##
-## The unit twice is nine characters that say nothing, and this panel is 215 px wide --
-## the first version of this line wrapped and left the word "left" alone on a row.
-## Dropped only when both sides land in the same unit, which is most of a download and
-## never the interesting end of one.
+## `23.5 / 63.0 MiB` rather than `23.5 MiB / 63.0 MiB`: the panel is 215 px wide and the repeated unit wrapped.
+## Dropped only when both sides land in the same unit.
 static func _bytes_pair(done: int, total: int) -> String:
 	var a := DotPaths.format_bytes(done)
 	var b := DotPaths.format_bytes(total)
@@ -1381,10 +1157,7 @@ static func _bytes_pair(done: int, total: int) -> String:
 	return "%s / %s" % [a, b]
 
 
-## A middle-elided name, because the end of a filename is the part that identifies it.
-##
-## `surf_mesa_geometry_lod0.bin` truncated from the right is `surf_mesa_geometr…`, which
-## is every file in that map.
+## A middle-elided name, because the end of a filename identifies it: `surf_mesa_geometry_lod0.bin` cut from the right is every file in that map.
 static func _elide(text: String, limit: int) -> String:
 	if text.length() <= limit:
 		return text
@@ -1404,12 +1177,8 @@ static func _eta_text(seconds: float) -> String:
 	return "%d min left" % minutes
 
 
-## `content_urls` out of `client/content.json`, or empty.
-##
-## Read here rather than through [DotCloudConfig], which has no field for it: the base
-## URLs live on the client and the config file is the only thing in an export an
-## operator can edit without rebuilding. Parsed defensively -- a file that is present
-## but malformed must not stop a build that can still play the games it already has.
+## `content_urls` out of `client/content.json`, or empty. Read here because DotCloudConfig has no field for it and this file is all an operator can edit in an export;
+## parsed defensively, since a malformed file must not stop a build that can play the games it already has.
 func _configured_content_urls() -> PackedStringArray:
 	var out := PackedStringArray()
 
@@ -1450,11 +1219,8 @@ func _connect_to(address: String) -> void:
 		_status.text = "Type an address first."
 		return
 
-	# [b]Online never sees a subscription.[/b] The index's session is what every catalogue
-	# filters by, and the cloud client's tag is what a mount is stamped with: both go to
-	# `online` before anything of the server's is fetched, and `sync()` is never called here.
-	# A pack that runs code stays resident in this process after its game is freed, so a
-	# process that mounted one restarts first rather than joining with it loaded.
+	# Online never sees a subscription: the index's session filters every catalogue and the cloud client's tag stamps a mount, so both go to `online` before anything is fetched.
+	# A pack that runs code stays resident after its game is freed, so a process that mounted one restarts first.
 	if _workshop != null and _workshop.requires_restart_before_online():
 		_restart_for_online(target)
 		return
@@ -1486,26 +1252,15 @@ func _connect_to(address: String) -> void:
 		_end_solo_session()
 		_clear_game()
 
-	# Before a new one is built, never after: see [method _drop_link]. Every path that
-	# ends a connection drops it too, so this is belt and braces -- except for the one
-	# path that does not, which is a signon that failed after the socket came up
-	# ([method _fail]), where the menu comes back with the link still connected.
+	# Before a new one is built, never after ([method _drop_link]). Belt and braces, except for a signon that failed after the socket came up ([method _fail]), where the menu returns with the link still connected.
 	_drop_link()
 
-	# [b]Without this a browser client cannot download anything, ever.[/b]
-	# `DotClientLink._begin_content_sync` resolves `dot_cloud_client` from [DotRegistry]
-	# and fails the join outright when it is null — "This server needs downloadable
-	# content, which this build cannot fetch" — so a shell with no cloud client can only
-	# ever join servers whose games ship inside this build. Every game in `content/` is
-	# `kind: builtin` today, which is exactly why nothing noticed.
+	# Without this a browser client cannot download anything: `DotClientLink._begin_content_sync` resolves `dot_cloud_client` from [DotRegistry] and fails the join when it is null.
 	_ensure_cloud()
 	_enter_online_session()
 
 	link = DotClientLink.new()
-	# "Server", because Godot routes an RPC by the receiver's node path relative to its
-	# MultiplayerAPI root and dot-server's node is called that. The name is the routing,
-	# not a description — get it wrong and every RPC fails, handshake included, with a
-	# timeout as the only symptom.
+	# "Server", because Godot routes an RPC by the receiver's node path and dot-server's node is called that; a wrong name fails every RPC, handshake included, with only a timeout to show.
 	link.name = "Server"
 	link.player_name = _name.text.strip_edges()
 	# Native launches join over UDP when the server serves ENet: `--udp host:port`
@@ -1566,19 +1321,9 @@ func _connect_to(address: String) -> void:
 		_drop_link()
 
 
-## The server's challenge: if it runs newer addons than this build, leave, fetch them, and
-## restart into them.
-##
-## [b]Before the join, because after it the old addons have run.[/b] The challenge is the
-## first message and arrives before anything of the game is loaded; a newer addon fetched
-## once a game is playing could not replace the copy already compiled (see
-## [DotCloudAddonSet] for the measurement). So the join is abandoned here, the packs are
-## fetched with the menu up, and the restart comes back to this server on the new addons.
-##
-## Never twice for one set: a set whose last start failed, or a server whose update failed
-## this session, is joined on this build's addons instead -- older addons than the server's
-## is the situation every release before this one was in, and it is a game, where a loop is
-## not.
+## The server's challenge: if it runs newer addons than this build, leave, fetch them, and restart into them.
+## Before the join, because after it the old addons have run and a newer one fetched later cannot replace the compiled copy (see [DotCloudAddonSet]).
+## Never twice for one set: after a failed start or update the join proceeds on this build's addons, because a loop is worse.
 func _on_server_info(_challenge: Dictionary, target: String) -> void:
 	if link == null or _addons_updating or _addons_skipped.has(target):
 		return
@@ -1621,14 +1366,8 @@ func _on_server_info(_challenge: Dictionary, target: String) -> void:
 
 
 func _update_addons(addons: DotCloudAddonSet, wanted: Dictionary, target: String, attempt: String) -> void:
-	# Quietly: `_drop_link` closes without a reason, so no "Disconnected" is said about a
-	# server this client is about to come straight back to.
-	#
-	# An exported (release) build logs one engine line here, `Attempt to disconnect a
-	# nonexistent connection from 'Server' ... 'tree_exited'`, from closing an ENet peer
-	# right after the server's first message. It is the engine's multiplayer cache, it is
-	# the same with the drop deferred by frames, a debug run does not print it, and the
-	# update and the rejoin complete either way (measured, 2026-10-10).
+	# Quietly: `_drop_link` closes without a reason, so no "Disconnected" is said about a server we rejoin at once.
+	# A release build logs one harmless engine line here (`Attempt to disconnect a nonexistent connection from 'Server'`), the same with the drop deferred.
 	_drop_link()
 	_set_busy(true)
 	_indeterminate(true)
@@ -1701,16 +1440,9 @@ func _attempt_key(target: String, wanted: Dictionary) -> String:
 	return "%s|%s" % [target, ",".join(parts)]
 
 
-## How many times this tab has restarted for [param key].
-##
-## [b]A browser guard that does not live where the failure does.[/b] The plan, the overlay
-## and the boot's own loop guard are all files in `user://`, which in a browser is a copy of
-## IndexedDB that reaches it only through an asynchronous sync -- and a restart onto newer
-## addons is a reload, so a write that did not land is a page that comes back with no plan,
-## sees the same newer addons, updates and reloads again, for ever. Measured: six reloads in
-## seventy seconds. `sessionStorage` is written synchronously and survives a reload of the
-## same tab, so this count is there whatever happened to the files. A desktop build writes
-## files synchronously and has the plan's own guard; it counts nothing here.
+## How many times this tab has restarted for [param key]. Kept in `sessionStorage`, not `user://`: in a browser files reach IndexedDB only through an asynchronous sync,
+## so a write that did not land is a reload with no plan that updates and reloads for ever (six reloads in seventy seconds measured).
+## A desktop build writes files synchronously and has the plan's own guard; it counts nothing here.
 func _update_attempts(key: String) -> int:
 	var counts := _read_update_attempts()
 	return int(counts.get(key, 0))
@@ -1748,12 +1480,8 @@ func _take_resume() -> Dictionary:
 	return resume as Dictionary
 
 
-## Restarts this client, by its platform's means. False when it cannot.
-##
-## A browser reloads its page and a desktop build relaunches itself with the same
-## arguments; [member restart_fn] stands in for both under test. [param keep] is what the
-## next start has to find: a browser reloads only once each of those files is in
-## IndexedDB, and does not reload at all when they cannot get there.
+## Restarts this client, by its platform's means; false when it cannot. [member restart_fn] stands in under test.
+## [param keep] is what the next start has to find: a browser reloads only once each file is in IndexedDB.
 func _restart(keep: PackedStringArray = PackedStringArray()) -> bool:
 	if restart_fn.is_valid():
 		restart_fn.call()
@@ -1763,18 +1491,8 @@ func _restart(keep: PackedStringArray = PackedStringArray()) -> bool:
 		return false
 
 	if DotPlatform.is_web():
-		# [b]Waits for IndexedDB to hold what the next load reads, by reading it back.[/b]
-		# This was four sync requests 0.75 s apart and then the reload, on the belief that
-		# the engine dropped a sync asked for during another. It does not (it runs the next
-		# one when the current ends), and the real loss was the clock: one `FS.syncfs` walks
-		# every file in `user://`, so it takes seconds and grows with the player's cache,
-		# and a reload inside it loses it. Measured in headless Chromium with an exported
-		# shell: syncs of 1-5 s under 1 MiB cached, and a reload 2.9 s after the plan was
-		# written that came back without the plan, the overlay or the last two addons'
-		# files -- downloaded again, restarted again, and the player joined on the old
-		# addons as a guest at the third load. A sync can also fail outright (the console
-		# says "Failed to save IDB file system"), and the next one carries the change, so
-		# no count of requests is right: reading the store back is.
+		# Waits for IndexedDB to hold what the next load reads, by reading it back: one `FS.syncfs` walks every file in `user://` and takes seconds,
+		# a reload inside it loses the plan and addons, and a sync can fail outright, so no count of requests is right.
 		# See [method DotCloudAddonSet.persisted].
 		var kept: DotResult = await DotCloudAddonSet.persisted(keep, PERSIST_TIMEOUT_SEC)
 		if not kept.ok:
@@ -1785,29 +1503,20 @@ func _restart(keep: PackedStringArray = PackedStringArray()) -> bool:
 				"why": str(kept.error),
 			})
 			return false
-		# Through the location object rather than `eval`, which a page with a strict
-		# Content-Security-Policy refuses; see `DotWeb.get_global`.
-		#
-		# Called as a method, not through `Object.call("reload")`: on a JavaScriptObject
-		# that asks JavaScript for a method named `call`, and the page says
-		# "obj[method] is not a function" and stays where it is.
+		# Through the location object rather than `eval`, which a strict CSP refuses (`DotWeb.get_global`).
+		# Called as a method, not `Object.call("reload")`: on a JavaScriptObject that asks for a method named `call`.
 		var location: Variant = DotWeb.get_global("location")
 		if location == null:
 			return false
-		# dot-game's DotGameClient arms a "Leave site?" prompt while a game is live, and
-		# this reload is ours, not the player's: an update restart that asks "are you
-		# sure" is one a player cancels. Disarmed by property, not eval, for the same CSP
-		# reason as above; the flag is absent when no game client installed it.
+		# dot-game's DotGameClient arms a "Leave site?" prompt while a game is live; this reload is ours, so it is disarmed (by property, not eval, same CSP reason).
+		# The flag is absent when no game client installed it.
 		var tab_guard: Variant = DotWeb.get_global("__dotTabGuard")
 		if tab_guard != null:
 			tab_guard.armed = false
 		location.reload()
 		return true
 
-	# [b]Both halves of the command line.[/b] `get_cmdline_args()` stops at the bare `--`,
-	# and everything this shell reads -- `--connect`, `--udp`, `--transport`,
-	# `--content-cache` -- is after it, so relaunching with that alone came back as a
-	# client that had forgotten where it was going and how. Measured, not assumed.
+	# Both halves of the command line: `get_cmdline_args()` stops at the bare `--`, and everything this shell reads (`--connect`, `--udp`, ...) is after it.
 	var args := OS.get_cmdline_args()
 	var user := OS.get_cmdline_user_args()
 
@@ -1820,35 +1529,9 @@ func _restart(keep: PackedStringArray = PackedStringArray()) -> bool:
 	return true
 
 
-## The client scene for every game that ships inside this build.
-##
-## [b]The whole of what makes this shell multi-game.[/b] A game delivered through dot-cloud
-## names its own client scene and [DotClientLink] builds it; a game shipped inside a build
-## names none, because `DotClientLink._resolve_scene` refuses every absolute `res://` path
-## outside dot-cloud's mount — so for those, the id is the only thing that says which of
-## this build's clients to put on screen.
-##
-## A match, never a default. A shell that fell back to some other game for an unknown id would
-## put a player in a room the server is not running, with the netcode of a game nobody is
-## playing — which looks like a working connection and is not one.
-## Keyed on the game's CONTENT id, not on the id the operator types.
-##
-## `game_id` is a directory name under `content/` and is theirs to choose; renaming one
-## would leave every client unable to find the scene for a game it still has. `content_id`
-## is the game's own identity, and it is also how two game ids share one client — hungry's
-## classic and frenzy are one `hungry`.
-##
-## [b]EMPTY, and that is the whole point of this build.[/b] It held five entries and five
-## games were compiled in beside them, so playing a game meant shipping a client that
-## already knew about it: a new game was a new export, an upload, and every player on the
-## old build unable to join. Every one of the five is a pack now, and this shell downloads
-## and mounts whatever the server it joined is running.
-##
-## The table is kept rather than deleted because the mechanism is still right for anybody
-## building a client with a game inside it — a single-game product, a demo, an offline
-## build. Add an entry and that content id stops needing a download. What must NOT go back
-## is an entry for a game that is also published: the built-in copy would win for players
-## on this build and the delivered one for everybody else, and the two would drift.
+## The client scene for every game that ships inside this build, keyed on the game's CONTENT id (`game_id` is the operator's directory name).
+## A match, never a default: falling back to another game for an unknown id would show a working connection to a room the server is not running.
+## EMPTY on purpose: every game is a downloaded pack, so a new game needs no new export. An entry for a game that is also published would win on this build and drift from the delivered copy.
 const BUILTIN_CLIENTS := {}
 
 
@@ -2194,11 +1877,8 @@ func _restart_for_online(target: String) -> void:
 		"Close and reopen the game to join a server: a subscribed pack that runs code is loaded.")
 
 
-## Fetches and mounts one pack by `<id>[@<version>]`, resolving a missing version to the
-## newest. The value is the `<id>@<version>` that was mounted.
-##
-## [param announce] says what is being fetched (name and size) in the status line for as long
-## as the fetch runs, so a download the player did not ask for by name is at least named.
+## Fetches and mounts one pack by `<id>[@<version>]`, resolving a missing version to the newest; returns the `<id>@<version>` mounted.
+## [param announce] names what is fetched and its size in the status line, so a download the player did not ask for is named.
 func _ensure_solo_pack(key: String, announce: bool = false) -> DotResult:
 	var parts := TmcSolo.split_key(key)
 	var id := str(parts["id"])
@@ -2307,10 +1987,8 @@ static func _scene_dependency_paths(path: String) -> PackedStringArray:
 	return out
 
 
-## Fills the resource cache across frames so the [code]load()[/code] that follows is a hit and
-## the loading cover keeps animating. A browser without threads would otherwise compile every
-## script in one frame. Native builds skip it unless [param force]. A failure only means the
-## plain load() does the work, and says what is wrong.
+## Fills the resource cache across frames so the following [code]load()[/code] is a hit and the cover keeps animating (a browser without threads compiles every script in one frame).
+## Native builds skip it unless [param force]; a failure only means the plain load() does the work.
 func _slice_load(paths: PackedStringArray, force: bool = false) -> void:
 	if paths.is_empty() or not (force or DotPlatform.is_web()):
 		return
@@ -2331,10 +2009,7 @@ func _slice_load(paths: PackedStringArray, force: bool = false) -> void:
 		DotLog.warn(CHANNEL, "slice preload stopped early", {"why": str(res.error)})
 
 
-## `--content-url <base>` on a desktop launch: one more place to ask for packs, after the
-## ones `content.json` names. Only an address -- every manifest still has to verify against
-## this build's key -- and never read from the page, whose solo launch uses the page's own
-## `/content` as a join does.
+## `--content-url <base>` on a desktop launch: one more place to ask for packs, after `content.json`'s. Only an address (every manifest still verifies against this build's key), never read from the page.
 func _adopt_content_url_arg() -> void:
 	var url := _user_arg("--content-url").strip_edges()
 	if url == "" or _cloud == null:
@@ -2345,12 +2020,8 @@ func _adopt_content_url_arg() -> void:
 		_cloud.http_base_urls = bases
 
 
-## Every menu a solo game builds leaves to the shell rather than doing nothing.
-##
-## dot-menu's stock Leave disconnects its `leave_link` when that reports itself connected,
-## and offline in a browser it hides itself (a page cannot close its tab). Pointed at the
-## session, it reads "Back to menu" and comes here. Watched with `node_added` because each
-## game builds its menu when it likes, some of them deferred.
+## Every menu a solo game builds leaves to the shell: dot-menu's stock Leave disconnects `leave_link` when connected, and offline in a browser hides itself.
+## Pointed at the session it reads "Back to menu" and comes here; watched with `node_added` because games build menus when they like.
 func _on_solo_node_added(node: Node) -> void:
 	if _solo_session == null or not (node is DotMenu) or not _game_root.is_ancestor_of(node):
 		return
@@ -2398,13 +2069,8 @@ func is_solo() -> bool:
 	return _solo_session != null
 
 
-## The server told us which game it is running. Fires on the first load and on every
-## change afterwards.
-##
-## [b]The old game comes down here, not in `_on_spawned`.[/b] `DotClientLink._unload_scene`
-## only frees a scene *it* built, which for a built-in game is nothing — so a shell that
-## left this to the link would stack every game an operator ever switched to on top of the
-## last, each with its own netcode manager ticking the same tree.
+## The server told us which game it is running; fires on the first load and on every change.
+## The old game comes down here, not in `_on_spawned`: `DotClientLink._unload_scene` frees only a scene *it* built, so built-in games would stack, each with its own netcode manager.
 func _on_game_changed(game_id: String, _content_id: String, display_name: String) -> void:
 	_join_marks["game_changed"] = Time.get_ticks_usec()
 	if _joining and display_name != "":
@@ -2455,22 +2121,13 @@ func _on_spawned() -> void:
 	var content_id := link.server_content_id
 
 	if content_id == "":
-		# A server running nothing at all. Legitimate — dot-server supports it — and said
-		# out loud, because an empty screen is indistinguishable from a broken client.
-		# Every game is delivered, so a server that is running none has nothing for this
-		# client to show.
+		# A server running nothing at all is legitimate, and said out loud because an empty screen is indistinguishable from a broken client.
 		_fail("This server is not running a game yet.")
 		return
 
 	if not BUILTIN_CLIENTS.has(content_id):
-		# [b]Say which side is behind, because the symptom points at neither.[/b] With an
-		# empty BUILTIN_CLIENTS this is the only way to get here, and by far the most
-		# likely cause is a server older than this client: a server that delivers its
-		# games ALWAYS sends content, so "named a game and sent nothing" is what a
-		# `kind: builtin` descriptor looks like from here -- or a deployment whose
-		# dot-server addon was not pulled alongside its host, which is the same thing one
-		# repository further down. The first version of this message said only that no
-		# content arrived, which is true, unactionable, and reads as a broken client.
+		# Say which side is behind, because the symptom points at neither: with an empty BUILTIN_CLIENTS the likely cause is a server older than this client,
+		# or a deployment whose dot-server addon was not pulled with its host; "named a game and sent nothing" is what a `kind: builtin` descriptor looks like from here.
 		DotLog.error(CHANNEL, "the server sent no content for the game it named", {
 			"content_id": content_id,
 			"builtin_clients": BUILTIN_CLIENTS.size(),
@@ -2504,28 +2161,14 @@ func _on_spawned() -> void:
 	_watch_game_ready()
 
 
-## Holds the loading screen over a game until it is ready to be seen, and draws its
-## materials once under it when it is. [TmcGameCover] does it: a game's [DotLoadGate] first,
-## else the older duck-typed root contract (`ready_to_show`), else a camera-and-settle wait,
-## so every game is covered at spawn whether or not it integrates anything.
-##
-## [b]Why the shell does it.[/b] A material's shader compiles the first time it is drawn,
-## synchronously under the Compatibility renderer, so a browser stalled for a second or more
-## after the map appeared and again at the first shot and the first kill; and a game is on
-## screen the moment its scene is added, before its map and players are. The loading screen
-## is the shell's, and it is the only thing that can cover those frames.
+## Holds the loading screen over a game until it is ready: [TmcGameCover] uses a game's [DotLoadGate], else the root contract (`ready_to_show`), else a camera-and-settle wait.
+## The shell does it because a shader compiles synchronously at first draw under Compatibility, and a game is on screen before its map and players are.
 func _watch_game_ready() -> void:
 	_cover.watch()
 
 
-## Starts the client side of the extra packs this server added to the game (`cfg/addons.yml`),
-## which the link reports as `content_extra` and the content client has already mounted.
-## Children of the game root, so [method _clear_game] frees them with the game. Once per game:
-## `spawned` fires again for a game change on the same connection, but by then the old
-## children are gone, and a second call for the same game finds its own and stops.
-##
-## [b]Only a shell exported after this existed does it.[/b] A player on an older shell mounts
-## the packs (the link asks the content client for them) and never starts their entry.
+## Starts the client side of the extra packs this server added (`cfg/addons.yml`), reported as `content_extra`; children of the game root, so [method _clear_game] frees them.
+## Once per game (a second call finds its own children and stops). Only a shell exported after this existed does it; older shells mount the packs and never start their entry.
 func _start_addon_entries() -> void:
 	if link == null or _cloud == null or link.content_extra.is_empty():
 		return
@@ -2537,11 +2180,7 @@ func _start_addon_entries() -> void:
 	TmcAddonEntry.attach(_game_root, _cloud, link.content_extra, "client")
 
 
-## Takes the current game off screen, whoever built it.
-##
-## `free()`, not `queue_free()`: the next game is added in the same frame, and two games in
-## the tree at once means two netcode managers, two input handlers and two cameras — for a
-## frame, which is long enough to send a packet from the wrong one.
+## Takes the current game off screen, whoever built it. `free()`, not `queue_free()`: the next game is added in the same frame, and two games at once are two netcode managers and cameras, long enough to send a packet from the wrong one.
 func _clear_game() -> void:
 	for child in _game_root.get_children():
 		_game_root.remove_child(child)
@@ -2549,28 +2188,8 @@ func _clear_game() -> void:
 
 
 ## Takes the current link out of the tree, closing whatever it still has open.
-##
-## [b]Reconnecting without this signs on, downloads nothing, and renders an empty world.[/b]
-## The link is named "Server" and that name is the routing: Godot addresses an RPC by the
-## receiver's node path relative to the [MultiplayerAPI] root, so everything the server
-## sends arrives addressed to "Server" and is delivered to whichever child of this shell
-## has that name. A shell that left the dropped link in the tree -- which is what both
-## ways out of a live connection used to do -- gets "Server2" for the replacement, because
-## Godot renames a colliding sibling rather than refusing the add.
-##
-## Nothing then errors. The *old* node answers the handshake, because it is the one the
-## server's calls resolve to, and its signals are still wired to this shell from the first
-## connection, so the menu hides and the game loads. The *new* node is what
-## [DotRegistry] hands out, and a delivered game asks the registry for its link and
-## parents its own RPC node underneath it -- under "Server2", where a snapshot addressed
-## to "Server/<game>" can never land. Signon completes, the pack is already mounted from
-## the first connection so there is visibly no download, the scene instantiates, and the
-## world stays empty. A page refresh "fixes" it because it is the second link, not the
-## connection, that is broken.
-##
-## `remove_child` before `queue_free`, because a name is released when the node leaves the
-## tree and `queue_free` defers that to the end of the frame -- long enough for a
-## reconnect in the same frame to collide with a node that is already on its way out.
+## `remove_child` before `queue_free`: the link's name "Server" is the routing and a colliding sibling is renamed ("Server2"), so the OLD node answers the handshake while [DotRegistry] hands out the new one,
+## whose snapshots addressed to "Server/<game>" never land: no error, an empty world. `queue_free` alone defers the name's release to the end of the frame.
 func _drop_link() -> void:
 	if link == null or not is_instance_valid(link):
 		link = null
@@ -2627,10 +2246,7 @@ func _mark_join(phase: int) -> void:
 		_join_marks[key] = Time.get_ticks_usec()
 
 
-## One line saying where a first join's time went, in milliseconds, for a browser console.
-## Measured because the join stalled a player's page for half a minute and nobody could say
-## in which step. `load` is `LOADING` to `PLAYING`: the link loads the scene, instantiates
-## it and adds it in one call, so the game's own `_ready` and setup are inside it.
+## One line saying where a first join's time went, in milliseconds, for a browser console. `load` is `LOADING` to `PLAYING`, so the game's own `_ready` is inside it.
 func _log_join() -> void:
 	if not _joining or not _join_marks.has("start"):
 		return
@@ -2650,13 +2266,8 @@ func _log_join() -> void:
 	_join_marks = {}
 
 
-## Says something, whether or not the menu is on screen.
-##
-## [b]The status label lives inside the menu, and the menu is hidden while a game is
-## running.[/b] So a failure written to it after signon — "this build has no client for
-## that game", which is the whole of what a multi-game client can get wrong — was written
-## to an invisible node and the page just sat there grey. Found by taking a screenshot and
-## seeing nothing rather than by reading anything.
+## Says something whether or not the menu is on screen: the status label lives in the menu, which is hidden while a game runs,
+## so a failure after signon was written to an invisible node and the page sat grey.
 func _say(text: String) -> void:
 	if _status != null:
 		_status.text = text
@@ -2778,20 +2389,9 @@ func _ask_clear() -> void:
 	_clear_confirm.popup_centered(Vector2i(420, 0))
 
 
-## Deletes every download, by restarting into a start that deletes them first.
-##
-## [b]Not now, because now is the one time it cannot be done.[/b] A pack this session
-## mounted stays merged into `res://` until the process ends -- there is no unmount on
-## any platform -- so deleting its files under it leaves paths that resolve to nothing,
-## and on Windows the open `.pck` refuses to be deleted at all. So this writes a marker
-## and restarts, and [method clear_pending] empties the cache on the way back up, before
-## anything is mounted.
-##
-## [b]In a browser the marker has to reach IndexedDB before the reload.[/b] `user://` is
-## an in-memory mirror there, flushed by an asynchronous `FS.syncfs` that reports nothing
-## back to GDScript, so the reload waits until the marker reads back from IndexedDB
-## ([method _restart]). A marker that did not land costs nothing but a second press -- the
-## old content is still there, and still correct to delete.
+## Deletes every download, by restarting into a start that deletes them first. Not now: a pack mounted this session stays merged into `res://` until exit,
+## and on Windows the open `.pck` cannot be deleted. So a marker is written and [method clear_pending] empties the cache on the way back up.
+## In a browser the marker must reach IndexedDB before the reload ([method _restart]); one that did not land costs a second press.
 func request_clear() -> void:
 	DotPaths.write_text(CLEAR_PENDING, Time.get_datetime_string_from_system(true))
 	# The addon overlay is downloaded content too. Forgotten now, so the restart below
@@ -2840,10 +2440,7 @@ func clear_pending() -> int:
 	return freed
 
 
-## Reports something that stopped the game from starting, and puts the menu back.
-##
-## The menu is what makes the message visible and is also the only way out: a player who
-## cannot be shown a game needs the address box back, not a frozen screen.
+## Reports something that stopped the game from starting, and puts the menu back: the only way out, since a player who cannot be shown a game needs the address box.
 func _fail(text: String) -> void:
 	DotLog.error(CHANNEL, text)
 	_leave_game_ui()
@@ -2869,21 +2466,13 @@ func _on_disconnected(reason: String) -> void:
 	notices.clear_all()
 	_leave_game_ui()
 
-	# [b]The one disconnection a player can actually act on, and it needs a different
-	# sentence from every other one.[/b] This build's `@rpc` surface does not match the
-	# server's, so no amount of retrying will work -- and "Disconnected: ..." beside a
-	# Connect button invites exactly that. See [DotSignon].
+	# The one disconnection a player can act on, and it needs its own sentence: this build's `@rpc` surface does not match the server's, so retrying is useless (see [DotSignon]).
 	if err != null and err.code == DotError.CODE_UNSUPPORTED and wanted != "" \
 			and wanted != DotSignon.revision([DotClientLink]):
 		_report_build_mismatch(wanted)
 		return
 
-	# [b]The same revision and still refused: the kinds or the message types differ.[/b]
-	# Since the RPC surface froze (DotEnvelope) two builds share a revision and settle what
-	# they can do between them by advertising it, and a server that finds a kind or a
-	# message type it REQUIRES missing refuses with CODE_VERSION and a sentence that says
-	# who has to update. That sentence is the whole message; "a different build (it wants
-	# X, this is X)" would name the same revision twice and help nobody.
+	# The same revision and still refused: the kinds or message types differ. The server's CODE_VERSION sentence says who has to update, and is the whole message.
 	if err != null and err.code == DotError.CODE_VERSION and reason != "":
 		DotLog.error(CHANNEL, "refused: this build and the server cannot play together", {
 			"why": reason, "detail": err.detail,
@@ -2903,19 +2492,8 @@ func _on_disconnected(reason: String) -> void:
 	_say(_text("shell.connect.disconnected", {"reason": why}, "Disconnected: %s" % why))
 
 
-## Tells the player, and tells the page.
-##
-## [b]The page is the half that can do something about it.[/b] This build cannot become a
-## different build; the thing embedding it can load one. Every build the site has ever
-## published is still at its own immutable prefix, so "open the build this server needs"
-## is a link the page can already form -- it just has to be told which revision is
-## wanted, and there was no way to tell it.
-##
-## Posted rather than thrown: a shell running natively, or in a page that is not
-## listening, must still show the player the sentence. It goes through [DotWeb] because
-## the [code]JavaScriptBridge[/code] singleton is only REGISTERED on the web export --
-## a script naming it directly does not resolve on desktop, which is the trap
-## [DotWeb] exists to close.
+## Tells the player, and tells the page. The page can load another build (every published build stays at its immutable prefix), so it is told which revision is wanted.
+## Posted rather than thrown, through [DotWeb] because the `JavaScriptBridge` singleton is only REGISTERED on the web export, so naming it fails to resolve on desktop.
 func _report_build_mismatch(wanted: String) -> void:
 	var ours := DotSignon.revision([DotClientLink])
 
@@ -2929,10 +2507,7 @@ func _report_build_mismatch(wanted: String) -> void:
 	if not DotPlatform.is_web():
 		return
 
-	# The shape the loader reads: one message, one type, the two revisions. Nothing
-	# here decides WHICH build to offer -- the page knows what it published and this
-	# does not, and a client naming a build URL would be a client that can be told to
-	# load one.
+	# The shape the loader reads: one message, one type, the two revisions. The page knows what it published; a client naming a build URL could be told to load one.
 	var payload := JSON.stringify({
 		"type": "tmc.build.mismatch",
 		"server_signon": wanted,

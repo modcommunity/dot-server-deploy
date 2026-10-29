@@ -1,35 +1,13 @@
 class_name TmcConfig
 extends RefCounted
 
-## The `cfg/` directory, read into everything a server needs.
-##
-## Five YAML files, four destinations, and one rule that decides which:
-##
-## [b]Where a key names something dot-server's console already knows, it is applied as a
-## console command.[/b] The console is the parser, the validator, the range clamp, the
-## permission check and the audit trail; a second one here would drift from it and the
-## drift would be silent. That is dot-serve's rule — "dot-server's console is the parser" —
-## and it is why `sv_maxplayers: 64` becomes the line `sv_maxplayers 64` rather than an
-## assignment.
-##
-## [b]Where a key names something the console cannot reach, it is applied to the boot
-## config.[/b] The listening port and the bind address are fixed before the console exists;
-## `DotConVar.FLAG_STARTUP_ONLY` is what dot-server uses to say so, and there is no cvar at
-## all for a port.
-##
-## Everything else — groups, per-user permissions, the auth backend, per-content settings —
-## has no console surface and is handed to whatever owns it.
-##
-## [b]An unknown key is reported, never fatal.[/b] Refusing to boot a server because its
-## config mentions a setting from a newer version is worse than ignoring it — which is
-## `DotConfig`'s own rule, for the same reason, and this follows it.
+## The `cfg/` directory, read into everything a server needs. Where a key names something the console knows it becomes a console command (the console is the parser, validator,
+## clamp, permission check and audit trail; `sv_maxplayers: 64` is the line `sv_maxplayers 64`); what the console cannot reach (the port, the bind address) goes to the boot config;
+## the rest is handed to its owner. An unknown key is reported, never fatal, as `DotConfig` does: refusing to boot over a newer version's setting is worse than ignoring it.
 
 const CHANNEL := "tmc.config"
 
-## The files read, in the order they are applied.
-##
-## `net.yml` after `server.yml` so a network setting wins over a general one that happens
-## to name the same thing — which is the order an operator would expect from the filenames.
+## The files read, in the order they are applied: `net.yml` after `server.yml`, so a network setting wins over a general one naming the same thing.
 const FILES := [
 	"server.yml", "net.yml", "log.yml", "rcon.yml", "auth.yml", "groups.yml",
 	"permissions.yml", "vote.yml", "security.yml", "party.yml", "matchmaking.yml",
@@ -41,12 +19,8 @@ const SERVER_DIR := "server"
 ## Files in it that another loader reads.
 const SERVER_DIR_OWNED := ["content.yml"]
 
-## Operator-facing name -> boot config property.
-##
-## [b]These are the ones the console cannot reach.[/b] Two vocabularies is a cost and it is
-## paid deliberately: an operator writes `net_port`, dot-server calls it `port`, and the
-## alternatives are renaming a published cvar or asking an operator to know which layer
-## they are configuring.
+## Operator-facing name -> boot config property, for what the console cannot reach. Two vocabularies are paid for deliberately:
+## an operator writes `net_port`, dot-server calls it `port`, and the alternative is renaming a published cvar.
 const BOOT_KEYS := {
 	"net_port": "port",
 	"net_bind_ip": "bind_address",
@@ -78,18 +52,12 @@ const BOOT_KEYS := {
 	"a2s_enabled": "a2s_enabled",
 	"a2s_port": "a2s_port",
 	"content_manifest_url": "content_manifest_url",
-	# dot-server documents this as the one stdin decision that is a real decision rather
-	# than an environment -- and it was unreachable, because YAML is the only surface this
-	# deployment has and the key was not on it. A server whose stdin carries something
-	# other than commands needs it, and so does anything running two servers in one
-	# process: [DotStdinConsole] is a thread blocked in a read the engine cannot cancel,
-	# so the second one keeps the process alive after everything else has stopped.
+	# dot-server documents this as the one stdin decision that is a real decision, and it was unreachable because YAML is this deployment's only surface.
+	# A server whose stdin carries something other than commands needs it, and so does anything running two servers in one process:
+	# [DotStdinConsole] is a thread blocked in a read the engine cannot cancel, so the second keeps the process alive.
 	"sv_stdin_console": "stdin_console_enabled",
-	# And whether a PIPE counts (dot-server 5f46687): off by default there, because a reader
-	# blocked on a pipe whose writer never closes keeps the process from exiting. A box that
-	# is driven by a supervisor writing commands down a pipe turns it on. TMC's own panel
-	# talks RCON, and neither the Docker image (no `stdin_open`) nor the systemd unit
-	# (StandardInput defaults to null) gives the server a stdin at all, so the default stands.
+	# And whether a PIPE counts (dot-server 5f46687): off by default, because a reader blocked on a pipe whose writer never closes keeps the process from exiting.
+	# TMC's panel talks RCON and neither the Docker image nor the systemd unit gives the server a stdin, so the default stands.
 	"sv_stdin_console_pipes": "stdin_console_pipes",
 	# log.yml. The level is the one an operator changes most often and the one they most
 	# often cannot find: it is not a cvar, because it has to apply before the console
@@ -121,15 +89,9 @@ const NET_KEYS := {
 	"net_stagger_snapshots": "stagger_snapshots",
 }
 
-## Operator-facing name -> [code]DotLogConfig[/code] property.
-##
-## [b]Only what dot-log adds.[/b] The level, the channels, the mirror threshold and every
-## file setting are in [constant BOOT_KEYS] already, because a server with no dot-log still
-## has all of them through dot-core's own sink — so they are read once, into
-## [member server], and copied across in [method build_log_router]. Two lists for one fact
-## is this tree's most repeated bug and the file settings are exactly the fact it would be.
-## [code]log_router[/code] is NOT here: it decides whether the router is built at all
-## rather than setting a property on it, and is handled by name in [method _apply_settings].
+## Operator-facing name -> [code]DotLogConfig[/code] property, only what dot-log adds: the level, channels, mirror threshold and file settings are in [constant BOOT_KEYS]
+## already (a server without dot-log has them through dot-core's sink) and are copied across in [method build_log_router]; two lists for one fact is this tree's most repeated bug.
+## [code]log_router[/code] is NOT here: it decides whether the router is built, and is handled by name in [method _apply_settings].
 const LOG_KEYS := {
 	"log_ring": "memory_enabled",
 	"log_ring_size": "memory_capacity",
@@ -187,15 +149,8 @@ const LEGACY_KEYS := {
 	"rcon_": "dot_console",
 }
 
-## Keys that exist and are handled somewhere other than a config object.
-##
-## Listed so they are not reported as unknown. A key that is silently ignored *and* not
-## reported is the worst of both: the operator believes it took effect.
-##
-## `net_public_ip` is here rather than in [constant BOOT_KEYS] because dot-server has no
-## such setting and should not: what a server binds to and what a player types are
-## different questions, and only the second one is behind NAT. It is what the join address
-## is printed from.
+## Keys that exist and are handled somewhere other than a config object, listed so they are not reported as unknown (a key silently ignored and not reported looks like it took effect).
+## `net_public_ip` is here, not in [constant BOOT_KEYS], because dot-server should have no such setting: what a server binds to and what a player types differ, and only the second is behind NAT.
 const HANDLED_ELSEWHERE := ["sv_content_dir"]
 
 ## The boot configuration, after every file has been applied.
@@ -215,21 +170,12 @@ var net: DotNetConfig = DotNetConfig.new()
 ## does not pass off a DotNetConfig default as an operator limit.
 var _net_written: PackedStringArray = []
 
-## What dot-log adds on top of the file every server already writes.
-##
-## Only the router-only half is read into it; see [constant LOG_KEYS]. The rest is copied
-## out of [member server] by [method build_log_router], so there is one list.
+## What dot-log adds on top of the file every server already writes. Only the router-only half is read into it, see [constant LOG_KEYS];
+## the rest is copied out of [member server] by [method build_log_router], so there is one list.
 var log: DotLogConfig = DotLogConfig.new()
 
-## Whether the sink layer is built at all: [code]"auto"[/code], [code]"on"[/code] or
-## [code]"off"[/code].
-##
-## [b]`auto` is on, and that is not the same as the setting being pointless.[/b] The router
-## is a strict superset of the file every server already writes -- same directory, same
-## name, same rotation, same JSON switch -- so turning it on costs a deployment nothing and
-## buys it `log tail`, `log grep` and `log test` on the console, plus somewhere for syslog
-## and a collector to be configured later. `off` is for a box that wants the plain sink and
-## nothing else, which is a legitimate and much smaller thing to have running.
+## Whether the sink layer is built at all: [code]"auto"[/code], [code]"on"[/code] or [code]"off"[/code].
+## `auto` is on: the router is a strict superset of the file every server writes, so it costs nothing and buys `log tail`, `log grep` and `log test`. `off` is for a box that wants the plain sink.
 var log_router: String = "auto"
 
 ## The guard, after every file has been applied. Its keys are [constant DotSecurityConfig.CFG_KEYS].
@@ -242,11 +188,8 @@ var anticheat: DotAntiCheatConfig = DotAntiCheatConfig.new()
 ## written with a `party_` prefix — `party_seat_hold_sec: 120`. See [method _apply_party].
 var party: DotPartyConfig = DotPartyConfig.new()
 
-## `party.yml`: this server's terms for a party booking it, written `party_reserve_*`.
-##
-## Ships with [member DotPartyReservePolicy.enabled] off, as the site does: an owner opts
-## into letting parties book the server. A booking made at the console with
-## `party_reserve` is the owner's own act and is not held to it.
+## `party.yml`: this server's terms for a party booking it, written `party_reserve_*`. Ships with [member DotPartyReservePolicy.enabled] off, as the site does,
+## so an owner opts in; a booking made at the console with `party_reserve` is the owner's own act and is not held to it.
 var party_policy: DotPartyReservePolicy = DotPartyReservePolicy.new()
 
 ## Whether this server takes part in parties at all. On: a server with no backbone still
@@ -278,14 +221,8 @@ var mm_playlists: Array[DotMmPlaylist] = []
 ## allocation and the players are told who they are playing with and nothing about where.
 var mm_servers: Dictionary = {}
 
-## `replay.yml`: the ring, the chunking and the caps of one file, as every
-## [DotReplayConfig] property written with a `replay_` prefix (`replay_ring_seconds: 120`).
-## See [method _apply_replay] and [TmcReplay].
-##
-## [b]`directory` starts empty here, and empty means `<data>/replays`.[/b] The addon's own
-## default is `user://replays`, which on a server is a directory under the home of whoever
-## runs it -- outside `data/`, so outside the one directory a container mounts writable and
-## a unit file names in `ReadWritePaths`. A clip written there is evidence nobody can find.
+## `replay.yml`: every [DotReplayConfig] property written with a `replay_` prefix (`replay_ring_seconds: 120`). See [method _apply_replay] and [TmcReplay].
+## `directory` starts empty, and empty means `<data>/replays`: the addon's `user://replays` is outside `data/`, the one directory a container mounts writable, so a clip written there is evidence nobody can find.
 var replay: DotReplayConfig = _replay_defaults()
 
 ## `bot_record.yml`: the demonstration recorder's settings, every [DotBotDemoConfig] property
@@ -329,13 +266,8 @@ var users: Dictionary = {}
 ## `auth.yml`, as parsed. Handed to [TmcAuth], which is the only thing that reads it.
 var auth: Dictionary = {}
 
-## `vote.yml`, as a real [DotVoteRules].
-##
-## Applied through [method DotConfig.apply_dictionary] rather than key by key, because
-## that is what reads an enum written by name and coerces every YAML scalar through the
-## property's own type — the same path `DOT_GAME_VOTE_*` and `--game-vote-*` take (see
-## [method _layer_vote_overrides]). A second translation table here would be a second
-## place for `method: instant_runoff` to mean something different.
+## `vote.yml`, as a real [DotVoteRules]. Applied through [method DotConfig.apply_dictionary] rather than key by key, because that reads an enum by name and coerces every scalar through the property's type,
+## the same path `DOT_GAME_VOTE_*` takes (see [method _layer_vote_overrides]); a second table would be a second place for `method: instant_runoff` to mean something else.
 var vote: DotVoteRules = DotVoteRules.new()
 
 ## `admin_menu.yml`, as parsed. Handed to [TmcAdminMenu], which is the only thing that
@@ -350,94 +282,39 @@ var loading: Dictionary = {}
 var radio: Dictionary = {}
 var radio_enabled: bool = false
 
-## Game ids `vote.yml` says are never on a ballot.
-##
-## Not a [DotVoteRules] setting: which of the things in `content/` count as games a
-## player would choose is a question about this deployment, and dot-vote should not have
-## an opinion about it.
+## Game ids `vote.yml` says are never on a ballot. Not a [DotVoteRules] setting: which things in `content/` count as games a player would choose is this deployment's question, and dot-vote should not have an opinion.
 var vote_exclude: PackedStringArray = PackedStringArray()
 
 ## The game to load at boot, or "" for whatever the content directory says is first.
 var initial_game: String = ""
 
-## The site's web loader version this server's browser players should get, or "" for the
-## site's default. Reported as the NOTIFY cvar `sv_web_loader` (see
-## `TmcHost._register_web_loader`).
-##
-## [b]A host field and not a console line,[/b] for the reason `sv_game` is one: the cvar is
-## registered by this host after dot-server boots, and the YAML's console lines run during
-## that boot, so `sv_web_loader: x` passed through would meet "names nothing this server
-## has" and be dropped. Unlike `sv_web_build`, which is read from a tracked file because it
-## is a fact about the checkout, this one is the operator's: it exists for a server that is
-## deliberately behind the site's default and knows which version it still needs.
+## The site's web loader version this server's browser players should get, or "" for the site's default. Reported as the NOTIFY cvar `sv_web_loader` (see `TmcHost._register_web_loader`).
+## A host field and not a console line, as `sv_game` is: the cvar is registered after dot-server boots, and the YAML's console lines run during that boot, so it would be dropped as unknown.
+## Unlike `sv_web_build` (a fact about the checkout) it is the operator's, for a server deliberately behind the site's default.
 var web_loader: String = ""
 
-## The map to start that game on, or "" for the game's own default.
-##
-## `sv_map` in the YAML, `--map` on the command line, and `+map` after a `--` for the
-## muscle memory of every other dedicated server. [b]It is a request, not a
-## guarantee.[/b] A game decides whether it has maps at all — a game of built
-## geometry does not — and the id has to be in that game's catalogue. Both are
-## reported and neither is fatal: a server that refused to boot because one argument
-## named a map that is not there is a server an operator cannot get back.
-##
-## Deliberately NOT a per-game setting. `--g2g-initial-map` already exists and always
-## has; what did not exist was a way to say it without knowing which game's config
-## prefix to spell, which is the whole difficulty on a box that runs seven of them.
+## The map to start that game on, or "" for the game's own default: `sv_map` in the YAML, `--map`, and `+map` after a `--`. A request, not a guarantee: the game decides whether it has maps
+## and the id must be in its catalogue; both are reported and neither is fatal, since a server that refuses to boot over a map name cannot be got back.
+## Deliberately NOT per-game: `--g2g-initial-map` exists, but saying it needs the game's config prefix, which is the difficulty on a box that runs seven.
 var initial_map: String = ""
 
-## The only games this server offers, or empty for everything in the content directory.
-##
-## `games` in the YAML, `--games a,b,c` on the command line, `TMC_GAMES` in a container.
-##
-## [b]A filter, not an installer.[/b] `tools/install_games.gd` is what puts a game's
-## descriptor on the disk; this decides which of the ones that ARE on the disk a player
-## may reach — the `games` listing, `changelevel`, the vote menu and the boot game all
-## read the scanned set, and the scan is where the list has to be applied for all four to
-## agree. Filtering at any one of them leaves the other three offering a game this server
-## was told not to run.
-##
-## [b]Empty means everything, and that is not the same as "none".[/b] A server with no
-## list is the ordinary hand-run one and must not lose its content the day this key is
-## added; a deployment that genuinely wants one game names one game. An id here that is
-## not on the disk is reported at boot and is not fatal, because the usual cause is a
-## pack that has not finished downloading yet and a server that refuses to boot over it
-## is a server an operator cannot get back.
+## The only games this server offers, or empty for everything in the content directory: `games` in the YAML, `--games a,b,c`, `TMC_GAMES` in a container.
+## A filter, not an installer (`tools/install_games.gd` puts descriptors on disk): the `games` listing, `changelevel`, the vote menu and the boot game all read the scanned set,
+## so the scan is where it must apply or the other three offer a game this server was told not to run. Empty means everything, not none; an id not on disk is reported, not fatal (the pack may still be downloading).
 var games_allow: PackedStringArray = PackedStringArray()
 
-## Where this server fetches content it does not have, in order.
-##
-## `content_urls` in the YAML. Empty means the network half is off and only packs
-## already on disk -- under `content/` or `dist/` -- can be used.
-##
-## [b]This is how a cloned server gets its maps.[/b] `maps/imported/` is gitignored in
-## the games that have one, so a deployment stood up by cloning the repositories has the
-## game and none of its maps; they live on the content origin instead, which is what
-## dot-cloud is for. Without this the server could only ever use what was already beside
-## it, while the browser client -- which has always had a base URL -- could download the
-## very map the server was refusing to load.
+## Where this server fetches content it does not have, in order: `content_urls` in the YAML. Empty means only packs already on disk (`content/`, `dist/`) can be used.
+## This is how a cloned server gets its maps: `maps/imported/` is gitignored, so a clone has the game and none of its maps, which live on the content origin; the browser client always had a base URL, the server did not.
 var content_urls: PackedStringArray = PackedStringArray()
 
-## The app's URL segment on the website, reported in a query as the game's name.
-##
-## `sv_query_app` in the YAML. Empty falls back to the running game's id, which is
-## already slug-shaped and is the right answer on a box running one game.
-##
-## [b]Display only.[/b] A server can claim any app it likes; nothing that has to be
-## certain which app a server belongs to — a launch resolving a build, a play grant
-## — reads this. Those ask the backbone, which knows.
+## The app's URL segment on the website, reported in a query as the game's name: `sv_query_app` in the YAML, empty falling back to the running game's id.
+## Display only: a server can claim any app, so nothing that must be certain (a launch resolving a build, a play grant) reads this; those ask the backbone.
 var app_url: String = ""
 
-## The address a player types, when it is not the one the server binds to.
-##
-## Behind NAT the two differ and only the operator knows the difference. Printed in the
-## join line and reported in the server listing; nothing binds to it.
+## The address a player types, when it is not the one the server binds to (behind NAT only the operator knows). Printed in the join line and reported in the listing; nothing binds to it.
 var public_address: String = ""
 
-## Keys that were seen and did not correspond to anything.
-##
-## Collected rather than reported one at a time, so a file with three typos produces three
-## warnings at boot rather than one abort.
+## Keys that were seen and did not correspond to anything, collected so a file with three typos produces three warnings at boot rather than one abort.
 var unknown: PackedStringArray = PackedStringArray()
 
 ## Files that were present and files that were not.
@@ -445,11 +322,7 @@ var files_read: PackedStringArray = PackedStringArray()
 var files_missing: PackedStringArray = PackedStringArray()
 
 
-## Reads a whole `cfg/` directory.
-##
-## A missing file is not an error: a deployment that does not use RCON has no reason to
-## carry an `auth.yml`, and a first run has none of them. A file that is *present and
-## malformed* is an error, and it names the line.
+## Reads a whole `cfg/` directory. A missing file is not an error (no RCON means no reason to carry an `auth.yml`); a file that is *present and malformed* is, and names the line.
 static func load_dir(directory: String) -> DotResult:
 	var config := TmcConfig.new()
 	var base := directory.rstrip("/")
@@ -566,16 +439,8 @@ func _warn_legacy_keys(path: String, tree: Dictionary) -> void:
 		path, DotCfgLegacy.REMOVE_AFTER, ", ".join(moved)], {"path": path})
 
 
-## The environment and the command line over `vote.yml`, like every DotConfig.
-##
-## [b]Under DOT_GAME_VOTE_* and --game-vote-*, not dot-vote's own prefixes.[/b] A game
-## loaded out of `content/` runs its own MAP vote in this same process and layers that
-## under `DOT_VOTE_*` and `--vote-*`; one prefix for both would make a single flag change
-## two votes, one of which the operator did not mean. The server-level vote's commands
-## are `game_*` for the same reason, so the prefix says the same thing twice.
-##
-## These layers used to be claimed and not applied: the note on [member vote] said
-## `DOT_VOTE_*` took the same path as the file, and nothing ever called it.
+## The environment and the command line over `vote.yml`, under DOT_GAME_VOTE_* and --game-vote-*, not dot-vote's own prefixes:
+## a game loaded from `content/` runs its own MAP vote in this process under `DOT_VOTE_*`, and one prefix for both would make a flag change two votes. The server-level vote's commands are `game_*` for the same reason.
 func _layer_vote_overrides() -> void:
 	var before := vote.unknown_keys.size()
 
@@ -586,12 +451,8 @@ func _layer_vote_overrides() -> void:
 		unknown.append("--game-vote-: %s" % vote.unknown_keys[i])
 
 
-## The environment and the command line over `party.yml` and `matchmaking.yml`.
-##
-## The addons' own prefixes -- `DOT_PARTY_*` / `--party-*` and `DOT_MM_*` / `--mm-*` --
-## because unlike the vote there is only one of each in the process: no game runs a
-## party server or a matchmaker of its own, so there is no second one for a prefix to
-## collide with.
+## The environment and the command line over `party.yml` and `matchmaking.yml`, under the addons' own prefixes (`DOT_PARTY_*` / `--party-*`, `DOT_MM_*` / `--mm-*`):
+## unlike the vote there is one of each in the process, so no second one for a prefix to collide with.
 func _layer_party_overrides() -> void:
 	for target in [party, matchmaking]:
 		var cfg := target as DotConfig
@@ -602,13 +463,8 @@ func _layer_party_overrides() -> void:
 			unknown.append("%s: %s" % [cfg.cli_prefix(), cfg.unknown_keys[i]])
 
 
-## The environment and the command line over `replay.yml`: dot-replay's own `DOT_REPLAY_*`
-## and `--replay-*`, for the reason the party's are its own -- there is one recorder in the
-## process and no game runs a second one. `--replay-ring-seconds 300` for one tournament
-## without editing a file is the case the addon's prefix exists for.
-##
-## A layered value the addon refuses is caught when [TmcReplay] configures its recorder,
-## which validates again: the ring is then not built, and that is said at ERROR.
+## The environment and the command line over `replay.yml`: dot-replay's own `DOT_REPLAY_*` and `--replay-*`, as with the party (one recorder per process);
+## `--replay-ring-seconds 300` for one tournament is the case the prefix exists for. A layered value the addon refuses is caught when [TmcReplay] validates again: the ring is not built, said at ERROR.
 func _layer_replay_overrides() -> void:
 	var before := replay.unknown_keys.size()
 	replay.apply_env()
@@ -636,14 +492,8 @@ static func _replay_defaults() -> DotReplayConfig:
 	return cfg
 
 
-## The operator's net settings as limits on a game's own: [DotNetConfig] property -> number,
-## only for what cfg wrote.
-##
-## [b]Handed to the game module, which applies it ([code]DotGameNetcode.cap[/code]) before
-## its netcode starts.[/b] Until then these were parsed into [member net] and nothing read
-## them, because every game builds its own [DotNetConfig]. Ceilings, not overrides: 0 is
-## "no limit from the operator", and the game's own value wins when it is lower. The
-## exception is [code]net_interp_buffer[/code], a smoothing choice the module overrides.
+## The operator's net settings as limits on a game's own: [DotNetConfig] property -> number, only for what cfg wrote. Handed to the game module, which applies it ([code]DotGameNetcode.cap[/code]) before its netcode starts,
+## because every game builds its own [DotNetConfig]. Ceilings, not overrides: 0 is "no limit", the game's lower value wins; [code]net_interp_buffer[/code] is a smoothing choice the module overrides.
 func net_ceiling() -> Dictionary:
 	var out := {}
 
@@ -775,24 +625,15 @@ func _apply_vote(tree: Dictionary) -> DotResult:
 	var before := vote.unknown_keys.size()
 	vote.apply_dictionary(settings, "vote.yml")
 
-	# Reported here rather than left in the resource, so a typo in vote.yml appears in
-	# the same boot report as a typo in server.yml. An unknown key is never fatal —
-	# DotConfig's rule, and refusing to boot over a setting from a newer version is
-	# worse than ignoring it.
+	# Reported here rather than left in the resource, so a typo in vote.yml appears in the same boot report as one in server.yml; an unknown key is never fatal (DotConfig's rule).
 	for i in range(before, vote.unknown_keys.size()):
 		unknown.append("vote.yml: %s" % vote.unknown_keys[i])
 
 	return DotResult.success(null)
 
 
-## `party.yml`: three switches of this deployment's, then two objects by prefix.
-##
-## [b]By prefix rather than by a table of keys.[/b] Every other file here keeps a table,
-## because an operator's name and the property's differ (`net_port` is `port`). Here they
-## do not: `party_seat_hold_sec` is `seat_hold_sec` on [DotPartyConfig] and
-## `party_reserve_empty_only` is `empty_only` on the policy, so a table would be a second
-## copy of each addon's property list -- the list that goes stale when the addon gains a
-## setting. An unknown one is still reported, by the object that did not have it.
+## `party.yml`: three switches of this deployment's, then two objects by prefix rather than by table (`party_seat_hold_sec` is `seat_hold_sec` on [DotPartyConfig]),
+## because a table would be a second copy of each addon's property list, which goes stale when the addon gains a setting. An unknown one is still reported, by the object that did not have it.
 func _apply_party(tree: Dictionary) -> DotResult:
 	for key in tree.keys():
 		var name := String(key)
@@ -855,13 +696,8 @@ func _apply_radio(tree: Dictionary) -> DotResult:
 	return DotResult.success(null)
 
 
-## `replay.yml`: six switches of this deployment's, then every [DotReplayConfig] property
-## by its `replay_` name -- by prefix and not by table, for the reason [method _apply_party]
-## gives: a table would be a second copy of the addon's property list.
-##
-## [b]A setting the addon refuses refuses the boot.[/b] `replay_compression: zip` or
-## keyframes faster than chunks would otherwise be a recorder that is quietly not built,
-## and the first person to find out is a moderator typing `replay save` during an incident.
+## `replay.yml`: six switches of this deployment's, then every [DotReplayConfig] property by its `replay_` name, by prefix as [method _apply_party] explains.
+## A setting the addon refuses refuses the boot: otherwise a recorder is quietly not built, and a moderator finds out typing `replay save` during an incident.
 func _apply_replay(tree: Dictionary) -> DotResult:
 	for key in tree.keys():
 		var name := String(key)
@@ -992,11 +828,8 @@ func _playlists_from(value: Variant) -> DotResult:
 	return DotResult.success(null)
 
 
-## Sets one property on a plain [Resource], coerced through the property's own type.
-##
-## [DotConfig] has this built in and these two are not DotConfigs: the reservation policy
-## is the site's `Server` columns ported, and a playlist is a document a matchmaker holds
-## several of. A plain `set()` would store a YAML string into an int and fail far away.
+## Sets one property on a plain [Resource], coerced through the property's own type. [DotConfig] has this built in and these two (the reservation policy, a playlist) are not DotConfigs;
+## a plain `set()` would store a YAML string into an int and fail far away.
 static func _set_on_resource(target: Object, property: String, value: Variant) -> DotResult:
 	for prop in target.get_property_list():
 		if String(prop["name"]) != property:
@@ -1087,25 +920,14 @@ func _apply_settings(file: String, tree: Dictionary) -> DotResult:
 			continue
 
 		if name == "sv_map":
-			# Not passed through as a console line for the same reason `sv_query_app`
-			# is not: there is no `map` cvar or command at this level to receive it.
-			# The one that exists belongs to whichever game is loaded, which at the
-			# time the startup config runs is none of them.
+			# Not passed through as a console line, like `sv_query_app`: there is no `map` cvar at this level; the one that exists belongs to whichever game is loaded, which is none when the startup config runs.
 			initial_map = String(value)
 			continue
 
 		if name == "games":
-			# A list, or one string, exactly as `content_urls` below takes either --
-			# `games: arena` is what an operator with one game writes and there is no
-			# reason to make them write a list of one.
-			#
-			# Not passed through as a console line: dot-server has no cvar for the set of
-			# games a host offers, because the set is this host's idea rather than the
-			# server's. `sv_game` picks one OF these and is a cvar, which is why the two
-			# spellings are deliberately not alike.
-			# Each entry through TmcGameRef, exactly as the command-line override is:
-			# `games: [gamemann/game-g2gfast01@1.2.0]` in a file has to mean the same
-			# directory as the same words in a panel field.
+			# A list, or one string, as `content_urls` below takes either (`games: arena` is what an operator with one game writes).
+			# Not a console line: dot-server has no cvar for the set of games a host offers; `sv_game` picks one OF these, so the two spellings are deliberately unalike.
+			# Each entry through TmcGameRef, as the command-line override is, so `gamemann/game-g2gfast01@1.2.0` in a file means the same directory as in a panel field.
 			if value is Array:
 				for entry in (value as Array):
 					for dir_name in TmcGameRef.dirs_in(String(entry)):
@@ -1132,31 +954,9 @@ func _apply_settings(file: String, tree: Dictionary) -> DotResult:
 				if one != "":
 					content_urls.append(one)
 
-			# [b]The same list to the clients, from the same line of YAML.[/b] The
-			# server downloads its maps from these and the client has to download the
-			# same maps from somewhere; left to itself the only address a shipped build
-			# can guess is the origin its page came from, which is right for a
-			# self-hosted deployment and wrong for every CDN. Two settings for one fact
-			# is this tree's most repeated bug, so there is one setting.
-			#
-			# [b]Assigned only if this dot-server has the property, and the check is
-			# not paranoia.[/b] Every addon here is a separately cloned repository, so
-			# an operator who pulls this one and not that one is the ordinary case --
-			# and a plain assignment to a property a resource does not have is a FATAL
-			# script error naming a type rather than a version:
-			#
-			#   Invalid assignment of property or key 'content_base_urls' with value
-			#   of type 'PackedStringArray' on a base object of type
-			#   'Resource (DotServerConfig)'
-			#
-			# which aborts `_apply_settings` mid-way, returns null into a caller that
-			# reads `.ok` off it, and buries the cause under two more errors about Nil.
-			# A server that booted yesterday then does not boot today and says nothing
-			# an operator can act on.
-			#
-			# This file's rule for the opposite skew -- a key from a NEWER config file
-			# than the code -- is fifty lines up: never fatal, report it and carry on.
-			# Same rule, other direction.
+			# The same list to the clients, from the same line of YAML: the server downloads maps from these and the client must download them from somewhere, and a shipped build can only guess its page's origin, wrong for every CDN.
+			# Assigned only if this dot-server has the property: addons are separately cloned, so pulling one and not another is ordinary, and assigning a missing property is a FATAL script error
+			# that aborts `_apply_settings` mid-way and returns null into a caller that reads `.ok` off it. (A key from a NEWER file than the code is the opposite skew: never fatal.)
 			if "content_base_urls" in server:
 				server.content_base_urls = content_urls
 			else:
@@ -1168,10 +968,7 @@ func _apply_settings(file: String, tree: Dictionary) -> DotResult:
 			continue
 
 		if name == "sv_query_app":
-			# Not passed through as a console line: the cvar of that name is
-			# registered by the query host, which opens AFTER the startup config
-			# runs, so a `sv_query_app` line in the generated .cfg would name a
-			# cvar that does not exist yet and be reported as unknown.
+			# Not a console line: the cvar of that name is registered by the query host, which opens AFTER the startup config runs, so a generated `sv_query_app` line would be reported unknown.
 			app_url = String(value)
 			continue
 
@@ -1194,13 +991,8 @@ func _apply_settings(file: String, tree: Dictionary) -> DotResult:
 			continue
 
 		if name == "log_router":
-			# [b]A bool is accepted because `on` and `off` ARE bools in this dialect.[/b]
-			# `TmcYaml` reads `on`, `yes` and `true` as true and `off`, `no` and `false`
-			# as false -- which is the same rule that famously turns the country code `NO`
-			# into a boolean, and is right here because that is what an operator writing
-			# `log_router: on` means. Reading only the three words would report the most
-			# natural spelling of the setting as an unknown key and quietly leave the
-			# default in force.
+			# A bool is accepted because `on` and `off` ARE bools in this dialect (`TmcYaml` reads `on`/`yes`/`true` as true), and `log_router: on` is the natural spelling;
+			# reading only the three words would report it as an unknown key and leave the default in force.
 			var mode := ""
 
 			if value is bool:
@@ -1253,27 +1045,15 @@ func _apply_settings(file: String, tree: Dictionary) -> DotResult:
 		if name in HANDLED_ELSEWHERE:
 			continue
 
-		# Anything left that *looks* like a cvar is handed to the console, unresolved.
-		# dot-server registers cvars a module owns, which this layer cannot know about at
-		# read time — `room_...`, `hungry_bots` — so a name-based guess here would refuse
-		# every setting a game contributed. The console answers "unknown command" for a
-		# real typo, which is the same report by a better-informed party.
+		# Anything left that *looks* like a cvar is handed to the console unresolved: a module's cvars (`room_...`, `hungry_bots`) are not known at read time,
+		# so a name-based guess here would refuse every setting a game contributed; the console answers "unknown command" for a real typo.
 		console_lines.append(_console_line(name, value))
 
 	return DotResult.success(null)
 
 
-## The sink layer this configuration describes, or null when it is switched off.
-##
-## [b]The shared settings are copied out of [member server] rather than read twice.[/b] The
-## level, the channels, the mirror threshold and every file setting exist on
-## [DotServerConfig] because a deployment with no dot-log still has all of them through
-## dot-core's own sink -- so `log.yml` names each of them once, they land there, and this
-## carries them across. A second set of keys for the same six facts is the shape this
-## project has already been bitten by twice.
-##
-## Returns null for [code]log_router: off[/code], and the server then makes its own
-## [code]DotLogSink[/code] exactly as it did before this existed.
+## The sink layer this configuration describes, or null when it is switched off (the server then makes its own [code]DotLogSink[/code]).
+## The shared settings are copied out of [member server] rather than read twice: a deployment with no dot-log has them through dot-core's sink, so `log.yml` names each once; a second set of keys is a shape this project was bitten by twice.
 func build_log_router() -> DotLogRouter:
 	if log_router == "off":
 		return null
@@ -1314,12 +1094,8 @@ func build_log_router() -> DotLogRouter:
 	return log.build_router()
 
 
-## Assigns onto a [DotConfig], coercing through its own rules.
-##
-## Through [method DotConfig.apply_dictionary] rather than [method Object.set], so a value
-## of the wrong type is coerced and reported the way every other layer of configuration in
-## this family coerces and reports it — and so `max-players`, `maxPlayers` and
-## `max_players` all reach the same property.
+## Assigns onto a [DotConfig], coercing through its own rules: through [method DotConfig.apply_dictionary] rather than [method Object.set], so a wrong-typed value is coerced and reported
+## as every other layer does, and `max-players`, `maxPlayers` and `max_players` reach the same property.
 func _set_on(target: DotConfig, property: String, value: Variant) -> DotResult:
 	var before := target.unknown_keys.size()
 	var applied := target.apply_dictionary({property: value}, "cfg")
@@ -1350,21 +1126,9 @@ static func _console_line(name: String, value: Variant) -> String:
 	return "%s %s" % [name, text]
 
 
-## Writes the console lines to a `.cfg` for dot-server to execute at boot.
-##
-## [b]Through dot-server's own startup-config path rather than through a hook of our
-## own.[/b] `DotServer.boot()` runs `config.startup_config` after the console exists and
-## *before* the listener opens, which is the only window in which a `FLAG_STARTUP_ONLY`
-## cvar — `sv_tickrate`, and everything else fixed at boot — is still settable. There is no
-## signal in that window and there should not be one: reaching in would be a second
-## ordering to keep in step with dot-server's, and dot-serve's rule already says the
-## console is the parser.
-##
-## The file is **generated and overwritten every boot**, which is the opposite of
-## dot-serve's rule about never touching `server.cfg` and is right for the opposite reason:
-## this file is derived, and the authored one is the YAML. It is written rather than kept
-## in memory so an operator can read exactly what their configuration became — which is the
-## question they actually have when a setting appears not to work.
+## Writes the console lines to a `.cfg` for dot-server to execute at boot, through its own startup-config path: `DotServer.boot()` runs it after the console exists and *before* the listener opens,
+## the only window where a `FLAG_STARTUP_ONLY` cvar (`sv_tickrate`) is still settable, and a hook of our own would be a second ordering to keep in step.
+## Generated and overwritten every boot (it is derived; the YAML is the authored file) and written rather than kept in memory so an operator can read what their configuration became.
 func write_cfg(path: String) -> DotResult:
 	var text := PackedStringArray([
 		"// GENERATED from cfg/*.yml on every boot. Do not edit: your changes will be",
@@ -1386,11 +1150,7 @@ func write_cfg(path: String) -> DotResult:
 	return DotResult.success(path)
 
 
-## Reports what dot-server made of the generated config.
-##
-## Called after boot. A line the console refused is a warning rather than a refusal to
-## start, for [member unknown]'s reason — but it is a warning that names the line, because
-## the alternative is a setting that silently did nothing.
+## Reports what dot-server made of the generated config, after boot. A line the console refused is a warning, for [member unknown]'s reason, but one that names the line.
 func note_console_result(console: DotConsole) -> void:
 	for line in console_lines:
 		var name := line.split(" ")[0]
@@ -1401,10 +1161,8 @@ func note_console_result(console: DotConsole) -> void:
 			unknown.append("cfg: %s%s" % [name, " (did you mean %s?)" % ", ".join(near) if not near.is_empty() else ""])
 
 
-## The settings this server does have that [param name] most resembles, best first (at most 3).
-##
-## Godot's bigram [method String.similarity] rather than a prefix test: a typo like
-## `net_intrest_radius` shares no useful prefix with the key it meant.
+## The settings this server does have that [param name] most resembles, best first (at most 3). Godot's bigram [method String.similarity] rather than a prefix test:
+## a typo like `net_intrest_radius` shares no useful prefix with the key it meant.
 func nearest_names(name: String, console: DotConsole = null) -> PackedStringArray:
 	var pool := PackedStringArray()
 	for keys: Dictionary in [BOOT_KEYS, NET_KEYS, LOG_KEYS]:
@@ -1426,10 +1184,7 @@ func nearest_names(name: String, console: DotConsole = null) -> PackedStringArra
 	return out
 
 
-## Turns a scalar or a sequence into a list of strings.
-##
-## A single value is a list of one. `sv_tags: pvp` and `sv_tags: [pvp, modded]` are both
-## things an operator writes and neither is a mistake.
+## Turns a scalar or a sequence into a list of strings: a single value is a list of one (`sv_tags: pvp` and `sv_tags: [pvp, modded]` are both legitimate).
 static func _string_list(value: Variant) -> PackedStringArray:
 	var out := PackedStringArray()
 
@@ -1450,13 +1205,8 @@ func describe_lines() -> PackedStringArray:
 	out.append("hostname : %s" % server.hostname)
 	out.append("listen   : %s:%d" % [server.bind_address, server.port])
 	out.append("players  : %d" % server.max_players)
-	# [b]`sv_game` was settable, worked, and was invisible from here.[/b] The parser has
-	# always mapped it onto `initial_game`, the shipped `server.yml` never mentioned it,
-	# and this report -- the one command whose entire job is "show me what my
-	# configuration became" -- did not print it. So the only way to find out which game a
-	# box would boot was to boot it and read the log. Empty is not "nothing": it means the
-	# content directory's own default wins, which is a different statement and is worth
-	# saying out loud rather than leaving as a blank.
+	# `sv_game` was settable and worked but invisible here: the one report whose job is "show me what my configuration became" did not print it.
+	# Empty is not "nothing": it means the content directory's own default wins, which is worth saying out loud.
 	out.append("game     : %s" % (
 		initial_game if initial_game != "" else "(content default)"))
 	# Here for the same reason `game` is, and it was about to repeat the same mistake:
@@ -1465,10 +1215,7 @@ func describe_lines() -> PackedStringArray:
 		initial_map if initial_map != "" else "(the game's default)"))
 	out.append("loader   : %s" % (
 		web_loader if web_loader != "" else "(the site's default)"))
-	# Same argument a third time. A server offering three of the ten games on its disk
-	# is a deliberate choice somewhere, and "somewhere" is this line -- without it the
-	# only way to tell a filtered server from an empty content directory is to boot one
-	# and count what came back.
+	# Same argument a third time: a server offering three of the ten games on its disk is a deliberate choice, and without this line a filtered server looks like an empty content directory.
 	out.append("games    : %s" % (
 		", ".join(games_allow) if not games_allow.is_empty() else "(everything in content/)"))
 	out.append("content  : %s" % (
