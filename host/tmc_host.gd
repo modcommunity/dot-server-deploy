@@ -58,6 +58,8 @@ var replay: TmcReplay = null
 
 ## dot-radio, when the addon is linked and `radio.yml` turns it on; null otherwise. See [TmcRadio].
 var radio: TmcRadio = null
+## dot-trail, likewise from `trail.yml`. See [TmcTrail].
+var trail: TmcTrail = null
 
 var _config_dir := "cfg"
 var _content_dir := "content"
@@ -735,6 +737,7 @@ func _boot() -> bool:
 	DotRegistry.register(&"bot_record_config", config.bot_record)
 
 	radio = TmcRadio.install(self, server, config, _absolute(_data_dir))
+	trail = TmcTrail.install(self, server, config, _absolute(_data_dir))
 
 	# After the first game, so the menu's first look at the console sees the game's own
 	# commands -- though it looks again on every page, which is what keeps it right across

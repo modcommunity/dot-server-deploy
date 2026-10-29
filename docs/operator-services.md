@@ -64,3 +64,12 @@ Each of these is operator- or shell-level: a game should not have to know about 
 - **Needs a new shell build.** `client/shell.gd` gained the notice case, and the client needs dot-radio in the shell's addon set (`addons.lock`), which is not bumped here. A shell built before that ignores the notice and the station still works for anything that opens the admin page or `GET /now`.
 - **Not built**: `!radio`, `!song`, `!request` chat commands (`DotRadioCommands` exists but nothing hands it a console), a listener HUD, and a tab in the workbench.
 - **Rights**: the operator uploads the audio and is responsible for the right to broadcast it.
+
+## Trails (optional)
+
+`host/tmc_trail.gd` (`TmcTrail.install`, after `TmcRadio`) on the server and `client/tmc_trail_link.gd` (`TmcTrailLink`) in the shell, from `cfg/addon/dot_trail/trail.yml`; games carry no trail code. `- repo: dot-trail` in `cfg/content/addons.yml` (and `addons.lock`) brings the addon; `trail_enabled: true` loads the trail set from `trail_store_dir` (default `data/trails/`), builds a `DotTrailRelay`, registers it as `dot_trail_relay`, and serves the `dot.trail` envelope kind.
+
+- **Classes by name**, as for the radio: a build without dot-trail parses, and enabled without the addon is one WARN.
+- **Ownership is the site's.** Groups come from the player's session; bought trails from `GET <trail_site_url><trail_entitlements_path>?user=<userid>` with the key in `trail_api_key_file` (a file only). A request the cached list would refuse refetches first, at most every 2 s, so a trail bought a moment ago can be worn.
+- **The pack**: `trail_pack: <id>@<version>` is advertised as the notify cvar `sv_trail_pack`; the shell's `DotGamePrejoin` fetches it before the socket opens (a failure is a warning, never a failed join).
+- **The shell** adds a Trails page to every game's menu once `DotGameClient` publishes itself (dot-game API 34), with buy, equip and the upload form. It uses the site's store when the shell knows the site, else a local stub. Ribbons go on the figures `DotGameClientAvatars.figure_of` names. Needs a shell build carrying dot-trail. `examples/trail_wiring.tscn` checks the install.

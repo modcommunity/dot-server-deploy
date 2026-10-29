@@ -109,6 +109,8 @@ var loading: TmcLoadingScreen = null
 
 ## dot-radio's client, made when a server that runs a station says where it is. See [TmcRadioLink].
 var radio_link: TmcRadioLink = null
+## dot-trail's client and menu page. See [TmcTrailLink].
+var trail_link: TmcTrailLink = null
 
 ## Whether this connection has put a game on screen yet.
 var _has_spawned := false
@@ -196,6 +198,14 @@ func _ready() -> void:
 	radio_link = TmcRadioLink.new()
 	radio_link.name = "RadioLink"
 	add_child(radio_link)
+	trail_link = TmcTrailLink.new()
+	trail_link.name = "TrailLink"
+	trail_link.site_fn = _workshop_site
+	trail_link.token_fn = _workshop_token
+	trail_link.cloud_fn = func() -> Object:
+		_ensure_cloud()
+		return _cloud
+	add_child(trail_link)
 
 	# Claims the covering job for every DotLoadGate a game makes under the game root, so
 	# only the loading screen shows, never the gate's own cover as well.
@@ -1236,12 +1246,12 @@ func _connect_to(address: String) -> void:
 	loading.begin(TmcLoadingScreen.REASON_GAME)
 	loading.set_progress(-1.0, _text("shell.loading.connecting", {"server": target}, "Connecting to %s…" % target))
 
-	# Avatar files the server requires come down before the socket opens, for every game. Bounded and
-	# never fatal: a dead CDN costs the stock figures, not the join.
+	# Avatar files and the trail pack come down before the socket opens; bounded, never fatal.
 	var prejoin := DotGamePrejoin.new()
 	prejoin.site_url = _workshop_site()
 	prejoin.progress_fn = func(fraction: float, text: String) -> void:
 		loading.set_progress(fraction, text)
+	trail_link.before_join(prejoin)
 	await prejoin.prepare(self, target)
 	if not _joining:
 		return
@@ -1263,17 +1273,14 @@ func _connect_to(address: String) -> void:
 	# "Server", because Godot routes an RPC by the receiver's node path and dot-server's node is called that; a wrong name fails every RPC, handshake included, with only a timeout to show.
 	link.name = "Server"
 	link.player_name = _name.text.strip_edges()
-	# Native launches join over UDP when the server serves ENet: `--udp host:port`
-	# names it (the launcher passes the server's advertised enet_port), and
-	# `--transport auto|udp|ws` overrides the choice. See DotClientLink.
+	# `--udp host:port` joins over ENet (the launcher passes enet_port); `--transport auto|udp|ws` overrides. See DotClientLink.
 	link.udp_address = _user_arg("--udp")
 	var preference := _user_arg("--transport")
 	if preference in ["auto", "udp", "ws"]:
 		link.transport_preference = preference
-	# Send-only, and declared before the connect so the credentials advertise it: the
-	# server sends a menu choice's kind to nobody, it only has to know this client can send
-	# one. See TmcAdminMenuPanel.KIND.
+	# Declared before the connect so the credentials advertise them. See TmcAdminMenuPanel.KIND.
 	link.envelope.register(TmcAdminMenuPanel.KIND)
+	trail_link.attach(link)
 	# Where the server's game scene is put. The shell never names a scene itself.
 	link.game_root_ref = DotNodeRef.of_path(_game_root.get_path())
 	add_child(link)
@@ -2235,6 +2242,8 @@ func _leave_game_ui() -> void:
 		loading.reset()
 	if radio_link != null:
 		radio_link.reset()
+	if trail_link != null:
+		trail_link.reset()
 
 
 ## Notes when the link entered a phase, for [method _log_join].

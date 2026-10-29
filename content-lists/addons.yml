@@ -95,6 +95,8 @@ entries:
     pin: v0.1.8
   - repo: dot-radio
     pin: v0.1.0
+  - repo: dot-trail
+    pin: v0.1.0
   - repo: dot-replay
     pin: v0.1.9
   - repo: dot-server

@@ -494,6 +494,9 @@ echo
 echo "the admin menu and the loading screen"
 "$GODOT" --headless --path . res://examples/admin_loading_selftest.tscn || fails=$((fails + 1))
 "$GODOT" --headless --path . res://examples/admin_live.tscn < /dev/null || fails=$((fails + 1))
+echo
+echo "dot-trail's install (addon linked or not)"
+"$GODOT" --headless --path . res://examples/trail_wiring.tscn || fails=$((fails + 1))
 
 # The other half: a real DotServer, a real listener, the default game loaded and a module in
 # it. Everything the selftest cannot reach without starting one.

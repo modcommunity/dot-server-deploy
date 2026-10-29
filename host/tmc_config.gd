@@ -11,7 +11,7 @@ const CHANNEL := "tmc.config"
 const FILES := [
 	"server.yml", "net.yml", "log.yml", "rcon.yml", "auth.yml", "groups.yml",
 	"permissions.yml", "vote.yml", "security.yml", "party.yml", "matchmaking.yml",
-	"replay.yml", "admin_menu.yml", "loading.yml", "radio.yml", "bot_record.yml",
+	"replay.yml", "admin_menu.yml", "loading.yml", "radio.yml", "trail.yml", "bot_record.yml",
 ]
 
 ## The operator's base directory under `cfg/`: `server.yml` and any other flat server file. Never touched by an update.
@@ -139,6 +139,7 @@ const LAYERED := {
 	"vote.yml": "dot-vote",
 	"loading.yml": "dot-core",
 	"radio.yml": "dot-radio",
+	"trail.yml": "dot-trail",
 }
 
 ## Key prefix in `server.yml` -> the addon folder that owns it now (`cfg/addons/<addon>/`). Still
@@ -281,6 +282,8 @@ var loading: Dictionary = {}
 ## `radio.yml` (dot-radio, optional): the `radio_*` keys, validated by [method _apply_radio]. Off by default; handed to [TmcRadio].
 var radio: Dictionary = {}
 var radio_enabled: bool = false
+## `trail.yml` (dot-trail, optional): the `trail_*` keys, read by [method TmcTrail.apply_config].
+var trail: Dictionary = {}
 
 ## Game ids `vote.yml` says are never on a ballot. Not a [DotVoteRules] setting: which things in `content/` count as games a player would choose is this deployment's question, and dot-vote should not have an opinion.
 var vote_exclude: PackedStringArray = PackedStringArray()
@@ -608,6 +611,8 @@ func _apply(file: String, tree: Dictionary) -> DotResult:
 			return DotResult.success(null)
 		"radio.yml":
 			return _apply_radio(tree)
+		"trail.yml":
+			return TmcTrail.apply_config(self, tree)
 		"vote.yml":
 			return _apply_vote(tree)
 		_:
