@@ -15,6 +15,8 @@
 #   cvar        change console variables        cheats  change cheat-flagged ones, and
 #                                                       noclip, god, buddha, hp, speed,
 #                                                       gravity, give, strip on players
+#   noclip      fly through walls where a game grants it as a permission (game-playground
+#               `pg_noclip permission`); cheats also covers it
 #   slay        slay, slap, freeze, respawn, rename, burn, blind, beacon a player
 #   teleport    bring, goto, send and return players
 #   config      execute config files            modules load and unload modules
