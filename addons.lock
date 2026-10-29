@@ -12,17 +12,17 @@ dot-chat	v0.1.5
 dot-cloud	v0.1.18
 dot-combat	v0.1.12
 dot-console	v0.1.7
-dot-core	v0.1.22
+dot-core	v0.1.23
 dot-economy	v0.1.5
 dot-effects	v0.1.6
 dot-entity	v0.1.6
 dot-friends	v0.1.5
-dot-fx	v0.3.1
+dot-fx	v0.3.2
 dot-game	v0.1.28
 dot-inventory	v0.1.4
 dot-leaderboard	v0.3.0
 dot-lighting	v0.1.8
-dot-loadout	v0.1.4
+dot-loadout	v0.1.5
 dot-locale	v0.1.5
 dot-log	v0.1.5
 dot-map	v0.1.55
@@ -42,7 +42,7 @@ dot-platform	v0.1.7
 dot-player	v0.1.5
 dot-player-char	v0.1.12
 dot-player-class	v0.1.5
-dot-player-controller	v0.2.4
+dot-player-controller	v0.2.8
 dot-procedural-generation	v0.1.4
 dot-radio	v0.1.0
 dot-profile	v0.1.21
@@ -67,4 +67,4 @@ dot-vote	v0.1.14
 dot-weapon	v0.1.16
 dot-weather	v0.1.1
 zed-dot-weapons	v0.1.5
-zee-dot-weapons	v0.1.17
+zee-dot-weapons	v0.1.19
