@@ -151,6 +151,23 @@ games:
         - gamemann/surf_torque2
         - gamemann/surf_velocity
         - gamemann/surf_xiv_v2a
+        # The deathmatch and gun game maps, one pack each, from github.com/zees-games/arena-dm-maps.
+        - gamemann/aim_forts
+        - gamemann/blackhawkdown
+        - gamemann/dm_hot_cn_v1
+        - gamemann/dm_industrial_gamma
+        - gamemann/dm_morpheus
+        - gamemann/dm_overwatch
+        - gamemann/dm_scarletdevilmansion
+        - gamemann/gg_canyon
+        - gamemann/gg_fy_snow
+        - gamemann/gg_garage
+        - gamemann/gg_krusty_krab
+        - gamemann/gg_lego_arena
+        - gamemann/gg_punishment
+        - gamemann/gg_simpsons_x
+        - gamemann/gg_woods
+        - gamemann/welcometomexicov6
 
   mg-wipeout:
     maps:
