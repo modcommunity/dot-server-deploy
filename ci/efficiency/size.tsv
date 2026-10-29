@@ -61,7 +61,7 @@ host/tmc_party.gd	822
 host/tmc_vote.gd	832
 tools/cloud_fetch_probe.gd::_init	116
 tools/index.gd::_initialize	114
-tools/install_games.gd	1872
+tools/install_games.gd	1770
 tools/install_games.gd::_init	349
 tools/map_content_probe.gd::_init	231
 tools/pack.gd	884

@@ -1,49 +1,12 @@
 extends SceneTree
 
-## Install the games this server was told to run, from the content origin.
+## Installs the games this server was told to run, from the content origin.
 ##
-## [codeblock]
-## godot --headless --path . --script res://tools/install_games.gd -- \
-##     --games arena,g2gfast --base https://dotgames.org/content \
-##     --content content --data data --config cfg
-## [/codeblock]
+## Driven by `./server install-games`, and by `./server run` when TMC_GAMES is set (a panel with no shell). The pack is a signed dot-cloud pack; the descriptor (`content/<id>/game.yml`) is fetched beside it.
 ##
-## Driven by `./server install-games`, and by `./server run` when TMC_GAMES is set, which
-## is how it runs on a panel that has no shell.
+## Fetched at startup, not on first join: a download of hundreds of megabytes with players waiting reads as a hang. An existing `game.yml` is never overwritten (operators edit it; `--refresh` takes the origin's). `--prune` removes only what this tool recorded in `data/installed-games.json`.
 ##
-## [b]What "installing a game" actually is, and why it is two halves.[/b] A game on the
-## origin is a signed dot-cloud pack: scenes, scripts and art, content-addressed, mounted
-## at `res://dot_cloud/<id>/<version>/`. What the pack does NOT carry is the descriptor
-## that starts it — which scene the server runs, which module drives it, how many players
-## it takes, what its cvars are. That is `content/<id>/game.yml`, it lives beside the pack
-## in the deploy repository, and every deployment used to get all ten of them by cloning.
-## `tools/index.gd` publishes them beside the packs; this fetches the two or three a
-## particular box was asked for:
-##
-## [codeblock]
-## GET {base}/games.json                     the catalogue
-## GET {base}/descriptors/<id>/game.yml  ->  content/<id>/game.yml
-## DotCloudClient.ensure(content_id, ver) ->  data/content_cache/…
-## [/codeblock]
-##
-## [b]The pack is fetched HERE, not on first join.[/b] Without this the download happens
-## the first time somebody changes to that game, with players connected and waiting on a
-## transfer that can be hundreds of megabytes — and on a panel the operator reads that as
-## a hang. Fetching at startup makes the wait happen where a wait is expected, and makes
-## a content origin that is down a startup failure with a message rather than a game
-## nobody can switch to an hour later.
-##
-## [b]A descriptor that is already on the disk is never overwritten.[/b] `game.yml` is the
-## file an operator edits — cvars, player counts, the map a server starts on — so a
-## startup that re-downloaded it would quietly undo their work on every restart, which is
-## the worst kind of bug to own: it only shows up on the reboot after the change, when
-## nobody is looking at this. `--refresh` is the explicit way to take the origin's copy.
-##
-## [b]It removes nothing unless asked, and then only what it installed itself.[/b]
-## `--prune` drops descriptors for games no longer in the list — but only the ones this
-## tool recorded installing, in `data/installed-games.json`. A game an operator authored
-## by hand under `content/` is not this tool's to delete, and the day those two cases get
-## confused is the day somebody loses a game they wrote.
+## Exit codes: 0 everything asked for is installed, 2 nothing could be, 3 some could not.
 ##
 ## Exit codes: 0 everything asked for is installed, 2 nothing could be, 3 some could not.
 
@@ -755,25 +718,8 @@ func _pack_update_due(
 
 ## Installs a game from a PUBLISHED pack, descriptor and all.
 ##
-## [b]The descriptor travels inside the pack, and for a pack somebody else published it
-## is the only place it can be.[/b] `games.json` and `descriptors/` are this project's
-## own index over first-party content; a member who publishes `alice/her-game` through
-## the site writes no such thing and should not have to. What they DO ship is their
-## repository, and a game's repository has its `game.yml` in it -- so the file that says
-## how to start the game is already in the signed pack, addressed by hash like everything
-## else in there.
-##
-## That also makes it as trustworthy as the rest of the pack: the manifest is verified
-## against a key this server already trusts before a single object is read, and the
-## descriptor is one of the objects the manifest names. A tampered `game.yml` is a
-## tampered manifest, which is a signature that does not check.
-##
-## [b]The directory is the NAME half of the id.[/b] `gamemann/game-g2gfast01` installs
-## into `content/game-g2gfast01/`, because the directory name is what an operator types at
-## the console and `changelevel gamemann/game-g2gfast01` is not a thing to ask of anybody.
-## A directory already holding a DIFFERENT content id is refused rather than overwritten:
-## two owners may legitimately publish `arena`, and silently replacing one with the other
-## is how a server ends up running content nobody chose.
+## The descriptor travels inside the signed pack, so a member who publishes through the site ships nothing extra, and a tampered `game.yml` is a manifest that fails its signature.
+## The directory is the NAME half of the id; a directory holding a DIFFERENT content id is refused, since two owners may both publish `arena`.
 func _install_from_pack(
 	want: Dictionary,
 	content_dir: String,
@@ -952,18 +898,8 @@ func _install_from_pack(
 
 ## A pack's own descriptor, told which pack it is.
 ##
-## [b]The descriptor in a pack cannot know its own address, so this writes it.[/b] A game
-## repository commits one `game.yml` and is published by whoever owns it on the site:
-## the content id is `<their username>/<repo>`, and a re-sync publishes `1.2.0+r2`. None
-## of that is knowable when the file is written, and a descriptor that names a different
-## id or version from the pack it came in makes the server mount a path that is not there
-## -- every script "not found", from a game that installed without an error. The one
-## party that DOES know is this installer, which has just verified that exact id and
-## version against a trusted signature. So `content_id`, `version` and `kind` are set to
-## what was installed, whatever the file said, and the result is parsed back to prove it.
-##
-## Text, not a re-serialised tree: TmcYaml reads and does not write, and the file is the
-## one an operator edits afterwards -- its comments and order are worth keeping.
+## The file cannot know its id or version when written, and a mismatch mounts a path that is not there; so `content_id`, `version` and `kind` are set to what this installer just verified, then parsed back.
+## Text, not a re-serialised tree: TmcYaml does not write, and operators keep the file's comments and order.
 static func stamp_identity(text: String, content_id: String, version: String) -> DotResult:
 	var want := {"content_id": content_id, "version": version, "kind": "pack"}
 	var seen := {}
@@ -1117,17 +1053,9 @@ static func stamp_dependencies(
 	return DotResult.success(result)
 
 
-## Resolves every unpinned map in `cfg/server/content/overrides.yml` to the origin's newest version and
-## writes the answers to `data/content-maps.json`, which TmcGameConfig reads at boot.
+## Resolves every unpinned map in `cfg/server/content/overrides.yml` to the origin's newest version, writing `data/content-maps.json` for TmcGameConfig.
 ##
-## [b]Every start, not once.[/b] The point of a server-side map list is that a new upload
-## of a map reaches the server without anybody touching the game, so a version decided at
-## first install and kept for ever would be the frozen pin this exists to replace. It is
-## one small `latest.json` per map. An answer the origin cannot give keeps the version the
-## cache already had: a restart during an outage must not take a working map away.
-##
-## Pinned entries are not looked up -- the host reads them straight from the file -- and
-## nothing is downloaded here: a map is fetched when the server changes to it.
+## Every start, so a new upload reaches the server without an edit; an origin that cannot answer keeps the cached version. Pinned entries are not looked up and nothing is downloaded here.
 func _resolve_owner_maps(
 	config_dir: String, data_dir: String, bases: PackedStringArray, content_dir: String,
 	allow_dirs: PackedStringArray
@@ -1235,19 +1163,9 @@ func _resolve_owner_maps(
 		print("             not on the origin; left out until it is")
 
 
-## Pins, prefetches and vets the extra packs in `cfg/addons.yml`, and writes the answers to
-## `data/content-addons.json`, which TmcAddonsConfig reads at boot.
+## Pins, prefetches and vets the extra packs in `cfg/addons.yml`, writing `data/content-addons.json` for TmcAddonsConfig.
 ##
-## [b]Pinned here for the reason maps are.[/b] A dependency has to name one version, or two
-## players of one game would be handed two packs. An unpinned entry resolves to the origin's
-## newest on every start, so a new upload reaches the server without anyone editing a file;
-## an origin that cannot answer keeps the version the cache had.
-##
-## [b]Prefetched and refused here, not at the first join.[/b] The pack is downloaded into the
-## store the server reads, and `ensure` checks its `requires.json` against the addons THIS
-## build carries. A pack they cannot run (too new an API level, an addon this box lacks) is
-## left out of the file with a message naming it, instead of failing the game change that
-## would otherwise need it: a game change with a missing dependency is abandoned whole.
+## Pinned so two players never get two packs. Vetted here: a pack whose `requires.json` this build cannot run is left out with a message, instead of abandoning the game change that needs it.
 func _resolve_addon_packs(
 	config_dir: String, data_dir: String, bases: PackedStringArray, content_dir: String,
 	allow_dirs: PackedStringArray, cloud: DotCloudClient
@@ -1395,17 +1313,9 @@ func _fetch_collection(collection: String, bases: PackedStringArray) -> DotResul
 	)
 
 
-## The newest published version of a pack, from the pointer beside its versions.
+## The newest published version of a pack, from the `latest.json` beside its versions.
 ##
-## [b]A static origin cannot answer a question, so the answer is a file.[/b] The versions
-## of a pack are directories and an S3 bucket behind a CDN has no way to say which is
-## newest -- listing is not public, and should not be. So a publish writes
-## `latest.json` next to them, which is one small document, cacheable, and readable by
-## exactly the same anonymous GET everything else here uses.
-##
-## Deliberately NOT a guess at the newest directory name: without listing there is
-## nothing to guess from, and with listing there would be a sort over version strings,
-## which is how `0.10.0` ends up older than `0.9.0`.
+## A static origin cannot list directories, and guessing by name sorts `0.10.0` before `0.9.0`.
 func _resolve_latest(content_id: String, bases: PackedStringArray) -> DotResult:
 	var pointer := await _resolve_pointer(content_id, bases)
 
@@ -1580,23 +1490,7 @@ static func _sha256_hex(bytes: PackedByteArray) -> String:
 
 ## Keeps a copy of a pack's manifest where an offline boot can find it.
 ##
-## [b]Without this, prefetching does not survive the thing it exists for.[/b] Every byte
-## of a pack can be in the store and the server still cannot start it while the origin is
-## unreachable, because dot-cloud resolves the MANIFEST before it looks at what it already
-## has -- and a manifest is fetched from the network every single time. Measured, with the
-## origin stopped and the pack fully cached: `Could not download the content manifest`,
-## exit 7, on a box holding all 212 files. A game server that cannot restart while
-## somebody else's web server is down is not deployable.
-##
-## [DotCloudClient] searches `local_search_dirs` BEFORE any URL, with the same
-## `{base}/{id}/manifest.json` shape, so a copy under `data/manifests/` is found by the
-## ordinary path with nothing special-cased. It is still verified against the trusted keys
-## on every load, exactly as a downloaded one is -- this caches bytes, it does not grant
-## them trust.
-##
-## Versions are namespaced, so a stale copy cannot shadow a new release: a republished
-## pack means a new version in `game.yml`, and a version with no local manifest goes to
-## the origin as it always did.
+## dot-cloud resolves the manifest from the network before looking at its cache, so a fully cached pack still fails to start when the origin is down. [DotCloudClient] searches `local_search_dirs` first and verifies against the trusted keys on every load, so this caches bytes, not trust. Versions are namespaced, so a stale copy cannot shadow a release.
 func _cache_manifest(
 	content_id: String,
 	version: String,
