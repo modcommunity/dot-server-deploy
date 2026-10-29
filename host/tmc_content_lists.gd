@@ -23,7 +23,6 @@ extends RefCounted
 ## that does not say `merge: true`, so an operator who wants exactly three games writes three. Packs are
 ## still verified by dot-cloud's signature check; this only says what to fetch.
 
-const CHANNEL := "tmc.content_lists"
 const DEFAULT_DIR := "res://content-lists"
 const KINDS := ["addons", "games"]
 

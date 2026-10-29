@@ -31,8 +31,6 @@ extends CanvasLayer
 ## so a row can be clicked. A click outside the panel goes to the game, which recaptures
 ## the mouse, and the number keys keep working.
 
-const CHANNEL := "tmc.admin_menu"
-
 const TOPIC := &"admin_menu"
 const NAV_COMMAND := "admin_menu"
 
