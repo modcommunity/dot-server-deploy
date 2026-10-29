@@ -18,7 +18,7 @@ dot-effects	v0.1.6
 dot-entity	v0.1.6
 dot-friends	v0.1.5
 dot-fx	v0.3.2
-dot-game	v0.1.28
+dot-game	v0.1.29
 dot-inventory	v0.1.4
 dot-leaderboard	v0.3.0
 dot-lighting	v0.1.8
@@ -41,7 +41,7 @@ dot-physics	v0.1.5
 dot-platform	v0.1.7
 dot-player	v0.1.5
 dot-player-char	v0.1.12
-dot-player-class	v0.1.5
+dot-player-class	v0.1.8
 dot-player-controller	v0.2.8
 dot-procedural-generation	v0.1.4
 dot-radio	v0.1.0
