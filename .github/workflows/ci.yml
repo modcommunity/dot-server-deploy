@@ -35,6 +35,7 @@ jobs:
         with:
             suites: 'examples/selftest examples/admin_loading_selftest'
             shell-command: 'for f in setup.sh demo.sh upgrade.sh play.sh tools/*.sh deploy/*.sh; do bash -n "$f" || exit 1; done'
+            efficiency: true
         secrets:
             DEPS_TOKEN: ${{ secrets.DOT_DEPS_TOKEN }}
 
