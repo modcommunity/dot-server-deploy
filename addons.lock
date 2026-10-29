@@ -18,7 +18,7 @@ dot-effects	v0.1.6
 dot-entity	v0.1.6
 dot-friends	v0.1.5
 dot-fx	v0.3.2
-dot-game	v0.1.29
+dot-game	v0.1.30
 dot-inventory	v0.1.4
 dot-leaderboard	v0.3.0
 dot-lighting	v0.1.8
@@ -58,7 +58,7 @@ dot-sql	v0.1.3
 dot-stats	v0.1.5
 dot-team	v0.1.6
 dot-timer	v0.1.7
-dot-trail	v0.1.0
+dot-trail	v0.1.1
 dot-ui	v0.1.11
 dot-user	v0.1.5
 dot-user-avatar	v0.1.7
