@@ -984,12 +984,14 @@ update_repos() {
         # A clone this script made, and a lock that names it: moved to exactly that ref
         # rather than pulled, so a reinstall lands where the published shell is. Fetched
         # by name at depth 1 because these clones are shallow and a tag cut after the
-        # clone is not in them.
+        # clone is not in them. --force because a tag that starts tracking a .uid file
+        # collides with the untracked one Godot wrote there, and a plain checkout then
+        # refuses, leaving the clone on its old tag for good.
         local ref
         if [ -n "${ADDONS_REPOS:-}" ] && [ "${dir#"$ADDONS_REPOS"/}" != "$dir" ] \
             && ref="$(lock_ref "$repo")"; then
             if git -C "$dir" fetch --quiet --depth 1 origin "$ref" 2>/dev/null \
-                && git -C "$dir" checkout --quiet --detach FETCH_HEAD 2>/dev/null; then
+                && git -C "$dir" checkout --quiet --force --detach FETCH_HEAD 2>/dev/null; then
                 behind+=("$repo")
             else
                 failed+=("$repo@$ref")
