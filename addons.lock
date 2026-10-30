@@ -16,6 +16,7 @@ dot-core	v0.1.26
 dot-economy	v0.1.5
 dot-effects	v0.1.7
 dot-entity	v0.1.6
+dot-flashlight	v0.1.1
 dot-friends	v0.1.5
 dot-fx	v0.3.3
 dot-game	v0.1.31
@@ -33,7 +34,7 @@ dot-moderation	v0.1.5
 dot-net	v0.1.20
 dot-npc	v0.1.10
 dot-npc-ai	v0.1.10
-dot-npc-ai-director	v0.1.6
+dot-npc-ai-director	v0.1.7
 dot-objective	v0.1.5
 dot-party	v0.1.4
 dot-peer-to-peer	v0.1.4

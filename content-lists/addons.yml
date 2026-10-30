@@ -35,6 +35,8 @@ entries:
     pin: v0.1.6
   - repo: dot-friends
     pin: v0.1.5
+  - repo: dot-flashlight
+    pin: v0.1.1
   - repo: dot-fx
     pin: v0.3.3
   - repo: dot-game
@@ -68,7 +70,7 @@ entries:
   - repo: dot-npc-ai
     pin: v0.1.10
   - repo: dot-npc-ai-director
-    pin: v0.1.6
+    pin: v0.1.7
   - repo: dot-objective
     pin: v0.1.5
   - repo: dot-party
