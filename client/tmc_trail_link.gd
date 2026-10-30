@@ -25,9 +25,17 @@ var _figure_fn: Callable = Callable()
 var _tick := 0.0
 
 
+## The script for a global `class_name`, or null; TmcRadio is host-only and absent from the web export.
+static func _script_named(class_name_: String) -> Script:
+	for entry in ProjectSettings.get_global_class_list():
+		if str(entry.get("class", "")) == class_name_:
+			return load(str(entry.get("path", ""))) as Script
+	return null
+
+
 static func available() -> bool:
 	for c in CLASSES:
-		if TmcRadio.script_named(c) == null:
+		if _script_named(c) == null:
 			return false
 	return true
 
@@ -36,10 +44,10 @@ func _ready() -> void:
 	if not available():
 		set_process(false)
 		return
-	registry = TmcRadio.script_named("DotTrailRegistry").new()
-	client = TmcRadio.script_named("DotTrailClient").new()
+	registry = _script_named("DotTrailRegistry").new()
+	client = _script_named("DotTrailClient").new()
 	client.registry = registry
-	var avatars := TmcRadio.script_named("DotGameClientAvatars")
+	var avatars := _script_named("DotGameClientAvatars")
 	if avatars != null and _has_static(avatars, &"figure_of"):
 		_figure_fn = Callable(avatars, &"figure_of")
 	client.node_for = func(actor: int) -> Node: return _figure_fn.call(actor) if _figure_fn.is_valid() else null
@@ -64,7 +72,7 @@ func before_join(prejoin: Object) -> void:
 ## Routes the trail kind through [param link]; call before the link is added (its credentials advertise the kind).
 func attach(link: Object) -> void:
 	if client != null:
-		DotLog.result(CHANNEL, "trail envelope", TmcRadio.script_named("DotTrailEnvelope").attach(link, client))
+		DotLog.result(CHANNEL, "trail envelope", _script_named("DotTrailEnvelope").attach(link, client))
 
 
 ## Back to no wearers and no page when the game is left.
@@ -85,7 +93,7 @@ func _process(delta: float) -> void:
 	var menu: Object = game.get(&"menu") if game != null and is_instance_valid(game) else null
 	if menu != null and menu != _menu and is_instance_valid(menu):
 		_menu = menu
-		TmcRadio.script_named("DotTrailMenu").add_to(menu, _setup)
+		_script_named("DotTrailMenu").add_to(menu, _setup)
 
 
 func _setup(screen: Object) -> void:
@@ -102,9 +110,9 @@ func _backend() -> RefCounted:
 		return backend
 	var site := str(site_fn.call()) if site_fn.is_valid() else ""
 	if not site.is_empty():
-		backend = TmcRadio.script_named("DotTrailBackendHttp").call(&"make", self, site, token_fn)
+		backend = _script_named("DotTrailBackendHttp").call(&"make", self, site, token_fn)
 	else:
-		backend = TmcRadio.script_named("DotTrailBackendStub").call(&"from_registry", registry, 1000, get_tree())
+		backend = _script_named("DotTrailBackendStub").call(&"from_registry", registry, 1000, get_tree())
 		backend.save_path = STUB_SAVE
 		backend.load_state()
 	DotLog.debug(CHANNEL, "trail store", {"site": site, "stub": site.is_empty()})
