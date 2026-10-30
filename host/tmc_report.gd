@@ -65,6 +65,9 @@ func _build() -> void:
 	# token, which is all an operator or [TmcEnroll] writes, was refused for that. INTROSPECT
 	# asks for nothing but the backbone URL; a file that names a strategy still wins.
 	_config.strategy = DotAuthConfig.Strategy.INTROSPECT
+	# On by default: the site draws a player's play time from the roster (join, leave, score),
+	# and enrollment already grants SERVER_USERS. `report_roster: false` in listing.json opts out.
+	_config.report_roster = true
 
 	if _path == "" or not FileAccess.file_exists(_path):
 		DotLog.info(CHANNEL, "no listing configuration; this server will not be listed", {
