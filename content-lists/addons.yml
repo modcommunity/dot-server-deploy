@@ -134,7 +134,7 @@ entries:
   - repo: dot-vote
     pin: v0.1.15
   - repo: dot-weapon
-    pin: v0.1.23
+    pin: v0.1.24
   - repo: dot-weather
     pin: v0.1.2
   - repo: zed-dot-weapons
