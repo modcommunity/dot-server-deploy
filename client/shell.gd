@@ -143,10 +143,9 @@ func _ready() -> void:
 		MultiplayerAPI.create_default_interface(), get_path()
 	)
 
-	DotLog.set_level(
-		DotLog.Level.DEBUG if "--verbose" in OS.get_cmdline_user_args()
-		else DotLog.Level.INFO
-	)
+	# `?log=debug` on the page URL raises the level in a browser build, which has no command line.
+	var verbose := "--verbose" in OS.get_cmdline_user_args() or DotWeb.query_param("log") == "debug"
+	DotLog.set_level(DotLog.Level.DEBUG if verbose else DotLog.Level.INFO)
 
 	TmcSiteDefault.apply(AUTH_CONFIG)
 
