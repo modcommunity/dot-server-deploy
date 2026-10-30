@@ -12,7 +12,7 @@ entries:
   - repo: dot-auth
     pin: v0.1.11
   - repo: dot-bot
-    pin: v0.1.2
+    pin: v0.1.5
   - repo: dot-bot-record
     pin: v0.1.0
   - repo: dot-browser
@@ -20,25 +20,25 @@ entries:
   - repo: dot-chat
     pin: v0.1.5
   - repo: dot-cloud
-    pin: v0.1.18
+    pin: v0.1.20
   - repo: dot-combat
     pin: v0.1.12
   - repo: dot-console
     pin: v0.1.7
   - repo: dot-core
-    pin: v0.1.23
+    pin: v0.1.26
   - repo: dot-economy
     pin: v0.1.5
   - repo: dot-effects
-    pin: v0.1.6
+    pin: v0.1.7
   - repo: dot-entity
     pin: v0.1.6
   - repo: dot-friends
     pin: v0.1.5
   - repo: dot-fx
-    pin: v0.3.2
+    pin: v0.3.3
   - repo: dot-game
-    pin: v0.1.30
+    pin: v0.1.31
   - repo: dot-inventory
     pin: v0.1.4
   - repo: dot-leaderboard
@@ -46,27 +46,27 @@ entries:
   - repo: dot-lighting
     pin: v0.1.8
   - repo: dot-loadout
-    pin: v0.1.5
+    pin: v0.1.8
   - repo: dot-locale
     pin: v0.1.5
   - repo: dot-log
     pin: v0.1.5
   - repo: dot-map
-    pin: v0.1.55
+    pin: v0.1.61
   - repo: dot-match
     pin: v0.1.5
   - repo: dot-matchmaking
     pin: v0.1.6
   - repo: dot-menu
-    pin: v0.1.13
+    pin: v0.1.16
   - repo: dot-moderation
     pin: v0.1.5
   - repo: dot-net
     pin: v0.1.20
   - repo: dot-npc
-    pin: v0.1.7
+    pin: v0.1.10
   - repo: dot-npc-ai
-    pin: v0.1.9
+    pin: v0.1.10
   - repo: dot-npc-ai-director
     pin: v0.1.6
   - repo: dot-objective
@@ -82,23 +82,23 @@ entries:
   - repo: dot-player
     pin: v0.1.5
   - repo: dot-player-char
-    pin: v0.1.12
+    pin: v0.1.35
   - repo: dot-player-class
     pin: v0.1.8
   - repo: dot-player-controller
-    pin: v0.2.8
+    pin: v0.2.9
   - repo: dot-procedural-generation
     pin: v0.1.4
   - repo: dot-profile
     pin: v0.1.21
   - repo: dot-props
-    pin: v0.1.8
+    pin: v0.1.10
   - repo: dot-radio
     pin: v0.1.0
   - repo: dot-trail
     pin: v0.1.1
   - repo: dot-replay
-    pin: v0.1.9
+    pin: v0.1.13
   - repo: dot-server
     pin: v0.1.23
   - repo: dot-server-query
@@ -132,10 +132,10 @@ entries:
   - repo: dot-vote
     pin: v0.1.14
   - repo: dot-weapon
-    pin: v0.1.16
+    pin: v0.1.18
   - repo: dot-weather
     pin: v0.1.1
   - repo: zed-dot-weapons
-    pin: v0.1.5
+    pin: v0.1.6
   - repo: zee-dot-weapons
-    pin: v0.1.19
+    pin: v0.1.28
