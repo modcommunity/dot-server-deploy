@@ -2,7 +2,7 @@
 # Shipped default; an operator replaces it with cfg/content/addons.yml (see docs/content-lists.md).
 entries:
   - repo: arena-weapons
-    pin: v1.4.6
+    pin: v1.4.7
   - repo: dot-2d
     pin: v0.1.5
   - repo: dot-achievements
@@ -54,7 +54,7 @@ entries:
   - repo: dot-log
     pin: v0.1.5
   - repo: dot-map
-    pin: v0.1.65
+    pin: v0.1.66
   - repo: dot-match
     pin: v0.1.5
   - repo: dot-matchmaking
@@ -84,7 +84,7 @@ entries:
   - repo: dot-player
     pin: v0.1.5
   - repo: dot-player-char
-    pin: v0.1.40
+    pin: v0.1.41
   - repo: dot-player-class
     pin: v0.1.8
   - repo: dot-player-controller
@@ -140,4 +140,4 @@ entries:
   - repo: zed-dot-weapons
     pin: v0.1.6
   - repo: zee-dot-weapons
-    pin: v0.1.37
+    pin: v0.1.38
