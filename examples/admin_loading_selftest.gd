@@ -12,7 +12,7 @@ extends Node
 ## a socket this suite serves itself, because the fetch is the half most likely to be
 ## wrong and least likely to be noticed.
 
-const CHECKS := 184
+const CHECKS := 186
 
 var _passed := 0
 var _failed := 0
@@ -1237,6 +1237,12 @@ func _test_cover_gate() -> void:
 	gate.release(&"map")
 	await _until_ms(func() -> bool: return gate.is_open(), 8000)
 	_check(gate.is_open() and not screen.is_showing(), "and it lifts again")
+
+	# The gate opened by its own host time-out while the shell's warm-up hung: the screen goes.
+	screen.begin(TmcLoadingScreen.REASON_WARM, "", "", true)
+	_check(screen.is_showing(), "the screen is up as a hung warm-up leaves it")
+	gate.opened.emit()
+	_check(not screen.is_showing(), "an opened gate drops a screen its warm-up never lifted")
 
 	gate.hold(&"map")
 	_check(screen.is_showing(), "held once more")

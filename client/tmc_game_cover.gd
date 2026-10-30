@@ -39,6 +39,9 @@ const GATE_META := &"dot_load_gate"
 const FALLBACK_SETTLE_FRAMES := 10
 ## The most a game with no gate is covered for, camera or not.
 const FALLBACK_MAX_SEC := 5.0
+## The most the material warm-up may take before the screen drops anyway; the web build
+## has stalled on it with the match already running underneath.
+const DRAW_MAX_SEC := 6.0
 
 ## Seconds a game on the root contract has, after it is on screen, to say it is ready.
 var warm_wait_sec: float = 20.0
@@ -100,6 +103,7 @@ func adopt_load_gate(gate: Object) -> void:
 	gate.connect(&"closed", _on_gate_closed.bind(gate))
 	gate.connect(&"ready_to_show", _on_gate_ready.bind(gate))
 	gate.connect(&"progress_changed", _on_gate_progress)
+	gate.connect(&"opened", _on_gate_opened.bind(gate))
 	if gate is Node:
 		(gate as Node).tree_exited.connect(_on_gate_gone.bind(id), CONNECT_ONE_SHOT)
 	# A gate made after the game was already on the fallback takes over from it.
@@ -169,6 +173,15 @@ func _on_gate_ready(gate: Object) -> void:
 		return
 	loading.end(TmcLoadingScreen.REASON_WARM)
 	gate.call(&"host_finished")
+
+
+## The gate opens on its own after its host time-out; the screen must not outlive that.
+func _on_gate_opened(gate: Object) -> void:
+	_warming.erase(gate.get_instance_id())
+	if loading.is_showing():
+		DotLog.warn(CHANNEL, "the gate opened while the screen was still up; dropping it", {
+			"step": "warm-up", "status": str(gate.call(&"status_text"))})
+		loading.end(TmcLoadingScreen.REASON_WARM)
 
 
 func _on_gate_gone(id: int) -> void:
@@ -277,7 +290,15 @@ func _draw_once(items: Array) -> void:
 	var started := Time.get_ticks_msec()
 	cam.add_child(warm)
 	warm.start()
-	var _n: int = await warm.finished
+	var done := [false]
+	warm.finished.connect(func(_n: int) -> void: done[0] = true)
+	while not done[0] and Time.get_ticks_msec() - started < int(DRAW_MAX_SEC * 1000.0):
+		await get_tree().process_frame
+	if not done[0]:
+		DotLog.warn(CHANNEL, "the material warm-up did not finish in time; moving on", {
+			"step": "warm-up", "items": count, "seconds": DRAW_MAX_SEC})
+		warm.queue_free()
+		return
 	DotLog.info(CHANNEL, "drew the game's materials once under the loading screen", {
 		"items": count, "ms": Time.get_ticks_msec() - started})
 
