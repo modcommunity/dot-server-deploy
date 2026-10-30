@@ -22,7 +22,7 @@ entries:
   - repo: dot-cloud
     pin: v0.1.20
   - repo: dot-combat
-    pin: v0.1.12
+    pin: v0.1.13
   - repo: dot-console
     pin: v0.1.7
   - repo: dot-core
