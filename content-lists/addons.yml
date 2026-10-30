@@ -30,7 +30,7 @@ entries:
   - repo: dot-economy
     pin: v0.1.5
   - repo: dot-effects
-    pin: v0.1.7
+    pin: v0.1.8
   - repo: dot-entity
     pin: v0.1.6
   - repo: dot-friends
@@ -84,11 +84,11 @@ entries:
   - repo: dot-player
     pin: v0.1.5
   - repo: dot-player-char
-    pin: v0.1.35
+    pin: v0.1.36
   - repo: dot-player-class
     pin: v0.1.8
   - repo: dot-player-controller
-    pin: v0.2.9
+    pin: v0.3.0
   - repo: dot-procedural-generation
     pin: v0.1.4
   - repo: dot-profile
@@ -100,7 +100,7 @@ entries:
   - repo: dot-trail
     pin: v0.1.1
   - repo: dot-replay
-    pin: v0.1.13
+    pin: v0.1.14
   - repo: dot-server
     pin: v0.1.23
   - repo: dot-server-query
@@ -122,7 +122,7 @@ entries:
   - repo: dot-timer
     pin: v0.1.7
   - repo: dot-ui
-    pin: v0.1.11
+    pin: v0.1.12
   - repo: dot-user
     pin: v0.1.5
   - repo: dot-user-avatar
@@ -134,7 +134,7 @@ entries:
   - repo: dot-vote
     pin: v0.1.14
   - repo: dot-weapon
-    pin: v0.1.18
+    pin: v0.1.19
   - repo: dot-weather
     pin: v0.1.1
   - repo: zed-dot-weapons
