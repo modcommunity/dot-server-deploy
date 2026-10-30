@@ -68,7 +68,7 @@ entries:
   - repo: dot-npc
     pin: v0.1.10
   - repo: dot-npc-ai
-    pin: v0.1.10
+    pin: v0.1.11
   - repo: dot-npc-ai-director
     pin: v0.1.7
   - repo: dot-objective
