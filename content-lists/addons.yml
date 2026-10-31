@@ -116,13 +116,13 @@ entries:
   - repo: dot-sql
     pin: v0.1.4
   - repo: dot-stats
-    pin: v0.1.7
+    pin: v0.1.8
   - repo: dot-team
     pin: v0.1.8
   - repo: dot-timer
     pin: v0.1.8
   - repo: dot-ui
-    pin: v0.1.13
+    pin: v0.1.14
   - repo: dot-user
     pin: v0.1.5
   - repo: dot-user-avatar
@@ -134,7 +134,7 @@ entries:
   - repo: dot-vote
     pin: v0.1.15
   - repo: dot-weapon
-    pin: v0.1.26
+    pin: v0.1.27
   - repo: dot-weather
     pin: v0.1.2
   - repo: zed-dot-weapons
