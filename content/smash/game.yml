@@ -20,6 +20,7 @@ cvars:
   # means the same thing whatever the server is running: opposite ends of the showdown,
   # with the ring between them.
   sc_teams: "2"
+  stats_report: "0"
 
   # Two minutes on the platforms, ninety seconds in the corners. The first half has to be
   # long enough for the cannon to reach its fourth tier — which is unlocked at fifty-five
