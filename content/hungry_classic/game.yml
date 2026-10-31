@@ -28,3 +28,6 @@ module: game/hungry_module.gd
 # `metadata: map_vote:` block would be read from whichever mode happened to be running
 # when it was first loaded. The defaults are in game/hungry_maps.gd.
 
+cvars:
+  # 1 files the players' stats with the backbone using the server's own ticket; 0 keeps them here.
+  stats_report: "0"
