@@ -387,7 +387,9 @@ func _test_a_final_death_crosses() -> void:
 	var on_course := await _until(func() -> bool: return int(_says(world).get("phase_id", 0)) == 2, 30.0)
 	_check(on_course, "the course opens")
 
-	# Everybody across, so two or more sides finished and the course closes into a fight.
+	# Everybody across, so two or more sides finished and the course closes into a fight; one course
+	# a round, or the default three would start the next course instead.
+	(world.get("config") as Object).set("courses_per_round", 1)
 	var finished := 0
 
 	for key: Variant in (world.get("players") as Dictionary):
