@@ -19,3 +19,5 @@ module: game/dd_module.gd
 cvars:
   # Stand-ins, so one person on an empty mountain has trucks to share the road with.
   dd_bots: "2"
+  # 1 files the players' stats with the backbone using the server's own ticket; 0 keeps them here.
+  stats_report: "0"
