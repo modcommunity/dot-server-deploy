@@ -51,3 +51,6 @@ cvars:
   # and the concrete blocks are all that is left — actually arrive, short enough that
   # somebody who is out waits for a round rather than for a match.
   bfh_round_seconds: "180"
+
+  # Off: files this server's stats with the backbone when switched on.
+  stats_report: "0"
