@@ -175,6 +175,8 @@ The game origin is not the only thing behind TLS, and the failures elsewhere are
 
 Neither belongs in production. Use a real certificate there.
 
-## Loading cost, measured 2026-10-16
+## Loading cost, measured 2026-10-16 and 2026-10-31
+
+**2026-10-31:** the pck had grown to 68.3 MB (62.7 MB brotli), about 59 MB of it imported art from the linked games' addons: 39 MB of textures (the weapon models and map surfaces import as mipmapped lossless WebP), 14 MB of streamed Ogg, 5 MB of scenes. `export-web` now runs `tools/web_shrink.gd`, which rewrites every mipmapped WebP texture in the exported pck as lossy WebP at quality 0.7 (UI art without mipmaps stays lossless; desktop builds are untouched): 123 textures, 34.3 MB to 13.6 MB, so the pck goes to 47.6 MB (42.5 MB brotli). `tools/publish-web-shell.sh` also uploads `index.wasm` and the worklets once under `game/<app>/engine/<hash>/` and points `embed.html`'s `executable` there, so a returning player does not fetch the 6.9 MB engine again for each new shell (`SHELL_SHARED_ENGINE=0` turns that off).
 
 The live shell (`game/godot/20261016-0230`) was served with no `Content-Encoding`: `index.wasm` 39,514,754 bytes, `index.pck` 8,682,768, `index.js` 279,815, about 48.5 MB before a pack. Brotli q11 gives 6.9 MB, 7.4 MB and 60 KB (14.3 MB, 71% less). `deploy/publish-web-s3.sh --brotli` and `tools/publish-web-shell.sh` (which the web-shell workflow runs) upload that way, with the real Content-Type and `Content-Encoding: br`; the site's own publisher has to do the same for an upload through App -> Party. `export-web` also writes the engine files' byte counts into `embed.html` (`fileSizes`), because the engine never reads `Content-Length` and without them the loading bar can only sweep.

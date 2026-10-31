@@ -238,6 +238,32 @@ brotli_file() {
     else return 1; fi
 }
 
+# [b]The engine is shared across builds[/b]: index.wasm and the worklets come from the stock
+# template, so they go once under a content hash and the page points `executable` there.
+# A returning player then re-downloads only the pck when a new shell is published.
+ENGINE_FILES=(index.wasm index.audio.worklet.js index.audio.position.worklet.js)
+engine_hash=
+if [ "$ENTRY" = embed.html ] && [ "${SHELL_SHARED_ENGINE:-1}" = 1 ] && [ "${SHELL_NO_BROTLI:-0}" != 1 ] \
+    && grep -q '^ *executable: "index",' "$work/build/embed.html"; then
+    engine_hash=$(cd "$work/build" && cat "${ENGINE_FILES[@]}" 2>/dev/null | sha256sum | cut -c1-16)
+    for e in "${ENGINE_FILES[@]}"; do [ -f "$work/build/$e" ] || engine_hash=; done
+fi
+if [ -n "$engine_hash" ]; then
+    eng="../engine/$engine_hash/index"
+    sed -i -e "s#^\( *\)executable: \"index\",#\1executable: \"$eng\", mainPack: \"index.pck\",#" \
+        -e "s#\"index.wasm\":#\"$eng.wasm\":#" "$work/build/embed.html"
+    echo "engine  game/$APP/engine/$engine_hash/ (shared by every build with this template)"
+    if [ "$DRY" = 0 ] && ! aws s3 ls "s3://$BUCKET/game/$APP/engine/$engine_hash/index.wasm" >/dev/null 2>&1; then
+        for e in "${ENGINE_FILES[@]}"; do
+            brotli_file "$work/build/$e" "$work/file.br" || die "cannot brotli $e"
+            aws s3 cp "$work/file.br" "s3://$BUCKET/game/$APP/engine/$engine_hash/$e" --only-show-errors \
+                --content-type "$(content_type "$e")" --content-encoding br \
+                --cache-control "public, max-age=31536000, immutable"
+            rm -f "$work/file.br"
+        done
+    fi
+fi
+
 count=0
 while IFS= read -r -d '' f; do
     rel=${f#"$work/build"/}
@@ -283,6 +309,10 @@ if [ "$DRY" = 0 ] && [ -n "$ORIGIN" ]; then
         sleep 10
     done
     [ "$ok" = 1 ] || die "$url/$ENTRY does not answer (last status $code); not pinning"
+    if [ -n "$engine_hash" ]; then
+        code=$(curl -s -o /dev/null -w '%{http_code}' -r 0-0 "$ORIGIN/$APP/engine/$engine_hash/index.wasm" || true)
+        [ "$code" = 200 ] || [ "$code" = 206 ] || die "$ORIGIN/$APP/engine/$engine_hash/index.wasm does not answer ($code); not pinning"
+    fi
     if [ -f "$work/build/shell-inputs.txt" ]; then
         curl -fsS "$url/shell-inputs.txt" -o "$work/served.txt" \
             && cmp -s "$work/served.txt" "$work/build/shell-inputs.txt" \

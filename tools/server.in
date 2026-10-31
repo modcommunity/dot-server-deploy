@@ -1444,6 +1444,13 @@ case "$COMMAND" in
         check_excluded_maps "$PROJECT/web/build/index.pck"
         check_lock_exported "$PROJECT/web/build/index.pck"
 
+        # 3D textures to lossy WebP for the browser only; desktop keeps the addons' lossless
+        # imports. The page's progress bar needs the new pck size, so it is re-stamped.
+        "$GODOT" --headless --path "$PROJECT" --script res://tools/web_shrink.gd \
+            -- "$PROJECT/web/build/index.pck" || exit $?
+        sed -i "s#\"index.pck\":[0-9]*#\"index.pck\":$(stat -c %s "$PROJECT/web/build/index.pck")#" \
+            "$PROJECT/web/build/index.html"
+
         # The standalone page, which takes ?server= from the URL.
         [ -f "$PROJECT/web/embed.html" ] && cp "$PROJECT/web/embed.html" "$PROJECT/web/build/embed.html"
 
