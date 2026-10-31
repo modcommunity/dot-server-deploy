@@ -17,7 +17,9 @@ const CFG := "res://examples/fixtures"
 ## A loaded game with rounds and no match the game vote can find. See the section that uses it.
 const RoundsWithoutMatch := preload("res://examples/fixtures/rounds_without_match.gd")
 
-const CHECKS := 447
+const Host := preload("res://host/tmc_host.gd")
+
+const CHECKS := 450
 
 var _passed := 0
 var _failed := 0
@@ -62,6 +64,7 @@ func _run() -> void:
 	await _test_replay()
 	await _test_friends()
 	_test_radio()
+	_test_addon_announce()
 
 	print("")
 	_check(
@@ -804,6 +807,16 @@ func _test_replay() -> void:
 ## dot-friends was linked here and built nowhere. What this asserts: a site with no friends
 ## routes turns the client off, once, and a presence says where the player is as the
 ## connection comes and goes -- read back from the site's rules, not from what was posted.
+func _test_addon_announce() -> void:
+	_section("the addon set a server announces")
+	var lock := "arena-weapons\tv1.4.10\ndot-core\tv0.1.30\n"
+	var out := Host.addon_set_from(lock, PackedStringArray(["arena_weapons", "dot_core"]))
+	_check(out.size() == 1 and out[0]["repo"] == "dot-core", "a repository whose site id is a data pack is not announced as an addon")
+	_check(out[0]["id"] == "modcommunity/dot-core" and out[0]["version"] == "0.1.30", "the others keep id and version")
+	_check(Host.addon_set_from(lock, PackedStringArray(["arena_weapons"])).is_empty(), "nothing left to announce is an empty set")
+	_done()
+
+
 func _test_radio() -> void:
 	_section("dot-radio, optional")
 	var root := "user://selftest_radio_cfg"
