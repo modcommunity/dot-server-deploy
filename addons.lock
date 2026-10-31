@@ -3,13 +3,13 @@
 arena-weapons	v1.4.10
 dot-2d	v0.1.5
 dot-achievements	v0.1.6
-dot-audio	v0.1.9
+dot-audio	v0.1.10
 dot-auth	v0.1.12
-dot-bot	v0.1.11
+dot-bot	v0.1.12
 dot-bot-record	v0.1.1
 dot-browser	v0.1.5
 dot-chat	v0.1.5
-dot-cloud	v0.1.23
+dot-cloud	v0.1.24
 dot-combat	v0.1.15
 dot-console	v0.1.8
 dot-core	v0.1.31
@@ -26,10 +26,10 @@ dot-lighting	v0.1.9
 dot-loadout	v0.1.10
 dot-locale	v0.1.5
 dot-log	v0.1.6
-dot-map	v0.1.69
+dot-map	v0.1.70
 dot-match	v0.1.5
 dot-matchmaking	v0.1.7
-dot-menu	v0.1.18
+dot-menu	v0.1.19
 dot-moderation	v0.1.5
 dot-net	v0.1.21
 dot-npc	v0.1.10
@@ -41,7 +41,7 @@ dot-peer-to-peer	v0.1.4
 dot-physics	v0.1.6
 dot-platform	v0.1.8
 dot-player	v0.1.5
-dot-player-char	v0.1.44
+dot-player-char	v0.1.45
 dot-player-class	v0.1.8
 dot-player-controller	v0.3.3
 dot-procedural-generation	v0.1.4
@@ -62,7 +62,7 @@ dot-timer	v0.1.8
 dot-trail	v0.1.1
 dot-ui	v0.1.14
 dot-user	v0.1.5
-dot-user-avatar	v0.1.8
+dot-user-avatar	v0.1.9
 dot-vehicle	v0.1.6
 dot-voice	v0.1.9
 dot-vote	v0.1.15
