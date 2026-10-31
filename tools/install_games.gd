@@ -48,6 +48,16 @@ const PACK_LISTS: PackedStringArray = ["dependencies", "server_dependencies", "m
 
 ## The pointer a publish writes beside a pack's versions, naming the newest.
 const LATEST_FILE := "latest.json"
+
+## Seconds an unpinned map's resolved version is trusted before its `latest.json` is asked again (0 asks every start).
+const LATEST_TTL_ENV := "TMC_LATEST_TTL"
+const LATEST_TTL_DEFAULT := 900
+
+## `latest.json` answers already fetched this run, by id: a pack and its update check ask once.
+var _pointers := {}
+
+## `--refresh`: ask the origin for everything, whatever the cache says.
+var _refresh := false
 const COLLECTION_FILE := "collection.json"
 
 
@@ -55,6 +65,7 @@ func _init() -> void:
 	DotLog.timestamps = false
 
 	var opts := _options()
+	_refresh = opts.has("refresh")
 
 	DotLog.set_level(
 		DotLog.Level.DEBUG if opts.has("verbose") else DotLog.Level.INFO
@@ -1117,7 +1128,13 @@ func _resolve_owner_maps(
 
 	var out := {}
 	var kept := 0
+	var cached := 0
 	var failed := PackedStringArray()
+	var cache_path := "%s/%s" % [data_dir.rstrip("/"), TmcGameConfig.RESOLVED_FILE]
+	var checked := _checked_times(cache_path)
+	var still := {}
+	var ttl := latest_ttl()
+	var now := int(Time.get_unix_time_from_system())
 
 	for entry in entries:
 		var ref := TmcGameRef.parse(entry)
@@ -1126,12 +1143,21 @@ func _resolve_owner_maps(
 			continue
 
 		var id := str(ref["id"])
+
+		# One request per map made every start slow on a long map list; a recent answer is reused.
+		if is_fresh(checked.get(id, 0), now, ttl) and owner_maps.resolved.has(id) and not _refresh:
+			out[id] = owner_maps.resolved[id]
+			still[id] = checked[id]
+			cached += 1
+			continue
+
 		var latest := await _resolve_pointer(id, bases)
 
 		# A moved map is kept at its pinned version: the answer is the new id's version,
 		# and this table is keyed by the id the descriptor names.
 		if latest.ok and str(latest.value["moved_from"]) == "":
 			out[id] = str(latest.value["version"])
+			still[id] = now
 		elif owner_maps.resolved.has(id):
 			out[id] = owner_maps.resolved[id]
 			kept += 1
@@ -1139,7 +1165,7 @@ func _resolve_owner_maps(
 			failed.append(id)
 
 	DirAccess.make_dir_recursive_absolute(data_dir)
-	var file := FileAccess.open("%s/%s" % [data_dir.rstrip("/"), TmcGameConfig.RESOLVED_FILE], FileAccess.WRITE)
+	var file := FileAccess.open(cache_path, FileAccess.WRITE)
 
 	if file == null:
 		DotLog.error(CHANNEL, "could not write the resolved map versions", {
@@ -1147,10 +1173,13 @@ func _resolve_owner_maps(
 		})
 		return
 
-	file.store_string(JSON.stringify({"maps": out, "collections": collections}, "\t") + "\n")
+	file.store_string(JSON.stringify({"maps": out, "collections": collections, "checked": still}, "\t") + "\n")
 	file.close()
 
 	print("  maps     : %d from cfg/%s" % [out.size(), TmcGameConfig.FILE])
+
+	if cached > 0:
+		print("             %d from the last check, under %ds old (%s=0 asks every start)" % [cached, ttl, LATEST_TTL_ENV])
 
 	if not collections.is_empty():
 		print("  collections: %s" % ", ".join(PackedStringArray(collections.keys())))
@@ -1334,6 +1363,40 @@ func _resolve_latest(content_id: String, bases: PackedStringArray) -> DotResult:
 ## followed, never more: city does not chain them, so a second hop is a bug somewhere and
 ## is refused (see [method follow_pointer]).
 func _resolve_pointer(content_id: String, bases: PackedStringArray) -> DotResult:
+	if _pointers.has(content_id):
+		return _pointers[content_id]
+
+	var res := await _resolve_pointer_uncached(content_id, bases)
+
+	if res.ok:
+		_pointers[content_id] = res
+
+	return res
+
+
+## Seconds a resolved map version is trusted, from `TMC_LATEST_TTL` (a bad value is the default).
+static func latest_ttl() -> int:
+	var raw := OS.get_environment(LATEST_TTL_ENV).strip_edges()
+	return int(raw) if raw.is_valid_int() and int(raw) >= 0 else LATEST_TTL_DEFAULT
+
+
+## True when a check made at [param at] (unix seconds) is younger than [param ttl] at [param now].
+static func is_fresh(at: Variant, now: int, ttl: int) -> bool:
+	var t := int(at) if (at is int or at is float) else 0
+	return ttl > 0 and t > 0 and t <= now and now - t < ttl
+
+
+## The `checked` times from the last resolved-maps file, by id; empty when there is none.
+static func _checked_times(path: String) -> Dictionary:
+	if not FileAccess.file_exists(path):
+		return {}
+	var body: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
+	if body is Dictionary and (body as Dictionary).get("checked") is Dictionary:
+		return (body as Dictionary)["checked"]
+	return {}
+
+
+func _resolve_pointer_uncached(content_id: String, bases: PackedStringArray) -> DotResult:
 	var first := await _fetch_pointer(content_id, bases, 0)
 
 	if not first.ok:

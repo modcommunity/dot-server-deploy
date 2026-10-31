@@ -17,7 +17,7 @@ const CFG := "res://examples/fixtures"
 ## A loaded game with rounds and no match the game vote can find. See the section that uses it.
 const RoundsWithoutMatch := preload("res://examples/fixtures/rounds_without_match.gd")
 
-const CHECKS := 443
+const CHECKS := 447
 
 var _passed := 0
 var _failed := 0
@@ -1707,11 +1707,18 @@ games:
 	var dir := "user://selftest_collections"
 	DirAccess.make_dir_recursive_absolute(dir)
 	var cache := FileAccess.open(dir + "/" + TmcGameConfig.RESOLVED_FILE, FileAccess.WRITE)
-	cache.store_string(JSON.stringify({"maps": {"o/m1": "1.0.0"}, "collections": first["collections"]}))
+	cache.store_string(JSON.stringify({"maps": {"o/m1": "1.0.0"}, "collections": first["collections"], "checked": {"o/m1": 1000.0}}))
 	cache.close()
 	var reloaded := TmcGameConfig.load_from("res://examples/fixtures/nothing", dir)
-	_check(reloaded.ok and (reloaded.value as TmcGameConfig).collections == first["collections"],
-		"the host reads the expansion back from data/content-maps.json")
+	_check(reloaded.ok and (reloaded.value as TmcGameConfig).collections == first["collections"]
+			and (reloaded.value as TmcGameConfig).resolved == {"o/m1": "1.0.0"},
+		"the host reads the expansion back from data/content-maps.json, check times and all")
+	# A start within the TTL reuses the last answer instead of one latest.json per map.
+	var times: Dictionary = installer._checked_times(dir + "/" + TmcGameConfig.RESOLVED_FILE)
+	_check(installer.is_fresh(times.get("o/m1"), 1100, 900) and not installer.is_fresh(times.get("o/m1"), 2000, 900)
+			and not installer.is_fresh(times.get("o/m1"), 1100, 0) and not installer.is_fresh(null, 1100, 900)
+			and not installer.is_fresh(5000, 1100, 900),
+		"a map checked under the TTL ago is reused; older, TTL 0, never checked or a future time is asked again", str(times))
 	DirAccess.remove_absolute(dir + "/" + TmcGameConfig.RESOLVED_FILE)
 	DirAccess.remove_absolute(dir)
 
