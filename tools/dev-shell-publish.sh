@@ -7,11 +7,15 @@
 #
 # Dev only: credentials come from ~/godot/.env.dev (the dev bucket), the origin is dev.dotgames.org, the
 # app segment is `godot`, and nothing is pinned. Secrets are read by the tools that need them and never printed.
-# The WebGameBuild row is inserted on dev01 over ssh: the database is on its loopback and its URL stays there.
+# The WebGameBuild row is inserted on dev01 over ssh into BOTH dev databases: dev_games (games.tmcdev.net) and tmc_dev
+# (tmcdev.net, which every app reads its engine from; app 69 "godot" is the shared engine app). Without the tmc_dev row
+# every app says "This game has no engine location configured". Both URLs stay on dev01 and are never printed.
+# Prod is not touched. For prod, run deploy-web-shell.sh --pin (uploads and pins the build) and insert the WebGameBuild
+# row on prod by hand, then restart; see the web-client-fix-not-live-until-uploaded note.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 env_file=${DEV_SHELL_ENV:-$HOME/godot/.env.dev} origin=https://dev.dotgames.org app=godot
-host=${DEV_SHELL_HOST:-dev01} remote_env=${DEV_GAMES_REMOTE_ENV:-\$HOME/stack/website-city/.env.dev-games}
+host=${DEV_SHELL_HOST:-dev01} remote_envs=${DEV_GAMES_REMOTE_ENVS:-\$HOME/stack/website-city/.env.dev-games \$HOME/stack/website-city/.env}
 build= entry= register=1 publish=1
 while [ $# -gt 0 ]; do
     case $1 in
@@ -50,6 +54,9 @@ fi
 sql="INSERT INTO \"WebGameBuild\" (id, \"appId\", build, entry, status, notes, api, \"createdAt\", \"updatedAt\")
 SELECT 'wgb' || substr(md5(random()::text), 1, 22), id, '$build', '$entry', 'ACTIVE', 'dev shell, tmc-dev key', $api, now(), now()
 FROM \"App\" WHERE url = '$app' ON CONFLICT (\"appId\", build) DO UPDATE SET api = COALESCE(EXCLUDED.api, \"WebGameBuild\".api);"
+# .env is not sourceable (a bare AUTH_API_KEY line), so the URL is read with grep, not sourced.
 # shellcheck disable=SC2029
-printf '%s\n' "$sql" | ssh "$host" "set -a; . $remote_env; set +a; psql \"\${DATABASE_URL%%\\?*}\" -v ON_ERROR_STOP=1 -q"
-echo "registered $build on dev_games (app $app)"
+for remote_env in $remote_envs; do
+    printf '%s\n' "$sql" | ssh "$host" "u=\$(grep '^DATABASE_URL=' $remote_env | cut -d= -f2- | tr -d '\"'); psql \"\${u%%\\?*}\" -v ON_ERROR_STOP=1 -q"
+    echo "registered $build in $(basename "$remote_env") (app $app)"
+done
