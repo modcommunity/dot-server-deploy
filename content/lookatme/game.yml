@@ -15,3 +15,7 @@ max_players: 24
 scene: scenes/lm_server.tscn
 client_scene: game/lm.tscn
 module: game/lm_module.gd
+
+cvars:
+  # 1 files the players' stats with the backbone using the server's own ticket; 0 keeps them here.
+  stats_report: "0"
