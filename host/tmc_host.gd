@@ -263,19 +263,21 @@ func _selftest_operator_surface() -> bool:
 		printerr("selftest FAILED: the log router was built and never started")
 		return false
 
-	# The build the site frames for this server, as the query will report it: a cvar without NOTIFY is not in the rules, and the site would frame the shared shell for a server running other addons.
-	var named := FileAccess.get_file_as_string(WEB_BUILD_FILE).strip_edges() \
-		if FileAccess.file_exists(WEB_BUILD_FILE) else ""
+	# Registered ALWAYS, empty unless the operator pinned a shell, so rcon can set it and the query reports it (a cvar without NOTIFY is not in the rules).
+	var pinned := server.console.find_cvar("sv_web_build")
 
-	if named != "":
-		var reported := server.console.find_cvar("sv_web_build")
+	if pinned == null or not pinned.has_flag(DotConVar.FLAG_NOTIFY) \
+			or pinned.get_string() != _release_label(config.web_build):
+		printerr("selftest FAILED: sv_web_build is not a NOTIFY cvar reporting the configured pin (%s)" % config.web_build)
+		return false
 
-		if reported == null or reported.get_string() != named \
-				or not reported.has_flag(DotConVar.FLAG_NOTIFY):
-			printerr("selftest FAILED: sv_web_build does not report %s to the query" % named)
-			return false
+	print("sv_web_build: %s" % (pinned.get_string() if pinned.get_string() != "" else "(latest shell)"))
 
-		print("sv_web_build: %s" % named)
+	var requires := server.console.find_cvar("sv_web_requires")
+
+	if requires == null or not requires.has_flag(DotConVar.FLAG_NOTIFY):
+		printerr("selftest FAILED: sv_web_requires is not a NOTIFY cvar the query reports")
+		return false
 
 	# The addon versions a joining client is told about. Empty on a box with a lock means every player keeps the addons their shell was exported with, however old.
 	# Through `get`, not the property: a box's dot-server may predate it, and a typed access would stop this whole script compiling there.
@@ -493,6 +495,11 @@ func _apply_overrides(args: PackedStringArray) -> void:
 
 	if web_loader != "":
 		config.web_loader = web_loader
+
+	var web_build := _value(args, "--web-build", _value(args, "+sv_web_build", ""))
+
+	if web_build != "":
+		config.web_build = web_build
 
 	for flag in ["--rcon-password", "--password"]:
 		if flag in args:
@@ -895,32 +902,80 @@ static func content_owner(repo: String) -> String:
 	return "modcommunity" if repo.begins_with("dot-") else "gamemann"
 
 
-## The tracked file naming the web client shell built from this checkout's addons.lock.
-const WEB_BUILD_FILE := "res://web/shell-build"
-
-
-## Reports `sv_web_build`: the client shell build this server's players need. A server and the shell are built from one lock but moved on different days,
-## and a pack built against new addons will not compile on the old shell (nor the reverse), so one shared shell broke a side on every release.
-## From a tracked file, not the operator's config: it is a property of the checkout (the release that bumps addons.lock writes it), and an operator-set value would be a second copy. Absent or empty registers nothing, which is the shared build.
+## Reports `sv_web_build`: the shell build this server's players are pinned to. EMPTY by default, which means the site's newest compatible shell, with no restart needed to move.
+## The pin is the operator's decision (`sv_web_build`, `--web-build`, TMC_WEB_BUILD), for a server deliberately held on an older shell the site still lists. `web/shell-build` is only this checkout's record of the shell it was exported with.
+## Always registered so rcon can set it.
 func _register_web_build() -> void:
 	if server == null or server.console == null:
 		return
 
-	var build := FileAccess.get_file_as_string(WEB_BUILD_FILE).strip_edges() \
-		if FileAccess.file_exists(WEB_BUILD_FILE) else ""
+	var wanted := _release_label(config.web_build)
 
-	if build == "":
-		DotLog.info(CHANNEL, "no web shell build is named; players get the shared one", {
-			"file": WEB_BUILD_FILE,
+	if wanted == "" and config.web_build.strip_edges() != "":
+		DotLog.warn(CHANNEL, "sv_web_build is not a build id; players get the site's newest shell", {
+			"value": config.web_build,
+			"expected": "one path segment: letters, digits, dot, dash, underscore",
 		})
-		return
 
 	server.console.cvar(
-		"sv_web_build", build,
-		"The web client build this server's players load. Read from %s." % WEB_BUILD_FILE,
+		"sv_web_build", wanted,
+		"Pins the web client shell build this server's players load. Empty is the site's newest compatible shell.",
 		DotConVar.FLAG_NOTIFY
 	)
-	DotLog.info(CHANNEL, "the web shell build this server needs", {"build": build})
+	server.console.cvar(
+		"sv_web_requires", "",
+		"JSON of the addon API levels the loaded game's pack needs, so the site can pick a compatible shell. Set by the host.",
+		DotConVar.FLAG_NOTIFY
+	)
+
+	if wanted != "":
+		DotLog.info(CHANNEL, "this server pins a web shell build", {"build": wanted})
+
+
+## Addon API levels each mounted pack asked for (`requires.json`), by content id.
+var _pack_requires: Dictionary = {}
+
+
+## Records what a mounted pack needs. Read here because the pack is mounted and nothing has to be fetched twice.
+func _record_requires(manifest: DotCloudManifest, mount_prefix: String) -> void:
+	var path := mount_prefix.trim_suffix("/") + "/" + DotAddonApi.REQUIREMENTS_FILE
+
+	if not FileAccess.file_exists(path):
+		return
+
+	var parsed := DotAddonApi.parse(FileAccess.get_file_as_string(path))
+
+	if parsed.ok:
+		_pack_requires[manifest.content_id] = parsed.value
+
+
+## Publishes the loaded game's needs as `sv_web_requires`: the highest level of each addon over the game's pack and its dependencies.
+## Empty when the pack carries no requires.json, which the site reads as "no constraint".
+func _publish_requires() -> void:
+	var cvar := server.console.find_cvar("sv_web_requires") if server != null and server.console != null else null
+	var current := server.games.current() if server != null and server.games != null else null
+
+	if cvar == null or current == null:
+		return
+
+	var descriptor := content.find(current.game_id)
+	var ids := PackedStringArray()
+
+	if descriptor != null:
+		ids.append(descriptor.content_id)
+		ids.append_array(descriptor.dependencies)
+		ids.append_array(descriptor.server_dependencies)
+
+	var merged: Dictionary = {}
+
+	for key in ids:
+		var needs: Variant = _pack_requires.get(String(key).get_slice("@", 0))
+
+		if needs is Dictionary:
+			for addon in needs:
+				merged[addon] = maxi(int(merged.get(addon, 0)), int(needs[addon]))
+
+	cvar.set_value("" if merged.is_empty() else JSON.stringify(merged))
 
 
 ## One path segment, as the site checks it (website-city `IsReleaseId`): it becomes part of
@@ -930,7 +985,12 @@ const _WEB_LOADER_PATTERN := "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
 
 ## The configured loader version if it is one the site could honour, else "".
 func _web_loader_value() -> String:
-	var wanted := config.web_loader.strip_edges()
+	return _release_label(config.web_loader)
+
+
+## A loader version or build id if it is one path segment the site could honour, else "".
+func _release_label(raw: String) -> String:
+	var wanted := raw.strip_edges()
 
 	if wanted == "":
 		return ""
@@ -945,7 +1005,7 @@ func _web_loader_value() -> String:
 
 ## Reports `sv_web_loader`: the version of the site's web game loader this server's browser players should get.
 ## The loader is the site's and moves on its schedule; a disabled or unknown version is ignored there, so this can never turn a launch into an error, only fail to hold a server back.
-## From the operator's configuration (`sv_web_loader`, `--web-loader`, TMC_WEB_LOADER), unlike `sv_web_build`, because holding a server on an older loader is a decision. Always registered, empty by default, so rcon can set it.
+## From the operator's configuration (`sv_web_loader`, `--web-loader`, TMC_WEB_LOADER), like `sv_web_build`, because holding a server on an older loader is a decision. Always registered, empty by default, so rcon can set it.
 func _register_web_loader() -> void:
 	if server == null or server.console == null:
 		return
@@ -1155,6 +1215,8 @@ func _on_content_ready(manifest: DotCloudManifest, mount_prefix: String) -> void
 	if manifest == null:
 		return
 
+	_record_requires(manifest, mount_prefix)
+
 	DotLog.info(CHANNEL, "content ready", {
 		"content": manifest.key(),
 		"at": mount_prefix,
@@ -1167,6 +1229,7 @@ func _on_game_loaded(_content_key: String) -> void:
 
 	await _load_game_module()
 	_attach_addon_entries()
+	_publish_requires()
 
 
 ## Starts the extra packs that run on the server, as children of the DotServer node: the game's own root is private to DotGameManager,

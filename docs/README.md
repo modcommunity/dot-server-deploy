@@ -15,7 +15,7 @@ The reasoning behind [../CLAUDE.md](../CLAUDE.md)'s rules. The operator's view o
 | [setup.md](setup.md) | `setup.sh`: one fact one place, addons and games inside the tree, `--only-games`, the runtime fetcher, Windows |
 | [deploy-modes.md](deploy-modes.md) | `./setup.sh --mode compose` or `--mode pterodactyl`: files for Docker Compose or a panel, with a worked example each |
 | [pterodactyl.md](pterodactyl.md) | The egg, and every way a panel install hung or died |
-| [releases.md](releases.md) | Release orders, what needs a new shell, `addons.lock`, self-update, `sv_web_build`, `sv_web_loader`, publishing the web build |
+| [releases.md](releases.md) | Release orders, what needs a new shell, `addons.lock`, self-update, `sv_web_build`, `sv_web_requires`, `sv_web_loader`, publishing the web build |
 | [addon-packs.md](addon-packs.md) | Addon releases reaching players by a restart, and the end-to-end proof |
 | [native-client.md](native-client.md) | `export-native`, the bare `--`, presets, macOS |
 | [web-client.md](web-client.md) | The shell: sign-in, refusals, clear downloaded content, TLS |

@@ -54,6 +54,13 @@ sv_allow_mobile: 1
 # and `sv_web_loader <version>` over rcon changes it while running.
 # sv_web_loader: ""
 
+# Pins this server's browser players to one web shell build the site lists as ACTIVE or
+# DEPRECATED. Empty is the default and almost always right: the site serves the newest
+# shell compatible with this server's game, and a new shell needs no restart here. Pin
+# only to hold a server on an older shell. A build the site has disabled is ignored.
+# TMC_WEB_BUILD overrides it from a panel, and `sv_web_build <id>` over rcon changes it.
+# sv_web_build: ""
+
 # Whether the server reads commands from its own stdin when stdin is a PIPE.
 #
 # A terminal is always read, and a file too. A pipe is not, by default, because a

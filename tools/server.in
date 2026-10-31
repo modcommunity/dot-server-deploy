@@ -96,6 +96,7 @@ OPT_MAX_PLAYERS="${TMC_MAX_PLAYERS:-}"
 OPT_GAME="${TMC_GAME:-}"
 OPT_MAP="${TMC_MAP:-}"
 OPT_WEB_LOADER="${TMC_WEB_LOADER:-}"
+OPT_WEB_BUILD="${TMC_WEB_BUILD:-}"
 AUTO_UPDATE="${TMC_AUTO_UPDATE:-when-needed}"
 CHANNEL="${TMC_CHANNEL:-latest}"
 
@@ -232,6 +233,9 @@ usage() {
                         addons to its lock (what a reinstall does), then start.
                         always: do that on every start. never: keep the installed
                         addons and game versions, and say so.
+    --web-build ID      Pin this server's players to one web shell build the site
+                        lists (reported as sv_web_build). Empty, the default, is
+                        the site's newest compatible shell, with no restart needed.
     --web-loader LABEL  Ask the site for this version of the web game loader
                         for this server's players (reported as sv_web_loader).
                         For a server on older addons than the site's default.
@@ -323,6 +327,7 @@ usage() {
     TMC_ALLOW_WEB       +sv_allow_web         TMC_ALLOW_DESKTOP +sv_allow_desktop
     TMC_ALLOW_MOBILE    +sv_allow_mobile      (1 admits, 0 refuses; empty = the YAML)
     TMC_WEB_LOADER      --web-loader          TMC_AUTO_UPDATE   --auto-update
+    TMC_WEB_BUILD       --web-build
     TMC_CHANNEL         --channel             (latest = the branch head, stable = newest v* release)
 
   So a TMC_PORT left in an environment file never hides an edit to the YAML: the
@@ -377,6 +382,7 @@ while [ $# -gt 0 ]; do
         --refresh)     REFRESH=1;        shift ;;
         --map)         [ $# -ge 2 ] || die "$1 needs a value"; OPT_MAP="$2";         shift 2 ;;
         --web-loader)  [ $# -ge 2 ] || die "$1 needs a value"; OPT_WEB_LOADER="$2";  shift 2 ;;
+        --web-build)   [ $# -ge 2 ] || die "$1 needs a value"; OPT_WEB_BUILD="$2";   shift 2 ;;
         --auto-update) [ $# -ge 2 ] || die "$1 needs a value"; AUTO_UPDATE="$2";     shift 2 ;;
         --channel)     [ $# -ge 2 ] || die "$1 needs a value"; CHANNEL="$2";         shift 2 ;;
         --base)    ENGINE_BASE="${2:-}"; shift 2 ;;
@@ -529,6 +535,7 @@ yield_to_file OPT_GAMES games --games TMC_GAMES "$(cfg_lists games)"
 [ -n "$OPT_GAME" ]        && OVERRIDES+=(--game "$OPT_GAME")
 [ -n "$OPT_MAP" ]         && OVERRIDES+=(--map "$OPT_MAP")
 [ -n "$OPT_WEB_LOADER" ]  && OVERRIDES+=(--web-loader "$OPT_WEB_LOADER")
+[ -n "$OPT_WEB_BUILD" ]   && OVERRIDES+=(--web-build "$OPT_WEB_BUILD")
 [ -n "$OPT_CONTENT_URL" ] && OVERRIDES+=(--content-url "$OPT_CONTENT_URL")
 
 # [b]The list reaches the SERVER too, and not only the installer.[/b] Installing the two
@@ -1480,6 +1487,24 @@ case "$COMMAND" in
                 warn "the linked addons are not at addons.lock (tools/addons-lock.sh check), so this build will not be pinned"
             fi
         fi
+        # [b]The addon API levels this shell carries[/b], so the site can pick the newest
+        # shell that satisfies a game's requires.json (sv_web_requires) instead of the newest
+        # one. Read from each addon's <addon>_api.gd, as DotAddonApi does at runtime.
+        {
+            printf '{'
+            sep=
+            for api in "$PROJECT"/addons/*/*_api.gd; do
+                [ -f "$api" ] || continue
+                addon="$(basename "$(dirname "$api")")"
+                [ "$(basename "$api")" = "${addon}_api.gd" ] || continue
+                level="$(sed -n 's/^const LEVEL *:= *\([0-9]\+\).*/\1/p' "$api" | head -1)"
+                oldest="$(sed -n 's/^const OLDEST *:= *\([0-9]\+\).*/\1/p' "$api" | head -1)"
+                printf '%s"%s":{"level":%s,"oldest":%s}' "$sep" "$addon" "${level:-1}" "${oldest:-1}"
+                sep=,
+            done
+            printf '}\n'
+        } > "$PROJECT/web/build/shell-api.json"
+
         printf '  wrote %s\n' "$PROJECT/web/build"
 
         # [b]The archive the site's publisher takes, because a directory is not one.[/b]
@@ -1689,9 +1714,9 @@ lock_moved() {
     target="$(git -C "$PROJECT" rev-parse "$TARGET_REF^{commit}" 2>/dev/null)" || return 1
     [ "$head" != "$target" ] || return 1
 
-    # web/shell-build too: it is what this server reports as sv_web_build, so a new shell
-    # pinned on the branch without a lock bump used to reach no box until a reinstall,
-    # and its players stayed on the previous shell.
+    # web/shell-build too: the checkout's record of its shell, so a new shell pinned on
+    # the branch without a lock bump still moves the checkout (the site serves players the
+    # newest compatible shell regardless, but the record should follow).
     git -C "$PROJECT" diff --quiet HEAD "$TARGET_REF" -- addons.lock web/shell-build 2>/dev/null \
         && return 0
 

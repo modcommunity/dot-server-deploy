@@ -293,8 +293,12 @@ var initial_game: String = ""
 
 ## The site's web loader version this server's browser players should get, or "" for the site's default. Reported as the NOTIFY cvar `sv_web_loader` (see `TmcHost._register_web_loader`).
 ## A host field and not a console line, as `sv_game` is: the cvar is registered after dot-server boots, and the YAML's console lines run during that boot, so it would be dropped as unknown.
-## Unlike `sv_web_build` (a fact about the checkout) it is the operator's, for a server deliberately behind the site's default.
+## Like `sv_web_build`, it is the operator's pin for a server deliberately behind the site's default.
 var web_loader: String = ""
+
+## The web shell build this server pins, or "" for the site's newest compatible shell. Reported as the NOTIFY cvar `sv_web_build` (see `TmcHost._register_web_build`).
+## A host field for the same reason as `web_loader`. `web/shell-build` is no longer read for it: that file records the checkout's shell, a pin is a decision.
+var web_build: String = ""
 
 ## The map to start that game on, or "" for the game's own default: `sv_map` in the YAML, `--map`, and `+map` after a `--`. A request, not a guarantee: the game decides whether it has maps
 ## and the id must be in its catalogue; both are reported and neither is fatal, since a server that refuses to boot over a map name cannot be got back.
@@ -924,6 +928,10 @@ func _apply_settings(file: String, tree: Dictionary) -> DotResult:
 			web_loader = str(value).strip_edges()
 			continue
 
+		if name == "sv_web_build":
+			web_build = str(value).strip_edges()
+			continue
+
 		if name == "sv_map":
 			# Not passed through as a console line, like `sv_query_app`: there is no `map` cvar at this level; the one that exists belongs to whichever game is loaded, which is none when the startup config runs.
 			initial_map = String(value)
@@ -1220,6 +1228,8 @@ func describe_lines() -> PackedStringArray:
 		initial_map if initial_map != "" else "(the game's default)"))
 	out.append("loader   : %s" % (
 		web_loader if web_loader != "" else "(the site's default)"))
+	out.append("shell    : %s" % (
+		web_build if web_build != "" else "(the site's newest compatible)"))
 	# Same argument a third time: a server offering three of the ten games on its disk is a deliberate choice, and without this line a filtered server looks like an empty content directory.
 	out.append("games    : %s" % (
 		", ".join(games_allow) if not games_allow.is_empty() else "(everything in content/)"))

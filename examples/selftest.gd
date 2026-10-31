@@ -346,6 +346,13 @@ func _test_config() -> void:
 		not config.console_lines.has("sv_web_loader fixture-loader"),
 		"and is not queued for a console that does not have the cvar yet"
 	)
+	_check(config.web_build == "20260101-0000", "sv_web_build is the operator's pin (%s)"
+		% config.web_build)
+	_check(
+		not config.console_lines.has("sv_web_build 20260101-0000"),
+		"and is not queued for a console that does not have the cvar yet"
+	)
+	_check(TmcConfig.new().web_build == "", "no pin by default: the site chooses the shell")
 	_check(
 		Array(config.server.tags) == ["fixture", "test"],
 		"sv_tags becomes a list (%s)" % [config.server.tags]
