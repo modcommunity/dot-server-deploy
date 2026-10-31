@@ -20,7 +20,7 @@ entries:
   - repo: dot-chat
     pin: v0.1.5
   - repo: dot-cloud
-    pin: v0.1.22
+    pin: v0.1.23
   - repo: dot-combat
     pin: v0.1.14
   - repo: dot-console
@@ -134,10 +134,10 @@ entries:
   - repo: dot-vote
     pin: v0.1.15
   - repo: dot-weapon
-    pin: v0.1.25
+    pin: v0.1.26
   - repo: dot-weather
     pin: v0.1.2
   - repo: zed-dot-weapons
-    pin: v0.1.6
+    pin: v0.1.7
   - repo: zee-dot-weapons
     pin: v0.1.41
