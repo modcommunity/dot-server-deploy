@@ -76,6 +76,9 @@ cvars:
   # properly the moment somebody else arrives.
   arena_minplayers: "1"
 
+  # E launch is off unless a server turns it on.
+  arena_launch: "0"
+
 # The MAP vote inside this game — what the players pick between when a map ends, and
 # whether they may extend the one they are on. Its defaults are in the game's own
 # game/arena_vote.gd; anything written here overrides them, and the server's own
