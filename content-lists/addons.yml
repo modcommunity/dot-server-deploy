@@ -2,7 +2,7 @@
 # Shipped default; an operator replaces it with cfg/content/addons.yml (see docs/content-lists.md).
 entries:
   - repo: arena-weapons
-    pin: v1.4.10
+    pin: v1.4.11
   - repo: dot-2d
     pin: v0.1.5
   - repo: dot-achievements
