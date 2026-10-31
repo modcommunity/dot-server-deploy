@@ -24,6 +24,20 @@
 
 **One engine line is expected.** A release build logs `ERROR: Attempt to disconnect a nonexistent connection from 'Server' ... 'tree_exited'` once when it leaves a server at the challenge to update. It is the engine's multiplayer cache on an ENet peer closed straight after the first message; deferring the drop does not change it, a debug build does not print it, and the update and rejoin complete.
 
+## Whose packs may replace the build's addons
+
+`ADDON_NAMESPACES` in `client/shell.gd` (`modcommunity/` and two first-party packs) is the `namespaces` list `DotCloudAddonSet.plan_for` takes an overlay from. It decides only whose pack may **replace** the shell's own `addons/<dir>`, which then runs for every game the shell plays, from the boot scene, before sign-in. That is shell code, so it stays first-party.
+
+It is not what a creator needs. A pack a server owner adds (`cfg/content/addons.yml`, `defaults: add:`) arrives as `content_extra`, is mounted under `res://dot_cloud/<id>/<version>/`, and its `entry` scene is started by `TmcAddonEntry` on the `side` its signed manifest names, with no namespace check: a creator's approved, signed pack already runs in the browser without the shell trusting its owner. Proven on dev with `sp-creator/probe` (`an extra pack started ... side=client`).
+
+If a creator ever needs to replace a shared addon itself, the options are:
+
+- **(a) The site's signed index names the owner of each addon dir.** The site already approves claims per owner; it would sign a `{dir: owner}` list (as it signs packs), and the shell would take an overlay for `addons/<dir>` only from that dir's approved owner. No owner could replace another's addon, and approving a claim stays the one gate. This is the right shape if it is ever wanted.
+- **(b) Per-player opt-in** to a third-party overlay. It moves the trust decision onto players, who cannot judge shell code.
+- **(c) Keep the first-party list** (current). Nothing a creator ships today needs it.
+
+Deriving the list from the pack's own manifest is not an option: the pack would vouch for itself, so any approved creator could replace any addon by naming its dir.
+
 ## The end-to-end proof
 
 dot-cloud's own suite proves the overlay with a run key and separate processes. **The end-to-end proof, an old exported shell meeting a newer server and relaunching onto site-signed addon packs, was done from here:**
