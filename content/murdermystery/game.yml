@@ -28,3 +28,5 @@ cvars:
   # Stand-ins, so one person on an empty server has somebody to play with.
   mm_bots: "1"
   bot_quota: "5"
+  # 1 files the players' stats with the backbone using the server's own ticket; 0 keeps them here.
+  stats_report: "0"
