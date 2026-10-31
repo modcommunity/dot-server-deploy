@@ -28,3 +28,5 @@ cvars:
   # Stand-ins, so one person on an empty server has somebody to find or to hide from.
   ph_bots: "1"
   ph_min_players: "3"
+  # 1 files the players' stats with the backbone using the server's own ticket; 0 keeps them here.
+  stats_report: "0"
