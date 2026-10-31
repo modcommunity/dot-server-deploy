@@ -410,7 +410,10 @@ func _test_a_leant_prop_is_drawn_on_the_floor() -> void:
 		for key: Variant in (catalogue.get("props") as Dictionary).keys():
 			var id := StringName(str(key))
 			var name := String(id)
-			if not (name.begins_with("food_") or name.begins_with("survival_")):
+			# Only pieces still drawn from the kit's atlas: barrels, boxes, bottles and the food pieces
+			# were rebuilt with flat colours of their own and carry no texture to look for.
+			if name not in ["survival_chest", "survival_workbench", "survival_signpost", "survival_bedroll",
+					"survival_barrel_open", "survival_box_open"]:
 				continue
 			var size: Vector3 = catalogue.call("size_of", id)
 			if bool(catalogue.call("may_disguise", id)) and size.y > tallest \
@@ -482,6 +485,8 @@ func _test_a_leant_prop_is_drawn_on_the_floor() -> void:
 					var material := (node as MeshInstance3D).get_active_material(surface) as BaseMaterial3D
 					if material != null and material.albedo_texture != null:
 						sample["textured"] = int(sample["textured"]) + 1
+					else:
+						sample["bare"] = "%s %s" % [(node as MeshInstance3D).get_active_material(surface), model.get_path()]
 			return float(sample["high"]) > float(sample["low"]),
 		15.0
 	)
@@ -494,7 +499,7 @@ func _test_a_leant_prop_is_drawn_on_the_floor() -> void:
 		"with its lowest point on the floor and the rest of it above", "low %+.3f, high %+.3f of %.3f" % [low, high, tallest])
 	_check(drawn and int(sample.get("boxes", 1)) == 0, "as the model, not the box that stands in for one that would not load")
 	_check(drawn and int(sample.get("textured", 0)) > 0,
-		"with the kit's external texture, loaded from inside the mount")
+		"with the kit's external texture, loaded from inside the mount", str(sample))
 	_done()
 
 
