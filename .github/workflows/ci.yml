@@ -39,6 +39,15 @@ jobs:
         secrets:
             DEPS_TOKEN: ${{ secrets.DOT_DEPS_TOKEN }}
 
+    # Hand-edited addons.lock bumps left the yml pins stale once; setup.sh prefers the pin.
+    addon-pins:
+        runs-on: ubuntu-latest
+        timeout-minutes: 2
+        steps:
+            - uses: actions/checkout@v4
+            - name: content-lists/addons.yml pins equal addons.lock
+              run: bash tools/addons-lock.sh check-pins
+
     # The Godot pin is in two places: tools/fetch-godot.sh here, which is
     # authoritative because it is what the containers, the release tarballs and every
     # developer box are built from, and dot-ci/godot.pin, which is what the family's

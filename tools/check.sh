@@ -59,6 +59,7 @@ echo "the lists written down twice"
 # setup.ps1's addon list and every copy of addon_repo()'s exceptions against setup.sh.
 bash tools/check_lists.sh || fails=$((fails + 1))
 bash tools/check_content_trust.sh || fails=$((fails + 1))
+bash tools/addons-lock.sh check-pins || fails=$((fails + 1))
 
 echo
 echo "the deploy modes (compose, pterodactyl)"

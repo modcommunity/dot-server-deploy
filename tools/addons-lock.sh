@@ -4,6 +4,7 @@
 #
 #   tools/addons-lock.sh write           newest release tag (v*) of every addon
 #   tools/addons-lock.sh write v0.1.2    that tag for all of them
+#   tools/addons-lock.sh check-pins      content-lists/addons.yml pins equal the lock (offline)
 #   tools/addons-lock.sh check           the linked addons are at the lock, and clean
 #
 # [b]Why a lock at all.[/b] A server's addons used to be whatever each repository's main
@@ -97,20 +98,28 @@ cmd_write() {
     awk '!/^#/ { print $2 }' "$LOCK" | sort | uniq -c | sed 's/^/  /'
 }
 
+# Offline: every pin in content-lists/addons.yml equals addons.lock. Hand-edited lock bumps
+# left the pins stale once and the web-shell CI failed; setup.sh prefers the pin.
+pins_agree() {
+    [ -f "$LOCK" ] || { echo "no addons.lock; run: tools/addons-lock.sh write" >&2; return 2; }
+    [ -f "$YML" ] || return 0
+    local repo ypin ref ok=0
+    while IFS=$'\t' read -r repo ypin; do
+        ref="$(awk -v r="$repo" '$1 == r { print $2 }' "$LOCK")"
+        if [ "$ref" != "$ypin" ]; then
+            echo "  !!    $repo: content-lists/addons.yml pins $ypin, addons.lock says ${ref:-nothing}; run: tools/addons-lock.sh write"
+            ok=1
+        fi
+    done < <(yml_pins)
+    return "$ok"
+}
+
 cmd_check() {
     [ -f "$LOCK" ] || { echo "no addons.lock; run: tools/addons-lock.sh write" >&2; exit 2; }
 
     local repo name ref dir root want have bad=0 ypin
 
-    if [ -f "$YML" ]; then
-        while IFS=$'\t' read -r repo ypin; do
-            ref="$(awk -v r="$repo" '$1 == r { print $2 }' "$LOCK")"
-            if [ -n "$ref" ] && [ "$ref" != "$ypin" ]; then
-                echo "  !!    $repo: content-lists/addons.yml pins $ypin, the lock says $ref (setup.sh prefers the pin)"
-                bad=1
-            fi
-        done < <(yml_pins)
-    fi
+    pins_agree || bad=1
 
     for repo in "${REPOS[@]}"; do
         ref="$(awk -v r="$repo" '$1 == r { print $2 }' "$LOCK")"
@@ -172,5 +181,6 @@ cmd_check() {
 case "${1:-}" in
     write) shift; cmd_write "${1:-}" ;;
     check) cmd_check ;;
-    *) sed -n '2,8p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+    check-pins) pins_agree; rc=$?; [ "$rc" -eq 0 ] && echo "every yml pin matches addons.lock"; exit "$rc" ;;
+    *) sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
 esac
