@@ -27,3 +27,4 @@ cvars:
   # Stand-ins, so one person on an empty server has an activator to run from.
   dr_bots: "1"
   dr_min_players: "3"
+  stats_report: "0"
