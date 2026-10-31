@@ -22,7 +22,7 @@ entries:
   - repo: dot-cloud
     pin: v0.1.24
   - repo: dot-combat
-    pin: v0.1.15
+    pin: v0.1.16
   - repo: dot-console
     pin: v0.1.8
   - repo: dot-core
@@ -38,7 +38,7 @@ entries:
   - repo: dot-flashlight
     pin: v0.1.2
   - repo: dot-fx
-    pin: v0.3.3
+    pin: v0.3.4
   - repo: dot-game
     pin: v0.1.35
   - repo: dot-inventory

@@ -10,7 +10,7 @@ dot-bot-record	v0.1.1
 dot-browser	v0.1.5
 dot-chat	v0.1.5
 dot-cloud	v0.1.24
-dot-combat	v0.1.15
+dot-combat	v0.1.16
 dot-console	v0.1.8
 dot-core	v0.1.31
 dot-economy	v0.1.5
@@ -18,7 +18,7 @@ dot-effects	v0.1.8
 dot-entity	v0.1.7
 dot-flashlight	v0.1.2
 dot-friends	v0.1.5
-dot-fx	v0.3.3
+dot-fx	v0.3.4
 dot-game	v0.1.35
 dot-inventory	v0.1.4
 dot-leaderboard	v0.3.1
