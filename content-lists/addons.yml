@@ -116,7 +116,7 @@ entries:
   - repo: dot-sql
     pin: v0.1.4
   - repo: dot-stats
-    pin: v0.1.8
+    pin: v0.1.12
   - repo: dot-team
     pin: v0.1.8
   - repo: dot-timer
