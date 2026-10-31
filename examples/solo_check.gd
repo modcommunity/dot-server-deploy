@@ -218,7 +218,7 @@ func _test_map_list() -> void:
 	_check(drift.is_empty(), "solo.json and cfg.example/server/content/overrides.yml agree", "\n".join(drift))
 
 	# And nothing in solo.json names a game this project does not publish.
-	var known := _games()
+	var known := _games(false)
 	var strays := PackedStringArray()
 	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(TmcSolo.SOLO_CONFIG))
 	for id: Variant in ((parsed as Dictionary).get("maps", {}) as Dictionary):
@@ -282,14 +282,18 @@ func _test_skip_maps() -> void:
 
 # --- Helpers -----------------------------------------------------------------
 
-func _games() -> PackedStringArray:
+## The games list's game repos; [param checked_out] keeps only those with a source here,
+## since a runner (a GPU box mirror) may lack one that the list still publishes.
+func _games(checked_out := true) -> PackedStringArray:
 	var out := PackedStringArray()
 	var listed := TmcContentLists.load_list("games", "res://cfg")
 	if not listed.ok:
 		return out
 	for e: Dictionary in listed.value:
 		var repo := String(e["id"])
-		if e["kind"] == "repo" and _source(repo) != "" and FileAccess.file_exists(_source(repo).path_join("game.yml")):
+		if e["kind"] != "repo":
+			continue
+		if not checked_out or (_source(repo) != "" and FileAccess.file_exists(_source(repo).path_join("game.yml"))):
 			out.append(repo)
 	return out
 
