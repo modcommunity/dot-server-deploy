@@ -64,7 +64,7 @@ entries:
   - repo: dot-moderation
     pin: v0.1.5
   - repo: dot-net
-    pin: v0.1.20
+    pin: v0.1.21
   - repo: dot-npc
     pin: v0.1.10
   - repo: dot-npc-ai
