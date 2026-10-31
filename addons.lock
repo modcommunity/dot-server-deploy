@@ -12,7 +12,7 @@ dot-chat	v0.1.5
 dot-cloud	v0.1.23
 dot-combat	v0.1.15
 dot-console	v0.1.8
-dot-core	v0.1.30
+dot-core	v0.1.31
 dot-economy	v0.1.5
 dot-effects	v0.1.8
 dot-entity	v0.1.7
@@ -68,5 +68,5 @@ dot-voice	v0.1.9
 dot-vote	v0.1.15
 dot-weapon	v0.1.27
 dot-weather	v0.1.2
-zed-dot-weapons	v0.1.7
-zee-dot-weapons	v0.1.41
+zed-dot-weapons	v0.1.9
+zee-dot-weapons	v0.1.44

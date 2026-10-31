@@ -26,7 +26,7 @@ entries:
   - repo: dot-console
     pin: v0.1.8
   - repo: dot-core
-    pin: v0.1.30
+    pin: v0.1.31
   - repo: dot-economy
     pin: v0.1.5
   - repo: dot-effects
@@ -138,6 +138,6 @@ entries:
   - repo: dot-weather
     pin: v0.1.2
   - repo: zed-dot-weapons
-    pin: v0.1.7
+    pin: v0.1.9
   - repo: zee-dot-weapons
-    pin: v0.1.41
+    pin: v0.1.44
