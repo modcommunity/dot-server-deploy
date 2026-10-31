@@ -140,4 +140,4 @@ entries:
   - repo: zed-dot-weapons
     pin: v0.1.9
   - repo: zee-dot-weapons
-    pin: v0.1.44
+    pin: v0.1.45
