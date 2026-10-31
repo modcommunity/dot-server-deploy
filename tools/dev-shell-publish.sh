@@ -37,9 +37,19 @@ if [ "$publish" = 1 ]; then
 fi
 [ "$register" = 1 ] || exit 0
 
-sql="INSERT INTO \"WebGameBuild\" (id, \"appId\", build, entry, status, notes, \"createdAt\", \"updatedAt\")
-SELECT 'wgb' || substr(md5(random()::text), 1, 22), id, '$build', '$entry', 'ACTIVE', 'dev shell, tmc-dev key', now(), now()
-FROM \"App\" WHERE url = '$app' ON CONFLICT (\"appId\", build) DO NOTHING;"
+# The addon API levels the shell carries (export-web's shell-api.json), so the resolver can match it to sv_web_requires.
+api=NULL
+if [ -f web/build/shell-api.json ]; then
+    api=$(python3 - web/build/shell-api.json <<'PY'
+import json, sys
+s = json.dumps(json.load(open(sys.argv[1])))
+print("'" + s.replace("'", "''") + "'::jsonb")
+PY
+)
+fi
+sql="INSERT INTO \"WebGameBuild\" (id, \"appId\", build, entry, status, notes, api, \"createdAt\", \"updatedAt\")
+SELECT 'wgb' || substr(md5(random()::text), 1, 22), id, '$build', '$entry', 'ACTIVE', 'dev shell, tmc-dev key', $api, now(), now()
+FROM \"App\" WHERE url = '$app' ON CONFLICT (\"appId\", build) DO UPDATE SET api = COALESCE(EXCLUDED.api, \"WebGameBuild\".api);"
 # shellcheck disable=SC2029
 printf '%s\n' "$sql" | ssh "$host" "set -a; . $remote_env; set +a; psql \"\${DATABASE_URL%%\\?*}\" -v ON_ERROR_STOP=1 -q"
 echo "registered $build on dev_games (app $app)"

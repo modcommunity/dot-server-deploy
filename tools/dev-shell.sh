@@ -41,6 +41,11 @@ d["trusted_keys"]["tmc-dev"] = open(sys.argv[1]).read().strip()
 json.dump(d, open(p, "w"), indent=4)
 PY
 tools/shell-auth-json.sh "$backbone" > client/auth.json
+# ./server is generated once by setup.sh; a stale one exports without shell-api.json, and the site then cannot match the shell to a game.
+if [ ! -x server ] || [ tools/server.in -nt server ]; then
+    godot_bin=$(sed -n 's/^GODOT="\${TMC_GODOT:-\(.*\)}"$/\1/p' server 2>/dev/null)
+    sed "s|@GODOT@|${godot_bin:-$(command -v godot)}|g" tools/server.in > server && chmod +x server
+fi
 ./server export-web
 echo "dev shell exported with backbone $backbone"
 ts=$(date +%Y%m%d-%H%M%S)
