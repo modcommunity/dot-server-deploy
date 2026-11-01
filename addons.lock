@@ -5,7 +5,7 @@ dot-2d	v0.1.5
 dot-achievements	v0.1.6
 dot-audio	v0.1.11
 dot-auth	v0.1.12
-dot-bot	v0.1.12
+dot-bot	v0.1.13
 dot-bot-record	v0.1.1
 dot-browser	v0.1.5
 dot-chat	v0.1.5
@@ -70,4 +70,4 @@ dot-vote	v0.1.15
 dot-weapon	v0.1.28
 dot-weather	v0.1.2
 zed-dot-weapons	v0.1.9
-zee-dot-weapons	v0.1.47
+zee-dot-weapons	v0.1.48
