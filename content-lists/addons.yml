@@ -26,7 +26,7 @@ entries:
   - repo: dot-console
     pin: v0.1.8
   - repo: dot-core
-    pin: v0.1.35
+    pin: v0.1.36
   - repo: dot-economy
     pin: v0.1.5
   - repo: dot-effects
