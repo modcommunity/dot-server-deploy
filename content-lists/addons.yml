@@ -12,7 +12,7 @@ entries:
   - repo: dot-auth
     pin: v0.1.12
   - repo: dot-bot
-    pin: v0.1.13
+    pin: v0.1.14
   - repo: dot-bot-record
     pin: v0.1.1
   - repo: dot-browser
