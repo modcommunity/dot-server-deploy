@@ -392,7 +392,7 @@
    * is allowed it here AND the parent's own Permissions-Policy delegates it to the game's
    * origin. The engine asks only when the player first presses the talk key.
    */
-  frame.setAttribute('allow', 'autoplay; gamepad; fullscreen; cross-origin-isolated; microphone');
+  frame.setAttribute('allow', 'autoplay; gamepad; fullscreen; cross-origin-isolated; microphone; local-network-access; local-network; loopback-network');
   frame.setAttribute('allowfullscreen', 'true');
 
   /*
