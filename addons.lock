@@ -19,7 +19,7 @@ dot-entity	v0.1.7
 dot-flashlight	v0.1.2
 dot-friends	v0.1.5
 dot-fx	v0.3.4
-dot-game	v0.1.38
+dot-game	v0.1.39
 dot-inventory	v0.1.4
 dot-leaderboard	v0.3.1
 dot-lighting	v0.1.9
@@ -46,6 +46,7 @@ dot-player-class	v0.1.8
 dot-player-controller	v0.3.3
 dot-procedural-generation	v0.1.4
 dot-profile	v0.1.22
+dot-profiler	v0.1.0
 dot-props	v0.1.10
 dot-radio	v0.1.1
 dot-replay	v0.1.15

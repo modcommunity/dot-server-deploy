@@ -40,7 +40,7 @@ entries:
   - repo: dot-fx
     pin: v0.3.4
   - repo: dot-game
-    pin: v0.1.38
+    pin: v0.1.39
   - repo: dot-inventory
     pin: v0.1.4
   - repo: dot-leaderboard
@@ -93,6 +93,8 @@ entries:
     pin: v0.1.4
   - repo: dot-profile
     pin: v0.1.22
+  - repo: dot-profiler
+    pin: v0.1.0
   - repo: dot-props
     pin: v0.1.10
   - repo: dot-radio
