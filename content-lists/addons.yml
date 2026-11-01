@@ -26,7 +26,7 @@ entries:
   - repo: dot-console
     pin: v0.1.8
   - repo: dot-core
-    pin: v0.1.33
+    pin: v0.1.34
   - repo: dot-economy
     pin: v0.1.5
   - repo: dot-effects
@@ -40,7 +40,7 @@ entries:
   - repo: dot-fx
     pin: v0.3.4
   - repo: dot-game
-    pin: v0.1.36
+    pin: v0.1.37
   - repo: dot-inventory
     pin: v0.1.4
   - repo: dot-leaderboard
@@ -64,7 +64,7 @@ entries:
   - repo: dot-moderation
     pin: v0.1.5
   - repo: dot-net
-    pin: v0.1.21
+    pin: v0.1.22
   - repo: dot-npc
     pin: v0.1.10
   - repo: dot-npc-ai
@@ -102,7 +102,7 @@ entries:
   - repo: dot-replay
     pin: v0.1.15
   - repo: dot-server
-    pin: v0.1.25
+    pin: v0.1.26
   - repo: dot-server-query
     pin: v0.1.6
   - repo: dot-server-security
