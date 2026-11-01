@@ -3,7 +3,7 @@
 arena-weapons	v1.4.18
 dot-2d	v0.1.5
 dot-achievements	v0.1.6
-dot-audio	v0.1.11
+dot-audio	v0.1.12
 dot-auth	v0.1.12
 dot-bot	v0.1.14
 dot-bot-record	v0.1.1
@@ -26,7 +26,7 @@ dot-lighting	v0.1.9
 dot-loadout	v0.1.10
 dot-locale	v0.1.5
 dot-log	v0.1.6
-dot-map	v0.1.71
+dot-map	v0.1.73
 dot-match	v0.1.5
 dot-matchmaking	v0.1.7
 dot-menu	v0.1.20
@@ -43,7 +43,7 @@ dot-platform	v0.1.8
 dot-player	v0.1.5
 dot-player-char	v0.1.53
 dot-player-class	v0.1.8
-dot-player-controller	v0.3.3
+dot-player-controller	v0.3.4
 dot-procedural-generation	v0.1.4
 dot-profile	v0.1.22
 dot-profiler	v0.1.0
@@ -67,7 +67,7 @@ dot-user-avatar	v0.1.9
 dot-vehicle	v0.1.6
 dot-voice	v0.1.9
 dot-vote	v0.1.15
-dot-weapon	v0.1.28
+dot-weapon	v0.1.29
 dot-weather	v0.1.2
 zed-dot-weapons	v0.1.9
-zee-dot-weapons	v0.1.48
+zee-dot-weapons	v0.1.49
