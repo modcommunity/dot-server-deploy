@@ -15,7 +15,7 @@ extends Node
 ## trailing comment on a read field disagrees with TmcYaml); and deleting a game from
 ## `client/solo.json` (the drift check names it).
 
-const CHECKS := 47
+const CHECKS := 48
 
 ## Every game repository, beside this project or in games/: the repositories of cfg/content/games.yml (shipped content-lists/games.yml).
 
@@ -176,11 +176,12 @@ func _test_descriptor_reader() -> void:
 
 	var inline := TmcSolo.parse_descriptor(
 		"name: \"A # not a comment\"  # a comment\nclient_scene: game/x.tscn\n"
-		+ "dependencies: [a/b@1.0, 'c/d@2']\nserver_dependencies:\n  - e/f@3  # why\ncvars:\n  x: \"1\"\n"
+		+ "dependencies: [a/b@1.0, 'c/d@2']\nserver_dependencies:\n  - e/f@3  # why\nsuggested:\n  - dm=a/b\ncvars:\n  x: \"1\"\n"
 	)
 	_check(inline["name"] == "A # not a comment", "a '#' inside quotes is kept and a trailing comment dropped")
 	_check(inline["dependencies"] == PackedStringArray(["a/b@1.0", "c/d@2"]), "an inline list is read")
 	_check(inline["server_dependencies"] == PackedStringArray(["e/f@3"]), "a block list is read, its comment dropped")
+	_check(inline["suggested"] == PackedStringArray(["dm=a/b"]), "a suggested list is read")
 	_check(inline["client_scene"] == "game/x.tscn", "a nested block after the lists is skipped")
 
 	_done()

@@ -229,11 +229,12 @@ static func read_descriptor(mount: String) -> DotResult:
 
 
 ## The flat fields of a `game.yml` text: `client_scene`, `name`, `content_id`, `version`,
-## and the `dependencies` and `server_dependencies` lists.
+## and the `dependencies`, `server_dependencies` and `suggested` lists.
 static func parse_descriptor(text: String) -> Dictionary:
 	var out := {
 		"name": "", "content_id": "", "version": "", "client_scene": "",
 		"dependencies": PackedStringArray(), "server_dependencies": PackedStringArray(),
+		"suggested": PackedStringArray(),
 	}
 	var list_key := ""
 

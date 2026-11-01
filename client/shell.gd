@@ -1663,7 +1663,7 @@ func _load_solo(content_id: String, version: String) -> DotResult:
 	# takes none and is not asked about them.
 	session.takes_subscriptions = not _game_accepts(mount).is_empty()
 	if session.takes_subscriptions:
-		session.workshop_summary = await _sync_workshop(content_id)
+		session.workshop_summary = await _sync_workshop(content_id, desc["suggested"] as PackedStringArray)
 
 	var path := mount.path_join(safe.value)
 	_warm_hold = await _warm_pack(slice_keys)
@@ -1787,8 +1787,9 @@ func _workshop_token() -> String:
 
 ## Runs the sync for a solo game behind the loading screen. The value is the summary; a
 ## refusal or a programmer error is an empty one, because nothing here may stop a game.
-func _sync_workshop(content_id: String) -> Dictionary:
+func _sync_workshop(content_id: String, suggested: PackedStringArray = PackedStringArray()) -> Dictionary:
 	var workshop := _ensure_workshop()
+	workshop.suggested = DotCloudSuggested.from_entries(suggested)
 	workshop.config.workshop_backbone_url = _workshop_site()
 
 	# Refresh the bearer first: `token_fn` is synchronous and a token that has just expired
