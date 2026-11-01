@@ -53,6 +53,20 @@
 # `games: <game>`. A list replaces a list; mode, cooldown and rotation merge. This template
 # changes nothing until you uncomment something.
 #
+# Two ways to say it. List only what plays (`maps:` above), OR keep every installed map and
+# exempt some. A file with only `exempt:` plays every installed map except those, sorted by id,
+# including maps from workshop or suggested packs that arrive later:
+#
+#   exempt: [dm_old_map, "dm_test_*", owner/some_map]    ids, owner/map refs, name globs
+#                                                      (quote a leading *); `remove:` is the
+#                                                      same key under its old name
+#
+# `exempt:` goes at the top of a file, inside `defaults:` or a game, or inside one rotation
+# (`rotations: <name>: exempt: [...]`). It wins over a `maps:` entry that lists the same map, and a
+# `merge: true` operator file can add exempts to a shipped list. Exempt maps stay installed:
+# `map <id>` loads them and the list marks them "not in rotation". A pattern that matches
+# nothing logs a WARN; exempting every map plays every map.
+#
 # Command names. A `commands:` block (in `defaults:` or under a game) renames the vote
 # commands. `prefix` goes in front of every name; `names` maps a role to a name, or to a list
 # whose first name is the one help shows and the rest are aliases:

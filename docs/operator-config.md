@@ -34,11 +34,19 @@ The strongest layer wins. A flat file such as `cfg/party.yml` still works until 
 
 **Replace the map list.** (The replace and `merge: true` rule for `maps.yml` is in dot-core; dot-map adopts it in a follow-up, until then its own file lookup applies.) A list file (a map rotation) is replaced whole by yours, which is what you want when you say "exactly these maps". Create `cfg/server/addon/dot_map/maps.yml` and list only the maps you want.
 
-**Add a map to the shipped list.** Start your file with `merge: true` and it is added to the list below instead of replacing it. Drop one with `remove:`:
+**Two ways to choose the maps.** List only what plays (`maps:`), or keep every installed map and exempt some (`exempt:`). A file with only `exempt:` plays every installed map except those, sorted by name, including maps from workshop or suggested packs that arrive later. Entries are map ids, `owner/map` refs or name globs; quote one that starts with `*`. A pattern that matches nothing logs a warning. An exempt map stays installed: `map <id>` still loads it and the map list marks it "not in rotation".
+
+```yaml
+exempt: [dm_old_map, "dm_test_*"]
+```
+
+`exempt:` goes at the top of the file, inside `defaults:` or a game, or inside one rotation (`rotations: <name>: exempt: [...]`), and it wins over a `maps:` entry for the same map. `remove:` is the old name of the same key and still works.
+
+**Add a map to the shipped list.** Start your file with `merge: true` and it is added to the list below instead of replacing it. Exempt one from the shipped list the same way:
 
 ```yaml
 merge: true
-remove: [dm_old_map]
+exempt: [dm_old_map]
 maps: [dm_new_map]
 ```
 
