@@ -19,7 +19,7 @@ const RoundsWithoutMatch := preload("res://examples/fixtures/rounds_without_matc
 
 const Host := preload("res://host/tmc_host.gd")
 
-const CHECKS := 450
+const CHECKS := 457
 
 var _passed := 0
 var _failed := 0
@@ -1558,6 +1558,33 @@ defaults:
 	_check(with_own.map_owner_for(ranked) == "mine", "the game's map_owner beats defaults:")
 	ranked.content_id = ""
 	_check(rank.map_owner_for(ranked) == "", "nothing resolves: no owner")
+
+	# --- the game's `suggested:` map packs reach the server's map list ----------------
+	var sug_game := _owner_game("own/game-x", PackedStringArray(["me/a@1"]))
+	sug_game.metadata["suggested"] = ["dm=zz/dm-one", "surf=zz/surf-one"]
+	var sug_content := TmcContent.new()
+	sug_content.games.append(sug_game)
+	var sug_on := _game_config("games:\n  game-x:\n    maps:\n      - m1\n")
+	sug_on.resolved = {"zz/dm-one": "3", "zz/surf-one": "4"}
+	_check(sug_on.all_map_entries(sug_content).has("zz/dm-one") and sug_on.all_map_entries(sug_content).has("zz/surf-one"),
+		"the installer pins a game's suggested map packs by default", str(sug_on.all_map_entries(sug_content)))
+	sug_on.apply(sug_game)
+	_check(sug_game.maps.has("zz/dm-one@3") and sug_game.maps.has("zz/surf-one@4") and sug_game.maps.has("me/a@1"),
+		"and the host puts them in the map list beside the game's own", str(sug_game.maps))
+	var sug_off := _game_config("games:\n  game-x:\n    suggested_maps: false\n")
+	sug_off.resolved = sug_on.resolved
+	_check(not sug_off.all_map_entries(sug_content).has("zz/dm-one"), "suggested_maps: false leaves them out of the installer's list")
+	var sug_off_game := _owner_game("own/game-x", PackedStringArray(["me/a@1"]))
+	sug_off_game.metadata["suggested"] = ["dm=zz/dm-one", "surf=zz/surf-one"]
+	sug_off.apply(sug_off_game)
+	_check(sug_off_game.maps == PackedStringArray(["me/a@1"]), "and out of the host's map list", str(sug_off_game.maps))
+	var sug_groups := _game_config("games:\n  game-x:\n    suggested_maps: surf\n")
+	_check(sug_groups.suggested_entries(sug_game) == PackedStringArray(["zz/surf-one"]),
+		"suggested_maps: surf keeps that group only", str(sug_groups.suggested_entries(sug_game)))
+	_check(_game_config("games:\n  game-x:\n    suggested_maps: \"a b\"\n") == null, "a bad suggested_maps is refused")
+	var sug_cvar := _game_config("games:\n  game-x:\n    cvars:\n      sv_suggested_maps: none\n")
+	_check(sug_cvar.suggested_entries(sug_game).is_empty(),
+		"the sv_suggested_maps cvar is read from the section's cvars")
 	rank.apply_all(rank_content)
 	_check(rank.errors.size() == 3 and rank.errors[0].contains("m1") and rank.errors[0].contains("game-x"),
 		"and each bare entry is refused with the game and the entry named", str(rank.errors))

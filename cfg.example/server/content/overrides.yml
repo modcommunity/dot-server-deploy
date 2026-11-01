@@ -40,6 +40,10 @@
 #         vote:                  this game's time limit in the server's game vote
 #           time_limit_sec: 2400
 #       map_owner: gamemann      who a bare map name below belongs to (optional)
+#       suggested_maps: all      the map packs the game's game.yml suggests: all (the default),
+#                                none, or groups to keep (dm,surf). Also --no-suggested,
+#                                --suggested=<mode>, --no-suggested-<group> on the command
+#                                line, or the sv_suggested_maps cvar
 #       maps:
 #         game_maps: true        also offer the maps the game itself lists (the default)
 #         add:                   maps to offer on top

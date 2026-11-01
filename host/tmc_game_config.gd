@@ -18,6 +18,7 @@ extends RefCounted
 ##       map_vote:
 ##         duration_sec: 1800
 ##     map_owner: gamemann              # who a bare map name belongs to (see below)
+##     suggested_maps: all              # the game.yml `suggested:` map packs: all, none, or groups (dm,surf)
 ##     maps:
 ##       game_maps: true                # keep the maps the game's own game.yml lists
 ##       add:
@@ -83,7 +84,7 @@ const RESOLVED_FILE := "content-maps.json"
 const COLLECTION_FORMAT := 1
 
 ## Keys a game section may carry.
-const KEYS: PackedStringArray = ["name", "max_players", "cvars", "metadata", "maps", "map_owner"]
+const KEYS: PackedStringArray = ["name", "max_players", "cvars", "metadata", "maps", "map_owner", "suggested_maps"]
 
 ## Keys that say what the game IS. Refused, with the reason.
 const IDENTITY: PackedStringArray = [
@@ -289,6 +290,10 @@ func all_map_entries(content: TmcContent = null) -> PackedStringArray:
 					if not out.has(entry):
 						out.append(entry)
 
+			for entry in suggested_entries(descriptor):
+				if not out.has(entry):
+					out.append(entry)
+
 	# Sections no descriptor claimed (or no content given): only the spellings that need
 	# no owner.
 	for section: Dictionary in [defaults] + games.values():
@@ -359,6 +364,63 @@ func map_owner_for(descriptor: DotGameDescriptor) -> String:
 	return descriptor.content_id.get_slice("/", 0) if descriptor.content_id.contains("/") else ""
 
 
+## Which of the game's `suggested:` groups this server offers: all, none or a comma list. The command line (`--no-suggested`, `--suggested=<mode>`, `--no-suggested-<group>`) wins, then the game's `suggested_maps:`, then `defaults:`, then the `sv_suggested_maps` cvar, then all.
+func suggested_mode_for(descriptor: DotGameDescriptor) -> String:
+	var own := _section_for(descriptor)
+	var fallback := DotCloudSuggested.MODE_ALL
+
+	if own.has("suggested_maps"):
+		fallback = str(own["suggested_maps"])
+	elif defaults.has("suggested_maps"):
+		fallback = str(defaults["suggested_maps"])
+	else:
+		var cvars := descriptor.cvars.duplicate()
+		cvars.merge(defaults["cvars"], true)
+		cvars.merge(own.get("cvars", {}), true)
+		var raw := str(cvars.get("sv_suggested_maps", "")).strip_edges()
+
+		if raw != "":
+			var mode := _suggested_mode_of(raw)
+			if DotCloudSuggested.valid_mode(mode):
+				fallback = mode
+
+	var groups := DotCloudSuggested.groups_of(
+		DotCloudSuggested.from_entries(PackedStringArray(descriptor.metadata.get("suggested", []))))
+	return DotCloudSuggested.mode_from_args(OS.get_cmdline_args(), groups, fallback)
+
+
+## The map packs from the game's `suggested:` that [method suggested_mode_for] keeps, as unpinned `owner/id` entries.
+func suggested_entries(descriptor: DotGameDescriptor) -> PackedStringArray:
+	var out := PackedStringArray()
+	var declared := PackedStringArray(descriptor.metadata.get("suggested", []))
+
+	if declared.is_empty():
+		return out
+
+	var kept := DotCloudSuggested.select(DotCloudSuggested.from_entries(declared), suggested_mode_for(descriptor))
+	var owner := map_owner_for(descriptor)
+
+	for e in kept:
+		var q := TmcGameRef.qualify_map(str(e["id"]), owner)
+
+		if bool(q["ok"]) and not out.has(str(q["id"])):
+			out.append(str(q["id"]))
+
+	return out
+
+
+## `suggested_maps:` as a mode string: true is all, false is none, a list is its groups.
+static func _suggested_mode_of(value: Variant) -> String:
+	if value is bool:
+		return DotCloudSuggested.MODE_ALL if value else DotCloudSuggested.MODE_NONE
+
+	if value is Array:
+		return ",".join(PackedStringArray(value))
+
+	var s := str(value).strip_edges().to_lower()
+	return {"true": "all", "yes": "all", "1": "all", "false": "none", "no": "none", "0": "none"}.get(s, s)
+
+
 ## [param rule] (a normalised `maps:` block) with every entry qualified for [param owner].
 ## `add` entries keep their `@version`; `remove` entries are ids, or a bare name when
 ## [param owner] is "" (then [method _maps] matches it on the name half, because removing
@@ -418,13 +480,14 @@ func apply(descriptor: DotGameDescriptor) -> bool:
 		descriptor.dependencies, descriptor.server_dependencies]
 
 	var owner := map_owner_for(descriptor)
+	var extra := suggested_entries(descriptor)
 
-	_apply_section(descriptor, defaults, owner)
+	_apply_section(descriptor, defaults, owner, extra)
 
 	var own := _section_for(descriptor)
 
 	if not own.is_empty():
-		_apply_section(descriptor, own, owner)
+		_apply_section(descriptor, own, owner, extra)
 
 	_maps_to_clients(descriptor)
 
@@ -530,6 +593,17 @@ func _read_section(where: String, value: Variant) -> DotResult:
 
 		out["map_owner"] = who
 
+	if section.has("suggested_maps"):
+		var mode := _suggested_mode_of(section["suggested_maps"])
+
+		if not DotCloudSuggested.valid_mode(mode):
+			return DotResult.fail(
+				DotError.CODE_INVALID,
+				"%s: suggested_maps must be true, false, all, none or a list of groups like dm,surf." % where
+			)
+
+		out["suggested_maps"] = mode
+
 	var maps := _read_maps(where, section.get("maps", {}))
 
 	if not maps.ok:
@@ -605,7 +679,9 @@ func _read_maps(where: String, value: Variant) -> DotResult:
 # --- Applying -------------------------------------------------------------------
 
 
-func _apply_section(descriptor: DotGameDescriptor, section: Dictionary, owner: String) -> void:
+func _apply_section(
+	descriptor: DotGameDescriptor, section: Dictionary, owner: String, suggested := PackedStringArray()
+) -> void:
 	if section.has("name"):
 		descriptor.display_name = str(section["name"])
 
@@ -627,7 +703,14 @@ func _apply_section(descriptor: DotGameDescriptor, section: Dictionary, owner: S
 
 		descriptor.metadata[key] = _merged(descriptor.metadata.get(key), metadata[key])
 
-	descriptor.maps = _maps(descriptor, qualified_rule(descriptor.game_id, section["maps"], owner))
+	var rule := qualified_rule(descriptor.game_id, section["maps"], owner)
+	var add := suggested.duplicate()
+
+	for entry in (rule["add"] as PackedStringArray):
+		add.append(entry)
+
+	rule["add"] = add
+	descriptor.maps = _maps(descriptor, rule)
 
 
 ## When a game's maps are fetched, which only the game can say: `metadata: maps_delivery:`

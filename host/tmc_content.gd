@@ -367,6 +367,12 @@ func _build(name: String, tree: Dictionary) -> DotResult:
 			if not descriptor.metadata.has(str(key)):
 				descriptor.metadata[str(key)] = (extra as Dictionary)[key]
 
+	# Map packs the game suggests (`group=owner/id`); TmcGameConfig adds them to the map list unless opted out.
+	var suggested: Variant = TmcYaml.at(tree, "suggested", [])
+
+	if suggested is Array and not (suggested as Array).is_empty():
+		descriptor.metadata["suggested"] = (suggested as Array).duplicate()
+
 	var valid := descriptor.validate()
 
 	if not valid.ok:
