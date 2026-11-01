@@ -23,7 +23,7 @@ extends Node
 const WORK := "user://tmc_workshop_solo"
 const SHELL := "res://client/shell.tscn"
 const GAME := "gamemann/ws-game"
-const CHECKS := 56
+const CHECKS := 61
 const ACCEPTS := {"kinds": ["map", "script"], "map_kinds": ["sandbox"]}
 const HttpServer := preload("res://examples/fixtures/ws_http_server.gd")
 const Backbone := preload("res://examples/fixtures/ws_backbone.gd")
@@ -318,6 +318,36 @@ func _test_the_panel() -> void:
 	_check(str(off.get("id", "")) != "on", "the pack the game does not take does not", str(off))
 	await _panel_shot(panel, "panel")
 	panel.queue_free()
+
+	var sg := TmcWorkshopPanel.new()
+	sg.workshop = _ws
+	sg.takes_subscriptions = true
+	add_child(sg)
+	await get_tree().process_frame
+	_check(sg.find_child("SuggestedMode", true, false) == null, "a game that suggests nothing gets no suggested switch")
+	sg.queue_free()
+	var kept_suggested: Array[Dictionary] = _ws.suggested
+	_ws.suggested = DotCloudSuggested.from_ids("maps", PackedStringArray(["gamemann/x-maps"]))
+	var sp := TmcWorkshopPanel.new()
+	sp.workshop = _ws
+	sp.takes_subscriptions = true
+	sp.summary = {"guest": true, "mounted": []}
+	add_child(sp)
+	await get_tree().process_frame
+	var pick: OptionButton = sp.find_child("SuggestedMode", true, false)
+	_check(pick != null and pick.selected == 0, "a game with suggested packs shows the switch, on auto by default, even for a guest")
+	pick.item_selected.emit(2)
+	_check(_ws.device.suggested_mode() == "none", "Off is the device mode none")
+	await get_tree().process_frame
+	pick = sp.find_child("SuggestedMode", true, false)
+	_check(pick != null and pick.selected == 2, "and the page shows it after redrawing")
+	pick.item_selected.emit(1)
+	var ask_ok: bool = _ws.device.suggested_mode() == "ask"
+	pick = sp.find_child("SuggestedMode", true, false)
+	pick.item_selected.emit(0)
+	_check(ask_ok and _ws.device.suggested_mode() == "", "Ask is ask, Auto follows the config again")
+	sp.queue_free()
+	_ws.suggested = kept_suggested
 
 	# A guest's page, on a build with no sign-in at all (every native build today).
 	var guest := TmcWorkshopPanel.new()

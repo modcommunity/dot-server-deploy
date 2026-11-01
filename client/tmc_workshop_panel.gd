@@ -107,6 +107,8 @@ func refresh() -> void:
 		_add_line(_t("workshop.off", "The Workshop is off in this build."))
 		return
 
+	_add_suggested_row()
+
 	if not takes_subscriptions:
 		_add_line(_t("workshop.takes_none", "This game takes no subscriptions."))
 		_add_site_button()
@@ -155,6 +157,30 @@ func refresh() -> void:
 		add_child(_removed_card(gone))
 
 	_add_site_button()
+
+
+## Off / Ask / Auto for the packs the game suggests (its map packs). Shown whenever the game
+## declares some, signed in or not, because it is this device's choice and not a subscription.
+func _add_suggested_row() -> void:
+	if workshop.suggested.is_empty():
+		return
+	_add_line(_t("workshop.suggested", "Suggested content (the game's map packs)"), true)
+	var pick := OptionButton.new()
+	pick.name = "SuggestedMode"
+	pick.custom_minimum_size = Vector2(0, TOUCH_HEIGHT)
+	var choices := ["auto", "ask", "off"]
+	pick.add_item(_t("workshop.suggested.auto", "Download automatically"))
+	pick.add_item(_t("workshop.suggested.ask", "Ask before downloading"))
+	pick.add_item(_t("workshop.suggested.off", "Off"))
+	var mode: String = workshop.device.suggested_mode() if workshop.device != null else ""
+	pick.select(choices.find(DotCloudSuggested.device_choice(mode)))
+	pick.item_selected.connect(func(i: int) -> void: _set_suggested(choices[i]))
+	add_child(pick)
+
+
+func _set_suggested(choice: String) -> void:
+	var res := workshop.set_device_suggested_mode(DotCloudSuggested.mode_for_choice(choice))
+	_after("suggested", res, func() -> void: pass)
 
 
 func _enabled() -> bool:
