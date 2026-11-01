@@ -20,13 +20,13 @@ entries:
   - repo: dot-chat
     pin: v0.1.5
   - repo: dot-cloud
-    pin: v0.1.28
+    pin: v0.1.29
   - repo: dot-combat
     pin: v0.1.16
   - repo: dot-console
     pin: v0.1.8
   - repo: dot-core
-    pin: v0.1.34
+    pin: v0.1.35
   - repo: dot-economy
     pin: v0.1.5
   - repo: dot-effects
