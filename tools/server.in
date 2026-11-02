@@ -1156,6 +1156,26 @@ stamp_file_sizes() {
     sed -i "s#/\*FILE_SIZES\*/{}#$sizes#" "$build/embed.html"
 }
 
+## dot-core's page script: every browser call DotWeb makes (the keyboard lock, the leave prompt,
+## the parent postMessage) is a named function there, because the game origin's CSP has no
+## 'unsafe-eval' and JavaScriptBridge.eval throws. Loaded before index.js so it sees the engine's errors.
+install_dot_web() {
+    local build="$1" js="$PROJECT/addons/dot_core/web/dot_web.js" page
+    if [ ! -f "$js" ]; then
+        warn "addons/dot_core/web/dot_web.js is missing (dot-core older than the CSP-safe DotWeb): this web build has no keyboard lock, leave prompt or parent messages"
+        return 0
+    fi
+    cp "$js" "$build/dot_web.js"
+    for page in "$build/index.html" "$build/embed.html"; do
+        [ -f "$page" ] || continue
+        if ! grep -qF 'dot_web.js' "$page"; then
+            sed -i 's#<head>#<head>\n<script src="dot_web.js"></script>#' "$page"
+        fi
+        grep -qF 'src="dot_web.js"' "$page" \
+            || die "$page does not load dot_web.js, so DotWeb has no page side" 3
+    done
+}
+
 install_ceiling() {
     local build="$1" js="$PROJECT/addons/dot_audio/web/dot_audio_ceiling.js" page
     if [ ! -f "$js" ]; then
@@ -1461,6 +1481,7 @@ case "$COMMAND" in
         # embed.html names it in its source, index.html gets it here because the presets
         # are each box's own copy.
         install_ceiling "$PROJECT/web/build"
+        install_dot_web "$PROJECT/web/build"
 
         # The byte counts of the engine files, from the index.html Godot just wrote, into
         # embed.html: the engine's progress callback only has a total when it is given one.

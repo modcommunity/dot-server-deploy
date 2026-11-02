@@ -1048,16 +1048,13 @@ func _report_client_behind(sentence: String) -> void:
 	if not DotPlatform.is_web():
 		return
 
-	var payload := JSON.stringify({
+	var payload := {
 		"type": "tmc.build.mismatch",
 		"reason": "client_behind",
 		"message": sentence,
 		"early": early,
-	})
-	DotWeb.eval(
-		"window.parent && window.parent.postMessage(%s, '*')" % JSON.stringify(payload),
-		true
-	)
+	}
+	DotWeb.post_to_parent(payload)
 
 
 func _on_cloud_phase(phase: int, text: String) -> void:
@@ -2517,14 +2514,10 @@ func _report_build_mismatch(wanted: String) -> void:
 		return
 
 	# The shape the loader reads: one message, one type, the two revisions. The page knows what it published; a client naming a build URL could be told to load one.
-	var payload := JSON.stringify({
+	var payload := {
 		"type": "tmc.build.mismatch",
 		"server_signon": wanted,
 		"client_signon": ours,
-	})
+	}
 
-	DotWeb.eval(
-		"window.parent && window.parent.postMessage(%s, '*')"
-			% JSON.stringify(payload),
-		true
-	)
+	DotWeb.post_to_parent(payload)
