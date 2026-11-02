@@ -77,7 +77,7 @@ examples/return_to_game.gd::banner	3
 examples/return_to_game.gd::history	1
 examples/return_to_game.gd::long_block	2
 examples/rpc_path_watch.gd::long_block	1
-examples/selftest.gd::banner	6
+examples/selftest.gd::banner	7
 examples/selftest.gd::history	3
 examples/selftest.gd::long_block	15
 examples/server_world.gd::long_block	1
@@ -89,6 +89,7 @@ examples/smash_client.gd::history	2
 examples/smash_client.gd::long_block	12
 examples/solo_check.gd::banner	1
 examples/solo_check.gd::long_block	1
+examples/suggested_live.gd::long_block	1
 examples/template_client.gd::banner	3
 examples/template_client.gd::history	1
 examples/template_client.gd::long_block	2
@@ -149,3 +150,4 @@ tools/pack_probe.gd::long_block	1
 tools/pack_scene_probe.gd::history	1
 tools/pack_scene_probe.gd::long_block	1
 tools/progress_shot.gd::long_block	1
+tools/web_shrink.gd::long_block	1
