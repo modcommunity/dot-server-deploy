@@ -10,14 +10,9 @@
 # (docs/releases.md, "Publishing the web build"); by hand it is the fallback, and
 # ~/godot/deploy-web-shell.sh on a developer box is a wrapper that passes its .env.
 #
-# Two upload paths. With --api SITE (SHELL_API) the files go through website-city's web
-# build API (docs/web-shell-api.md): the site hands out presigned PUTs, so the games store
-# can be storez and this machine holds no storage credentials, only SHELL_PUBLISH_TOKEN.
-# Without it the legacy `aws s3` path runs (GAMES_S3_ACCESS_KEY, GAMES_S3_ACCESS_SECRET,
-# GAMES_S3_BUCKET, GAMES_S3_REGION), which only works while the store is S3.
-# Credentials come from the environment or --env FILE. Order: file < environment <
-# command line. Credentials are never taken from an argument (an argument is in `ps`
-# and shell history) and never printed.
+# Two upload paths: --api SITE (SHELL_API) goes through website-city's web build API (docs/web-shell-api.md) and needs only SHELL_PUBLISH_TOKEN;
+# without it the legacy `aws s3` path runs (GAMES_S3_* variables), which works only while the store is S3.
+# Credentials come from the environment or --env FILE (file < environment < command line), never from an argument, never printed.
 set -euo pipefail
 
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)

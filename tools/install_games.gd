@@ -1452,11 +1452,8 @@ func _fetch_pointer(content_id: String, bases: PackedStringArray, hop: int) -> D
 	return res
 
 
-## The newest-version lookup behind [method _fetch_pointer], with the transport as [param get_json]
-## (`url -> DotResult` of the parsed body) so a selftest can answer without a network.
-##
-## The pack API answers only `{version}` and a 404 for an id it does not hold, so an unknown or
-## retired id still falls through to `latest.json`, which carries `moved_to`.
+## The newest-version lookup behind [method _fetch_pointer], with the transport as [param get_json] (`url -> DotResult` of the parsed body) so a selftest needs no network.
+## The pack API answers only `{version}` and a 404 for an unknown id, so a retired id still falls through to `latest.json`, which carries `moved_to`.
 static func pointer_from(
 	content_id: String, site: String, bases: PackedStringArray, hop: int, get_json: Callable
 ) -> DotResult:
