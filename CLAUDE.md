@@ -65,6 +65,7 @@ Exit codes: `2` usage, `3` no runtime, `4` no project (`install-games`: addons b
 - The shell's `project.godot` keeps `audio/driver/enable_input=true`, or no delivered game can open a microphone. [web](docs/web-client.md#the-shells-projectgodot)
 - The shell's `project.godot` carries no comments (the editor drops them); its reasons are in [web](docs/web-client.md#the-shells-projectgodot).
 
+- Both web pages load dot-core's `dot_web.js` (the named functions `DotWeb` calls; the game origin's CSP has no `unsafe-eval`, so nothing may `JavaScriptBridge.eval`) before the ceiling; `install_dot_web` in `tools/server.in` patches exported pages. `server.ps1.in` has no equivalent yet. [web](docs/web-client.md#the-csp-safe-page-script)
 - Both web pages load dot-audio's `dot_audio_ceiling.js` before `index.js`, the browser player's only limiter; a change needs a new shell. [web](docs/web-client.md#the-browsers-audio-ceiling)
 - A delivered game references its own files by relative path; no `class_name`, and every `res://` string through `<Game>Paths.rebase()`. [delivery](docs/delivery-constraint.md#rules-that-follow)
 - `rebase()` is one line over `rebase_onto(path, root)`, so a suite can test with a mount prefix; tested against `res://` it passes with the bug in. [delivery](docs/delivery-constraint.md#rules-that-follow)

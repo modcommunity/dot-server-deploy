@@ -40,14 +40,10 @@ static func commit() -> String:
 
 ## The web build id from the page's path, or "" anywhere else.
 static func build_id() -> String:
-	if not OS.has_feature("web") or not Engine.has_singleton("JavaScriptBridge"):
+	if not OS.has_feature("web"):
 		return ""
 
-	# By singleton name, because the identifier does not exist outside a web export (the same
-	# reason dot_cloud_boot.gd does it).
-	var path: Variant = Engine.get_singleton("JavaScriptBridge").call("eval", "location.pathname", true)
-
-	return id_from_path(str(path) if path != null else "")
+	return id_from_path(DotWeb.pathname())
 
 
 ## The build id in a URL path: the one segment that is exactly an id, or "". Public so a
