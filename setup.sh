@@ -387,12 +387,22 @@ cfg_get() {
 server_yml() { if [ ! -f cfg/server/server.yml ] && [ -f cfg/server.yml ]; then echo cfg/server.yml; else echo cfg/server/server.yml; fi; }
 net_cfg_file() { [ -f cfg/net.yml ] && echo cfg/net.yml || server_yml; }
 
-# The rate a game was built for; sv_tickrate is the one knob and dot-server applies it to
-# Engine.physics_ticks_per_second. arena's snapshot rate divides 66, not 60.
+# The rate a game's engine runs at: its own physics_ticks_per_second, never a different one.
+# A source checkout is read directly; a box with only packs uses the table, which
+# tools/check_tickrate.sh compares against every game's project.godot.
 game_tickrate() {
-    case "$1" in
-        arena) printf 66 ;;
-        *)     printf 60 ;;
+    local g="${1#game-}" p r
+    g="${g#mg-}"
+    for p in "../game-$g/project.godot" "../mg-$g/project.godot"; do
+        [ -f "$p" ] || continue
+        r="$(sed -n 's/^common\/physics_ticks_per_second=\([0-9][0-9]*\).*/\1/p' "$p" | head -1)"
+        printf '%s' "${r:-60}"
+        return
+    done
+    case "$g" in
+        arena)             printf 66 ;;
+        g2gfast|playground) printf 128 ;;
+        *)                 printf 60 ;;
     esac
 }
 

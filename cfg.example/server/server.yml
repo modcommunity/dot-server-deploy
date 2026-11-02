@@ -71,9 +71,9 @@ sv_allow_mobile: 1
 # sv_stdin_console_pipes: false
 
 # Simulation rate. Higher is more responsive and costs CPU and bandwidth on every
-# client as well as here. Fixed at boot. 60 suits most games; arena runs 66 (setup.sh
-# defaults it per game), g2gfast 128.
-sv_tickrate: 60
+# client as well as here. Fixed at boot. Left unset here on purpose: setup.sh asks with the
+# game's own engine rate (arena 66, g2gfast and playground 128, the rest 60) and writes it.
+# sv_tickrate: 60
 
 # What an empty server does. 1 (the default): it idles at a low tick rate while nobody is
 # connected, and every map clock waits and starts again from the top when somebody joins. 0: it
