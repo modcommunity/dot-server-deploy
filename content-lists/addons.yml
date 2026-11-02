@@ -2,11 +2,11 @@
 # Shipped default; an operator replaces it with cfg/content/addons.yml (see docs/content-lists.md).
 entries:
   - repo: arena-weapons
-    pin: v1.4.18
+    pin: v1.4.19
   - repo: dot-2d
     pin: v0.1.5
   - repo: dot-achievements
-    pin: v0.1.6
+    pin: v0.1.7
   - repo: dot-audio
     pin: v0.1.13
   - repo: dot-auth
@@ -22,7 +22,7 @@ entries:
   - repo: dot-cloud
     pin: v0.1.32
   - repo: dot-combat
-    pin: v0.1.17
+    pin: v0.1.20
   - repo: dot-console
     pin: v0.1.8
   - repo: dot-core
@@ -40,7 +40,7 @@ entries:
   - repo: dot-fx
     pin: v0.3.7
   - repo: dot-game
-    pin: v0.1.48
+    pin: v0.1.49
   - repo: dot-inventory
     pin: v0.1.4
   - repo: dot-leaderboard
@@ -88,7 +88,7 @@ entries:
   - repo: dot-player-class
     pin: v0.1.8
   - repo: dot-player-controller
-    pin: v0.3.4
+    pin: v0.4.2
   - repo: dot-procedural-generation
     pin: v0.1.4
   - repo: dot-profile
@@ -104,7 +104,7 @@ entries:
   - repo: dot-replay
     pin: v0.1.15
   - repo: dot-server
-    pin: v0.1.26
+    pin: v0.1.28
   - repo: dot-server-query
     pin: v0.1.6
   - repo: dot-server-security
@@ -112,19 +112,19 @@ entries:
   - repo: dot-settings
     pin: v0.1.5
   - repo: dot-spawn
-    pin: v0.1.9
+    pin: v0.2.0
   - repo: dot-spectate
     pin: v0.1.6
   - repo: dot-sql
     pin: v0.1.4
   - repo: dot-stats
-    pin: v0.1.13
+    pin: v0.1.16
   - repo: dot-team
     pin: v0.1.8
   - repo: dot-timer
     pin: v0.1.8
   - repo: dot-ui
-    pin: v0.1.15
+    pin: v0.1.16
   - repo: dot-user
     pin: v0.1.5
   - repo: dot-user-avatar
@@ -132,14 +132,14 @@ entries:
   - repo: dot-vehicle
     pin: v0.1.6
   - repo: dot-voice
-    pin: v0.1.9
+    pin: v0.1.10
   - repo: dot-vote
-    pin: v0.1.15
+    pin: v0.1.16
   - repo: dot-weapon
-    pin: v0.1.29
+    pin: v0.1.36
   - repo: dot-weather
     pin: v0.1.2
   - repo: zed-dot-weapons
     pin: v0.1.9
   - repo: zee-dot-weapons
-    pin: v0.1.50
+    pin: v0.1.53
