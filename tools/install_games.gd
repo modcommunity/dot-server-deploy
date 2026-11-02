@@ -64,6 +64,19 @@ var _refresh := false
 const COLLECTION_FILE := "collection.json"
 
 
+## The site an operator already named for sign-in: `backbone_url` in the last auth.yml under [param config_dir], or empty.
+## One key for one value, so `--site` and `TMC_SITE_URL` stay overrides, not a second setting.
+static func site_from_config(config_dir: String) -> String:
+	var site := ""
+	for path in TmcAuth.auth_files(config_dir):
+		var parsed := TmcYaml.parse_file(path)
+		if parsed.ok:
+			var url := str(TmcYaml.at(parsed.value as Dictionary, "backbone_url", "")).strip_edges()
+			if url != "":
+				site = url
+	return site
+
+
 func _init() -> void:
 	DotLog.timestamps = false
 
@@ -80,6 +93,8 @@ func _init() -> void:
 	var config_dir := str(opts.get("config", "cfg"))
 	var bases := _list(str(opts.get("base", "")))
 	_site = str(opts.get("site", OS.get_environment("TMC_SITE_URL"))).strip_edges()
+	if _site == "":
+		_site = site_from_config(config_dir)
 
 	# No --games: the packs cfg/content/games.yml lists (`pack: owner/name`, optionally pinned) are
 	# what to fetch. Its repository entries are cloned by setup.sh, not fetched here.

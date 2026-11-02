@@ -19,7 +19,7 @@ const RoundsWithoutMatch := preload("res://examples/fixtures/rounds_without_matc
 
 const Host := preload("res://host/tmc_host.gd")
 
-const CHECKS := 457
+const CHECKS := 463
 
 var _passed := 0
 var _failed := 0
@@ -1372,6 +1372,14 @@ func _test_game_refs() -> void:
 	_check(viacdn.ok and viacdn.value["version"] == "1.0.0" and asked.size() == 2,
 		"a 404 from the pack API falls back to latest.json", str(asked))
 	asked.clear()
+	var site_dir := "user://site_from_config"
+	DirAccess.make_dir_recursive_absolute(site_dir)
+	_check(installer.site_from_config(site_dir) == "", "no auth.yml names no site")
+	var af := FileAccess.open(site_dir + "/auth.yml", FileAccess.WRITE)
+	af.store_string("strategy: ticket\nbackbone_url: \"https://site.example\"\n")
+	af.close()
+	_check(installer.site_from_config(site_dir) == "https://site.example", "auth.yml backbone_url is the install site", installer.site_from_config(site_dir))
+	DirAccess.remove_absolute(site_dir + "/auth.yml")
 	var nosite: DotResult = await installer.pointer_from("a/b", "", cdn, 0, transport)
 	_check(nosite.ok and asked.size() == 1 and str(asked[0]).ends_with("/a/b/latest.json"),
 		"with no site set only latest.json is asked", str(asked))
