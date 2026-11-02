@@ -17,6 +17,10 @@ client/notice_overlay.gd::_cover_lines::alloc_dict	1
 client/notice_overlay.gd::_cover_lines::string_build	1
 client/notice_overlay.gd::_render::string_build	1
 client/notice_overlay.gd::format_seconds::string_build	2
+client/tmc_game_cover.gd::_draw_once::alloc_array	1
+client/tmc_game_cover.gd::_draw_once::connect_unguarded	1
+client/tmc_trail_link.gd::_script_named::load	1
+client/tmc_trail_link.gd::_script_named::string_build	2
 examples/admin_live.gd::_process::duplicate	1
 examples/fixtures/ws_backbone.gd::_process::alloc_array	1
 examples/fixtures/ws_backbone.gd::_respond::alloc_dict	3
