@@ -1,36 +1,11 @@
 class_name TmcGameRef
 extends RefCounted
 
-## What one entry of the games list means.
-##
-## [b]One rule, two readers, and they must not drift.[/b] `tools/install_games.gd` decides
-## what to FETCH and `TmcHost` decides what to OFFER, and both are handed the same
-## `TMC_GAMES` string. A server that installed `gamemann/game-g2gfast01` and then filtered
-## its content directory against that same string would find no directory called that,
-## report the game as missing, and offer nothing -- having just downloaded it.
-##
-## This project has shipped that bug in its smallest form twice already (the addon
-## repository name, the pack owner table). Here is the third place it could have gone, so
-## here is the one function.
+## What one entry of the games list means. [b]One rule, two readers, and they must not drift.[/b]
+## `tools/install_games.gd` decides what to FETCH and `TmcHost` decides what to OFFER, and both are
+## handed the same `TMC_GAMES` string.
 
 ## One entry of the games list, taken apart.
-##
-## [b]Three spellings, and the difference decides where a game comes from.[/b]
-##
-## [codeblock]
-## g2gfast                         a content directory this build already carries
-## gamemann/game-g2gfast01         a published pack, latest version
-## gamemann/game-g2gfast01@1.2.0   a published pack, that version
-## [/codeblock]
-##
-## The slash is the whole test, and it is safe to test on: a content id is
-## `<owner>/<name>` by construction — the site refuses to hand out any other shape,
-## because dot-cloud scopes a publisher's signing key with a glob over the id and a
-## flattened `owner_name` would let `alice_*` sign for the member called `alice_bob`.
-## A directory name cannot contain a slash, so nothing is ambiguous.
-##
-## `@` splits from the RIGHT. A version cannot contain one and an id can never end with
-## one, so the last `@` is the separator even if somebody's name has one in it.
 static func parse(raw: String) -> Dictionary:
 	var name := raw.strip_edges()
 	var version := ""
@@ -40,18 +15,15 @@ static func parse(raw: String) -> Dictionary:
 		version = name.substr(at + 1).strip_edges()
 		name = name.substr(0, at).strip_edges()
 
-	# `@latest` is spelled out rather than being the absence of a version, because a
-	# panel field that says what it means is worth the four characters -- and because
-	# "no version" and "the newest one" are the same request here but are not the same
-	# sentence, and somebody reading a config should not have to know that.
+	# `@latest` is spelled out rather than being the absence of a version, because a panel field that
+	# says what it means is worth the four characters -- and because "no version" and "the newest one"
+	# are the same request here but are not the same sentence.
 	if version == "latest":
 		version = ""
 
-	# `@v1.2.0` is the RELEASE TAG and `1.2.0` is the pack's version: the site publishes
-	# a tag's pack under the version with the `v` taken off, so a list written from the
-	# releases page asked the origin for a `v1.2.0/` directory nothing had written, and
-	# got S3's 403 for a key that is not there. Only a `v` followed by a digit, so a
-	# version that genuinely begins with a letter is left as it was written.
+	# `@v1.2.0` is the RELEASE TAG and `1.2.0` is the pack's version: the site publishes a tag's pack
+	# under the version with the `v` taken off, so a list written from the releases page asked the
+	# origin for a `v1.2.0/` directory nothing had written.
 	if version.length() > 1 and (version[0] == "v" or version[0] == "V") \
 			and version[1].is_valid_int():
 		version = version.substr(1)
@@ -61,20 +33,16 @@ static func parse(raw: String) -> Dictionary:
 	return {
 		"raw": raw.strip_edges(),
 		"id": name,
-		# The game's id, and where its descriptor lands: `content/<owner>/<name>/`. The
-		# WHOLE content id, owner included, so a fork and its original -- or two people's
-		# games that share a name -- are two games on one server rather than one
-		# overwriting the other. The console still takes the bare name while it is
-		# unambiguous (DotGameManager.find_game), so nobody has to type the owner.
+		# The game's id, and where its descriptor lands: `content/<owner>/<name>/`. The WHOLE content id,
+		# owner included, so a fork and its original -- or two people's games that share a name -- are two
+		# games on one server rather than one overwriting the other.
 		"dir": name,
 		"version": version,
 		"from_origin": is_pack,
 	}
 
-## Just the content directory an entry names.
-##
-## What `TmcHost` needs: a filter is over directories, and the id, the version and the
-## owner are all somebody else's business by then.
+## Just the content directory an entry names. What `TmcHost` needs: a filter is over directories,
+## and the id, the version and the owner are all somebody else's business by then.
 static func dir_of(raw: String) -> String:
 	return str(parse(raw)["dir"])
 
@@ -98,22 +66,12 @@ static func dirs_in(raw: String) -> PackedStringArray:
 
 
 ## A map entry of `cfg/server/content/overrides.yml`, qualified with [param owner] when it is bare.
-##
-## [b]The one place a bare map name becomes an id.[/b] `install-games` pins versions under
-## the id this returns and the host looks them up under the same one; two spellings of
-## "surf_mesa" resolved in two places is the drift this file exists to prevent. Returns
-## `{"ok": bool, "id": "<owner>/<map>", "version": "", "why": ""}`. `<owner>/<collection>/*` is a whole
-## collection (`wildcard: true`, `collection` the two-segment id; the installer expands it).
-## Any other three segments and an empty name are refused, never guessed at; a bare name with no
-## [param owner] is refused too, because the caller is the one who can name the entry.
 static func qualify_map(raw: String, owner: String) -> Dictionary:
 	var trimmed := raw.strip_edges()
 
-	# A whole collection: `<owner>/<collection>/*`, exactly. Nothing is guessed about a
-	# partial glob (`a/b/bhop_*`, `a/*/*`, `*`): the site publishes one list per collection
-	# and a pattern over it would be a second query language to keep in step. A pin is
-	# refused too, because a collection is "whatever it publishes now", and a version of it
-	# is not a version of any map in it; pin the maps you need beside it instead.
+	# A whole collection: `<owner>/<collection>/*`, exactly. Nothing is guessed about a partial glob
+	# (`a/b/bhop_*`, `a/*/*`, `*`): the site publishes one list per collection and a pattern over it
+	# would be a second query language to keep in step.
 	if trimmed.contains("*"):
 		var parts := trimmed.split("/")
 

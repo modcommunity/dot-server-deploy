@@ -4,19 +4,6 @@ extends VBoxContainer
 ## The Subscriptions page of a solo game: what the player subscribed to that this game takes,
 ## whether it is on, and the switches. Drawn into the game's own menu by the shell (see
 ## `TmcWorkshopPanel.add_to_menu`), so it is where the player already looks for the maps.
-##
-## [b]It draws and it asks; the decisions are elsewhere.[/b] What is on comes from the last
-## sync's summary and [method DotCloudWorkshop.last_list]; a switch is a call on
-## [DotCloudWorkshop] (the site for a scope, this device's file for the device switch). Nothing
-## here mounts or unmounts: a mounted pack cannot be taken back, so every change says it applies
-## at the next launch, and the row shows the new answer at once from [member _pending].
-##
-## [b]Phone width is the design width.[/b] No row has a minimum width, every label wraps, and a
-## card's switches are in a flow container that drops to a second line, because the browser
-## player is a panel whose size the page decides.
-##
-## [b]Words go through [member text_fn][/b] (the shell's `_text`), with the English as the
-## fallback, so a language file that lacks a key reads as a sentence, not as a key.
 
 const CHANNEL := "tmc.workshop_panel"
 
@@ -77,10 +64,9 @@ func _ready() -> void:
 	refresh()
 
 
-## Adds the page to [param menu] (a DotMenu), built from [param make] each time it opens.
-##
-## A page is data and is drawn fresh every time it is shown, so the panel is made when the
-## page opens and freed when it closes, and reads the Workshop's state as it is then.
+## Adds the page to [param menu] (a DotMenu), built from [param make] each time it opens. A page is
+## data and is drawn fresh every time it is shown, so the panel is made when the page opens and
+## freed when it closes, and reads the Workshop's state as it is then.
 static func add_to_menu(menu: Object, make: Callable) -> void:
 	var page := DotMenuPage.make(PAGE_ID, "Subscriptions", "Packs you subscribed to on the site.")
 	page.build = func(_kit: Object, body: VBoxContainer) -> void:
@@ -187,7 +173,6 @@ func _enabled() -> bool:
 	return workshop.config == null or workshop.config.workshop_enabled
 
 
-# --- Drawing --------------------------------------------------------------------
 
 func _add_heading() -> void:
 	var title := Label.new()
@@ -373,7 +358,6 @@ func _label(text: String) -> Label:
 	return l
 
 
-# --- State ----------------------------------------------------------------------
 
 ## What an item is right now: `{id, reason}` where id is `on`, `off_here` (this game's switch
 ## was just turned off), `off_device`, `skipped` (with a reason) or `failed`. Pure on the
@@ -446,7 +430,6 @@ func _device_off(content_id: String) -> bool:
 	return workshop != null and workshop.device != null and workshop.device.is_off(content_id)
 
 
-# --- Switches -------------------------------------------------------------------
 
 func _set_scope(sub_id: String, on: bool) -> void:
 	if _busy or workshop == null:

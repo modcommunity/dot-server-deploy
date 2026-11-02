@@ -1,27 +1,9 @@
 class_name TmcContentLists
 extends RefCounted
 
-## The download lists a server operator owns: `addons.yml` (repositories) and `games.yml` (games and packs).
-##
-## [codeblock]
-## merge: true            # absent or false: this file REPLACES the list below it
-## remove: [dot-voice]    # ids dropped after the lists below are merged in
-## entries:
-##   - dot-core                      # a git repository, shorthand
-##   - dot-vote@v0.2.1               # pinned to a tag or commit
-##   - repo: game-arena              # long form
-##     pin: v1.0.0
-##     content: arena                # games.yml only: the content directory
-##   - pack: gamemann/surf_mesa      # a dot-cloud pack id; `@1.2.0` or `pin:` pins it
-##   - repo: game-arena              # games.yml only, both optional:
-##     maps: [dm_one, dm_two]        #   the maps to rotate, in this order (absent: every installed map, sorted)
-##     rotation: random              #   sequential (default), random or vote
-## [/codeblock]
-##
-## Layers, weakest first: the shipped default (`content-lists/` in this project), the operator's
-## `<cfg>/content/<file>`, then `<cfg>/server/content/<file>`. A list is replaced by the strongest layer
-## that does not say `merge: true`, so an operator who wants exactly three games writes three. Packs are
-## still verified by dot-cloud's signature check; this only says what to fetch.
+## The download lists a server operator owns: `addons.yml` (repositories) and `games.yml` (games and
+## packs). Layers, weakest first: the shipped default (`content-lists/` in this project), the
+## operator's `<cfg>/content/<file>`, then `<cfg>/server/content/<file>`.
 
 const DEFAULT_DIR := "res://content-lists"
 const KINDS := ["addons", "games"]
@@ -84,10 +66,9 @@ static func pin_for(entries: Array, id: String) -> String:
 	return String(entries[at]["pin"]) if at >= 0 else ""
 
 
-## The order games rotate in: the games.yml entries that are in [param installed] (by content directory, else
-## id), in list order, then any installed game the list does not name, sorted. One game is a list of one, so
-## the caller does no game rotation. Fails with CODE_NOT_FOUND-style CODE_INVALID naming an id in
-## [param wanted] (an explicit order an operator wrote elsewhere) that is neither listed nor installed.
+## The order games rotate in: the games.yml entries that are in [param installed] (by content
+## directory, else id), in list order, then any installed game the list does not name, sorted. One
+## game is a list of one, so the caller does no game rotation.
 static func game_order(entries: Array, installed: PackedStringArray, wanted: PackedStringArray = PackedStringArray()) -> DotResult:
 	var known := PackedStringArray()
 	for e: Dictionary in entries:

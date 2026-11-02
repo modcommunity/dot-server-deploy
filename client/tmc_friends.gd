@@ -1,38 +1,8 @@
 class_name TmcFriends
 extends Node
 
-## The signed-in player's friends: who is online and where, this player's own presence kept
-## posted as they connect, change game and leave, and "join my friend".
-##
-## [b]dot-friends was the other addon in the family that nothing constructed.[/b] The site's
-## friends and presence routes were specified with it and it had a client, a backend for the
-## site and a suite -- and no game, no tool and no shell built one, so a friend could not
-## see that anybody was playing, let alone where. The shell already runs a dot-party client
-## the same way; this sits beside it and is built at the same moment, from the same
-## sign-in, over the same dot-auth client.
-##
-## [b]Why a node of this project's rather than a [DotFriendsClient] inside `shell.gd`.[/b]
-## Everything here is decided by the shell's connection -- which server, which game, which
-## party, whether the player is in a match or on the menu -- and none of it needs the menu.
-## As its own node the suite can drive the whole of it against a local hub and a stand-in
-## 404, with no window, no sign-in and no server; inside the shell it could only be reached
-## by booting the shell, which signs in against a real site.
-##
-## [b]A 404 switches it off for the session, quietly.[/b] The routes are on website-city's
-## `feat/game-backbone` branch, unmerged. Until they are deployed every request is a 404,
-## and the party client beside this one already made the call for the family: the first
-## one turns the feature off with one INFO line (dot-friends' own, naming the missing routes;
-## this file's is DEBUG for that case) rather than asking every thirty seconds for
-## something the site has said it does not have. A keyed 404 (a refusal the site explained)
-## is not the site lacking routes, and does not.
-##
-## [b]Where a friend can be followed.[/b] A presence carries the site's server id, and the
-## shell only knows addresses. So "join my friend" prefers the party -- dot-party's own join,
-## which already follows a party to its server -- and falls back to the server only when
-## this shell has been on that server itself and so knows its address. Anything else is
-## refused with the site's own `friends.join.deny.unsupported`, honestly, rather than by
-## inventing a lookup the site does not offer: the address of a server is gated on that
-## server's own `showNetInfo`, and a presence that leaked it would bypass the gate.
+## The signed-in player's friends: who is online and where, this player's own presence kept posted
+## as they connect, change game and leave, and "join my friend".
 
 const CHANNEL := "tmc.friends"
 
@@ -85,7 +55,6 @@ func _ready() -> void:
 	client.set_joinable(false)
 
 
-# --- This player's presence -------------------------------------------------------
 
 ## Signon finished on [param address]. [param site_server_id] is what the server's
 ## challenge named (`auth.yml`'s `server_id`) -- the site's id for a server that issues
@@ -145,7 +114,6 @@ func go_offline() -> DotResult:
 	return await client.go_offline()
 
 
-# --- Following a friend -------------------------------------------------------------
 
 ## Takes the player to [param user_id], through [method DotFriendsClient.join].
 func join(user_id: String) -> DotResult:
@@ -172,16 +140,14 @@ func _connect_server(server_id: int, friend: DotFriend) -> DotResult:
 	return DotResult.success(null)
 
 
-# --- Switching off ------------------------------------------------------------------
 
 func _on_request_failed(what: String, error: DotError) -> void:
 	if error == null:
 		return
 
 	if error.http_status == 404 and error.detail == "":
-		# At DEBUG, because `DotFriendsBackendApp` has just said this at INFO — once, as
-		# the one line a site without the routes costs. Two INFO lines for one fact was
-		# what this file's note used to apologise for.
+		# At DEBUG, because `DotFriendsBackendApp` has just said this at INFO — once, as the one line a
+		# site without the routes costs.
 		switch_off("the site does not serve friends routes yet", what, DotLog.Level.DEBUG)
 		return
 

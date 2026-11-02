@@ -1,54 +1,13 @@
 class_name TmcContent
 extends RefCounted
 
-## The `content/` directory, read into [DotGameDescriptor]s.
-##
-## One subdirectory per game, each with a `game.yml` that names it. The directory name is
-## the id an operator types at the console, which is why it is the directory name and not a
-## field: two places to write the same thing is one place to write it differently.
-##
-## [codeblock]
-## content/
-##   global/          loaded by every game. No game.yml; it is not a game.
-##   arena/
-##     game.yml
-##   buses/
-##     game.yml
-##     pack/          what gets published, when kind is `pack`
-## [/codeblock]
-##
-## [b]Two kinds, and the difference is not cosmetic.[/b]
-##
-## `builtin` — the game's code is compiled into this build. The scene is an absolute
-## `res://` path and the client scene is deliberately **empty**, because
-## [method DotClientLink._resolve_scene] refuses every absolute path outside dot-cloud's
-## mount. A server that named one would have every client refuse it, never report loaded,
-## and be timed out in `LOADING` with no other symptom.
-##
-## `pack` — the game is delivered through dot-cloud. Paths are relative and resolve under
-## the version-namespaced mount, so a client that has never heard of this game downloads it
-## and instantiates the scene named here.
-##
-## [b]A pack's scripts may not use `class_name`.[/b] Measured, not assumed: a mounted pack's
-## globals are not registered in the host, so every cross-file type reference inside it
-## fails to compile — the pack mounts, the scene loads, and every script in it is dead.
-## `preload("res://path.gd")` and `extends "res://path.gd"` both work. That is the whole
-## constraint, and why a game that cannot follow it has to be `builtin`, compiled into
-## the shell.
+## The `content/` directory, read into [DotGameDescriptor]s. One subdirectory per game, each with a
+## `game.yml` that names it.
 
 const CHANNEL := "tmc.content"
 
-## Directories under `content/` that are deliberately not games.
-##
-## `global` is content every game loads on top of its own. `avatars` is where a game looks
-## for cosmetic parts that shipped in the build — `HungryContentSource` reads
-## `res://content/avatars/` — and it lands here because `res://content/` is this project's
-## content root and a game cannot be asked to look somewhere else without re-authoring it.
-##
-## Skipped silently rather than reported. A directory with no `game.yml` that nobody meant
-## as a game is reported once and then ignored for ever, which trains an operator to ignore
-## the report — and the report exists for the half-finished upload, which is the case worth
-## seeing.
+## Directories under `content/` that are deliberately not games. `global` is content every game
+## loads on top of its own.
 const NOT_GAMES := ["global", "avatars"]
 
 ## The file that makes a directory a game.
@@ -66,21 +25,18 @@ var skipped: PackedStringArray = PackedStringArray()
 ## Ids the list asked for that are not on the disk. Reported, never fatal.
 var missing: PackedStringArray = PackedStringArray()
 
-## The list this scan was filtered against, or empty when nothing was filtered.
-##
-## Kept so a report can say "three of ten, on purpose" rather than leaving an operator to
-## infer it from a count that looks like a missing upload.
+## The list this scan was filtered against, or empty when nothing was filtered. Kept so a report can
+## say "three of ten, on purpose" rather than leaving an operator to infer it from a count that
+## looks like a missing upload.
 var allowed: PackedStringArray = PackedStringArray()
 
 ## Absolute path of the content root, for publishing.
 var root: String = ""
 
 
-## Scans a content directory.
-##
-## A directory with no `game.yml` is skipped and reported — it is what a half-finished
-## upload looks like, and also what `README.md` sitting in `content/` looks like, and an
-## operator should be able to tell which.
+## Scans a content directory. A directory with no `game.yml` is skipped and reported — it is what a
+## half-finished upload looks like, and also what `README.md` sitting in `content/` looks like, and
+## an operator should be able to tell which.
 static func scan(
 	directory: String, allow: PackedStringArray = PackedStringArray()
 ) -> DotResult:
@@ -97,12 +53,9 @@ static func scan(
 			"a server with no content is legitimate; a missing directory is a typo"
 		)
 
-	# [b]Two layouts, one list of ids.[/b] A game this build carries is
-	# `content/<name>/game.yml` and its id is `<name>`; a published game is
-	# `content/<owner>/<name>/game.yml` and its id is `<owner>/<name>`, so forks and
-	# same-named games from two publishers sit side by side. A top-level directory with
-	# its own descriptor is a game; one without is an owner, and each directory under it
-	# that has one is that owner's game.
+	# [b]Two layouts, one list of ids.[/b] A game this build carries is `content/<name>/game.yml` and
+	# its id is `<name>`; a published game is `content/<owner>/<name>/game.yml` and its id is
+	# `<owner>/<name>`, so forks and same-named games from two publishers sit side by side.
 	var names := PackedStringArray()
 	var tops := dir.get_directories()
 	tops.sort()
@@ -137,15 +90,9 @@ static func scan(
 
 	for name in names:
 
-		# [b]The allow list is applied HERE and nowhere else.[/b] Four things read the
-		# scanned set -- the `games` listing, `changelevel`, the vote menu and the boot
-		# game -- so a filter applied at any one of them lets the other three offer a game
-		# this server was told not to run. One gate, before a descriptor is ever built.
-		#
-		# Reported rather than silently dropped: a directory that is present, valid and
-		# deliberately not offered is exactly the thing an operator will otherwise spend
-		# an evening on, and it reads differently from a half-finished upload because it
-		# says so.
+		# [b]The allow list is applied HERE and nowhere else.[/b] Four things read the scanned set -- the
+		# `games` listing, `changelevel`, the vote menu and the boot game -- so a filter applied at any
+		# one of them lets the other three offer a game this server was told not to run.
 		if not allow.is_empty() and not name in allow:
 			index.skipped.append("%s (not in the games list)" % name)
 			continue
@@ -171,10 +118,9 @@ static func scan(
 
 		if bool(TmcYaml.at(parsed.value as Dictionary, "default", false)):
 			if index.default_game != "":
-				# Refused rather than resolved by order. Two games both claiming the boot
-				# slot is an operator mistake with no correct answer, and picking one
-				# alphabetically means a server that boots into a different game after a
-				# rename.
+				# Refused rather than resolved by order. Two games both claiming the boot slot is an operator
+				# mistake with no correct answer, and picking one alphabetically means a server that boots into
+				# a different game after a rename.
 				return DotResult.fail(
 					DotError.CODE_INVALID,
 					"Both '%s' and '%s' are marked default." % [index.default_game, name]
@@ -185,12 +131,9 @@ static func scan(
 	if index.default_game == "" and not index.games.is_empty():
 		index.default_game = index.games[0].game_id
 
-	# [b]An id that was asked for and is not there is the one outcome worth a WARN.[/b]
-	# It is what a download that has not finished, a typo in a panel variable and a game
-	# that was renamed on the content origin all look like, and none of them is visible
-	# from a count of what WAS found. Not fatal, for the reason `initial_map` is not:
-	# a server that refuses to boot over one absent game is a server whose operator has
-	# lost the other nine as well.
+	# [b]An id that was asked for and is not there is the one outcome worth a WARN.[/b] It is what a
+	# download that has not finished, a typo in a panel variable and a game that was renamed on the
+	# content origin all look like, and none of them is visible from a count of what WAS found.
 	for wanted in allow:
 		if index.find(wanted) == null:
 			index.missing.append(wanted)
@@ -224,14 +167,9 @@ func _build(name: String, tree: Dictionary) -> DotResult:
 	var scene := String(TmcYaml.at(tree, "scene", ""))
 	var client_scene := String(TmcYaml.at(tree, "client_scene", ""))
 
-	# [b]What the game is made of, as opposed to what this server calls it.[/b] The id is
-	# the directory name — an operator's choice, and what they type at the console — but a
-	# client holds a table of the games built into it and cannot be keyed on that: renaming
-	# `content/arena` to `content/dm` would leave every client unable to find the scene
-	# for a game it has. It is also how two game ids share one client: hungry's two modes
-	# are one `hungry`.
-	#
-	# Defaults to the directory name, so a game that does not care never mentions it.
+	# [b]What the game is made of, as opposed to what this server calls it.[/b] The id is the directory
+	# name — an operator's choice, and what they type at the console — but a client holds a table of
+	# the games built into it and cannot be keyed on.
 	descriptor.content_id = String(TmcYaml.at(tree, "content_id", name))
 
 	match kind:
@@ -250,15 +188,9 @@ func _build(name: String, tree: Dictionary) -> DotResult:
 					+ "so the client would refuse it and be timed out in LOADING"
 				)
 		"pack":
-			# [b]Optional, and it used to be required.[/b] A pack is found by its content
-			# id: `content/` and `dist/` on this box are searched first, then every
-			# `content_urls` entry in order. Requiring an address here meant writing a
-			# per-DEPLOYMENT fact into a per-GAME file -- a server that published its own
-			# packs had to spell out a path that was true on one box, and every version
-			# bump meant editing it again in a file that is otherwise pure description.
-			#
-			# Set it when the content lives somewhere this server has no base for. Leave
-			# it out and `./server pack <id>` is the whole of the setup.
+			# Requiring an address here meant writing a per-DEPLOYMENT fact into a per-GAME file -- a server
+			# that published its own packs had to spell out a path that was true on one box, and every
+			# version bump meant editing it again in a file that is otherwise pure description.
 			descriptor.manifest_url = String(TmcYaml.at(tree, "manifest_url", ""))
 			descriptor.scene = scene
 			descriptor.client_scene = client_scene
@@ -270,12 +202,7 @@ func _build(name: String, tree: Dictionary) -> DotResult:
 					"set scene: to the server scene inside the pack, relative to its root"
 				)
 
-			# The packs the game needs beside its own. Written by an author as
-			# `owner/name@latest` if they like; install-games pins each one when it
-			# installs the game, so what reaches the server is always a version -- and an
-			# entry that still is not one is refused here rather than resolved per join.
-			# The same rule for the server-only packs and the delivered maps (dot-server's
-			# DotGameDescriptor documents all three).
+			# The packs the game needs beside its own.
 			for field in ["dependencies", "server_dependencies", "maps"]:
 				var listed: Variant = TmcYaml.at(tree, field, [])
 
@@ -319,21 +246,9 @@ func _build(name: String, tree: Dictionary) -> DotResult:
 	if cvars is Dictionary:
 		descriptor.cvars = flatten_cvars(cvars as Dictionary)
 
-	# The module is named rather than derived from the id. A module is a script path and a
-	# guessed one produces a load failure that reads as a missing game — and a game with no
-	# server-side behaviour at all is legitimate, so "absent" has to be expressible.
-	# [b]A pack game's module is inside the mount, and nothing was resolving it.[/b]
-	# `TmcHost._on_game_loaded` hands this string straight to `load_module`, so a relative
-	# path -- the only kind a pack can honestly write, because the version segment of the
-	# mount prefix is not knowable when the file is authored -- was loaded as a path
-	# relative to the project root and found nothing. The alternative an operator would
-	# have reached for is worse: an absolute `res://dot_cloud/<id>/<version>/…` spelled out
-	# in `game.yml` is a path that has to be edited by hand on every version bump, and a
-	# stale one loads the PREVIOUS version's module against the new version's scene.
-	#
-	# Resolved the same way [method DotGameDescriptor._resolve] resolves the scene, and
-	# against the same id and version, so the module and the scene cannot disagree about
-	# which mount they are in.
+	# The module is named rather than derived from the id. A module is a script path and a guessed one
+	# produces a load failure that reads as a missing game — and a game with no server-side behaviour
+	# at all is legitimate, so "absent" has to be expressible.
 	var module := String(TmcYaml.at(tree, "module", ""))
 
 	if kind == "pack" and module != "" and not module.contains("://"):
@@ -349,17 +264,9 @@ func _build(name: String, tree: Dictionary) -> DotResult:
 		"directory": "%s/%s" % [root, name],
 	}
 
-	# [b]The operator's own `metadata:` block, which nothing was reading.[/b] dot-vote's
-	# README, its game source and cfg/vote.yml all tell an operator to write a game's time
-	# limit under `metadata: vote:` in game.yml, and DotVoteGameSource reads
-	# `descriptor.metadata.vote` — but the descriptor was built from the three keys above
-	# and the block was dropped, so every per-game vote setting anybody wrote was ignored
-	# in silence. `map_vote:` rides the same way: it is what a game's own map vote layers
-	# over its defaults (DotVoteGameSource.running_game_metadata).
-	#
-	# The three keys this file sets win over anything the block says. They are how the
-	# host finds the game's module and directory, and a game.yml that could redirect them
-	# through a metadata key would be a second, undocumented way to say `module:`.
+	# [b]The operator's own `metadata:` block, which nothing was reading.[/b] dot-vote's README, its
+	# game source and cfg/vote.yml all tell an operator to write a game's time limit under `metadata:
+	# vote:` in game.yml, and DotVoteGameSource reads `descriptor.metadata.vote`.
 	var extra: Variant = TmcYaml.at(tree, "metadata", {})
 
 	if extra is Dictionary:
@@ -382,25 +289,6 @@ func _build(name: String, tree: Dictionary) -> DotResult:
 
 
 ## A `cvars:` block with its list values joined, because a cvar's value is a string.
-##
-## [b]A console cvar is a line of text, and YAML is not.[/b] dot-server applies a
-## descriptor's cvars by handing each value to the console, so an Array arrives through
-## `str()` as `["surf_mesa", "surf_beginner2"]` — brackets, quotes and commas included —
-## and the cvar is set to that, verbatim and wrong. Nothing errors: it is a valid string.
-##
-## Written as a list where a list is what it is:
-##
-## [codeblock]
-## cvars:
-##   sv_content_maps:
-##     - surf_mesa
-##     - surf_beginner2
-## [/codeblock]
-##
-## Joined with spaces rather than commas because that is what a console line looks like,
-## and every list-shaped cvar in this family splits on either. The cost is that an
-## element containing a space cannot be expressed — which is equally true of typing the
-## cvar at the console, so the YAML is not promising anything the console would keep.
 static func flatten_cvars(cvars: Dictionary) -> Dictionary:
 	var out := {}
 

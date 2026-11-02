@@ -1,33 +1,6 @@
 extends Node
 
 ## A minimal static HTTP/1.1 file server, so the HTTP source can be tested for real.
-##
-## [b]Why this exists.[/b] [DotCloudSourceHttp] is the source every shipped game
-## actually uses — mirror failover, sticky preference, range resume, the
-## content-addressed URL layout — and until this file it was exercised by no
-## example at all. [code]sync_demo[/code] runs the whole pipeline through
-## [DotCloudSourceLocal], which resolves synchronously and never builds a URL,
-## never parses a response and never resumes anything.
-##
-## Serving from GDScript rather than shelling out to a real web server keeps the
-## example self-contained: no Python, no Docker, no network, nothing to install,
-## and it runs in [code]--headless[/code] on any machine the engine runs on.
-##
-## It is deliberately not production code and does not live in
-## [code]addons/[/code]. It speaks exactly as much HTTP as
-## [code]DotHttp[/code] asks for — GET, HEAD, one [code]Range: bytes=N-[/code]
-## form, keep-alive off — and every fault it can inject exists because a source
-## code path needs it:
-##
-## [codeblock]
-## var srv := preload("res://examples/http_test_server.gd").new()
-## add_child(srv)
-## srv.root = "user://published"
-## srv.start(0)                      # 0 = any free port
-## srv.corrupt_paths.append("/objects/ab/abcd…")   # serves wrong bytes
-## srv.fail_paths.append("/objects/cd/cdef…")      # serves 500
-## srv.support_ranges = false                       # ignores Range, replies 200
-## [/codeblock]
 
 ## Directory served as the document root. A Godot path — [code]user://[/code] is fine.
 var root: String = ""
@@ -42,10 +15,8 @@ var support_ranges: bool = true
 ## Request paths answered with 500 rather than content.
 var fail_paths: PackedStringArray = PackedStringArray()
 
-## Request paths answered with the right length of the wrong bytes.
-##
-## The interesting failure, because it is the one that gets past the transfer
-## and has to be caught by hash verification instead.
+## Request paths answered with the right length of the wrong bytes. The interesting failure, because
+## it is the one that gets past the transfer and has to be caught by hash verification instead.
 var corrupt_paths: PackedStringArray = PackedStringArray()
 
 ## Every request line served, in order, as "GET /path" — plus " (range)" when
@@ -177,10 +148,9 @@ func _respond(peer: StreamPeerTCP, request: String) -> void:
 		_send(peer, 500, "Internal Server Error", PackedByteArray(), {})
 		return
 
-	# The document root answers 200 with nothing in it, the way a content host
-	# with a directory root does. It matters because DotCloudSourceHttp.probe_base
-	# probes the bare base URL: a host that 404s its root is reported unreachable
-	# even though every object under it is served fine.
+	# The document root answers 200 with nothing in it, the way a content host with a directory root
+	# does. It matters because DotCloudSourceHttp.probe_base probes the bare base URL: a host that 404s
+	# its root is reported unreachable even though every object under it is served fine.
 	if path == "/":
 		log.append("%s /" % method)
 		_send(peer, 200, "OK", PackedByteArray(), {"Accept-Ranges": "bytes"})

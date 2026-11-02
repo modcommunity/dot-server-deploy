@@ -1,21 +1,6 @@
 extends SceneTree
 
 ## Renders the client shell's download progress panel and saves a picture of it.
-##
-## [b]Because an interface is one of the two things no assertion reaches.[/b] Every
-## check in this tree asserts a value; a progress line that formats correctly and lands
-## off the bottom of the panel, or under the Connect button, or as white-on-white, is a
-## pass in every one of them. So a frame gets rendered and a person looks at it.
-##
-## Drives the REAL scene with a synthetic payload, rather than building the widgets
-## again here: the thing under test is the shell's own layout and formatting, and a
-## copy of the widgets would be a test of the copy.
-##
-##   xvfb-run -a godot --path . --resolution 900x760 \
-##       --script tools/progress_shot.gd -- --out screenshots/progress.png
-##
-## NOT --headless: that is a null renderer and every frame it saves is empty, which is
-## worse than no screenshot because it looks like one.
 
 const SHELL := "res://client/shell.tscn"
 

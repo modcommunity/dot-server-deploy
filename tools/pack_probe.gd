@@ -1,27 +1,8 @@
 extends SceneTree
 
-## Does a script inside a MOUNTED pack see the HOST's `class_name` globals?
-##
-## The whole platform shape turns on this. It is already measured that a pack's OWN
-## `class_name` globals are not registered, so a pack's scripts must find each other by
-## path. What was never measured is whether the HOST's globals still resolve from inside
-## one -- and if they do not, a creator cannot call a single dot-* API from delivered
-## content and every mode needs its own engine build.
-##
-##     godot --headless --path . --script res://tools/pack_probe.gd
-##
-## MEASURED 2026-09-12, on this project with the whole dot-* family in it:
-##
-##     host class_name    resolved DotResult, value 42
-##     pack class_name    SCRIPT DID NOT COMPILE
-##     pack by path       by path ok: true
-##
-## So the rule is narrower than "a pack cannot carry code". A pack's scripts cannot
-## find EACH OTHER by `class_name`; everything the BUILD ships they can call freely.
-## That is what makes delivered content worth having -- a game mode shipped as a pack
-## gets the entire addon API, and only its own files have to be reached by path.
-##
-## Takes about two minutes: `--script` on this project boots every addon in it first.
+## Does a script inside a MOUNTED pack see the HOST's `class_name` globals? The whole platform shape
+## turns on this. It is already measured that a pack's OWN `class_name` globals are not registered,
+## so a pack's scripts must find each other by path.
 
 const OUT := "user://packprobe.pck"
 const ROOT := "res://packprobe"

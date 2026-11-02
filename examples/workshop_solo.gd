@@ -1,24 +1,8 @@
 extends Node
 
-## Subscribed packs in solo play, through the REAL client shell: a solo start mounts what the
-## player subscribed to and the game's map catalogue sees it; an online start of the same game
-## never asks and sees none of it.
-##
-## [codeblock]
-## godot --headless --path . res://examples/workshop_solo.tscn
-## [/codeblock]
-##
-## The packs are real (published, signed, served over HTTP, verified and mounted by the shell's
-## own content client); only the site is fake. The shell is the one in client/, started the way
-## the page starts it, so what is checked is its ORDER: session, game pack, map packs, sync,
-## scene. Sign-in cannot be driven natively (no handoff outside a browser), so the bearer is
-## the fake site's token set on the Workshop's [code]token_fn[/code]; the shell's own
-## [code]_workshop_token[/code] is checked to answer a guest with nothing.
-##
-## Armed by: moving `_enter_online_session()` out of `_connect_to` (the online-session
-## checks fail); calling `_sync_workshop` from `_connect_to` (the request count moves);
-## swapping the `_sync_workshop` and the scene `load` in `_load_solo` (the catalogue misses
-## the map); and dropping the `requires_restart_before_online()` test (the restart checks).
+## Subscribed packs in solo play, through the REAL client shell: a solo start mounts what the player
+## subscribed to and the game's map catalogue sees it; an online start of the same game never asks
+## and sees none of it.
 
 const WORK := "user://tmc_workshop_solo"
 const SHELL := "res://client/shell.tscn"
@@ -84,7 +68,6 @@ func _run() -> void:
 	get_tree().quit(1 if _failed > 0 else 0)
 
 
-# --- setup --------------------------------------------------------------------
 
 func _boot() -> bool:
 	_section("a shell, a content host, a fake site and four packs")
@@ -236,7 +219,6 @@ func _session() -> TmcSoloSession:
 	return _shell.get("_solo_session")
 
 
-# --- sections -------------------------------------------------------------------
 
 func _test_guest() -> void:
 	_section("a guest plays solo with nothing subscribed")
@@ -449,7 +431,6 @@ func _test_code_pack_restarts_first() -> void:
 	_done()
 
 
-# --- helpers ----------------------------------------------------------------------
 
 func _toggles(node: Node) -> int:
 	var n := 0

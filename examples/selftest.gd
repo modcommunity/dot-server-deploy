@@ -1,16 +1,8 @@
 extends Node
 
-## Everything this repository adds, checked without starting a server.
-##
-## [codeblock]
-## godot --headless --path . res://examples/selftest.tscn
-## [/codeblock]
-##
-## Exits non-zero on any failure.
-##
-## The YAML reader, the config translation, the permission translation and the content
-## index. `./server check` is the other half — it boots a real server, loads its default game and
-## shuts down — and between them they cover everything before a client connects.
+## Everything this repository adds, checked without starting a server. Exits non-zero on any
+## failure. The YAML reader, the config translation, the permission translation and the content
+## index.
 
 const CFG := "res://examples/fixtures"
 
@@ -117,7 +109,6 @@ func _parse(text: String) -> Dictionary:
 	return result.value as Dictionary if result.ok else {}
 
 
-# --- Sections --------------------------------------------------------------
 
 func _test_yaml_scalars() -> void:
 	_section("YAML scalars")
@@ -214,10 +205,9 @@ groups:
 	_done()
 
 
-## What it refuses, and that it says which line.
-##
-## Every one of these is either a mistake or a feature this format does not have, and both
-## are better as an error at boot than as a value nobody intended.
+## What it refuses, and that it says which line. Every one of these is either a mistake or a feature
+## this format does not have, and both are better as an error at boot than as a value nobody
+## intended.
 func _test_yaml_refusals() -> void:
 	_section("YAML refusals")
 
@@ -329,12 +319,9 @@ func _test_config() -> void:
 	_check(config.nearest_names("zzzz_nothing").is_empty(), "and nothing when nothing is near")
 	_check(config.public_address == "203.0.113.7", "net_public_ip is kept for the join line")
 	_check(config.initial_game == "buses", "sv_game names the boot game")
-	# [b]Its own key, and not a console line.[/b] `sv_map` has no cvar and no command
-	# behind it at this level — the `map` command belongs to whichever game is loaded,
-	# and at read time that is none of them. So the check that matters is the negative
-	# one below it: a key this parser did not claim would end up queued for a console
-	# that will never have a `map`, which is exactly how it behaved before it was a
-	# setting at all.
+	# [b]Its own key, and not a console line.[/b] `sv_map` has no cvar and no command behind it at this
+	# level — the `map` command belongs to whichever game is loaded, and at read time that is none of
+	# them.
 	_check(config.initial_map == "fixture_map", "sv_map names the boot map (%s)"
 		% config.initial_map)
 	_check(
@@ -386,12 +373,6 @@ func _test_config() -> void:
 
 
 ## The sink layer, and the one list the shared settings come from.
-##
-## [b]dot-log was in the dependency list and instantiated nowhere.[/b] `cfg/log.yml` has
-## documented a level, per-channel levels, a mirror threshold and five file settings since
-## it was written, and every one reached dot-core's plain rotating sink -- syslog, a hosted
-## collector, a SQL table, redaction, flood gating and the ring behind `log tail` were
-## installed, configured-for and unreachable.
 func _test_logging() -> void:
 	_section("the sink layer")
 
@@ -430,10 +411,9 @@ func _test_logging() -> void:
 		_done()
 		return
 
-	# [b]The shared settings are copied out of `server` rather than read twice.[/b] The
-	# file's directory, name, rotation and JSON switch have to reach the router's file
-	# target from the SAME keys that reach dot-core's sink, or a deployment that turns the
-	# router on silently starts writing somewhere else.
+	# [b]The shared settings are copied out of `server` rather than read twice.[/b] The file's
+	# directory, name, rotation and JSON switch have to reach the router's file target from the SAME
+	# keys that reach dot-core's sink.
 	_check(
 		config.log.file_directory == config.server.log_directory
 			and config.log.file_basename == config.server.log_basename
@@ -499,8 +479,7 @@ func _test_party() -> void:
 			and config.party_policy.days[1] == 6,
 		"a list of days stays a typed list (%s)" % [config.party_policy.days]
 	)
-	# 22:00 to 02:00: the wrapped window the site's own rules have. 2026-09-26 is a
-	# Saturday, and this is 23:00 UTC on it.
+	# 22:00 to 02:00: the wrapped window the site's own rules have.
 	_check(
 		config.party_policy.window_open(1790463600),
 		"a window crossing midnight is open late on a booking day"
@@ -569,12 +548,9 @@ static func _count_replays(dir: String) -> int:
 	return n
 
 
-## dot-replay was linked here and built nowhere. What this asserts: the ring is built by
-## default and bounded, `replay save` writes a file dot-replay's own reader calls complete,
-## and a ban or a kick carries the hash of a clip that is really on disk.
-##
-## Driven with no server: [TmcReplay] keeps everything a server is needed for in
-## `install()`, and `./server check` asserts that half on a server that booted.
+## dot-replay was linked here and built nowhere. What this asserts: the ring is built by default and
+## bounded, `replay save` writes a file dot-replay's own reader calls complete, and a ban or a kick
+## carries the hash of a clip that is really on disk.
 func _test_bot_record() -> void:
 	_section("the bot demonstration recorder")
 	var config := TmcConfig.load_dir(CFG).value as TmcConfig
@@ -968,10 +944,9 @@ func _test_security() -> void:
 	var config := loaded.value as TmcConfig
 
 	_check(config.security.enabled, "sec_enabled reaches the guard")
-	# [b]The two dry runs are separate on purpose and the fixture sets them apart.[/b] An
-	# operator commonly trusts the chat rules long before a movement threshold they have
-	# not measured on their own maps, and a single switch for both would make that
-	# unsayable — so the fixture says it, and this check would fail if they were merged.
+	# [b]The two dry runs are separate on purpose and the fixture sets them apart.[/b] An operator
+	# commonly trusts the chat rules long before a movement threshold they have not measured on their
+	# own maps, and a single switch for both would make that unsayable — so the fixture says.
 	_check(config.security.dry_run, "sec_dryrun reaches the guard's own dry run")
 	_check(not config.anticheat.dry_run, "and the detectors keep a separate one")
 	_check(config.security.caps_ratio == 0.8, "a float reaches the chat detection")
@@ -1228,16 +1203,8 @@ func _test_admins() -> void:
 	_check(not admins.lookup(_identity("nobody")).ok, "and a stranger is not listed")
 	_check(not admins.lookup(null).ok, "nor is a null identity, which is not a crash")
 
-	# A permission name that is not a flag is REPORTED, never refused.
-	#
-	# Refusing would be worse: a game defines its own flags -- the fixture's `spawn_npc` is
-	# one -- and this file cannot know them. (It was `slay`, until dot-server made `slay` a
-	# standard flag for dot-moderation's live tools and this check started failing on a
-	# name that had become real.) But silence was worse than either. `cfg/groups.yml`
-	# shipped `warn`, `announce` and `change`, none of which is a flag, so the group called
-	# `admin` granted kick, ban and mute and could not change the map, use admin chat, or
-	# be recognised as staff. Every one of those reads as a correctly configured group that
-	# mysteriously does not work.
+	# A permission name that is not a flag is REPORTED, never refused. Refusing would be worse: a game
+	# defines its own flags -- the fixture's `spawn_npc` is one -- and this file cannot know them.
 	_check(
 		Array(admins.unknown_flags).has("spawn_npc"),
 		"a name that is not a flag is reported (%s)" % [admins.unknown_flags]
@@ -1558,7 +1525,6 @@ defaults:
 	_check(_game_config("games:\n  game-x:\n    map_owner: a/b\n") == null,
 		"a map_owner that is not one name is refused")
 
-	# --- bare map names: one owner rule for the host and the installer ---------------
 	var by_key := _game_config("""games:
   game-x:
     map_owner: keyowner
@@ -1597,7 +1563,6 @@ defaults:
 	ranked.content_id = ""
 	_check(rank.map_owner_for(ranked) == "", "nothing resolves: no owner")
 
-	# --- the game's `suggested:` map packs reach the server's map list ----------------
 	var sug_game := _owner_game("own/game-x", PackedStringArray(["me/a@1"]))
 	sug_game.metadata["suggested"] = ["dm=zz/dm-one", "surf=zz/surf-one"]
 	var sug_content := TmcContent.new()
@@ -1673,7 +1638,6 @@ defaults:
 func _test_map_collections() -> void:
 	_section("owner/collection/* in maps")
 
-	# --- parsing: exactly owner/collection/*, never a partial glob or a pin -----------
 	var whole := TmcGameRef.qualify_map("gamemann/g2gfast-maps/*", "")
 	_check(bool(whole["ok"]) and bool(whole["wildcard"]) and whole["collection"] == "gamemann/g2gfast-maps",
 		"a whole collection parses (and needs no map_owner)", str(whole))
@@ -1690,7 +1654,6 @@ func _test_map_collections() -> void:
 	_check(_game_config("games:\n  game-x:\n    maps:\n      - gamemann/g2gfast-maps/bhop_*\n") == null,
 		"a partial glob is refused when the file is read")
 
-	# --- collection.json ------------------------------------------------------------
 	var doc := {"format": 1, "id": "o/c", "version": "1.0.0", "packs": ["o/m1", "o/m2", "o/m1"]}
 	var parsed := TmcGameConfig.parse_collection("o/c", doc)
 	_check(parsed.ok and parsed.value == PackedStringArray(["o/m1", "o/m2"]),
@@ -1706,7 +1669,6 @@ func _test_map_collections() -> void:
 		and not TmcGameConfig.parse_collection("o/c", "nope").ok,
 		"a pack that is not owner/map, and a body that is not an object, are refused")
 
-	# --- merge: wildcard + explicit pin + remove --------------------------------------
 	var merged := _game_config("""games:
   game-x:
     maps:
@@ -1757,7 +1719,6 @@ games:
 	_check(merged.all_map_entries(_content_of(wild_game)).has("o/c/*"),
 		"the installer sees the wildcard entry to expand", str(merged.all_map_entries(_content_of(wild_game))))
 
-	# --- expansion against a fake origin, and the outage rule ---------------------------
 	var origin := {"o/c": {"format": 1, "id": "o/c", "version": "1.0.0", "packs": ["o/m1", "o/m2"]},
 		"o/new": {"format": 2, "packs": []}}
 	var origin_state := {"up": true}
@@ -1887,14 +1848,8 @@ func _test_content() -> void:
 	_done()
 
 
-## A deployed game whose map runs until it is voted out says so twice, and the two must
-## agree: `<game>_map_seconds: "0"` stops the MAP session's timer, and the vote has a
-## clock of its own. The playground shipped with the first and not the second, and was put
-## to a ballot at twenty-eight minutes under people mid-build.
-##
-## Read off the real `content/`, not a fixture, because the contradiction is in a file an
-## operator ships — and layered exactly as the game layers it, `metadata: map_vote:` over
-## dot-vote's defaults, so what is asserted is what a running server would do.
+## A deployed game whose map runs until it is voted out says so twice, and the two must agree:
+## `<game>_map_seconds: "0"` stops the MAP session's timer, and the vote has a clock of its own.
 func _test_deployed_map_clocks() -> void:
 	var scanned := TmcContent.scan("res://content")
 
@@ -1944,11 +1899,9 @@ func _test_deployed_map_clocks() -> void:
 	)
 
 
-## `end_vote`, `include_extend` and `extend_seconds` through `DOT_GAME_VOTE_*` and
-## `--game-vote-*`, each in a child process, change what the server vote's ballot does.
-##
-## `_test_vote` checks one of the six as a parsed value; this asks the ballot. `vote.yml`'s
-## own layer is `multigame`'s, on the real running server. `[mce-1]`.
+## `end_vote`, `include_extend` and `extend_seconds` through `DOT_GAME_VOTE_*` and `--game-vote-*`,
+## each in a child process, change what the server vote's ballot does. `_test_vote` checks one of
+## the six as a parsed value; this asks the ballot.
 func _test_vote_layers_reach_a_ballot() -> void:
 	_section("the server vote's own layers reach a running ballot")
 
@@ -2107,16 +2060,8 @@ func _test_vote() -> void:
 	_done()
 
 
-## `time_up: finish_round` in a game whose match the game vote cannot find: the change waits
-## for the round end the game's own director forwards, and goes on it.
-##
-## [b]The only check on the forwarding.[/b] `TmcVote` asks the running game's match every frame
-## whether a round is LIVE (`round_in_progress`), and every game in the family keeps one beside
-## its director, so `game_vote_rounds` lets each change go the frame the match leaves LIVE
-## whether or not `round_ended` reached the game vote. A game with rounds and no findable match
-## is answered "live" and is held until a forwarded `round_ended`: break the forwarding and its
-## change waits for ever (`finish_round_max_sec: 0`). The stand-in is
-## `fixtures/rounds_without_match.gd`; no server is needed, so the vote is advanced by hand.
+## `time_up: finish_round` in a game whose match the game vote cannot find: the change waits for the
+## round end the game's own director forwards, and goes on it.
 func _test_vote_rounds_without_a_match() -> void:
 	_section("finish_round in a game whose match the game vote cannot find")
 
@@ -2198,14 +2143,9 @@ func _test_vote_rounds_without_a_match() -> void:
 	_done()
 
 
-## A limit that runs out while a game change is landing must not draw a game for the empty
-## server it sees (`game_vote_all` 2026-10-11: the way back to the first game flaked).
-##
-## Forced rather than waited for: the change is declared under way by hand, nobody is on the
-## server, and the clock is run well past its limit. Without TmcVote's hold the director
-## draws a game at random and announces a second change.
-## A vote over five stand-in games, with `games.yml` given as a tree. [member TmcVote.server] only
-## needs `games`, so a bare server with a manager stands in for the host.
+## Forced rather than waited for: the change is declared under way by hand, nobody is on the server,
+## and the clock is run well past its limit. Without TmcVote's hold the director draws a game at
+## random and announces a second change.
 func _rotation_votes(tree: Dictionary, excluded: Array = [], running: String = "") -> TmcVote:
 	var manager := DotGameManager.new()
 	for id in ["arena", "surf", "bhop", "maze", "deathrun"]:
@@ -2433,15 +2373,8 @@ func _test_vote_limit_waits_for_a_change() -> void:
 	_done()
 
 
-## The game vote's HUD: what the template asks the shell to play, and what the shell does
-## with a notice.
-##
-## [b]Two copies of one list, checked against each other, because they cannot be one.[/b]
-## The cue ids are named by the SERVER's configuration and played out of the CLIENT's
-## catalogue, and the client is a different build — host/ is not in it. So the ids are
-## written twice by necessity, and this is the check that the two agree: a template
-## naming a cue the shell has no def for is a vote that is silent for every player, with
-## nothing erroring anywhere, because dot-audio treats an unknown id as silence on purpose.
+## The game vote's HUD: what the template asks the shell to play, and what the shell does with a
+## notice.
 func _test_vote_notices() -> void:
 	_section("the game vote on the shell's HUD")
 
@@ -2551,8 +2484,6 @@ func _test_vote_notices() -> void:
 	_check(overlay.is_line_shown(&"restart"), "and only that line: another one is drawn")
 	overlay.show_notice(DotNotice.make(&"", "", -1.0, &"game_ballot", {"open": false, "winner": "A"}))
 	_check(overlay.is_line_shown(&"game_vote"), "and once the ballot closes the line is back")
-	# A closed ballot holds its result for a few seconds, and a game's own ballot opening in
-	# them used to stack under it, down over the bottom-right HUD.
 	var result_up := overlay.ballot(&"game_ballot").visible
 	overlay.show_notice(DotNotice.make(&"", "", 20.0, &"map_ballot", {
 		"open": true, "title": "Vote for the next map", "command": "votefor", "seconds": 20.0,
@@ -2592,10 +2523,9 @@ func _test_vote_notices() -> void:
 func _test_auth() -> void:
 	_section("authentication")
 
-	# [b]The case that shipped: a file nothing read.[/b] `TmcConfig.auth` was parsed and
-	# handed to a TmcAuth that did not exist, so a server advertised `auth=none`,
-	# everybody arrived as a guest, and `permissions.yml` did nothing -- which is
-	# indistinguishable from a deployment that chose not to authenticate.
+	# [b]The case that shipped: a file nothing read.[/b] `TmcConfig.auth` was parsed and handed to a
+	# TmcAuth that did not exist, so a server advertised `auth=none`, everybody arrived as a guest, and
+	# `permissions.yml` did nothing.
 	var off := TmcAuth.build({}, "cfg")
 	_check(off.ok and off.value != null, "no auth.yml at all is TMC's sign-in (ticket, guests allowed), not a guest server")
 
@@ -2718,10 +2648,9 @@ func _test_auth() -> void:
 		)
 		node.free()
 
-	# [b]Introspection here is scoped or refused.[/b] The site's avatar and profile
-	# routes resolve only the key it mints for this server's credential; a join let in
-	# through `/me` would be keyed by the account id instead, and the same player would be
-	# two people depending on whether they joined before the listing came up.
+	# [b]Introspection here is scoped or refused.[/b] The site's avatar and profile routes resolve only
+	# the key it mints for this server's credential; a join let in through `/me` would be keyed by the
+	# account id instead.
 	var scoped := TmcAuth.build({
 		"enabled": true, "strategy": "introspect", "first_party": true,
 		"backbone_url": "https://site.example", "allow_guests": true,

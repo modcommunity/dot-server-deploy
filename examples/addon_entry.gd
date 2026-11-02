@@ -2,18 +2,6 @@ extends Node
 
 ## A server owner's extra pack (`cfg/content/addons.yml`) is mounted as a dependency of the game and
 ## its entry scene is started.
-##
-## Publishes four fixture packs with the real `tools/pack.gd` (one starting on the server, one
-## on the client, one with no entry, one whose entry scene is not in the pack), mounts them
-## through a real [DotCloudClient] against a signed scratch origin, lets [TmcAddonsConfig]
-## append them to a game's dependencies, and has [TmcAddonEntry] start them. The entry scene
-## carries no script (a delivered scene cannot name its own files by res:// path), only a
-## group, so "instantiated" is read off the tree and off the scene's path under the mount.
-##
-##     godot --headless --path . res://examples/addon_entry.tscn
-##
-## Armed by making `TmcAddonEntry.attach` ignore `side` (the server run then also starts the
-## client pack and the counts fail), and by making `TmcAddonsConfig.apply` append nothing.
 
 const CHECKS := 23
 const FIXTURE := "res://examples/fixtures/addon_pack"

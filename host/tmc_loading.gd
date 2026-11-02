@@ -1,34 +1,9 @@
 class_name TmcLoading
 extends Node
 
-## What a player sees and hears while this server changes game or map under them:
-## a background picture, music, tips — `cfg/loading.yml`, sent to the shell, drawn by
+## What a player sees and hears while this server changes game or map under them: a background
+## picture, music, tips — `cfg/loading.yml`, sent to the shell, drawn by
 ## [code]TmcLoadingScreen[/code].
-##
-## [b]Only for a change, not for the first connect.[/b] Before a player has joined, the
-## page that launched them is what they are looking at, and this server has not been
-## asked anything yet. Once they are in, every `changelevel` and every map that has to be
-## downloaded is a stretch of nothing on screen, and that stretch is the server owner's to
-## fill.
-##
-## [b]Sent as data, fetched by the client.[/b] The server sends URLs, never bytes: a
-## picture and a song are what a CDN is for, a [DotNotice] holds eight kilobytes, and a
-## server that streamed media to every player at the moment it is also sending them a
-## game would be competing with itself for the one link that matters. So the document
-## goes out once, on spawn, and the shell fetches what it names in the background WHILE
-## THE PLAYER IS PLAYING — the change is the worst moment to start downloading a song.
-##
-## Three layers, each field falling through on its own: the map's entry, then the game's,
-## then the default. A map with a screenshot and no music plays the game's music over its
-## screenshot. Map entries are not in the document — a records server has two hundred
-## maps, and the notice would be dropped whole — but sent as a hint when that map is about
-## to load, from the loaded game's map session (`fetching` and `changing`, duck-typed:
-## a game with no map session simply has no per-map screens).
-##
-## [b]A URL is only ever http(s).[/b] A server naming `res://` or `user://` would be a
-## server reading files out of the player's own build or profile; the shell refuses those
-## too, because the shell is where it matters, and they are refused here so an owner finds
-## out at boot rather than from a player.
 
 const CHANNEL := "tmc.loading"
 
@@ -124,7 +99,6 @@ static func install(
 	return node
 
 
-# --- Configuration ---------------------------------------------------------------
 
 ## Reads `loading.yml`'s tree. Returns self.
 func configure(tree: Dictionary) -> TmcLoading:
@@ -296,7 +270,6 @@ func is_empty() -> bool:
 	return default_entry.is_empty() and games.is_empty() and maps.is_empty()
 
 
-# --- What happens ----------------------------------------------------------------
 
 func _on_client_spawned(session: DotClientSession) -> void:
 	if not enabled or is_empty() or not send_fn.is_valid():
@@ -359,7 +332,6 @@ func _broadcast(data: Dictionary) -> void:
 		broadcast_fn.call(data)
 
 
-# --- Console ---------------------------------------------------------------------
 
 ## The commands this registered, so they go when it does.
 var _registered := PackedStringArray()

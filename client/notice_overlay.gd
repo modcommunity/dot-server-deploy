@@ -1,56 +1,15 @@
 class_name TmcNoticeOverlay
 extends CanvasLayer
 
-## The shell's own HUD: the lines and sounds the SERVER sends, over whatever game is on
-## screen.
-##
-## [b]Why the shell draws these and not the game.[/b] A [DotNotice] is dot-server's
-## message to the client application — the game vote's countdown, a restart warning —
-## and what sends it (TmcVote, a host, an operator) outlives the game it is shown over.
-## The game on screen is a delivered pack that knows nothing about the server's vote and
-## is replaced by the change that vote causes, so a line it drew would go with it. The
-## shell is the one thing on the client that is there before, during and after.
-##
-## [b]One line per topic.[/b] Two notices with the same topic are one line that changed,
-## which is how a countdown is one line counting rather than ten stacked; a topic and
-## nothing else takes the line down. A notice without a topic is a line of its own that
-## goes after [constant HOLD_SEC].
-##
-## [b]The countdown is counted here.[/b] The server sends a number and the moment it
-## arrived is the zero; between messages this counts down on its own clock and a later
-## message simply replaces it. A line whose countdown runs out is taken down a moment
-## later, so a countdown the server stopped caring about — a lost clear, a server that
-## went away — does not sit on screen at 0:00.
-##
-## [b]Sounds are dot-audio ids, played through this overlay's own catalogue.[/b] The ids
-## are named by the server's configuration (`cfg/vote.yml`'s `cue_*`) and must be in
-## [method sound_catalogue]; the selftest checks every id the template names is. An id
-## this build does not have is silence — dot-audio's rule, and the right one: a newer
-## server naming a cue an older shell lacks should cost a sound, not an error.
+## The shell's own HUD: the lines and sounds the SERVER sends, over whatever game is on screen.
 
 ## [b]A notice can also carry a ballot[/b] — the game vote's, and a game's map vote — in its
-## [code]data[/code], and that is drawn as a [DotBallotPanel] per topic down the right-hand
-## side, under the lines. A player chooses with a number key or a click,
-## and the choice goes back as the same command they could type, through [member vote_fn].
-## With two ballots open the number keys belong to the one that opened last; the other is
-## still clickable. Each voter's avatar is fetched from its URL once and kept, and a voter
-## whose picture cannot be fetched — no URL, a host that refuses a browser, a format this
-## build cannot read — is drawn as an initial, never as a gap.
+## [code]data[/code], and that is drawn as a [DotBallotPanel] per topic down the right-hand side,
+## under the lines.
 
 ## [b]Everything here is in one column down the right-hand side, and nothing is at the top
-## centre.[/b] The lines were a bar across the top centre, 56 px down, and that is where
-## nearly every game puts its own second line: the round clock's, the map's name, "between
-## rounds", the portraits under the scores. Rendered over all thirteen games at 1280x720 the
-## game vote's line hid one of them in ten. The right-hand column under 110 px was already
-## the ballots' and already clear of them, so the lines go at its head. The column narrows
-## with the frame ([method column_width]): at a fixed 360 px a ballot on a phone in
-## landscape was nearly half the screen and over the crosshair.
-##
-## [b]A ballot names the line it stands for[/b] ([code]data["line"][/code], a topic), and
-## that line is not drawn while the ballot is open: the ballot already says what the line
-## says (the title, how to vote, the time), and two copies were the second-tallest thing on
-## the HUD. The line still exists, for [method line_text] and for a shell older than this
-## that draws no ballot.
+## centre.[/b] The lines were a bar across the top centre, 56 px down, and that is where nearly
+## every game puts its own second line: the round clock's, the map's name, "between rounds".
 
 const CHANNEL := "tmc.notice"
 
@@ -119,7 +78,6 @@ func _ready() -> void:
 	_fit_column()
 
 
-# --- What a line says ---------------------------------------------------------
 
 ## Takes a notice from the server. Connect [signal DotClientLink.notice_received] here.
 func show_notice(notice: DotNotice) -> void:
@@ -169,7 +127,6 @@ func clear_all() -> void:
 		(_ballots[key] as DotBallotPanel).dismiss()
 
 
-# --- Ballots --------------------------------------------------------------------
 
 ## Draws, updates or takes down the ballot for [param topic]. See the class notes.
 func show_ballot(topic: StringName, data: Dictionary) -> void:
@@ -193,11 +150,7 @@ func show_ballot(topic: StringName, data: Dictionary) -> void:
 		_dismiss_results_except(panel)
 
 
-## Takes down every ballot that is only showing its result, other than [param keep]. A
-## closed ballot holds "X won" for a few seconds, and a game's own ballot often opens inside
-## them, right after the game vote keeps the game: the two panels then stacked down the
-## column to y~650 at 1280x720, over the bottom-right HUD of three games. The result is
-## news only until something else asks a question.
+## Takes down every ballot that is only showing its result, other than [param keep].
 func _dismiss_results_except(keep: DotBallotPanel) -> void:
 	for other: DotBallotPanel in _ballots.values():
 		if other != keep and not other.is_open() and other.visible:
@@ -431,7 +384,6 @@ func _now() -> float:
 	return Time.get_ticks_msec() / 1000.0
 
 
-# --- The view -----------------------------------------------------------------
 
 func _build_view() -> void:
 	_root = Control.new()
@@ -497,13 +449,10 @@ func _make_line() -> Dictionary:
 	return {"panel": panel, "label": label}
 
 
-# --- The sound ------------------------------------------------------------------
 
-## Every cue this shell can play. Flat, on Master, one at a time each.
-##
-## [b]Master, not a UI bus[/b], because this project declares no bus layout and a bus
-## name that does not exist is not one a player's volume slider reaches either. A game
-## that brings a layout brings its own sliders for its own sounds.
+## Every cue this shell can play. Flat, on Master, one at a time each. [b]Master, not a UI bus[/b],
+## because this project declares no bus layout and a bus name that does not exist is not one a
+## player's volume slider reaches either.
 static func sound_catalogue() -> DotAudioCatalogue:
 	var c := DotAudioCatalogue.new()
 
@@ -519,10 +468,7 @@ static func sound_catalogue() -> DotAudioCatalogue:
 	return c
 
 
-## Which synthesised voice stands in for each cue until a real file is in
-## [constant SOUND_DIR]. The same choices a game's map vote makes, so a ballot sounds like
-## a ballot whichever vote opened it: up for opening, because up reads as "on", a blip for
-## the warning and a click per second, so a countdown is not mistaken for a hit marker.
+## Which synthesised voice stands in for each cue until a real file is in [constant SOUND_DIR].
 static func sound_recipes() -> Dictionary:
 	return {
 		CUE_VOTE_START: DotAudioSynth.Voice.SPAWN,
@@ -537,11 +483,9 @@ func _build_audio() -> void:
 	audio.name = "Audio"
 	audio.catalogue = sound_catalogue()
 	audio.voices = 4
-	# [b]Not in the registry, and not on the buses.[/b] A delivered game registers its own
-	# `dot_audio` manager and sets its own bus volumes from its own settings; a shell that
-	# registered or applied a default mixer would displace the one or reset the other the
-	# moment it started, which is a game whose volume slider stops working for no reason
-	# anybody could find.
+	# [b]Not in the registry, and not on the buses.[/b] A delivered game registers its own `dot_audio`
+	# manager and sets its own bus volumes from its own settings; a shell that registered or applied a
+	# default mixer would displace the one or reset the other the moment it started.
 	audio.register_as_service = false
 	audio.apply_mixer_to_buses = false
 	add_child(audio)

@@ -1,48 +1,7 @@
 extends SceneTree
 
-## Publish the index a server installs games FROM.
-##
-## [codeblock]
-## godot --headless --path . --script res://tools/index.gd -- \
-##     --content content --out dist
-## [/codeblock]
-##
-## Driven by `./server index`, which is the way to run it, and which every publish should
-## end with — see the note on staleness below.
-##
-## [b]Why this exists at all: a pack does not contain the descriptor that boots it.[/b]
-## `./server pack arena --source games/game-arena` publishes the GAME — 212 files of
-## scenes, scripts and art, signed, content-addressed, mountable. What it does not publish
-## is `content/arena/game.yml`, which is the file that says which scene the SERVER runs,
-## which module drives it, how many players it takes and what its cvars are. The
-## descriptor lives beside the pack in this repository and has never left it, so a server
-## could download any game in the catalogue and still had no way to learn how to start
-## one. Every deployment got the descriptors by cloning this repository, which means every
-## deployment got all ten whether it ran one of them or ten.
-##
-## This writes the missing half:
-##
-## [codeblock]
-## dist/games.json                        the catalogue: id -> content id, version, name
-## dist/descriptors/<id>/game.yml         one copy of each descriptor, by id
-## [/codeblock]
-##
-## Both land in `dist/`, which is what already gets uploaded to the content origin, so
-## publishing the index is not a second deployment step with a second set of credentials.
-##
-## [b]Keyed by the directory id, not by the content id, and that is not arbitrary.[/b]
-## Five of the ids here — `hungry_classic`, `hungry_frenzy`, `hungry_gauntlet`,
-## `hungry_warrens`, `hungry_reef` — are five descriptors over ONE pack, `tmc/hungry`: same
-## code, five sets of cvars. Keying descriptors by content id would give those five one
-## file, so the last one written would win and four modes would quietly become the fifth. The id is
-## what an operator types and is unique by construction, because it is a directory name.
-##
-## [b]It goes stale silently, which is the failure worth designing against.[/b] An index
-## naming version 0.1.0 of a pack that was republished as 0.2.0 sends every installing
-## server to a manifest that is not there, and the server reports "could not download"
-## about a game that is sitting on the origin. `./server pack --all` therefore runs this
-## afterwards, and this reads the version out of the same `game.yml` the publisher read,
-## rather than out of anything a human keeps in step.
+## Publish the index a server installs games FROM. Driven by `./server index`, which is the way to
+## run it, and which every publish should end with — see the note on staleness below.
 
 const EXIT_OK := 0
 const EXIT_USAGE := 1
@@ -55,10 +14,6 @@ const FORMAT_VERSION := 1
 const DESCRIPTOR_DIR := "descriptors"
 
 ## Directories under `content/` that are content but are not games.
-##
-## The same two `TmcContent.NOT_GAMES` skips, and deliberately a second spelling of them:
-## this is a publishing tool that must run without a server, and reaching into the host's
-## class to borrow a constant would make `./server index` depend on the host booting.
 const NOT_GAMES := ["global", "avatars"]
 
 
@@ -131,11 +86,9 @@ func _initialize() -> void:
 
 	var index := {
 		"format_version": FORMAT_VERSION,
-		# [b]No generation time, deliberately.[/b] Two indexes built from the same
-		# descriptors are then byte-identical, so an upload that changed nothing is
-		# visible as an upload of nothing -- where a run timestamp makes every publish
-		# look like a change, which is exactly when people stop diffing it. The versions
-		# inside are what say whether an origin is current.
+		# [b]No generation time, deliberately.[/b] Two indexes built from the same descriptors are then
+		# byte-identical, so an upload that changed nothing is visible as an upload of nothing -- where a
+		# run timestamp makes every publish look like a change.
 		"games": games,
 	}
 
@@ -156,12 +109,9 @@ func _initialize() -> void:
 	print("  %d games -> %s" % [games.size(), path])
 	print("  descriptors -> %s" % out_dir.path_join(DESCRIPTOR_DIR))
 
-	# [b]Two games both claiming the boot slot is fatal on the server, not here.[/b]
-	# `TmcContent.scan` refuses a content directory where two descriptors say
-	# `default: true`, with no correct way to resolve it -- so an index that offers two
-	# such games is an index from which certain PAIRS of games cannot be installed
-	# together, and the operator finds out when their server will not start. Said here
-	# because this is the only place that sees all of them at once.
+	# [b]Two games both claiming the boot slot is fatal on the server, not here.[/b] `TmcContent.scan`
+	# refuses a content directory where two descriptors say `default: true`, with no correct way to
+	# resolve.
 	if defaults.size() > 1:
 		print("")
 		print("  WARNING: %d games claim `default: true` (%s)." % [
@@ -194,12 +144,9 @@ func _entry(id: String, path: String) -> DotResult:
 
 	var kind := str(TmcYaml.at(tree, "kind", "builtin"))
 
-	# [b]A `builtin` game is listed and marked, not omitted.[/b] Its code is compiled into
-	# a particular build of the client and shell, so installing its descriptor onto a
-	# server running a different build produces a game that loads nothing -- but leaving
-	# it out of the index instead makes the installer report "no such game", which sends
-	# an operator looking for a publishing mistake that did not happen. The kind travels
-	# and the installer refuses with the real reason.
+	# [b]A `builtin` game is listed and marked, not omitted.[/b] Its code is compiled into a particular
+	# build of the client and shell, so installing its descriptor onto a server running a different
+	# build produces a game that loads nothing.
 	var row := {
 		"content_id": content_id,
 		"version": str(TmcYaml.at(tree, "version", "0.0.0")),
@@ -220,11 +167,6 @@ func _entry(id: String, path: String) -> DotResult:
 
 
 ## Copy one descriptor into the output tree, byte for byte.
-##
-## [b]Copied, not regenerated.[/b] `game.yml` carries cvars, comments and the reasoning
-## for both, and a version written back out of a parse would lose every line of it --
-## which matters because the copy an installing server ends up with is the one its
-## operator will read and edit.
 func _copy_descriptor(source: String, out_dir: String, id: String) -> DotResult:
 	var target_dir := out_dir.path_join(DESCRIPTOR_DIR).path_join(id)
 	var made := DirAccess.make_dir_recursive_absolute(target_dir)

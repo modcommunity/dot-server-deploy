@@ -1,19 +1,7 @@
 extends Node
 
-## A fake site for the Workshop sync client: a local HTTP server whose answers come from one
-## [member handler] the test sets, so each section decides what the backbone says.
-##
-## Like [code]http_test_server.gd[/code] it speaks as much HTTP as [DotHttp] asks for, and no
-## more -- but it reads a request [b]body[/b] (the scope route is a POST) and it can decline to
-## answer at all, which is how a timeout is made.
-##
-## [codeblock]
-## var bb := preload("res://examples/workshop_backbone.gd").new()
-## add_child(bb)
-## bb.handler = func(method, path, query, headers, body):
-##     return {"status": 200, "json": {"hello": "world"}}   # or {"hang": true}
-## bb.start()
-## [/codeblock]
+## A fake site for the Workshop sync client: a local HTTP server whose answers come from one [member
+## handler] the test sets, so each section decides what the backbone says.
 
 ## [code](method, path, query: Dictionary, headers: Dictionary, body: String) -> Dictionary[/code]
 ## returning [code]{status, json}[/code] or [code]{hang: true}[/code]. Header names are lower-cased.

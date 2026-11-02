@@ -1,46 +1,9 @@
 class_name TmcLoadingScreen
 extends CanvasLayer
 
-## The screen over a game or map change: the server owner's picture, music and tips, with
-## the download's own progress on top. Configured by `cfg/loading.yml` on the server and
-## sent by `TmcLoading`; see that file for what the document holds and why it is URLs.
-##
-## [b]It covers three things, and they end differently.[/b]
-##
-## - [code]game[/code]: a changelevel. Starts when the server says one is coming (or the
-##   link starts downloading or loading a game) and ends when the new game has spawned.
-##   The old game is still on screen while its replacement downloads, which is exactly the
-##   stretch this exists to cover.
-## - [code]content[/code]: anything the content client fetches while a game is running —
-##   in practice a map. Starts when a fetch has been going for [member show_delay_sec],
-##   so a map already on the disk does not flash a screen, and ends when it is mounted.
-## - [code]warm[/code]: a game on screen that declared it is not ready to be seen (its map
-##   arrives after signon) and then the frames in which its materials are drawn once, so
-##   their shaders compile under this screen and not at the first shot. Shown at once, not
-##   faded in.
-##
-## The screen is up while any is. None of them on the first connect before spawn: the shell's own menu
-## (or the page that launched the player) has that, and the shell only calls [method begin]
-## once a game has spawned. The shell menu carries the same corner line naming the shell
-## build ([TmcShellVersion]), so the first screen a player sees and this one both say which
-## client it is.
-##
-## [b]Media is fetched ahead of time and kept for the session.[/b] When a document arrives
-## every URL in it is queued, one request at a time, while the player is still playing —
-## so the picture is there when the change starts, rather than racing the game's own
-## download for the same link. A URL that fails is not retried this session, and a screen
-## whose picture never arrived is a plain dark screen with the progress on it, which is
-## what it was before any of this existed.
-##
-## [b]Only http(s), and only what the bytes say they are.[/b] A server must not be able to
-## make a client read `res://` or `user://`, so anything else is refused here whatever the
-## server checked. An image is decoded by its magic number — PNG, JPEG, WebP — and audio
-## likewise — Ogg, MP3, WAV — because a URL is often a route with no extension.
-##
-## [b]The music is the player's to silence.[/b] M on the screen mutes it, and the choice is
-## kept in `user://tmc_loading.cfg`: a loading theme on every map change of a long evening
-## is exactly what somebody wants off, and a setting they have to find in a menu between
-## two changes is one they never find.
+## The screen over a game or map change: the server owner's picture, music and tips, with the
+## download's own progress on top. Configured by `cfg/loading.yml` on the server and sent by
+## `TmcLoading`; see that file for what the document holds and why it is URLs.
 
 const CHANNEL := "tmc.loading"
 
@@ -133,10 +96,9 @@ var _fetching := false
 ## Test seam: a suite serves its pictures from 127.0.0.1. See [method is_private_host].
 var allow_private_hosts := false
 
-## The fetch in progress, between steps that cannot finish in the frame they start in:
-## `{"url", "audio", "resolve": id}` while its host is being looked up, then
-## `{"url", "task": id, "out": [result]}` while its bytes are being decoded on a worker.
-## Empty when nothing is. One at a time, like the requests.
+## The fetch in progress, between steps that cannot finish in the frame they start in: `{"url",
+## "audio", "resolve": id}` while its host is being looked up, then `{"url", "task": id, "out":
+## [result]}` while its bytes are being decoded on a worker. Empty when nothing is.
 var _step: Dictionary = {}
 
 ## Why the last file was not used, for [method describe] and a bug report.
@@ -168,7 +130,6 @@ func _ready() -> void:
 	_root.modulate.a = 0.0
 
 
-# --- The document ------------------------------------------------------------------
 
 ## Takes a notice's data under [constant TOPIC]: a document, a hint about what is coming
 ## next, or a cancel. Anything else is ignored.
@@ -249,13 +210,9 @@ func has_document() -> bool:
 	return not _doc.is_empty()
 
 
-# --- When ------------------------------------------------------------------------
 
-## Something started that the screen should cover. [param game_id] and [param game_name]
-## name what is loading, when that is known.
-##
-## [param instant] shows it at full opacity in this frame rather than fading in: over a game
-## that has just been put on screen, a fade is a quarter of a second of the thing it covers.
+## Something started that the screen should cover. [param game_id] and [param game_name] name what
+## is loading, when that is known.
 func begin(reason: StringName, game_id: String = "", game_name: String = "", instant: bool = false) -> void:
 	if not _in_game() and not _visible:
 		return
@@ -266,11 +223,7 @@ func begin(reason: StringName, game_id: String = "", game_name: String = "", ins
 	_last_activity = _now()
 
 	if reason == REASON_CONTENT:
-		# Delayed: see [member show_delay_sec]. EVERY content call, not only the first: the
-		# shell calls this on each phase of one fetch, and dot-cloud goes from fetching the
-		# manifest to verifying its signature in the same frame -- so a check of "first time
-		# only" let the second phase show the screen at once, and a map already on the disk
-		# flashed a full-screen picture. Found by the review, by running it.
+		# Delayed: see [member show_delay_sec].
 		_reasons[REASON_CONTENT] = true
 		if not _visible and _pending_content_at < 0.0:
 			_pending_content_at = _now()
@@ -349,7 +302,6 @@ func _process(_delta: float) -> void:
 		_next_at = -1.0
 
 
-# --- Which screen ------------------------------------------------------------------
 
 ## The entry for what is loading now: the map's, over the game's, over the default, one
 ## field at a time.
@@ -393,7 +345,6 @@ func _apply_image() -> void:
 	_image.texture = _media[ready.pick_random()] if not ready.is_empty() else null
 
 
-# --- Showing -----------------------------------------------------------------------
 
 func _show() -> void:
 	if _visible:
@@ -442,7 +393,6 @@ func _fade_to(alpha: float) -> void:
 				_root.visible = false)
 
 
-# --- Music -------------------------------------------------------------------------
 
 func _start_music() -> void:
 	var songs: Array = (_entry.get("music", []) as Array).filter(
@@ -535,14 +485,10 @@ func _save_prefs() -> void:
 	DotWeb.sync_filesystem()
 
 
-# --- Fetching ----------------------------------------------------------------------
 
 ## Whether [param url] is one this client will fetch: absolute http(s), one token, bounded.
-##
-## `TmcLoading.is_safe_url` on the server is the same rule, written twice because `host/`
-## is not in the client build. The server's is so an owner hears about a bad URL at boot;
-## this one is the one that counts, because a server is not where a client gets to decide
-## what it reads.
+## `TmcLoading.is_safe_url` on the server is the same rule, written twice because `host/` is not in
+## the client build.
 static func is_safe_url(url: String) -> bool:
 	if url == "" or url.length() > MAX_URL:
 		return false
@@ -556,11 +502,9 @@ static func is_safe_url(url: String) -> bool:
 	return host != "" and not host.begins_with("/")
 
 
-## Whether [param url] names this machine or a private network by address or by
-## `localhost`. Such a URL is not fetched: a server must not be able to make every player's
-## client send requests into that player's own network. A hostname that RESOLVES to a
-## private address is not caught here -- that would need a lookup per URL -- so this is the
-## cheap half of the rule, and the half a hostile server would reach for first.
+## Whether [param url] names this machine or a private network by address or by `localhost`. Such a
+## URL is not fetched: a server must not be able to make every player's client send requests into
+## that player's own network.
 static func is_private_host(url: String) -> bool:
 	var host := host_of(url)
 	if host == "localhost" or host.ends_with(".localhost") or host.ends_with(".local"):
@@ -620,9 +564,9 @@ static func _is_address(host: String) -> bool:
 ## unspecified, in IPv4 or IPv6 (an IPv4-mapped IPv6 address is judged as its IPv4).
 static func is_private_address(address: String) -> bool:
 	if address.contains(":"):
-		# Parsed into eight groups rather than matched as text: the engine's own resolver
-		# writes ::1 as `0:0:0:0:0:0:0:1`, and the first version of this matched `::1` and
-		# waved a name that resolves to it straight through. Found by the suite's lookup.
+		# Parsed into eight groups rather than matched as text: the engine's own resolver writes ::1 as
+		# `0:0:0:0:0:0:0:1`, and the first version of this matched `::1` and waved a name that resolves to
+		# it straight through.
 		var g := _ipv6_groups(address)
 		if g.is_empty():
 			return true
@@ -709,12 +653,9 @@ func _pump() -> void:
 	var audio: bool = next[1]
 	_fetching = true
 
-	# [b]Where a name LEADS, not only what it says.[/b] [method is_private_host] catches a
-	# URL that names a private address or `localhost`; a public-looking name that resolves to
-	# one is the same request into the player's own network. So off-web the host is looked
-	# up first, without blocking a frame, and every address it has is checked. A browser
-	# offers no lookup to make -- and blocks a public page reaching a private address by
-	# itself -- so there the literal check is the whole of it.
+	# [b]Where a name LEADS, not only what it says.[/b] [method is_private_host] catches a URL that
+	# names a private address or `localhost`; a public-looking name that resolves to one is the same
+	# request into the player's own network.
 	var host := host_of(url)
 	if not allow_private_hosts and not DotPlatform.is_web() and not _is_address(host):
 		_step = {"url": url, "audio": audio, "resolve": IP.resolve_hostname_queue_item(host, IP.TYPE_ANY)}
@@ -741,13 +682,9 @@ func _request(url: String, audio: bool) -> void:
 		_finish(url, null, "the request could not start")
 
 
-## The bytes arrived: decode them, off the main thread when there are threads.
-##
-## [b]Decoding a 4 MB JPEG is tens of milliseconds, and this happens while the player is
-## PLAYING[/b] -- which is the point of fetching early, and would make each picture a
-## dropped frame or three mid-fight. So the decode runs on a [WorkerThreadPool] task and
-## only the texture is made back here, because a texture is a rendering-server object. A
-## browser build without threads has no worker to give it to, and decodes in the frame.
+## The bytes arrived: decode them, off the main thread when there are threads. [b]Decoding a 4 MB
+## JPEG is tens of milliseconds, and this happens while the player is PLAYING[/b] -- which is the
+## point of fetching early, and would make each picture a dropped frame or three mid-fight.
 func _received(url: String, body: PackedByteArray) -> void:
 	if not DotPlatform.has_threads():
 		_finish(url, to_media(decode_data(body)), "not a picture or a sound this client reads")
@@ -835,10 +772,9 @@ static func decode_data(body: PackedByteArray) -> Variant:
 	var is_jpg := body[0] == 0xFF and body[1] == 0xD8
 	var is_webp := body.slice(0, 4).get_string_from_ascii() == "RIFF" and body.slice(8, 12).get_string_from_ascii() == "WEBP"
 
-	# [b]Read the size the file DECLARES before letting a decoder allocate it.[/b] The byte
-	# limit bounds what is downloaded, not what it decodes to: a 1 MB PNG can declare
-	# 16384 x 16384 and the decoder allocates a gigabyte before the resize below runs.
-	# Anything whose header cannot be read is refused rather than decoded to find out.
+	# [b]Read the size the file DECLARES before letting a decoder allocate it.[/b] The byte limit
+	# bounds what is downloaded, not what it decodes to: a 1 MB PNG can declare 16384 x 16384 and the
+	# decoder allocates a gigabyte before the resize below runs.
 	if is_png or is_jpg or is_webp:
 		var size := declared_size(body)
 		if size.x <= 0 or size.y <= 0 or size.x * size.y > MAX_DECODE_PIXELS:
@@ -916,7 +852,6 @@ static func _be32(b: PackedByteArray, at: int) -> int:
 	return b[at] << 24 | b[at + 1] << 16 | b[at + 2] << 8 | b[at + 3]
 
 
-# --- The view ----------------------------------------------------------------------
 
 func _build_view() -> void:
 	_root = Control.new()

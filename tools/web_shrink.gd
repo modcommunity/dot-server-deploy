@@ -1,12 +1,8 @@
 extends SceneTree
 
-## Rewrites an exported pck so its mipmapped lossless WebP textures are lossy WebP.
-##
-##     godot --headless --path . --script res://tools/web_shrink.gd -- web/build/index.pck [quality]
-##
-## Mipmaps mark a 3D texture; UI art (no mipmaps) stays lossless, and VRAM-compressed
-## textures are left alone. Desktop builds keep the addons' own import settings: only the
-## browser pays for every byte on every new shell, so only export-web runs this.
+## Rewrites an exported pck so its mipmapped lossless WebP textures are lossy WebP. godot --headless
+## --path . --script res://tools/web_shrink.gd -- web/build/index.pck [quality] Mipmaps mark a 3D
+## texture; UI art (no mipmaps) stays lossless, and VRAM-compressed textures are left alone.
 
 const MAGIC := 0x43504447 # "GDPC"
 const FLAG_REL_FILEBASE := 2

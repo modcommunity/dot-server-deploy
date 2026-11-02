@@ -1,14 +1,8 @@
 extends SceneTree
 
-## Installs the games this server was told to run, from the content origin.
-##
-## Driven by `./server install-games`, and by `./server run` when TMC_GAMES is set (a panel with no shell). The pack is a signed dot-cloud pack; the descriptor (`content/<id>/game.yml`) is fetched beside it.
-##
-## Fetched at startup, not on first join: a download of hundreds of megabytes with players waiting reads as a hang. An existing `game.yml` is never overwritten (operators edit it; `--refresh` takes the origin's). `--prune` removes only what this tool recorded in `data/installed-games.json`.
-##
-## Exit codes: 0 everything asked for is installed, 2 nothing could be, 3 some could not.
-##
-## Exit codes: 0 everything asked for is installed, 2 nothing could be, 3 some could not.
+## Installs the games this server was told to run, from the content origin. Driven by `./server
+## install-games`, and by `./server run` when TMC_GAMES is set (a panel with no shell). The pack is
+## a signed dot-cloud pack; the descriptor (`content/<id>/game.yml`) is fetched beside it.
 
 const EXIT_OK := 0
 const EXIT_USAGE := 1
@@ -31,19 +25,14 @@ const STATE_FILE := "installed-games.json"
 const STATE_VERSION := 1
 
 ## Where a verified manifest is kept so that a boot with no network can still find one.
-##
-## Under the DATA directory rather than under `content/`: it is a cache, it is derived, and
-## a content directory is scanned for games -- a `tmc/` directory appearing in there would
-## be reported as a half-finished upload at every boot.
 const MANIFEST_DIR := "manifests"
 
 ## The descriptor, under a content directory and in the published tree alike.
 const DESCRIPTOR := "game.yml"
 
 ## The descriptor lists that name published packs, all pinned at install the same way.
-## `dependencies` (server and every client mount them at load), `server_dependencies`
-## (the server only), `maps` (the game fetches each when it changes to it). See
-## DotGameDescriptor in dot-server.
+## `dependencies` (server and every client mount them at load), `server_dependencies` (the server
+## only), `maps` (the game fetches each when it changes to it). See DotGameDescriptor in dot-server.
 const PACK_LISTS: PackedStringArray = ["dependencies", "server_dependencies", "maps"]
 
 ## The pointer a publish writes beside a pack's versions, naming the newest.
@@ -109,10 +98,9 @@ func _init() -> void:
 				wanted.append(String(e["id"]) + ("@" + String(e["pin"]) if String(e["pin"]) != "" else ""))
 
 	if wanted.is_empty():
-		# Not an error, and this is the ordinary case for a hand-run server: no list
-		# means "run what is in the content directory", which needs no installer at all
-		# -- except for the maps an owner added in cfg/server/content/overrides.yml, which still need a
-		# version each (see _resolve_owner_maps).
+		# Not an error, and this is the ordinary case for a hand-run server: no list means "run what is in
+		# the content directory", which needs no installer at all -- except for the maps an owner added in
+		# cfg/server/content/overrides.yml, which still need a version each (see _resolve_owner_maps).
 		print("  no games list; nothing to install")
 
 		if bases.is_empty():
@@ -123,27 +111,22 @@ func _init() -> void:
 		quit(EXIT_OK)
 		return
 
-	# [b]One statement of where content comes from, and it is the server's own.[/b]
-	# Without this the launcher would have to carry a default origin of its own beside the
-	# one in `cfg/server.yml`, and the day somebody repoints a deployment at a mirror they
-	# would edit the YAML, restart, and watch the installer keep fetching from the address
-	# they had just replaced.
+	# [b]One statement of where content comes from, and it is the server's own.[/b] Without this the
+	# launcher would have to carry a default origin of its own beside the one in `cfg/server.yml`, and
+	# the day somebody repoints a deployment at a mirror they would edit the YAML, restart.
 	if bases.is_empty():
 		bases = _bases_from_config(config_dir)
 	var prune := opts.has("prune")
 	var refresh := opts.has("refresh")
 
-	# [b]`SceneTree._init` runs before the tree is usable.[/b] `root` exists but nothing
-	# has processed a frame, and an HTTPRequest parented in here is never polled — the
-	# request is not even attempted, and it surfaces as "could not download", which sends
-	# you looking at the origin. One frame is the whole fix; `cloud_fetch_probe.gd` was
-	# where this was learned.
+	# [b]`SceneTree._init` runs before the tree is usable.[/b] `root` exists but nothing has processed
+	# a frame, and an HTTPRequest parented in here is never polled — the request is not even attempted,
+	# and it surfaces as "could not download", which sends you looking at the origin.
 	await process_frame
 
-	# [b]Made before anything is written into it.[/b] A box whose games all arrive from an
-	# origin has no reason to carry a content directory in advance, and a server handed a
-	# `--content` that is not there exits 7 with "No content directory", which reads as a
-	# broken install rather than as a directory nobody created yet.
+	# [b]Made before anything is written into it.[/b] A box whose games all arrive from an origin has
+	# no reason to carry a content directory in advance, and a server handed a `--content` that is not
+	# there exits 7 with "No content directory".
 	DirAccess.make_dir_recursive_absolute(content_dir)
 
 	var state := _read_state(data_dir)
@@ -159,27 +142,17 @@ func _init() -> void:
 		var one := TmcGameRef.parse(raw)
 		wants.append(one)
 
-		# [b]A game installed before ids carried the owner is moved, not re-downloaded.[/b]
-		# It lived at `content/<name>/`; its id is `<owner>/<name>` now and so is its
-		# directory. Only when that flat directory holds THIS pack -- its descriptor names
-		# the same content id -- so a built-in or somebody else's game that happens to share
-		# the name is never taken.
+		# [b]A game installed before ids carried the owner is moved, not re-downloaded.[/b] It lived at
+		# `content/<name>/`; its id is `<owner>/<name>` now and so is its directory.
 		if one["from_origin"]:
 			_adopt_flat_install(one, content_dir, installed)
 
-	# Built once and shared. A published pack needs it to fetch and VERIFY a manifest
-	# before its descriptor is trusted, and the prefetch below needs the same store, the
-	# same trusted keys and the same bases -- two clients would download everything twice
-	# and disagree about what was already here.
+	# Built once and shared.
 	var cloud := _build_cloud(content_dir, data_dir, bases)
 
-	# [b]Started here, because everything below reaches it by a route that does not.[/b]
-	# `acquire` and `ensure` start the client themselves; `fetch_manifest` and
-	# `verify_manifest` do not, and they are what a published pack's descriptor is read
-	# through. Unstarted, the first has no HTTP client at all -- "Nonexistent function
-	# 'get_bytes' in base 'Nil'" -- and the second would check a signature against a
-	# `config_file` that has never been read, which is the failure dot-cloud's own
-	# `ensure` has a paragraph about.
+	# [b]Started here, because everything below reaches it by a route that does not.[/b] `acquire` and
+	# `ensure` start the client themselves; `fetch_manifest` and `verify_manifest` do not, and they are
+	# what a published pack's descriptor is read through.
 	if cloud != null:
 		var started: DotResult = await cloud.start()
 
@@ -194,10 +167,9 @@ func _init() -> void:
 	# Games whose wanted version needs newer addons than this box has: "<raw>: <why>".
 	var behind := PackedStringArray()
 	var index := {}
-	# The origin the catalogue came from. Descriptor paths in it are relative and must
-	# resolve against THAT origin rather than against whichever base is first in the
-	# list -- a mirror that is a version behind would otherwise hand out its own
-	# descriptors for the packs a different origin is serving.
+	# The origin the catalogue came from. Descriptor paths in it are relative and must resolve against
+	# THAT origin rather than against whichever base is first in the list -- a mirror that is a version
+	# behind would otherwise hand out its own descriptors for the packs a different origin is serving.
 	var origin := ""
 
 	# The catalogue is only fetched when something is actually missing. A box whose games
@@ -247,13 +219,8 @@ func _init() -> void:
 			if not want["from_origin"]:
 				continue
 
-			# [b]A pack game on the disk is not necessarily the one the list asks for.[/b]
-			# This used to `continue` here for every game already installed, so the
-			# version was decided ONCE, at first install: `@latest` meant "latest on the
-			# day this box was set up", and changing `@0.1.2` to `@0.1.3` in the panel did
-			# nothing at all without `--refresh`. A server whose list says one version and
-			# runs another is exactly the "which build is this" question an operator
-			# should never have to ask.
+			# A server whose list says one version and runs another is exactly the "which build is this"
+			# question an operator should never have to ask.
 			var due := await _pack_update_due(want, path, bases, cloud)
 
 			if not due.ok:
@@ -290,16 +257,12 @@ func _init() -> void:
 			want = want.duplicate()
 			want["version"] = target
 
-		# --- A published pack carries its own descriptor ----------------------
 		if want["from_origin"]:
 			var got := await _install_from_pack(want, content_dir, bases, cloud)
 
 			if not got.ok:
-				# [b]Addons too old is not "could not install".[/b] Nothing is wrong with
-				# the pack or the origin; this box is one addon release behind it. The
-				# installed version (if any) stays, which is the point: before this check
-				# a restart moved the descriptor to a version the server then refused at
-				# boot, and a working server came up running nothing.
+				# [b]Addons too old is not "could not install".[/b] Nothing is wrong with the pack or the
+				# origin; this box is one addon release behind it.
 				if got.error.code == DotError.CODE_VERSION:
 					DotLog.warn(CHANNEL, "a game needs newer addons than this server has", {
 						"game": str(want["id"]),
@@ -338,10 +301,9 @@ func _init() -> void:
 			continue
 
 		if str(row.get("kind", "pack")) == "builtin":
-			# A builtin game's code is compiled into a particular build of the shell, so
-			# its descriptor on a server running any other build names a scene that is not
-			# there. Refused with the reason, rather than left out of the catalogue: an
-			# id that is simply absent reads as a publishing mistake.
+			# A builtin game's code is compiled into a particular build of the shell, so its descriptor on a
+			# server running any other build names a scene that is not there. Refused with the reason, rather
+			# than left out of the catalogue: an id that is simply absent reads as a publishing mistake.
 			DotLog.warn(CHANNEL, "that game is not delivered and cannot be installed", {
 				"game": id,
 				"hint": "its code ships inside a client build, not as a pack",
@@ -368,7 +330,6 @@ func _init() -> void:
 		}
 		added.append(id)
 
-	# --- What this box should now have -------------------------------------
 	var present := PackedStringArray()
 
 	for want in wants:
@@ -420,16 +381,9 @@ func _init() -> void:
 	quit(EXIT_PARTIAL if not (missing.is_empty() and refused.is_empty()) else EXIT_OK)
 
 
-# --- The catalogue ----------------------------------------------------------
 
 
 ## Reads `games.json` from the first origin that answers with one.
-##
-## [b]Tried in order and the first usable answer wins, which is not the same as the first
-## answer.[/b] A mirror that is up and serving an empty or half-written index is a mirror
-## that must not stop the real origin being asked — this is the case a LAN deployment
-## produces the first time somebody points a base URL at a directory they have not
-## finished uploading.
 func _fetch_index(bases: PackedStringArray) -> DotResult:
 	if bases.is_empty():
 		return DotResult.fail(
@@ -523,12 +477,6 @@ func _install_descriptor(
 
 
 ## Puts one descriptor under `content/<dir>/`, whole or not at all.
-##
-## [b]Written to a temporary name and moved into place.[/b] A descriptor half-written by a
-## connection that dropped is a directory that scans as a game and fails to parse, and the
-## server refuses to boot over it -- so the file under `content/` is either the old one or
-## the new one and never a piece of either. Shared by both install paths, because the
-## failure it prevents has nothing to do with where the bytes came from.
 func _write_descriptor(
 	content_dir: String, dir_name: String, bytes: PackedByteArray
 ) -> DotResult:
@@ -566,16 +514,11 @@ func _write_descriptor(
 	return DotResult.success(target)
 
 
-# --- The packs --------------------------------------------------------------
 
 
-## Downloads and verifies every pack the installed games need.
-##
-## [b]Deduplicated by content id, and that matters more than it looks.[/b] Four of the
-## ids here — the four Hungario modes — are four descriptors over ONE pack. Ensuring per
-## game rather than per pack would ask the origin for the same 30 MB four times; dot-cloud
-## would answer three of them out of the store, but the manifest fetch and the verify
-## happen every time and the log then reads as four downloads of a game there is one of.
+## Downloads and verifies every pack the installed games need. [b]Deduplicated by content id, and
+## that matters more than it looks.[/b] Four of the ids here — the four Hungario modes — are four
+## descriptors over ONE pack.
 func _prefetch(
 	ids: PackedStringArray,
 	content_dir: String,
@@ -646,10 +589,9 @@ func _prefetch(
 		var res: DotResult = await cloud.ensure(StringName(content_id), version)
 
 		if not res.ok:
-			# [b]Not fatal.[/b] A pack that could not be fetched now is fetched on first
-			# use, exactly as it was before this tool existed — so an origin that is down
-			# costs a slow first join rather than a server that will not start. The
-			# operator gets the reason at the top of the log either way.
+			# [b]Not fatal.[/b] A pack that could not be fetched now is fetched on first use, exactly as it
+			# was before this tool existed — so an origin that is down costs a slow first join rather than a
+			# server that will not start. The operator gets the reason at the top of the log either way.
 			DotLog.warn(CHANNEL, "could not prefetch content", {
 				"content": content_id,
 				"version": version,
@@ -702,12 +644,6 @@ func _adopt_flat_install(want: Dictionary, content_dir: String, installed: Dicti
 
 
 ## Whether an installed pack game has to move to another version, and to which.
-##
-## Success with `""` is "up to date", success with a version is "install that one", a
-## failure with [constant DotError.CODE_STATE] is another content id in the directory,
-## and any other failure is "could not tell" -- which the caller treats as keep what is
-## there. `@latest` costs one small `latest.json` read per start; `TMC_NO_INSTALL` is how
-## a box that must not touch the network skips it.
 func _pack_update_due(
 	want: Dictionary,
 	path: String,
@@ -746,10 +682,9 @@ func _pack_update_due(
 	return DotResult.success("" if target == have_version else target)
 
 
-## Installs a game from a PUBLISHED pack, descriptor and all.
-##
-## The descriptor travels inside the signed pack, so a member who publishes through the site ships nothing extra, and a tampered `game.yml` is a manifest that fails its signature.
-## The directory is the NAME half of the id; a directory holding a DIFFERENT content id is refused, since two owners may both publish `arena`.
+## Installs a game from a PUBLISHED pack, descriptor and all. The descriptor travels inside the
+## signed pack, so a member who publishes through the site ships nothing extra, and a tampered
+## `game.yml` is a manifest that fails its signature.
 func _install_from_pack(
 	want: Dictionary,
 	content_dir: String,
@@ -838,11 +773,9 @@ func _install_from_pack(
 	# exactly what the publisher wrote rather than a second spelling of it.
 	var prefix := _version_prefix(content_id, version, manifest)
 
-	# [b]Can this server run it, asked before anything is written.[/b] The pack's
-	# requires.json names the addon API levels it was built against; the same rule the
-	# cloud client applies at mount (DotAddonApi.check) is applied here, so a version this
-	# box cannot run is never installed over one it can. A pack with no such file predates
-	# it and needs nothing that can be checked.
+	# [b]Can this server run it, asked before anything is written.[/b] The pack's requires.json names
+	# the addon API levels it was built against; the same rule the cloud client applies at mount
+	# (DotAddonApi.check) is applied here.
 	var able := await _check_requirements(manifest, prefix, bases)
 
 	# Not wrapped: the check's own sentence ("This game needs dot-platform API level 3 or
@@ -874,11 +807,9 @@ func _install_from_pack(
 
 	var bytes := got.value as PackedByteArray
 
-	# [b]The hash is checked HERE and not left to the mounter.[/b] Everything else in a
-	# pack is verified when dot-cloud syncs it; this one file is pulled out early, by a
-	# different path, and is then WRITTEN TO DISK as configuration the server obeys. A
-	# proxy that served a different body would be handing this box a game descriptor of
-	# its own choosing, and nothing downstream would look at it again.
+	# [b]The hash is checked HERE and not left to the mounter.[/b] Everything else in a pack is
+	# verified when dot-cloud syncs it; this one file is pulled out early, by a different path, and is
+	# then WRITTEN TO DISK as configuration the server obeys.
 	var digest := _sha256_hex(bytes)
 
 	if digest != descriptor.sha256:
@@ -895,12 +826,9 @@ func _install_from_pack(
 	if not stamped.ok:
 		return stamped.wrap("%s out of %s@%s" % [DESCRIPTOR, content_id, version])
 
-	# The game's other packs, each pinned to a version NOW. The server never resolves
-	# `@latest` itself -- it would hand two players two different packs under one game --
-	# so this is the one moment it can happen, and the answer is written into the file
-	# the server reads.
-	# Every list of packs a descriptor can name, each pinned to a concrete version here so
-	# the host never resolves `latest` per join: what every client mounts is the same.
+	# The game's other packs, each pinned to a version NOW. The server never resolves `@latest` itself
+	# -- it would hand two players two different packs under one game -- so this is the one moment it
+	# can happen, and the answer is written into the file the server reads.
 	for field in PACK_LISTS:
 		var deps := await _resolve_dependencies(str(stamped.value), bases, field)
 
@@ -926,10 +854,9 @@ func _install_from_pack(
 	return DotResult.success({"content_id": content_id, "version": version})
 
 
-## A pack's own descriptor, told which pack it is.
-##
-## The file cannot know its id or version when written, and a mismatch mounts a path that is not there; so `content_id`, `version` and `kind` are set to what this installer just verified, then parsed back.
-## Text, not a re-serialised tree: TmcYaml does not write, and operators keep the file's comments and order.
+## A pack's own descriptor, told which pack it is. The file cannot know its id or version when
+## written, and a mismatch mounts a path that is not there; so `content_id`, `version` and `kind`
+## are set to what this installer just verified, then parsed back.
 static func stamp_identity(text: String, content_id: String, version: String) -> DotResult:
 	var want := {"content_id": content_id, "version": version, "kind": "pack"}
 	var seen := {}
@@ -968,11 +895,6 @@ static func stamp_identity(text: String, content_id: String, version: String) ->
 
 
 ## The `dependencies:` of a descriptor, each as a concrete `<id>@<version>`.
-##
-## An entry is written the way a games-list entry is -- `gamemann/surf_mesa`,
-## `gamemann/surf_mesa@latest`, `gamemann/surf_mesa@v1.0.0` -- and read through the same
-## [TmcGameRef], so the two lists cannot disagree about what `@v1.0.0` means. A bare name
-## with no owner is refused: a dependency is always a published pack.
 func _resolve_dependencies(
 	text: String, bases: PackedStringArray, field: String = "dependencies"
 ) -> DotResult:
@@ -1017,11 +939,9 @@ func _resolve_dependencies(
 	return DotResult.success(out)
 
 
-## Rewrites a descriptor's top-level `dependencies:` list to exactly [param keys].
-##
-## Text, like [method stamp_identity], for the same reason: the file is one an operator
-## reads and edits, and its comments and order are worth keeping. The old list's items are
-## replaced in place; a descriptor with no `dependencies:` and no keys is left alone.
+## Rewrites a descriptor's top-level `dependencies:` list to exactly [param keys]. Text, like
+## [method stamp_identity], for the same reason: the file is one an operator reads and edits, and
+## its comments and order are worth keeping.
 static func stamp_dependencies(
 	text: String, keys: PackedStringArray, field: String = "dependencies"
 ) -> DotResult:
@@ -1305,15 +1225,9 @@ func _resolve_addon_packs(
 		print("             left out of this server; update the addons or drop the entry")
 
 
-## Expands each collection id in [param wanted] (`owner/collection`) with [param fetch], a
-## Callable `(collection) -> DotResult` of its `owner/map` ids ([method _fetch_collection];
-## a suite passes a fake origin). Returns `{"collections": {id: [ids]}, "failed": [lines]}`.
-##
-## [b]An answer the origin cannot give keeps the expansion [param cached] already had[/b], the
-## same rule as a map's version: a restart during an outage must not take maps away. A
-## collection with no cache and no answer is simply absent (and reported in `failed`).
-## An answer that is refused (a newer `format`) does not fall back to the cache silently
-## either: it is reported, and the cache keeps the maps running.
+## Expands each collection id in [param wanted] (`owner/collection`) with [param fetch], a Callable
+## `(collection) -> DotResult` of its `owner/map` ids ([method _fetch_collection]; a suite passes a
+## fake origin). Returns `{"collections": {id: [ids]}, "failed": [lines]}`.
 static func resolve_collections(wanted: PackedStringArray, fetch: Callable, cached: Dictionary) -> Dictionary:
 	var out := {}
 	var failed := PackedStringArray()
@@ -1374,13 +1288,6 @@ func _resolve_latest(content_id: String, bases: PackedStringArray) -> DotResult:
 
 
 ## [method _resolve_latest] plus the id the answer belongs to: `{id, version, moved_from}`.
-##
-## [b]A renamed repository's old id is retired, not deleted.[/b] website-city rebuilds the
-## packs under the new id and leaves the old tree in the bucket, with `moved_to` written
-## into the old `latest.json` whose version stays the last one published before the
-## rename. Reading only `version` therefore installs that stale build forever. One hop is
-## followed, never more: city does not chain them, so a second hop is a bug somewhere and
-## is refused (see [method follow_pointer]).
 func _resolve_pointer(content_id: String, bases: PackedStringArray) -> DotResult:
 	if _pointers.has(content_id):
 		return _pointers[content_id]
@@ -1524,11 +1431,9 @@ static func follow_pointer(content_id: String, body: Variant, hop: int) -> DotRe
 	return TmcSolo.follow_pointer(content_id, body, hop)
 
 
-## Where one published version lives, under a base.
-##
-## The manifest's own `mount_root` is not consulted: that is where content lands inside
-## the client, and this is where it sits on the origin. They are the same two segments by
-## convention and are not the same decision.
+## Where one published version lives, under a base. The manifest's own `mount_root` is not
+## consulted: that is where content lands inside the client, and this is where it sits on the
+## origin. They are the same two segments by convention and are not the same decision.
 static func _version_prefix(
 	content_id: String, version: String, manifest: DotCloudManifest
 ) -> String:
@@ -1536,10 +1441,8 @@ static func _version_prefix(
 	return "%s/%s" % [content_id, v]
 
 
-## SHA-256 of a buffer, as lowercase hex.
-## Fetch the pack's requires.json, if it has one, and check it against this build's addons.
-## Fails with CODE_VERSION when the addons are too old -- the caller's signal to keep the
-## installed version -- and with the fetch's own error when the file cannot be read.
+## SHA-256 of a buffer, as lowercase hex. Fetch the pack's requires.json, if it has one, and check
+## it against this build's addons.
 func _check_requirements(
 	manifest: DotCloudManifest, prefix: String, bases: PackedStringArray
 ) -> DotResult:
@@ -1643,13 +1546,6 @@ func _cache_manifest(
 
 
 ## A cloud client wired exactly as the server's own is.
-##
-## [b]Exactly, and that is the requirement rather than a nicety.[/b] The whole value of
-## prefetching is that the server finds the pack already in its store, and the store is
-## `data/content_cache` — so a client here with a cache of its own would download
-## everything, verify everything, and leave the server to download it all again. The
-## trusted keys are read from the same place for the same reason: a pack fetched against
-## a permissive config is a pack the server will reject.
 func _build_cloud(
 	content_dir: String,
 	data_dir: String,
@@ -1675,10 +1571,8 @@ func _build_cloud(
 	if not FileAccess.file_exists(cloud.config_file):
 		cloud.config_file = "res://client/content.json"
 
-	# The content directory as it was given, exactly as `TmcContent.root` holds it and
-	# exactly as the server hands it to its own client. A tool that helpfully absolutised
-	# it would be searching a different directory from the server it is prefetching for
-	# the moment anybody passes a relative `--content`.
+	# The content directory as it was given, exactly as `TmcContent.root` holds it and exactly as the
+	# server hands it to its own client.
 	var searched := PackedStringArray([content_dir])
 	var published := ProjectSettings.globalize_path("res://dist")
 
@@ -1692,16 +1586,8 @@ func _build_cloud(
 
 	cloud.local_search_dirs = searched
 	cloud.http_base_urls = bases
-	# [b]The published layout is `{id}/{version}/`, and that is dot-cloud's own default.[/b]
-	# This used to override it to a flat `{id}/manifest.json`, which was right when the
-	# only origin was this project's own `dist/` and every pack had one version in it.
-	# The site publishes `content/<owner>/<name>/<version>/manifest.json` -- a member may
-	# have four versions of one game up at once -- so the versioned shape is the primary
-	# one now.
-	#
-	# The flat form stays as a FALLBACK because an origin holds both: eight imported map
-	# packs were published under it and are still the maps a game asks for by name.
-	# Re-publishing everything in existence is not a precondition for this server starting.
+	# The site publishes `content/<owner>/<name>/<version>/manifest.json` -- a member may have four
+	# versions of one game up at once -- so the versioned shape is the primary one now.
 	cloud.manifest_url_template = "{base}/{id}/{version}/manifest.json"
 	cloud.manifest_url_fallbacks = PackedStringArray(["{base}/{id}/manifest.json"])
 
@@ -1710,7 +1596,6 @@ func _build_cloud(
 	return cloud
 
 
-# --- Pruning and state ------------------------------------------------------
 
 
 ## Removes descriptors this tool installed and the list no longer asks for.
@@ -1718,9 +1603,7 @@ func _prune(
 	keeping: PackedStringArray, installed: Dictionary, content_dir: String
 ) -> void:
 	# [b]Compared against DIRECTORIES, not against the raw list.[/b] `TMC_GAMES` may say
-	# `gamemann/game-g2gfast01@1.2.0` and the thing on disk is `content/game-g2gfast01/`,
-	# so a prune that matched the raw entry would find no match for a game it had just
-	# installed and would delete it on the next restart -- once per restart, for ever.
+	# `gamemann/game-g2gfast01@1.2.0` and the thing on disk is `content/game-g2gfast01/`.
 	for id in installed.keys():
 		if id in keeping:
 			continue
@@ -1737,11 +1620,9 @@ func _prune(
 		installed.erase(id)
 		DotLog.info(CHANNEL, "game removed", {"game": id})
 
-	# [b]The cached PACK is deliberately left alone.[/b] dot-cloud's store is
-	# content-addressed and objects are shared between packs, so deleting the objects of
-	# one game can take files another game is using with it — the store has its own quota
-	# and its own eviction, and this is not the place to second-guess either. Removing a
-	# game frees its descriptor, not its download.
+	# [b]The cached PACK is deliberately left alone.[/b] dot-cloud's store is content-addressed and
+	# objects are shared between packs, so deleting the objects of one game can take files another game
+	# is using with it — the store has its own quota and its own eviction.
 
 
 func _read_state(data_dir: String) -> Dictionary:
@@ -1774,26 +1655,18 @@ func _write_state(data_dir: String, state: Dictionary) -> void:
 		DotLog.warn(CHANNEL, "could not record what was installed", {"path": path})
 		return
 
-	# Stamped fresh rather than carried through from the parse. [JSON] has no integers --
-	# every number comes back as a float -- so a version read and written straight back
-	# turns `1` into `1.0` on the second run and into a file that reads as though
-	# something generated it wrong. The constant is an int and writing it again keeps it
-	# one.
+	# Stamped fresh rather than carried through from the parse. [JSON] has no integers -- every number
+	# comes back as a float -- so a version read and written straight back turns `1` into `1.0` on the
+	# second run and into a file that reads as though something generated it wrong.
 	state["format_version"] = STATE_VERSION
 
 	file.store_string(JSON.stringify(state, "\t", true) + "\n")
 	file.close()
 
 
-# --- Arguments --------------------------------------------------------------
 
 
 ## `content_urls` out of `cfg/server.yml`, without loading the whole configuration.
-##
-## [b]The lean read is deliberate.[/b] `TmcConfig.load_dir` ends by VALIDATING a server
-## configuration -- ports, RCON, admin groups -- and every one of those checks is a way
-## for this tool to refuse to install a game because of something it does not use. It
-## reads the same key out of the same file with the same parser, and nothing else.
 static func _bases_from_config(config_dir: String) -> PackedStringArray:
 	var out := PackedStringArray()
 	# The singular layout keeps it in cfg/server/server.yml; the flat cfg/server.yml is the old one.
@@ -1834,10 +1707,9 @@ func _descriptor_path(content_dir: String, id: String) -> String:
 	return content_dir.path_join(id).path_join(DESCRIPTOR)
 
 
-## A comma-separated argument, trimmed, de-duplicated, order kept.
-##
-## Comma-separated rather than a repeated flag because what is on the other end of it is a
-## panel text box and a unit file's `Environment=`, and neither can repeat a flag.
+## A comma-separated argument, trimmed, de-duplicated, order kept. Comma-separated rather than a
+## repeated flag because what is on the other end of it is a panel text box and a unit file's
+## `Environment=`, and neither can repeat a flag.
 static func _list(raw: String) -> PackedStringArray:
 	var out := PackedStringArray()
 

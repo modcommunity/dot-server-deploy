@@ -1,25 +1,6 @@
 extends Node
 
-## The game vote on a REAL shell's HUD, over a REAL socket.
-##
-## [codeblock]
-## godot --headless --path . res://examples/shell_notice.tscn
-## [/codeblock]
-##
-## Exits non-zero on any failure.
-##
-## [b]Why a suite of its own.[/b] Three halves meet here and each has its own tests: dot-vote
-## counts the countdown, dot-server carries a [DotNotice] across a socket (its
-## `signon_revision` suite), and `selftest` checks the overlay draws and plays what it is
-## handed. None of them can see whether the countdown a director emits becomes a line on
-## the screen of a client the SERVER admitted — the host's wiring, the shell's wiring and
-## the RPC routing between them, which is the family's "two ends that never met" in its
-## plainest form. `multigame` hears the server's side with no client; `reconnect` has a
-## client and no vote.
-##
-## Headless, so the overlay's sounds go to dot-audio's null sink, which records what it
-## would have played. That is what "the cue was played" means here, and it is the real
-## catalogue, cooldowns and concurrency caps in front of it — see dot-audio's docs/design.md.
+## The game vote on a REAL shell's HUD, over a REAL socket. Exits non-zero on any failure.
 
 const CONFIG := "res://examples/fixtures/shell_notice"
 
@@ -91,7 +72,6 @@ func _run() -> void:
 	get_tree().quit(1 if _failed > 0 else 0)
 
 
-# --- The harness ------------------------------------------------------------
 
 func _section(title: String) -> void:
 	_entered += 1
@@ -150,7 +130,6 @@ func _played(id: StringName) -> int:
 	return sink.count_of(id) if sink != null else -1
 
 
-# --- Boot ------------------------------------------------------------------
 
 func _boot() -> bool:
 	_section("booting")
@@ -192,10 +171,9 @@ func _boot() -> bool:
 		"and the shell has its overlay, with its own sounds"
 	)
 
-	# [b]Every sound ends the moment it starts.[/b] The null sink finishes nothing on its
-	# own, so each cue def's one-at-a-time cap would refuse the second "tick" of a
-	# countdown here -- a refusal a real 35 ms click never meets -- and four voices would
-	# be full after four cues. `finish` is the null sink's documented way to end one.
+	# [b]Every sound ends the moment it starts.[/b] The null sink finishes nothing on its own, so each
+	# cue def's one-at-a-time cap would refuse the second "tick" of a countdown here -- a refusal a
+	# real 35 ms click never meets -- and four voices would be full after four cues.
 	var sink := _overlay().audio.sink as DotAudioSinkNull
 	if sink != null:
 		_overlay().audio.played.connect(
@@ -230,11 +208,9 @@ func _test_a_failed_download_in_game() -> void:
 	_done()
 
 
-## "Clear downloaded content": the button asks with the size, confirming leaves a marker
-## and restarts without deleting anything mounted, and the next start deletes it all
-## before it mounts anything (`[client-clear-cache-1]`). The restart is the suite's
-## `restart_fn`; the next start is a second shell booted in this process, which runs
-## the same `_ready` a relaunched client does.
+## "Clear downloaded content": the button asks with the size, confirming leaves a marker and
+## restarts without deleting anything mounted, and the next start deletes it all before it mounts
+## anything (`[client-clear-cache-1]`).
 func _test_clearing_downloads() -> void:
 	_section("clearing downloaded content")
 
@@ -298,7 +274,6 @@ func _teardown() -> void:
 		await get_tree().physics_frame
 
 
-# --- Sections --------------------------------------------------------------
 
 func _test_connect() -> bool:
 	_section("a player joins")

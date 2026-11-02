@@ -121,8 +121,6 @@ const LOG_KEYS := {
 	"log_rate_per_channel": "per_channel_rate",
 }
 
-## The files each addon reads itself, through its own layered loader (`cfg/addons/<addon>/`, the
-## game's, the operator's `cfg/server/addons/<addon>/`, then the flat file here until 2026-12-31).
 ## Each addon owns its key table, so this file keeps no second copy that goes stale.
 const LAYERED := {
 	"security.yml": "dot-server-security",

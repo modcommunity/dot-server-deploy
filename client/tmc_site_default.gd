@@ -1,21 +1,9 @@
 class_name TmcSiteDefault
 extends RefCounted
 
-## The site a hand-started shell lists servers from, when nobody named one.
-##
-## A game's server browser lists a site only when `--browser-backbone-url` or
-## `DOT_BROWSER_BACKBONE_URL` names it (dot-browser's layered config). tmc-app passes the
-## flag, but a shell started by hand has no app, and a web build has neither argv nor
-## environment, so both listed nothing. The shell already ships the site's origin in
-## `client/auth.json`, so it publishes that as the environment variable, which every game's
-## browser reads without knowing the shell exists.
-##
-## [b]Why not leave the web to the page's origin.[/b] The game origin is a different
-## registrable domain from the site on purpose (docs/web-client.md), and a published game
-## origin is a static bucket that answers `/api/...` with 403, so "same origin as the page"
-## lists nothing there. The shipped file is the one place the site is written down.
-##
-## Anything an operator or player set wins: argv, the environment, and (web) `?backbone=`.
+## The site a hand-started shell lists servers from, when nobody named one. A game's server browser
+## lists a site only when `--browser-backbone-url` or `DOT_BROWSER_BACKBONE_URL` names it (dot-
+## browser's layered config).
 
 const ENV_KEY := "DOT_BROWSER_BACKBONE_URL"
 const ARG_PREFIX := "--browser-backbone-url"

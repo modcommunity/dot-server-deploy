@@ -1,19 +1,8 @@
 extends Node
 
-## Solo play's pieces that can be checked without a network: what a page may ask for, the
-## shell's `game.yml` reader against the host's, the shell's map list against the stock
-## server one, and the session a game reads its map packs from.
-##
-##     godot --headless --path . res://examples/solo_check.tscn
-##
-## The boot itself (fetch, verify, mount, start offline) is proven against real packs by
-## running the shell: `godot --headless --path . res://client/boot.tscn -- --solo
-## gamemann/game-arena --content-url <origin>/content` (docs/web-client.md#solo-play).
-##
-## Armed by: making `TmcSiteDefault.resolve` ignore the environment or argv (the "wins" checks fail); making `follow_pointer` ignore `moved_to` (the hop checks fail); letting `valid_id` accept an upper-case or three-segment id (the refusals
-## fail); dropping the `_strip_comment` call in `parse_descriptor` (every game.yml with a
-## trailing comment on a read field disagrees with TmcYaml); and deleting a game from
-## `client/solo.json` (the drift check names it).
+## Solo play's pieces that can be checked without a network: what a page may ask for, the shell's
+## `game.yml` reader against the host's, the shell's map list against the stock server one, and the
+## session a game reads its map packs from. godot --headless --path .
 
 const CHECKS := 48
 
@@ -281,7 +270,6 @@ func _test_skip_maps() -> void:
 	_done()
 
 
-# --- Helpers -----------------------------------------------------------------
 
 ## The games list's game repos; [param checked_out] keeps only those with a source here,
 ## since a runner (a GPU box mirror) may lack one that the list still publishes.

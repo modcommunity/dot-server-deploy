@@ -1706,7 +1706,6 @@ func _load_solo(content_id: String, version: String) -> DotResult:
 	return DotResult.success(instance)
 
 
-# --- The Workshop (subscribed packs in solo play) --------------------------------
 
 ## This process is playing alone: packs mounted from here on are `solo`, and the index offers
 ## solo entries to the catalogues that follow it.

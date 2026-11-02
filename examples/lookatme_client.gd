@@ -3,22 +3,8 @@ extends Node
 # Delivery is a delivered pack at `res://dot_cloud/tmc/lookatme/<version>/…`; everything about
 # it is reached through the host's module table, `describe()` and duck typing.
 
-## A REAL client, over a REAL socket, in a DELIVERED Look At Me.
-##
-## [codeblock]
-## godot --headless --path . res://examples/lookatme_client.tscn
-## [/codeblock]
-##
-## Needs `dist/tmc/lookatme` (`./server pack lookatme --source games/mg-look-at-me`).
-##
-## [b]What only this can see.[/b] The game's own suites never run it from a mount and never
-## over a WebSocket: the levels are read out of the mount on the server and arrive at the
-## client one per message (all of them together are past a WebSocket's buffer), the player is
-## predicted against a real clock, and a /command typed in chat goes to the house rather than
-## to everybody. A second player then joins over a WebSocket through a 1 Mbit/s link while the
-## first walks: the house (490 KB of JSON) must arrive whole, deflated and a window at a time
-## (a browser drops what overflows its 64 KiB inbound buffer between two frames; mg-look-at-me
-## docs/design.md, "The house on the wire"), and the first player must keep walking meanwhile.
+## A REAL client, over a REAL socket, in a DELIVERED Look At Me. Needs `dist/tmc/lookatme`
+## (`./server pack lookatme --source games/mg-look-at-me`).
 
 const CONFIG := "res://examples/fixtures/lookatme"
 
@@ -110,7 +96,6 @@ func _run() -> void:
 	get_tree().quit(1 if _failed > 0 else 0)
 
 
-# --- The harness ------------------------------------------------------------
 
 func _process(delta: float) -> void:
 	if _relay != null:
@@ -167,8 +152,8 @@ func _says(world: Object) -> Dictionary:
 	return world.call("describe") as Dictionary
 
 
-## The CLIENT's world: the delivered client scene under the link's `GameRoot`, whose `game`
-## property is the world it built. Found by walking, because nothing here can name its type.
+## The CLIENT's world: the delivered client scene under the link's `GameRoot`, whose `game` property
+## is the world it built.
 func _client_world(link: DotClientLink = null) -> Object:
 	if link == null:
 		link = _link
@@ -187,7 +172,6 @@ func _client_world(link: DotClientLink = null) -> Object:
 	return null
 
 
-# --- Boot -------------------------------------------------------------------
 
 func _boot() -> bool:
 	print("")
@@ -249,7 +233,6 @@ func _teardown() -> void:
 	await get_tree().process_frame
 
 
-# --- Sections ---------------------------------------------------------------
 
 func _test_connect() -> bool:
 	_section("a client connects to a delivered game")
@@ -347,10 +330,9 @@ func _test_a_second_over_a_slow_websocket() -> void:
 	_section("a second player joins over a slow WebSocket while the first walks")
 	var bridge: Object = _server().modules.get_module(MODULE).get("bridge")
 	var window := BROWSER_INBOUND / 2
-	# Both clients in this process are one guest (dot-server's device id is per install), and the
-	# house keys progress by account, so the second would take the player and the first would be
-	# dropped (that is _test_the_same_guest_in_a_second_tab). Keyed by session for the second's
-	# join, as two people on two machines would be.
+	# Both clients in this process are one guest (dot-server's device id is per install), and the house
+	# keys progress by account, so the second would take the player and the first would be dropped
+	# (that is _test_the_same_guest_in_a_second_tab).
 	var key_fn: Callable = bridge.get("key_fn")
 	bridge.set("key_fn", Callable())
 	_relay = SlowTcpRelay.new()

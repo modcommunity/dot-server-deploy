@@ -1,31 +1,7 @@
 extends Node
 
-## Reconnecting to a server that went down and came back, through the REAL shell.
-##
-## [codeblock]
-## godot --headless --path . res://examples/reconnect.tscn
-## [/codeblock]
-##
-## Exits non-zero on any failure.
-##
-## [b]The bug this exists for.[/b] A player was connected, the server restarted under them,
-## they were dropped to the menu, and pressing Connect signed them on to a working server
-## and left them looking at an empty screen. Nothing errored on either end, nothing was
-## downloaded (the pack was still mounted from the first connection), and a page refresh
-## made it work — so it read as a browser problem and was none.
-##
-## [member DotClientLink.name] is "Server" and that name is the RPC routing. The shell
-## never freed the dropped link, so the replacement was added beside it and Godot renamed
-## it "Server2". From then on the server's calls resolved to the OLD node and
-## [DotRegistry] handed the NEW one to the game, which parents its own RPC node under the
-## link it was given — under a name the server has never heard of. Two objects, each doing
-## half the job, neither of them wrong enough to report anything.
-##
-## [b]What is checked is the shape, not the symptom.[/b] An empty screen needs a game with
-## art in it; "the node the server's RPCs resolve to is the node the registry hands out"
-## is the same bug one layer up, and it is checkable with nothing on screen at all. This
-## is the only suite that connects the shell twice — `live_switch` connects a bare link
-## once and `multigame` connects nothing — which is why nothing caught it.
+## Reconnecting to a server that went down and came back, through the REAL shell. Exits non-zero on
+## any failure.
 
 const CONFIG := "res://examples/fixtures/reconnect"
 
@@ -132,17 +108,6 @@ func _playing() -> bool:
 
 
 ## The server's half of "admitted": a session that reached SPAWNED.
-##
-## [b]The client's PLAYING is not it.[/b] [DotClientLink] enters PLAYING on its own, right
-## after SENDING `loaded` -- nothing comes back to confirm the server heard it -- so a
-## client can be in PLAYING while the server still has it in LOADING and will time it out
-## for being idle. Only the server's session can say it was spawned.
-##
-## A probe of this exact shape on 2026-09-14 (TmcHost and the real shell in one process)
-## saw precisely that: PLAYING on the client, LOADING on the server for ever, while two
-## processes joined fine. Its RPC -- `report_loaded` -- went with dot-server 52fe6bd's
-## envelope lanes, and on those this check passes on both connects. Armed by dropping the
-## client's `loaded` send, which reproduces the probe's states and fails only these two.
 func _spawned() -> bool:
 	var srv := _server()
 
@@ -184,10 +149,9 @@ func _until(condition: Callable, seconds: float = 20.0) -> bool:
 	return bool(condition.call())
 
 
-## Every [DotClientLink] the shell is holding, however it is named.
-##
-## By type rather than by name, because the failure renames the second one — counting
-## children called "Server" finds exactly one in both the broken and the fixed shell.
+## Every [DotClientLink] the shell is holding, however it is named. By type rather than by name,
+## because the failure renames the second one — counting children called "Server" finds exactly one
+## in both the broken and the fixed shell.
 func _links() -> Array[Node]:
 	var out: Array[Node] = []
 
@@ -208,7 +172,6 @@ func _link_names() -> String:
 	return str(names)
 
 
-# --- Boot ------------------------------------------------------------------
 
 ## Starts a server. Called twice: the restart is a second one on the same address, which
 ## is what a restarted process is.
@@ -267,16 +230,9 @@ func _boot() -> bool:
 	await get_tree().process_frame
 	await get_tree().process_frame
 
-	# [b]Where this shell fetches the game from, because there is no web server here.[/b]
-	# A base that is not a URL is searched as a directory, and `res://dist` is where
-	# [DotCloudPublisher] writes -- the same directory the host itself searches before it
-	# asks the network. The export ships `client/content.json` naming the page's own
-	# origin, which is right in a browser and unreachable from a headless run.
-	#
-	# Built here rather than at the first connect so the second connect finds it already
-	# made, which is what a real session does: the shell keeps one content client for its
-	# whole life, and the pack it mounted the first time is still mounted the second --
-	# that is why the player saw no download and assumed nothing had happened.
+	# [b]Where this shell fetches the game from, because there is no web server here.[/b] A base that
+	# is not a URL is searched as a directory, and `res://dist` is where [DotCloudPublisher] writes --
+	# the same directory the host itself searches before it asks the network.
 	_shell._ensure_cloud()
 	_shell._cloud.http_base_urls = PackedStringArray([
 		ProjectSettings.globalize_path("res://dist")
@@ -306,7 +262,6 @@ func _teardown() -> void:
 	await _stop_host()
 
 
-# --- Sections --------------------------------------------------------------
 
 func _test_first_connection() -> bool:
 	_section("a player connects")
@@ -347,10 +302,9 @@ func _test_server_goes_down() -> bool:
 		func() -> bool: return _shell.link == null, 10.0
 	)
 
-	# Checked, and then carried on with regardless. A shell still holding the dropped link
-	# is the CAUSE; the reconnect below is the symptom the player reported, and a suite
-	# that stopped here would pass a half-fix that dropped the link on disconnect and not
-	# before the next dial.
+	# Checked, and then carried on with regardless. A shell still holding the dropped link is the
+	# CAUSE; the reconnect below is the symptom the player reported, and a suite that stopped here
+	# would pass a half-fix that dropped the link on disconnect and not before the next dial.
 	_check(
 		dropped,
 		"the shell lets go of the dropped link",
@@ -404,10 +358,9 @@ func _test_reconnect() -> void:
 		"a second link beside the first is renamed 'Server2' and stops being addressable"
 	)
 
-	# [b]The check that would have caught the empty screen.[/b] The server addresses its
-	# calls to "Server"; a delivered game asks the registry for its link and hangs its own
-	# RPC node under whatever it is handed. Those have to be the same object, or the
-	# handshake lands on one and the game's snapshots are addressed to the other.
+	# [b]The check that would have caught the empty screen.[/b] The server addresses its calls to
+	# "Server"; a delivered game asks the registry for its link and hangs its own RPC node under
+	# whatever it is handed.
 	_check(
 		_shell.get_node_or_null("Server") == _shell.link,
 		"the node the server's RPCs resolve to is the shell's live link"

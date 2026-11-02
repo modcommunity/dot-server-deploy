@@ -1,31 +1,11 @@
 extends Node
-# [b]Nothing preloaded out of a game, because no game is in this build.[/b] Buses is
-# a delivered pack: its files are at `res://dot_cloud/tmc/buses/<version>/…` and this file
-# cannot name that path, because the version is the game's. The module is reached through
-# the host's own module table instead, which is where a host is supposed to reach it.
+# [b]Nothing preloaded out of a game, because no game is in this build.[/b] Buses is a delivered
+# pack: its files are at `res://dot_cloud/tmc/buses/<version>/…` and this file cannot name that
+# path, because the version is the game's.
 
-## Changing the game with a REAL client attached, over a real socket.
-##
-## [codeblock]
-## godot --headless --path . res://examples/live_switch.tscn
-## [/codeblock]
-##
-## Exits non-zero on any failure.
-##
-## [b]Why this exists when `examples/multigame.tscn` already switches games.[/b] That one
-## switches with an occupant seated in the world, and an occupant is not a socket. A real
-## client is a [DotClientSession] in a state machine, a peer in a [DotNetManager], a set of
-## RPCs routed by node path, and a scene the server told it to load — and a game change
-## puts all four back through `LOADING` at once.
-##
-## Switching under a browser segfaulted the server, and nothing headless could see it:
-## `multigame` passed the same switch with an occupant, and with an occupant who had left
-## before it. This is the shape that reaches it.
-##
-## Two `MultiplayerAPI` instances in one process, scoped by
-## [method SceneTree.set_multiplayer], because there is one [member SceneTree.multiplayer]
-## and two peers here want it. RPCs are routed by node path relative to each API root, so
-## both link nodes are named `Server` — the name is the routing, not a description.
+## Changing the game with a REAL client attached, over a real socket. Exits non-zero on any failure.
+## [b]Why this exists when `examples/multigame.tscn` already switches games.[/b] That one switches
+## with an occupant seated in the world, and an occupant is not a socket.
 
 const CONFIG := "res://examples/fixtures/multigame"
 
@@ -142,7 +122,6 @@ func _at_game(game_id: String) -> bool:
 		and _server().games.phase == DotGameManager.Phase.IDLE
 
 
-# --- Boot ------------------------------------------------------------------
 
 func _boot() -> bool:
 	print("")
@@ -187,7 +166,6 @@ func _teardown() -> void:
 		_host.free()
 
 
-# --- Sections --------------------------------------------------------------
 
 func _test_connect() -> bool:
 	_section("a client connects")
@@ -232,10 +210,9 @@ func _test_connect() -> bool:
 	return true
 
 
-## The player's own block list (`sm`, dot-chat's DotChatSelfMute) against a real server: the
-## roster it learns without the board held, a mute by the server's key, and `!sm` typed in a
-## real chat box never reaching the server, which is what keeps the muted player from being
-## told. The client mutes itself here because it is the only player; the list does not care.
+## The player's own block list (`sm`, dot-chat's DotChatSelfMute) against a real server: the roster
+## it learns without the board held, a mute by the server's key, and `!sm` typed in a real chat box
+## never reaching the server, which is what keeps the muted player from being told.
 var _mutes: DotChatSelfMute = null
 var _muted_key := [""]
 const SELF_MUTE_FILE := DATA + "/self_mute.json"
@@ -377,10 +354,9 @@ func _test_switch_back() -> void:
 	_done()
 
 
-## Whatever the switch did to the server, it can still take a new player.
-##
-## The check that a crash cannot pass by accident: a process that has segfaulted answers
-## nothing, and one that survived but left its listener in pieces answers nothing either.
+## Whatever the switch did to the server, it can still take a new player. The check that a crash
+## cannot pass by accident: a process that has segfaulted answers nothing, and one that survived but
+## left its listener in pieces answers nothing either.
 func _test_still_serving() -> void:
 	_section("still serving")
 
@@ -388,11 +364,9 @@ func _test_still_serving() -> void:
 		_server().console.execute("status").ok,
 		"the console answers"
 	)
-	# Counted from the content directory rather than written down. The literal `3` here
-	# went stale the moment a fourth game.yml was added, and a failing check that is
-	# only out of date is the one somebody edits to match rather than reads.
-	# Annotated, not inferred: `_host` is a plain Node, so this expression is Variant
-	# and `var x := <Variant>` is a parse ERROR under these projects' warning settings.
+	# Counted from the content directory rather than written down. The literal `3` here went stale the
+	# moment a fourth game.yml was added, and a failing check that is only out of date is the one
+	# somebody edits to match rather than reads.
 	var expected: int = _host.content.games.size()
 	_check(
 		_server().games.game_ids().size() == expected,

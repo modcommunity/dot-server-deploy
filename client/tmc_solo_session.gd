@@ -2,23 +2,6 @@ class_name TmcSoloSession
 extends Node
 
 ## The solo game the shell is running, as a game and its menu find it.
-##
-## Registered in [DotRegistry] under [constant TmcSolo.MAPS_SERVICE] while a solo game is on
-## screen, and NOT under the client link's name: every game decides it is offline by finding
-## no link there, so a stand-in under that name would make a solo game wait for a server.
-##
-## Two things live here.
-##
-## [b]The map packs the shell mounted for this game[/b] ([member map_roots]): a game's
-## offline catalogue reads them the way its server module reads the packs its server names
-## (dot-game's `DotGameContent.map_dirs`), duck-typed, because nothing in a pack may name a
-## shell class.
-##
-## [b]The way back to the shell's menu.[/b] dot-menu's stock Leave disconnects whatever
-## [member DotMenu.leave_link] is, when it reports itself connected, and hides itself in a
-## browser offline (a tab cannot be closed by its page, and a quit there is a frozen canvas).
-## The shell points every menu in a solo game at this node, so Leave reads "Back to menu"
-## and takes the player there instead of doing nothing.
 
 ## `<owner>/<repo>` and the version that was mounted.
 var content_id: String = ""

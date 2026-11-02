@@ -1,49 +1,8 @@
 extends Node
-# [b]Nothing preloaded out of a game, because no game is in this build.[/b] Every game is a
-# delivered pack; its RPC link is found by the counters every game's link keeps, its player by
-# dot-net's registry, and dot-game-template (whose link keeps no counters) by dot-net's own.
 
 ## A real client on ENet, through dot-net's lossy UDP relay, in a DELIVERED game: do its commands
-## reach the server, do the server's snapshots reach it, and does ENet's packet throttle leave
-## both alone?
-##
-## [codeblock]
-## godot --headless --path . res://examples/enet_relay.tscn -- --game arena
-## godot --headless --path . res://examples/enet_relay.tscn -- --game arena --stock-throttle
-## tools/enet_relay_all_games.sh            # every delivered game, the control, and the table
-## [/codeblock]
-##
-## [b]Why here.[/b] ENet's packet throttle drops unreliable packets at the SENDER when a reliable
-## acknowledgement comes back later than the last interval's lowest round trip plus twice its
-## variance; on a steady path that variance is a few milliseconds, so a joiner's reliable burst
-## acknowledged across one long frame takes the throttle to 0, and the client's commands and the
-## server's snapshots stop arriving at 0% loss (dot-core's [code]DotTransportENet.
-## packet_throttle_deceleration[/code], docs/transports.md). Loopback never shows it: there the
-## round trip is under its own variance. Only mg-look-at-me, game-arena and game-g2gfast had a
-## relay suite of their own, each inside its own project; this runs every game as players get
-## it, a signed pack mounted into the shell, with the real dual-stack host and a real
-## [DotClientLink] that picked ENet.
-##
-## [b]What it does.[/b] Boots the host on the game; puts the relay in front of its UDP port with a
-## steady 60 ms each way; joins on ENet through it; holds the movement keys (W, then S, a second
-## each) so the delivered client scene sends real commands. Two windows: 60 ms with no loss, with
-## three 300 ms frames at its start (both ends stall, as a server loading a level does), then 60 ms
-## at 5% loss. Each window checks: the share of the client's inputs the server's game link
-## received, the share of the server's snapshots the client's game link received (at least 90% of
-## what the relay let through), ENet's packet throttle at 32 at both ends for the whole window, and
-## that the player moved on the server: the server link's input counter moved, and where dot-net's
-## registry has an entity the client's peer owns, its path (teleports left out) was at least a
-## metre, or 64 px in a 2D game. The throttle is also held to 32 from the connect through the join.
-## dot-game-template's link keeps no counters, so there dot-net's own stand in (see [method
-## _measure]); Delivery registers no entity per player, so there the counters are the whole probe.
-##
-## [code]--stock-throttle[/code] is the control: it puts ENet's throttle back as the engine ships
-## it at both ends as each connects, and again whenever either end says otherwise (each end's own
-## connect sends dot-core's setting to the far end, which can land later), and the throttle checks
-## must fail. tools/enet_relay_all_games.sh requires that of every game.
-##
-## Prints one `RELAY {json}` line for the table. Exit 0 all held, 1 a check failed, 3 the game's
-## pack is not published here (or the template or dot-ci is not beside this project).
+## reach the server, do the server's snapshots reach it, and does ENet's packet throttle leave both
+## alone?
 
 const ServerWorld := preload("res://examples/server_world.gd")
 const Installer := preload("res://tools/install_games.gd")
@@ -204,7 +163,6 @@ func _skip(why: String) -> void:
 	get_tree().quit(3)
 
 
-# --- Harness ------------------------------------------------------------------
 
 func _section(title: String) -> void:
 	_entered += 1
@@ -247,7 +205,6 @@ func _seconds(s: float) -> void:
 		await get_tree().physics_frame
 
 
-# --- Config and the template's pack -------------------------------------------
 
 ## The shared fixture files with this game in server.yml, the vote off, a port nothing else here
 ## uses, and the server awake (a hibernating server slows the clock a joiner builds its netcode
@@ -341,7 +298,6 @@ func _publish_template() -> String:
 	return content
 
 
-# --- Boot and join ------------------------------------------------------------
 
 func _server() -> DotServer:
 	return _host.server as DotServer
@@ -423,7 +379,6 @@ func _join() -> bool:
 	return found
 
 
-# --- The probe: links, the throttle, the player ---------------------------------
 
 ## The game's RPC link under [param parent]: the child keeping a link's counters, not retired.
 static func _game_link(parent: Node, counter: String) -> Node:
@@ -664,8 +619,7 @@ func _window(window: Array) -> void:
 
 ## How far the server's player is carried over [param seconds]: the path, frame by frame, without
 ## any step longer than [constant TELEPORT] (a respawn or a round putting it somewhere is not a
-## walk). [param hitches] >= 0 holds W and S a second each, with that many long frames at the
-## start; -1 holds nothing. Returns [distance, bodies seen (0: no positioned entity), 2D].
+## walk).
 func _path(seconds: float, hitches: int) -> Array:
 	var t0 := Time.get_ticks_msec()
 	var deadline := t0 + int(seconds * 1000.0)

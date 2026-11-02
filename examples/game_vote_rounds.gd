@@ -3,49 +3,8 @@ extends Node
 # delivered pack; each one's match is reached through the module's `game` and its
 # `match_node`, a dot-match DotMatch, which this build does carry.
 
-## The game vote's `time_up: finish_round`, through REAL round ends in four delivered games.
-##
-## [codeblock]
-## godot --headless --path . res://examples/game_vote_rounds.tscn
-## [/codeblock]
-##
-## Exits non-zero on any failure. Needs `dist/tmc/arena`, `dist/tmc/smash`, `dist/tmc/prophunt`,
-## `dist/tmc/prophunt_maps` and `dist/tmc/buses` (`./server pack <id> --source games/<repo>`);
-## says "skipped" without them. Arena's pack must carry game-arena b7d00ff or later: before
-## it, `arena_timelimit` did not exist and the match ran its mode's ten minutes.
-##
-## [b]Why this exists.[/b] `game_vote_all` asserts that the game vote knows whether each game
-## reports rounds, and `multigame` that the rule reads right, but neither ever lets the game
-## vote's clock run out while a round is being played: a delivered game's rounds are minutes
-## long. Before TmcVote forwarded a game's `round_ended`, `finish_round` changed the game at
-## the expiry, mid-round, in every game, and every suite passed. Here each game's round is
-## shortened through its own cvars (`fixtures/game_vote_rounds/content.yml`, the way an owner
-## sets them), a real shell votes the other game in, and the suite watches every physics frame
-## from the expiry: the server stays on the game until its match ends the round, and changes
-## after that.
-##
-## [b]Four round shapes.[/b] Arena is a deathmatch whose round is the whole match, ended by
-## its time limit (or a score limit nobody reaches in it) and then an intermission, shortened
-## through `arena_timelimit`, `arena_scorelimit` and `arena_warmup`; its own map vote is the
-## director that hears the match's `round_ended`. Smash Copter is a survival phase, a short warning and then a
-## showdown, ending when one side is left or the showdown runs out; Prop Hunt is a hiding
-## phase, then a hunt that ends when the props are found or its own clock runs out; Buses
-## from Hell is two bot-driven buses against the one person on foot, ending on the round
-## clock. Arena votes Smash in, Smash votes Prop Hunt, Prop Hunt votes Buses, and Buses votes
-## Arena back, so each is switched into and out of under `finish_round`.
-##
-## [b]Arena's limits are asserted on its match[/b] ([constant RULES]): its match cvars were once
-## registered and read by nothing, and a round that is merely short for another reason would
-## pass every other check here.
-##
-## [b]Each game is asked whether a round is live[/b] (`TmcVote.round_in_progress`, from the
-## game's own match): `round_based` alone held a change through a warmup for nothing.
-##
-## [b]The server runs in its own World3D[/b] (a SubViewport), because the shell's copy of a
-## delivered game is built in this same process. Sharing the root's world put the client's
-## bodies in the server's physics space: Buses' server bus collided with the client's copy
-## of itself and the bowl, was thrown out of the bowl and fell for ever (y=-2120 at 30 s).
-## A deployed server and its clients never share a process.
+## The game vote's `time_up: finish_round`, through REAL round ends in four delivered games. Exits
+## non-zero on any failure.
 
 const CONFIG := "res://examples/fixtures/game_vote_rounds"
 
@@ -63,10 +22,9 @@ const ORDER := ["arena", "smash", "prophunt", "buses"]
 ## The packs the games need, prophunt's maps among them.
 const NEEDS := ["tmc/arena", "tmc/smash", "tmc/prophunt", "tmc/prophunt_maps", "tmc/buses"]
 
-## What each game's match must be playing to once the fixture's cvars are applied: the values
-## in `fixtures/game_vote_rounds/content.yml`, read back off the running match's
-## [DotMatchRules]. One check per game listed. Arena's are none of its mode's numbers (25,
-## 600 s and a warmup), so a cvar that reaches nothing fails here.
+## What each game's match must be playing to once the fixture's cvars are applied: the values in
+## `fixtures/game_vote_rounds/content.yml`, read back off the running match's [DotMatchRules]. One
+## check per game listed.
 const RULES := {
 	"arena": {"score_limit": 50, "time_limit_sec": 50.0, "warmup_sec": 0.0},
 }
@@ -125,7 +83,6 @@ func _run() -> void:
 
 	DotPaths.remove_tree(DATA)
 
-	# For the whole run: a game change is where a game's RPC node used to be renamed.
 	var rpc_watch := RpcPathWatch.new()
 	OS.add_logger(rpc_watch)
 
@@ -167,7 +124,6 @@ func _run() -> void:
 	get_tree().quit(1 if _failed > 0 else 0)
 
 
-# --- The harness ------------------------------------------------------------
 
 func _section(title: String) -> void:
 	_entered += 1
@@ -347,7 +303,6 @@ func _on_round_ended(_number: int, _winner: int, _outcome: int) -> void:
 	_round_ends.append(Time.get_ticks_msec())
 
 
-# --- Boot -------------------------------------------------------------------
 
 func _boot() -> bool:
 	_section("booting")
@@ -434,7 +389,6 @@ func _teardown() -> void:
 		await get_tree().physics_frame
 
 
-# --- One game ---------------------------------------------------------------
 
 func _test_game(game_id: String, next: String) -> void:
 	_section("%s: the time limit runs out mid-round, and %s waits for the round" % [game_id, next])

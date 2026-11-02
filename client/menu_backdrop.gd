@@ -3,20 +3,6 @@ class_name MenuBackdrop
 extends Control
 
 ## The sky behind the shell's menu.
-##
-## [b]Why a drawn backdrop and not a colour.[/b] The shell is the first thing a player sees
-## after a forty-megabyte download, and for most of them it is the only screen they will
-## judge the whole thing by — a flat grey rectangle with two text fields says "unfinished"
-## before a single frame of the game is on screen. This costs one node, no art, and about
-## thirty draw calls.
-##
-## It is the same [DotStarfield] the arena uses, on the same palette, so the menu reads as the
-## place the game happens rather than as a launcher bolted onto it. The field drifts on its
-## own here: there is no camera to move it, and a sky that is completely still looks like a
-## screenshot of a sky.
-##
-## Everything is generated at runtime — two small gradient textures and a hash. Nothing in
-## this project ships art, for the reason dot-ui gives about imposing its own.
 
 ## How fast the field drifts, in world units per second. Slow on purpose: fast enough to
 ## see if you look, slow enough that it never pulls the eye off the button.
@@ -41,11 +27,7 @@ var _radial: GradientTexture2D = null
 
 
 func _ready() -> void:
-	# ANCHORS AND OFFSETS, not anchors alone. `set_anchors_preset` adjusts the offsets to
-	# preserve the rect the control currently has — and called from `_ready`, that rect is
-	# 0x0, so the anchors say "fill the parent" while the offsets pin it to nothing and
-	# `_draw` paints a sky the size of a point. It cost an export to find, because the panel
-	# in front of it is laid out by a container and looked perfectly fine.
+	# ANCHORS AND OFFSETS, not anchors alone.
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	# The sky is scenery. Every press belongs to whatever is in front of it.
 	mouse_filter = Control.MOUSE_FILTER_IGNORE

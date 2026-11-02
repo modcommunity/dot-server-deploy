@@ -1,35 +1,11 @@
 extends SceneTree
 
-# [b]Loaded out of the MOUNT, not preloaded, because the game is not in this build.[/b]
-# game-g2gfast is a delivered pack: its scripts exist at
-# `res://dot_cloud/g2gfast/<version>/game/…`, a path no constant here can name, because
-# the version belongs to the game and this file belongs to the host. So the probe mounts
-# the pack first -- which it was going to do anyway, since mounting is half of what it
-# proves -- and loads them from where they landed.
+# [b]Loaded out of the MOUNT, not preloaded, because the game is not in this build.[/b] game-g2gfast
+# is a delivered pack: its scripts exist at `res://dot_cloud/g2gfast/<version>/game/…`, a path no
+# constant here can name, because the version belongs to the game and this file belongs to the host.
 
-## Does a client with NO maps get one from the content origin?
-##
-## `cloud_fetch_probe.gd` proved fetch-verify-mount for a pack. This proves the half that
-## makes it matter for a timer server: `G2GGame.ensure_map_content` turning a map id the
-## catalogue has never heard of into a map the catalogue can load, without the 66 MB of
-## geometry the web export used to carry.
-##
-## [b]Run it with ONE map moved aside.[/b] A source tree has every map on disk and the
-## catalogue finds them in `IMPORTED_ROOTS`, so a probe run against an intact tree passes
-## by doing nothing at all -- which is the failure mode this whole check exists to avoid.
-##
-## One rather than all of them, and the smallest one: moving `maps/imported` wholesale
-## takes ninety-eight textures out of the project, and Godot then reimports the tree on
-## the way in and again on the way out. That is six minutes per run before a line of this
-## file executes, which is long enough to read as a hang.
-##
-##     mv maps/imported/surf_kitsune /tmp/aside
-##     godot --headless --path . --script res://tools/map_content_probe.gd -- surf_kitsune
-##     mv /tmp/aside maps/imported/surf_kitsune
-##
-## Every step prints before it runs, not after. An await that never returns is the
-## expected failure here -- it is what a content client with nowhere to fetch from does --
-## and a probe that only prints results says nothing at all about where it stopped.
+## Does a client with NO maps get one from the content origin? `cloud_fetch_probe.gd` proved fetch-
+## verify-mount for a pack.
 
 const CONTENT_CONFIG := "res://client/content.json"
 
@@ -59,10 +35,9 @@ func _init() -> void:
 		ProjectSettings.globalize_path("res://dist")
 	])
 	cloud.manifest_url_template = "{base}/{id}/manifest.json"
-	# `register_service` is the default and is what `G2GGame.ensure_map_content` finds it
-	# by -- `DotCloudClient.SERVICE`, which is what every other duck-typed consumer in the
-	# family looks under. There is no `service_name` to set; a scope is the only thing
-	# that changes the registered name.
+	# `register_service` is the default and is what `G2GGame.ensure_map_content` finds it by --
+	# `DotCloudClient.SERVICE`, which is what every other duck-typed consumer in the family looks
+	# under.
 	root.add_child(cloud)
 
 	print("-- mounting g2gfast")
@@ -125,11 +100,9 @@ func _init() -> void:
 		quit(2)
 		return
 
-	# [b]Which client the game will actually find.[/b] `DotRegistry.register` replaces,
-	# and `DotCloudClient.register_service` defaults to on -- so anything else in the tree
-	# that builds one takes the name, and the configured client this probe made is still
-	# in the tree, still started, and reachable by nobody. The symptom is a signature
-	# failure, because the usurper has no `config_file` and therefore no trusted key.
+	# [b]Which client the game will actually find.[/b] `DotRegistry.register` replaces, and
+	# `DotCloudClient.register_service` defaults to on -- so anything else in the tree that builds one
+	# takes the name, and the configured client this probe made is still in the tree.
 	var found: Object = DotRegistry.get_service(&"dot_cloud_client")
 	print("-- registered content client: %s (probe built %d)" % [
 		"none" if found == null else str(found.get_instance_id()), cloud.get_instance_id()
@@ -186,17 +159,9 @@ func _init() -> void:
 	else:
 		print("  ok   the world changed to %s" % id)
 
-	# --- The set, rather than the one -----------------------------------------
-	#
-	# [b]Everything downstream of the catalogue reads it as a SET, and the check above
-	# proves one id at a time.[/b] A delivered server that can fetch any map when asked
-	# by name still lists three built-in scenes under `maps`, rotates between those three
-	# when the time limit runs out, and offers those three to a vote -- which is a surf
-	# server that never plays a surf map, working perfectly, saying nothing.
-	#
-	# `sv_content_maps` is the answer and this is what proves it arrived: the ids come
-	# from the published tree rather than from a list here, so a probe cannot pass by
-	# agreeing with itself about which maps exist.
+	# [b]Everything downstream of the catalogue reads it as a SET, and the check above proves one id at
+	# a time.[/b] A delivered server that can fetch any map when asked by name still lists three built-
+	# in scenes under `maps`, rotates between those three when the time limit runs out.
 	var published := _published_ids()
 	published.erase(id)
 
@@ -219,13 +184,9 @@ func _init() -> void:
 			print("  [FAIL] the sweep finished and %s are still missing" % ", ".join(missing))
 			failures += 1
 
-	# --- The command an operator actually types -------------------------------
-	#
-	# [b]The refusal that made all of the above unreachable.[/b] `DotMapCommands` checked
-	# the catalogue and answered "No map called 'surf_kitsune'" before `change_fn` -- the
-	# one piece of code written to go and fetch it -- was ever called. Nothing above this
-	# line catches that: `ensure_map_content` and `change_map` both work, and the operator
-	# is told the map does not exist.
+	# [b]The refusal that made all of the above unreachable.[/b] `DotMapCommands` checked the catalogue
+	# and answered "No map called 'surf_kitsune'" before `change_fn` -- the one piece of code written
+	# to go and fetch it -- was ever called.
 	print("-- map <id> for something the catalogue has never held")
 
 	var fresh: Node = G2GGame.new()
@@ -260,11 +221,9 @@ func _init() -> void:
 	quit(0 if failures == 0 else 1)
 
 
-## Every content id under `dist/` that looks like a published map.
-##
-## Read from the disk rather than listed, for [G2GMapCatalogue]'s own reason: a list in a
-## probe goes stale the first time somebody publishes a ninth map, and it goes stale by
-## passing.
+## Every content id under `dist/` that looks like a published map. Read from the disk rather than
+## listed, for [G2GMapCatalogue]'s own reason: a list in a probe goes stale the first time somebody
+## publishes a ninth map, and it goes stale by passing.
 func _published_ids() -> PackedStringArray:
 	var out := PackedStringArray()
 	var root_dir := ProjectSettings.globalize_path("res://dist")

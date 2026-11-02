@@ -1,33 +1,6 @@
 class_name TmcEnroll
 extends Node
 ## Gets this server its integration credential from the site, with nobody pasting a token.
-##
-## [b]Why it exists.[/b] Everything this server is to the site -- listed, reporting stats
-## and records, resolving a signed-in player (`auth.yml`'s `introspect`) and reading their
-## avatar -- runs on the integration token in `data/listing.json`. It used to be made by
-## hand in the site's dashboard and copied onto the box, and a box without one admitted
-## every member as a guest while looking perfectly healthy.
-##
-## [b]How it proves who it is.[/b] The site already knows this server's address: it found
-## it by scanning, and claiming it on the site proved a person controls it. So this asks
-## the site for an enrollment, gets back a public CHALLENGE and a SECRET, publishes the
-## challenge as the A2S rule `tmc_enroll`, and completes with the secret. The site queries
-## the address IT has stored for the server -- never one this request names -- and issues
-## the credential only if the challenge is there. Answering on that address is being this
-## server; holding the secret is being the process that asked. The challenge is public the
-## moment it is published (anyone can read a server's rules), which is why it completes
-## nothing on its own.
-##
-## [b]When it runs.[/b] At boot, before [TmcReport] reads `listing.json`, and only when
-## that file has no token: an operator's own token is never replaced. It waits up to
-## [constant BOOT_WAIT_SEC] so the first game loads WITH the credential (the game's identity
-## layer looks for it as its module loads); after that the boot goes on and this keeps
-## asking until the enrollment expires, then [signal enrolled] lets the host pick the
-## token up live. `TMC_ENROLL=off` turns it off.
-##
-## [b]What it needs from the operator.[/b] The server added and claimed on the site, and
-## A2S answering on the address the site has for it -- both true of any server already
-## listed there.
 
 const CHANNEL := "tmc.enroll"
 

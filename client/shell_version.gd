@@ -2,18 +2,6 @@ class_name TmcShellVersion
 extends RefCounted
 
 ## Which client a player is running, as one small line: `shell 20261016-0230 · c09533b`.
-##
-## [b]Two numbers, because they are known at different times.[/b] The commit is stamped by
-## `./server export-web` and `export-native` into `res://client/build_stamp.gd` (generated,
-## git-ignored) just before exporting. The BUILD ID cannot be: it is chosen when the export
-## is uploaded, after the files exist, so no file in the export can name it. On the web the
-## page that loaded the engine can, because the publisher serves every build from a folder
-## named for it (`/game/<app>/<id>/`, `/godot/<id>/`), so it is read back from the page's
-## own path. A native build has no such folder and shows the commit only.
-##
-## [b]Strict patterns, and nothing otherwise.[/b] Both values come from outside this script
-## (a URL anybody can link to, a file a script wrote) and end up on screen over a login
-## menu. Anything that is not exactly the expected shape is dropped, not trimmed.
 
 const STAMP := "res://client/build_stamp.gd"
 

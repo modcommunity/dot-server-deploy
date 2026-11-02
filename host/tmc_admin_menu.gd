@@ -1,61 +1,8 @@
 class_name TmcAdminMenu
 extends Node
 
-## `/admin`: a menu of everything this admin may do here, picked with a number key or a
-## click, and built from `cfg/admin_menu.yml`.
-##
-## [codeblock]
-## /admin
-##   1. Player commands      -> 1. Kick  2. Ban  3. Warn  ...
-##   2. Server commands         -> 1. Bob (#12)  2. Alice (#14)  ...
-##                                -> 1. Spamming  2. Abusive language  ...  8. Custom…
-##                                   -> runs `kick #12 "Spamming"` as the admin
-## [/codeblock]
-##
-## [b]The menu is a way of TYPING a command, and nothing else.[/b] Every leaf ends as one
-## console line, run through [method DotConsole.execute] with the admin's own chat context
-## — so the permission check, the immunity check, the chat gate, the audit line and the
-## reply are the console's, exactly as if the admin had typed `/kick #12 Spamming`. A menu
-## that performed its own kicks would be a second implementation of every moderation
-## command, drifting from the first the day either changed; and a menu that only checked
-## permissions when DRAWING would be a menu a modified client could walk past. Here the
-## drawing check is a courtesy and the console's is the one that counts.
-##
-## [b]So "everything is listed if they have the permission" is computed, not configured.[/b]
-## An item is shown when the command its line begins with exists in the console right now,
-## may be run from chat, and the admin holds that command's flag (and the item's own
-## `flag`, when the file sets one, as a further restriction — never a grant). That is why
-## the default menu names `slay` and `map` on every server: a game that registers them
-## shows them, one that does not hides them, and the first `changelevel` to a game without
-## live tools takes them off the menu with nothing here having to know.
-##
-## [b]Server-driven, one page at a time.[/b] The client is sent a page — a title and rows
-## — as a [DotNotice] under [constant TOPIC], and each choice comes back as an envelope kind
-## of its own, [constant KIND], carrying the path. A page is
-## built when it is asked for, so a player list is the players who are here NOW and not
-## the ones who were when the menu opened; and nothing about which commands exist, who
-## outranks whom or what a reason list says ever has to reach a client that is not
-## about to draw it. Pages ride the notice and choices ride a KIND rather than an RPC of
-## their own, because every new RPC is a signon revision every shipped client has to be
-## rebuilt for, and a kind is not: a peer that does not know it is simply not sent it.
-##
-## [b]Not chat, and that was found by running it.[/b] The choices first went back as
-## `/admin_menu <path>` chat lines, which is how a ballot votes — and a ballot is one line.
-## A menu walk is six (open, category, item, player, reason, confirm) inside a few
-## seconds, and dot-server's chat limiter allows a burst of five and then one every three
-## seconds, so the sixth was dropped and the admin told they were "sending messages too
-## quickly" by a menu. The kind has a limiter of its own sized for pressing keys
-## ([constant NAV_PER_SEC]). The chat command is still registered: it is the fallback for a
-## shell talking to a server that does not advertise the kind, and it is typable.
-##
-## [b]A path, not a session.[/b] `i:ban #12 3 2` is "ban, player #12, the third duration,
-## the second reason" — `y:ban #12 3 2` is the same, confirmed — and the server keeps no per-admin menu state: each path is
-## re-validated from scratch, so a player who left between two key presses is a reply
-## ("#12 is not here any more") and a fresh list rather than a ban on whoever is #12 next.
-## List choices travel as indices into the SERVER's list, never as the text, so the only
-## free text a client can put in a command line is a custom entry — and that is stripped
-## of quotes, semicolons and control characters before it is quoted into one argument.
-## A semicolon would otherwise be a second statement with the admin's permissions.
+## `/admin`: a menu of everything this admin may do here, picked with a number key or a click, and
+## built from `cfg/admin_menu.yml`.
 
 const CHANNEL := "tmc.admin_menu"
 
@@ -89,22 +36,12 @@ const MAX_LABEL := 64
 ## Longest custom text an admin may type into a command.
 const MAX_TEXT := 120
 
-## Bytes a page's notice data may encode to before rows are cut, measured the way
-## [DotNotice] measures it — [method @GlobalScope.var_to_bytes] of the whole `data` — and a
-## margin under its [constant DotNotice.MAX_DATA_BYTES], past which it drops the tree WHOLE:
-## a menu that silently never opens.
-##
-## [b]Bytes, not characters, and the review that found it measured both.[/b] The first
-## version cut at 6000 characters of JSON: sixty players with ASCII names came to 7.6 KB
-## encoded, Cyrillic names to 10.7 KB and CJK to 13.9 KB, all past the notice limit while
-## under the character cut. Players choose their own names.
+## Bytes a page's notice data may encode to before rows are cut, measured the way [DotNotice]
+## measures it — [method @GlobalScope.var_to_bytes] of the whole `data` — and a margin under its
+## [constant DotNotice.MAX_DATA_BYTES], past which it drops the tree WHOLE.
 const MAX_PAGE_BYTES := 7900
 
 ## Step kinds this file fills itself. Any other kind is the name of a list.
-##
-## `player` is somebody the admin outranks; `anyone` is any player at all, for a step that
-## names a place rather than a victim (`goto`, `send`'s destination), which is
-## dot-moderation's own rule for those; `item` is what the loaded game's `give` can hand out.
 const BUILTIN_KINDS := ["player", "anyone", "game", "map", "item", "text"]
 
 ## `DotPunishment.Kind.WARN`, as a number: this host has dot-moderation in its build, but
@@ -114,11 +51,6 @@ const PUNISHMENT_WARN := 4
 const MODERATION_SERVICE := &"dot_moderation"
 
 ## The lists a step may name. A layer's `lists:` merges over these by key.
-##
-## A list either has `options:` (chosen by position, so the server's own text reaches the
-## command) or a `source:`, the name of a list a game registered in code with
-## [method add_list] — chosen by value, because what a game offers can change between two
-## key presses, and the value is checked against what it offers NOW.
 const DEFAULT_LISTS := {
 	"reason": {
 		"title": "Reason",
@@ -195,11 +127,9 @@ const DEFAULT_LISTS := {
 	},
 }
 
-## Every item a server gets without writing one. An item whose command this server does
-## not have is simply not drawn — see the class notes — and one with an `ability` is drawn
-## only when the loaded game says it can do that (see [method supports]). So the fun ones
-## below appear in the 3D games, which implement them, and not in a 2D game, which has no
-## body to slap.
+## Every item a server gets without writing one. An item whose command this server does not have is
+## simply not drawn — see the class notes — and one with an `ability` is drawn only when the loaded
+## game says it can do that (see [method supports]).
 const DEFAULT_ITEMS := {
 	"kick": {"label": "Kick", "command": "kick {player} {reason}", "steps": ["player", "reason"]},
 	"ban": {"label": "Ban", "command": "ban {player} {duration} {reason}", "steps": ["player", "duration", "reason"], "confirm": true},
@@ -278,7 +208,6 @@ const GROUPS := [["@all", "Everyone"], ["@others", "Everyone else"]]
 ## Where an item the file adds but places in no category is put, rather than nowhere.
 const OTHER_CATEGORY := "other"
 
-# --- Settings, from `admin_menu.yml` ---------------------------------------------
 
 var enabled := true
 
@@ -321,7 +250,6 @@ var categories: Dictionary = {}
 ## What was wrong with the file. Reported at install; never fatal.
 var problems := PackedStringArray()
 
-# --- Seams -----------------------------------------------------------------------
 
 var server: DotServer = null
 var console: DotConsole = null
@@ -449,27 +377,8 @@ func _exit_tree() -> void:
 	_registered.clear()
 
 
-# --- Configuration ---------------------------------------------------------------
 
 ## Reads `admin_menu.yml`'s tree over the defaults and any game layers. Returns self.
-##
-## [b]Four layers, the owner's last.[/b] The built-in defaults; the loaded game's
-## `metadata: admin_menu:` from its `game.yml`; anything a game registered in code
-## ([method set_layer]); and the owner's file. Each merges over the one before:
-##
-## - [b]items and lists merge by key[/b], so `items: {kick: {label: Boot}}` renames kick and
-##   keeps its command, and `items: {slap: {enabled: false}}` takes a game's or the
-##   built-in slap off;
-## - [b]an item may name its own `category:`[/b], which is created if it does not exist;
-## - [b]a game's `categories:` merge[/b]: their items are appended to a category of the
-##   same id, or a new one is added after the built-in ones;
-## - [b]the owner's `categories:` replace the built-in layout[/b], because that is the owner
-##   saying what is on the menu — and a game's items still follow it unless
-##   `admin_menu_game_items: false`, because a game that ships a "Restart the round" should
-##   not lose it on every server whose owner reordered the moderation commands.
-##
-## An item somebody added and placed nowhere goes under the game's category (a game's) or
-## "Other" (the owner's) rather than being defined and unreachable.
 func configure(tree: Dictionary) -> TmcAdminMenu:
 	_owner_tree = tree
 	_rebuild()
@@ -663,24 +572,8 @@ func _placed(id: String) -> bool:
 	return false
 
 
-# --- What a game adds ------------------------------------------------------------
 
-## Adds or replaces a layer of items, lists and categories, in the same shape as
-## `admin_menu.yml`. For a game, from its module:
-##
-## [codeblock]
-## var menu := DotRegistry.get_service(&"admin_menu")
-## if menu != null and menu.has_method("set_layer"):
-##     menu.set_layer("arena", {
-##         "title": "Arena",
-##         "items": {"restart": {"label": "Restart the match", "command": "arena_restart"}},
-##     }, self)
-## [/codeblock]
-##
-## With an [param owner], the layer goes when the owner leaves the tree or is freed — a
-## module unloaded by a game change takes its items with it and nothing has to remember to
-## call [method clear_layer]. `title` names the category its unplaced items go under.
-## The owner's own `admin_menu.yml` still wins over anything here.
+## Adds or replaces a layer of items, lists and categories, in the same shape as `admin_menu.yml`.
 func set_layer(key: String, tree: Dictionary, owner: Object = null) -> void:
 	var layer: Dictionary = _layers.get(key, {"lists": {}})
 	layer["tree"] = tree.duplicate(true)
@@ -705,13 +598,9 @@ func clear_layer(key: String) -> void:
 		_rebuild()
 
 
-## A list whose options a game computes when the page is drawn: what `give` can hand out,
-## the rounds a mode has, the teams there are. [param fn] returns an Array of
-## `[value, label]` pairs or of plain strings. A step names it by giving its list a
-## `source: <name>`, or by naming [param name] directly as the step's kind.
-##
-## Values are single words (no space, quote or semicolon), because the chosen value travels
-## back in the path; anything else is dropped from the list.
+## A list whose options a game computes when the page is drawn: what `give` can hand out, the rounds
+## a mode has, the teams there are. [param fn] returns an Array of `[value, label]` pairs or of
+## plain strings.
 func add_list(key: String, name: String, fn: Callable, list_title: String = "", owner: Object = null) -> void:
 	if not _layers.has(key):
 		set_layer(key, {}, owner)
@@ -870,7 +759,6 @@ func _normalise_item(id: String, raw: Dictionary) -> Dictionary:
 	return item
 
 
-# --- Commands --------------------------------------------------------------------
 
 func register_commands() -> void:
 	for name in commands:
@@ -925,12 +813,9 @@ func _cmd_nav(ctx: DotCmdContext) -> void:
 	handle(ctx, ctx.args)
 
 
-## A choice off the wire. See [constant KIND].
-##
-## [b]Answered as CHAT.[/b] It is the player's in-game input channel, the same one the
-## typed `/admin_menu` arrives on, so a command that refuses chat is refused here too and
-## the menu does not become a way round a game's own rule. Replies go to the admin as chat
-## lines, which is where a typed command's replies go.
+## A choice off the wire. See [constant KIND]. [b]Answered as CHAT.[/b] It is the player's in-game
+## input channel, the same one the typed `/admin_menu` arrives on, so a command that refuses chat is
+## refused here too and the menu does not become a way round a game's own rule.
 func _on_kind(peer_id: int, payload: Dictionary) -> void:
 	if server == null:
 		return
@@ -996,7 +881,6 @@ func _cmd_warn(ctx: DotCmdContext) -> void:
 		server.chat.announce_action("%s was warned: %s" % [session.display_name, reason])
 
 
-# --- Visibility ------------------------------------------------------------------
 
 ## Whether [param ctx] may open the menu at all: the open flag, and one usable item.
 func may_open(ctx: DotCmdContext) -> bool:
@@ -1062,15 +946,6 @@ func may_use(ctx: DotCmdContext, item: Dictionary) -> bool:
 
 
 ## Whether the loaded game can do what [param item]'s `ability` names.
-##
-## [b]The command existing is not enough for these, and that is dot-moderation's own
-## design.[/b] Its live-tool commands are registered whether or not a game supports them,
-## so `!slap` in a 2D game answers with the game's reason rather than "unknown command" —
-## right for somebody typing, wrong for a menu, where a Slap row that can only fail is a
-## row that should not be there. So an item with an ability asks the command's own handler
-## object for its `tools` and asks those `supports(ability)`; `teleport` asks whether the
-## game gave them a way to move a player. Duck-typed throughout: an item whose command is
-## somebody else's, with no `tools` to ask, is shown, and the command answers for itself.
 func supports(item: Dictionary) -> bool:
 	var ability := String(item.get("ability", ""))
 	if ability == "":
@@ -1139,7 +1014,6 @@ func command_of(item: Dictionary) -> DotConCommand:
 	return console.find_command(words[0].to_lower())
 
 
-# --- Pages -----------------------------------------------------------------------
 
 ## The first page: the categories this admin can use anything in. One is opened directly.
 func root_page(ctx: DotCmdContext) -> Dictionary:
@@ -1194,10 +1068,9 @@ func handle(ctx: DotCmdContext, tokens: PackedStringArray) -> void:
 	var item_id := _id(head.substr(2))
 	var item: Dictionary = items.get(item_id, {})
 
-	# On the menu for THIS admin, not only usable: a path can name an item the owner left
-	# out of every category, or put under a category whose flag this admin lacks, and the
-	# drawing check is not the one that counts. For a command item the console's own flag
-	# would still refuse; for an info item this is the only gate.
+	# On the menu for THIS admin, not only usable: a path can name an item the owner left out of every
+	# category, or put under a category whose flag this admin lacks, and the drawing check is not the
+	# one that counts.
 	if not on_menu(ctx, item_id) or not may_use(ctx, item):
 		ctx.reply("That is not on your menu any more.")
 		_send(ctx, root_page(ctx))
@@ -1406,7 +1279,6 @@ func info_page(ctx: DotCmdContext, session: DotClientSession, path: String = "")
 	return _page(_label(session.display_name), "Player info", path, rows)
 
 
-# --- Values ----------------------------------------------------------------------
 
 ## A step's value, checked against what this server has now. `[substituted, label]`.
 func _resolve(ctx: DotCmdContext, item: Dictionary, step: Dictionary, token: String) -> DotResult:
@@ -1473,10 +1345,9 @@ func _resolve(ctx: DotCmdContext, item: Dictionary, step: Dictionary, token: Str
 	return DotResult.success([String(option["value"]), String(option["label"])])
 
 
-## [param template] with each `{name}` replaced by its value as ONE console argument.
-##
-## Quoted when it has a space, and never containing a quote or a semicolon: every value
-## is either the server's own (a userid, a list entry) or went through [method _text].
+## [param template] with each `{name}` replaced by its value as ONE console argument. Quoted when it
+## has a space, and never containing a quote or a semicolon: every value is either the server's own
+## (a userid, a list entry) or went through [method _text].
 static func fill(template: String, values: Dictionary) -> String:
 	var out := template
 	for name in values.keys():
@@ -1556,7 +1427,6 @@ static func _pairs(fn: Callable) -> Array:
 	return out
 
 
-# --- Sending ---------------------------------------------------------------------
 
 func _page(p_title: String, subtitle: String, path: String, rows: Array) -> Dictionary:
 	var page := {"title": _label(p_title), "subtitle": _label(subtitle), "path": path, "rows": rows}
@@ -1589,7 +1459,6 @@ func _send(ctx: DotCmdContext, page: Dictionary) -> void:
 	send_fn.call(ctx.session, page)
 
 
-# --- Cleaning --------------------------------------------------------------------
 
 ## A label as drawn: one line, bounded.
 static func _label(text: String) -> String:

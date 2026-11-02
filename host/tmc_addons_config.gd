@@ -2,35 +2,6 @@ class_name TmcAddonsConfig
 extends RefCounted
 
 ## The extra packs a server OWNER adds to a game, from `cfg/content/addons.yml`.
-##
-## [codeblock]
-## defaults:                            # every game on this server
-##   add: [owner/pack, owner/pack@1.2.0]
-## games:
-##   game-g2gfast:                      # a game id, or its name half while unambiguous
-##     add: [owner/other]
-##     remove: [owner/pack]             # drop a default for this game only
-## [/codeblock]
-##
-## [b]A pack is delivered as one more dependency of the game, for this server.[/b] The
-## server mounts it before the game loads and every client downloads and mounts it before
-## the game, in the one content sync it already gets (`content_extra`). Nothing about the
-## game's identity moves: `overrides.yml` still refuses `dependencies:`, because a
-## dependency list there would be the owner rewriting which game this is. Here the owner
-## ADDS to what the author listed, after it, and a pack the game already lists is not
-## listed twice.
-##
-## [b]Pinned at install, like every other pack list.[/b] `TmcContent` refuses an unpinned
-## dependency, because a version decided per join would hand two players two packs under
-## one game. So `./server install-games` (every start) pins each unpinned entry to the
-## origin's newest version into `data/content-addons.json`, prefetches it, and drops a pack
-## this build's addons cannot run (`requires.json`) from that file with a message. This
-## class reads the file; an entry with no version and no cached answer is left out with a
-## warning rather than blocking the boot, as an unresolved map is.
-##
-## [b]A pack may start something.[/b] See [TmcAddonEntry]: a pack whose manifest metadata
-## names an `entry` scene has it instantiated on the server, the client or both after the
-## game loads. A pack without one is just mounted.
 
 const CHANNEL := "tmc.content"
 
@@ -157,10 +128,8 @@ func read(tree: Dictionary) -> DotResult:
 	return DotResult.success(null)
 
 
-## The packs [param descriptor] gets, `owner/pack@version` where a version is known and
-## `owner/pack` where it is not yet (install-games pins those). Defaults first, then the
-## game's own; a pack the game removes is dropped by id whichever list named it; the
-## game's own spelling of a pack wins over the default's.
+## The packs [param descriptor] gets, `owner/pack@version` where a version is known and `owner/pack`
+## where it is not yet (install-games pins those).
 func entries_for(descriptor: DotGameDescriptor) -> PackedStringArray:
 	var own: Dictionary = TmcGameConfig.section_in(games, descriptor)
 	var removed := PackedStringArray()

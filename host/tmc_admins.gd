@@ -1,23 +1,9 @@
 class_name TmcAdmins
 extends RefCounted
 
-## `groups.yml` and `permissions.yml`, as a [DotAdminManager] source.
-##
-## dot-server's permission model is **flags, not roles** — deliberately, because operators
-## do not agree on what a "moderator" is, and because a game adds `slay` or `noclip`
-## without coordinating with anybody. What an operator writes, just as deliberately, is
-## roles: a group with a list of things it may do, and a list of people in it.
-##
-## This is the translation, and it is the only place the two vocabularies meet.
-##
-## [b]It is a source, not a replacement.[/b] `DotAdminManager` merges every source rather
-## than taking the first match, so a player named here *and* in a site group gets the union
-## of both flag sets and the higher immunity. A source that returned "no, and stop looking"
-## would silently demote somebody an operator had promoted somewhere else.
-##
-## Registered by duck type: `lookup()` and `source_name()` are the whole contract, and
-## `DotAdminManager.add_source` validates it at registration — so a mistyped source is a
-## startup error rather than an absence of permissions discovered during an incident.
+## `groups.yml` and `permissions.yml`, as a [DotAdminManager] source. dot-server's permission model
+## is **flags, not roles** — deliberately, because operators do not agree on what a "moderator" is,
+## and because a game adds `slay` or `noclip` without coordinating with anybody.
 
 const CHANNEL := "tmc.admins"
 
@@ -27,25 +13,18 @@ var _group_flags: Dictionary = {}
 ## Group name -> immunity.
 var _group_immunity: Dictionary = {}
 
-## Permission names written in the config that dot-server does not recognise.
-##
-## Reported once at boot, never enforced. See the warning in [method from] for why this is
-## a warning rather than a refusal, and for the three names that made it worth having.
+## Permission names written in the config that dot-server does not recognise. Reported once at boot,
+## never enforced. See the warning in [method from] for why this is a warning rather than a refusal,
+## and for the three names that made it worth having.
 var unknown_flags: PackedStringArray = PackedStringArray()
 
-## Lower-cased identifier -> {flags, immunity}.
-##
-## Lower-cased because an operator typing a name into a config file and a player typing one
-## into a client will not agree about capitalisation, and a permission that depended on
-## that would be a permission that works on Tuesday.
+## Lower-cased identifier -> {flags, immunity}. Lower-cased because an operator typing a name into a
+## config file and a player typing one into a client will not agree about capitalisation, and a
+## permission that depended on that would be a permission that works on Tuesday.
 var _users: Dictionary = {}
 
 
 ## Builds a source from the two parsed files.
-##
-## An unknown group named by a user is a **warning, not a refusal**: it is exactly what a
-## typo looks like and exactly what a group removed from `groups.yml` last week looks like,
-## and refusing to boot over it leaves a server unmoderated rather than under-moderated.
 static func from(groups: Dictionary, users: Dictionary) -> DotResult:
 	var source := TmcAdmins.new()
 
@@ -126,16 +105,9 @@ static func from(groups: Dictionary, users: Dictionary) -> DotResult:
 	})
 
 	if not source.unknown_flags.is_empty():
-		# A warning rather than a refusal, for the reason above: a game defines its own
-		# flags -- `slay`, `noclip` -- and this file cannot know them, so refusing to boot
-		# over one would leave a server unmoderated rather than under-moderated.
-		#
-		# But SILENCE was worse than either. `cfg/groups.yml` shipped `warn`, `announce`
-		# and `change`, none of which is a flag, so the `admin` group granted kick, ban and
-		# mute and nothing else -- no map change, no admin chat, not even `generic`. Every
-		# one of those reads as a correctly configured group that mysteriously does not
-		# work, which is this family's own "a setting that read differently and behaved
-		# identically" wearing an operator's clothes.
+		# A warning rather than a refusal, for the reason above: a game defines its own flags -- `slay`,
+		# `noclip` -- and this file cannot know them, so refusing to boot over one would leave a server
+		# unmoderated rather than under-moderated. But SILENCE was worse than either.
 		DotLog.warn(
 			CHANNEL,
 			"%d permission name(s) are not flags dot-server knows" % source.unknown_flags.size(),
@@ -148,22 +120,9 @@ static func from(groups: Dictionary, users: Dictionary) -> DotResult:
 	return DotResult.success(source)
 
 
-## `DotAdminManager`'s duck-typed contract: `lookup(identity) -> DotResult`.
-##
-## [param identity] is the object dot-server holds for the player — `DotAuthIdentity` on
-## an authenticated server, `DotGuestIdentity` without dot-auth — and both carry `uid`,
-## `username` and `display_name`. All three are tried, because an operator writes into
-## `permissions.yml` whichever of them they know, and asking them to know which one the
-## server will match on is asking them to get it wrong.
-##
-## [b]A failure means "nothing for this player", not an error.[/b] That is
-## `DotAdminManager`'s reading of it and it is the normal case for almost everybody.
-##
-## Note that `DotAdminManager.resolve` returns before consulting any source when a session
-## is not authenticated — a guest uid is a random per-device string, so granting anything
-## to one grants it to anyone. On a server with no dot-auth the local console is therefore
-## the only administrator, which is the correct answer and worth knowing before wondering
-## why `permissions.yml` appears to do nothing.
+## `DotAdminManager`'s duck-typed contract: `lookup(identity) -> DotResult`. [param identity] is the
+## object dot-server holds for the player — `DotAuthIdentity` on an authenticated server,
+## `DotGuestIdentity` without dot-auth — and both carry `uid`, `username` and `display_name`.
 func lookup(identity: Object) -> DotResult:
 	if identity == null:
 		return DotResult.fail(DotError.CODE_STATE, "No identity.")
@@ -233,10 +192,9 @@ func describe_lines() -> PackedStringArray:
 	return out
 
 
-## Records any flag in [param flags] that is not one dot-server defines.
-##
-## Deduplicated, because one misspelling in a group is repeated by every user in it and a
-## warning naming `change` four times is a warning nobody reads to the end of.
+## Records any flag in [param flags] that is not one dot-server defines. Deduplicated, because one
+## misspelling in a group is repeated by every user in it and a warning naming `change` four times
+## is a warning nobody reads to the end of.
 func _note_unknown(_who: String, flags: PackedStringArray) -> void:
 	for flag in DotAdminFlags.unknown(flags):
 		if not unknown_flags.has(flag):

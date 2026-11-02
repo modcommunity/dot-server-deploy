@@ -2,33 +2,6 @@ class_name TmcSolo
 extends RefCounted
 
 ## Solo play: a delivered game run entirely in this process, with no server and no link.
-##
-## [b]Why the shell can do this at all.[/b] Every game's client scene already has an
-## offline mode: it looks for a client link in [DotRegistry], finds none, and simulates its
-## own rules in-process (bots, map changes, its console, everything a `godot --path .` run
-## of the repository has). The only thing a delivered copy lacks is somebody to fetch and
-## mount it, and a join is what normally does that. So solo is a join with the server taken
-## out: fetch, verify and mount the pack exactly as [DotClientLink] does for a server (by id
-## and version, signed, through the same [DotCloudClient]), then instantiate the game's
-## `client_scene` out of the mount and register no link.
-##
-## [b]What names the game.[/b] `--solo <owner>/<repo>` on the command line, or `?solo=` in
-## the page's query string (the site's direct Play, through the loader and `embed.html`).
-## The version is `--solo-version` / `?solo_version=`, and empty means the newest published
-## one, read from `latest.json` beside the versions -- the pointer a publish writes, which
-## the server's installer reads the same way.
-##
-## [b]Nothing here is trusted because the page said it.[/b] The id picks which signed pack
-## to ask for; the manifest still has to verify against a key built into this export, and
-## its own id and version have to match what was asked for, or [method DotCloudClient.ensure]
-## refuses it. A crafted link can start a different published game and nothing else.
-##
-## [b]The map packs.[/b] A server names its games' map packs in its own configuration
-## (`cfg/content.yml`), which a tab with no server does not have. `client/solo.json` is the
-## shell's copy of the stock list (`cfg.example/server/content/overrides.yml`), and `tools/check.sh` fails
-## when the two drift. Each pack in it is fetched and mounted before the game starts, and
-## its roots are published in [DotRegistry] under [constant MAPS_SERVICE] for a game whose
-## offline catalogue reads delivered maps.
 
 const CHANNEL := "tmc.solo"
 
@@ -70,12 +43,8 @@ static func valid_version(version: String) -> bool:
 	return re.search(version) != null
 
 
-## The solo request, `{"id", "version"}`, or an empty id when none was made.
-##
-## The command line first (a desktop launch, a suite), then the page's query string. The
-## page goes through `embed.html`, which forwards `?solo=` as `--solo`, so the query string
-## here is the belt-and-braces for a host that serves the export without that page -- the
-## same pair `--connect` and `?server=` are.
+## The solo request, `{"id", "version"}`, or an empty id when none was made. The command line first
+## (a desktop launch, a suite), then the page's query string.
 static func requested() -> Dictionary:
 	var args := OS.get_cmdline_user_args()
 	var id := _arg(args, "--solo")
@@ -109,12 +78,8 @@ static func _arg(args: PackedStringArray, name: String) -> String:
 	return ""
 
 
-## Reads one `latest.json` body: `{version, moved_to}`. Pure, so the selftest drives it.
-##
-## [param hop] is how many `moved_to` links were already followed. A body that moves on
-## when [code]hop >= 1[/code] is a chain or a loop (`a -> b -> a`) and is refused with
-## [constant DotError.CODE_STATE] rather than followed: nothing writes a chain, and a
-## loop would never end. `moved_to` pointing at the id itself is refused the same way.
+## Reads one `latest.json` body: `{version, moved_to}`. Pure, so the selftest drives it. [param hop]
+## is how many `moved_to` links were already followed.
 static func follow_pointer(content_id: String, body: Variant, hop: int) -> DotResult:
 	if not body is Dictionary:
 		return DotResult.fail(DotError.CODE_IO, "%s is not an object" % LATEST_FILE)
@@ -146,10 +111,8 @@ static func follow_pointer(content_id: String, body: Variant, hop: int) -> DotRe
 	return DotResult.success({"version": version, "moved_to": ""})
 
 
-## The newest published version of [param id], from `latest.json` under each base in turn:
-## `{id, version}`. [b]The id may differ from the one asked for[/b]: a renamed repository's
-## old `latest.json` says `moved_to`, followed one hop, and everything after resolution
-## must use the returned id.
+## The newest published version of [param id], from `latest.json` under each base in turn: `{id,
+## version}`.
 static func resolve_latest(host: Node, id: String, bases: PackedStringArray) -> DotResult:
 	var first := await _fetch_pointer(host, id, bases, 0)
 
@@ -208,13 +171,9 @@ static func _fetch_pointer(host: Node, id: String, bases: PackedStringArray, hop
 	)
 
 
-## The fields of a pack's `game.yml` that solo needs, read out of the mount.
-##
-## [b]A reader for the subset, not a YAML parser.[/b] `host/` (and [TmcYaml]) are not in the
-## client build, and the descriptor fields read here are flat: scalars and lists of
-## scalars at the top level. Nested blocks (`cvars:`, `metadata:`) are skipped whole.
-## `examples/solo_check.gd` reads every game's `game.yml` through both this and [TmcYaml]
-## and fails when they disagree about any field here.
+## The fields of a pack's `game.yml` that solo needs, read out of the mount. [b]A reader for the
+## subset, not a YAML parser.[/b] `host/` (and [TmcYaml]) are not in the client build, and the
+## descriptor fields read here are flat: scalars and lists of scalars at the top level.
 static func read_descriptor(mount: String) -> DotResult:
 	var path := mount.path_join("game.yml")
 

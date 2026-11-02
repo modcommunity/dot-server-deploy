@@ -1,38 +1,7 @@
 extends SceneTree
 
-## Can a pack built by `--export-pack` deliver a SCENE that runs?
-##
-## `pack_probe.gd` beside this answered the class_name question with a hand-built pack of
-## raw `.gd` files. A real game mode is not that: it is a `.tscn` whose nodes carry script
-## references and exported property values, inside a pack the exporter produced. Three
-## things could differ and none of them were measured.
-##
-##     godot --headless --path . --script res://tools/pack_scene_probe.gd -- <pack.pck>
-##
-## MEASURED 2026-09-12 against a pack built by `--export-pack` from a project shaped
-## like a creator's -- a scene, a script on its node, an exported property, and a helper
-## the script preloads by path:
-##
-##     mounted. project name before=TMC server after=TMC server
-##     scene loaded
-##     exported property rounds=7 (7 means the scene's value survived)
-##     scene script ran: rounds=7 host=7 helper reached by path
-##
-## All four in favour of delivered content: an exported pack mounts, its scenes load,
-## the values stored IN the scene survive, the script attaches, a host `class_name`
-## resolves from inside it, and the creator's own file is reachable by path.
-##
-## THE PACK MUST EXCLUDE THE ADDONS IT WAS AUTHORED AGAINST. A creator needs dot-core on
-## disk or the project cannot typecheck `DotResult` and the export fails -- but
-## `export_filter="all_resources"` would then ship a second copy of every addon at the
-## SAME res:// paths the host already defines. `exclude_filter="addons/*"` is what keeps
-## the pack to the creator's own files.
-##
-## An exported pack also carries `project.binary` and `.godot/global_script_class_cache.cfg`.
-## The first is why this probe reads a host setting before and after the mount rather
-## than assuming; it did not overwrite one. The second is the class registry, and its
-## presence in the pack changes nothing -- the host does not re-read it, which is exactly
-## why a pack's own `class_name` globals stay unregistered.
+## Can a pack built by `--export-pack` deliver a SCENE that runs? `pack_probe.gd` beside this
+## answered the class_name question with a hand-built pack of raw `.gd` files.
 
 func _init() -> void:
 	var args := OS.get_cmdline_user_args()

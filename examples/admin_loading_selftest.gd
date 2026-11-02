@@ -1,16 +1,6 @@
 extends Node
 
 ## The admin menu and the loading screen, both halves, without a server.
-##
-## [codeblock]
-## godot --headless --path . res://examples/admin_loading_selftest.tscn
-## [/codeblock]
-##
-## The menu against a standalone console with stand-in commands, so what reaches a command
-## is asserted argument by argument; the panel by pressing its keys; the loading screen's
-## document, its choice of screen and its timing; and one real HTTP fetch of a picture from
-## a socket this suite serves itself, because the fetch is the half most likely to be
-## wrong and least likely to be noticed.
 
 const CHECKS := 186
 
@@ -104,7 +94,6 @@ func _check(condition: bool, what: String, detail: String = "") -> bool:
 	return condition
 
 
-# --- Fixtures ------------------------------------------------------------------------
 
 func _build_console() -> void:
 	console = DotConsole.new()
@@ -174,7 +163,6 @@ func _nav(menu: TmcAdminMenu, who: DotClientSession, path: String) -> void:
 	menu.handle(_ctx(who), DotConsole.tokenize(path))
 
 
-# --- The menu --------------------------------------------------------------------------
 
 func _test_menu_config() -> void:
 	_section("admin_menu.yml")
@@ -770,7 +758,6 @@ func _test_review_fixes() -> void:
 	_done()
 
 
-# --- The panel -------------------------------------------------------------------------
 
 func _test_panel() -> void:
 	_section("the panel on a player's screen")
@@ -828,7 +815,6 @@ func _test_panel() -> void:
 	_done()
 
 
-# --- Loading, server ---------------------------------------------------------------------
 
 func _test_loading_server() -> void:
 	_section("loading.yml")
@@ -910,7 +896,6 @@ class MapStandIn:
 		id = StringName(p_id)
 
 
-# --- Loading, client ---------------------------------------------------------------------
 
 func _test_loading_client() -> void:
 	_section("the loading screen")
@@ -1169,7 +1154,6 @@ func _until_frames(condition: Callable, frames: int) -> void:
 		await get_tree().process_frame
 
 
-# --- Covering a game until it is ready ---------------------------------------------------
 
 ## A loading screen, a cover that claims a game root, and the root, as the shell builds them.
 func _cover_rig() -> Array:

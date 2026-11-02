@@ -2,10 +2,6 @@ class_name TmcRadio
 extends Node
 
 ## dot-radio on the server, when the addon is linked and `radio.yml` turns it on. Never fatal.
-##
-## The addon's classes are reached through the global class list, not by name: this project
-## must parse in a build that does not carry dot-radio, and listing it in addons.yml is
-## the only thing an operator does to get it.
 
 const CHANNEL := "tmc.radio"
 const SERVICE := &"dot_radio"

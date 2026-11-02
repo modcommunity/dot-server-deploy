@@ -1,26 +1,10 @@
 extends Node
 # [b]Nothing preloaded out of the game, because no game is in this build.[/b] Deathrun is a
-# delivered pack at `res://dot_cloud/tmc/deathrun/<version>/…`, and its courses are a second
-# pack at `res://dot_cloud/tmc/deathrun_maps/<version>/…`. Everything about the game is
-# reached through the host's module table and `describe()`, as wipeout_client does.
+# delivered pack at `res://dot_cloud/tmc/deathrun/<version>/…`, and its courses are a second pack at
+# `res://dot_cloud/tmc/deathrun_maps/<version>/…`.
 
-## A REAL client, over a REAL socket, in a DELIVERED Deathrun — with its courses delivered as
-## a server-only pack beside it.
-##
-## [codeblock]
-## godot --headless --path . res://examples/deathrun_client.tscn
-## [/codeblock]
-##
-## Exits non-zero on any failure. Needs `dist/tmc/deathrun` and `dist/tmc/deathrun_maps`
-## (`./server pack deathrun_maps --source games/mg-deathrun-maps`, then deathrun).
-##
-## [b]What only this can see.[/b] mg-deathrun's suites run inside its own project, where its
-## courses are a link at `res://courses`. Delivered, they are `server_dependencies`, mounted on
-## the server alone, and the game finds them only if the prefix it computes from the pinned key
-## is where the pack really mounted; a wrong guess is a server that plays only the practice
-## course built into the game. So this asserts the courses arrived, a round runs, the client —
-## never sent a course file — built the same course with the same traps from the STAGE
-## document, and an activator's press crosses the socket.
+## A REAL client, over a REAL socket, in a DELIVERED Deathrun — with its courses delivered as a
+## server-only pack beside it. Exits non-zero on any failure.
 
 const CONFIG := "res://examples/fixtures/deathrun"
 
@@ -107,7 +91,6 @@ func _run() -> void:
 	get_tree().quit(1 if _failed > 0 else 0)
 
 
-# --- The harness ------------------------------------------------------------
 
 func _section(title: String) -> void:
 	_entered += 1
@@ -159,8 +142,8 @@ func _says(world: Object) -> Dictionary:
 	return world.call("describe") as Dictionary
 
 
-## The CLIENT's world: the delivered client scene under the link's `GameRoot`, whose `game`
-## property is the world it built. Found by walking, because nothing here can name its type.
+## The CLIENT's world: the delivered client scene under the link's `GameRoot`, whose `game` property
+## is the world it built.
 func _client_world() -> Object:
 	var root := _link.get_node_or_null(^"GameRoot") if _link != null else null
 
@@ -176,7 +159,6 @@ func _client_world() -> Object:
 	return null
 
 
-# --- Boot -------------------------------------------------------------------
 
 func _boot() -> bool:
 	print("")
@@ -247,7 +229,6 @@ func _teardown() -> void:
 	await get_tree().process_frame
 
 
-# --- Sections ---------------------------------------------------------------
 
 func _test_connect() -> bool:
 	_section("a client connects to a delivered game")
@@ -346,15 +327,7 @@ func _test_the_client_builds_the_course() -> void:
 
 ## [b]A landed shot is HIT to the shooter's client alone, over the socket.[/b] mg-deathrun's
 ## headless_net proves the bridge's routing over a loopback queue (codec, registry and per-peer
-## routing real; no socket, no RPC routing). Here the gun is the delivered client's own: its
-## `_firing` goes into the command it sends, the server's weapon fires from that command and
-## lag-compensates, `DrGame.hit_landed` names the shooter, and the HIT crosses a real
-## DotClientLink to the shooter, while a second real client, connected and playing, hears none.
-## Then the owner's magazine, spent on the server, is what the drawn gun shows once quiet
-## (`DrClient.correct_drawn`). mg-smash-copter, mg-prop-hunt and mg-wipeout route HIT with the
-## same lines of their own bridges (`hit_landed` → `peer_for_player(session_of(id))` → `_tell`).
-## Armed with a pack whose bridge sends no HIT (the first check fails) and one that broadcasts
-## it (the second fails).
+## routing real; no socket, no RPC routing).
 func _test_a_hit_is_the_shooters() -> void:
 	_section("a shot from the delivered client lands, and only the shooter is told")
 
@@ -519,11 +492,9 @@ func _test_still_serving() -> void:
 	_done()
 
 
-## [b]dot-combat's `mp_teammate_passthrough` on the delivered client.[/b] The client traces its
-## own shots for tracers and impacts; on its default 1 against a server on 0 or 2 they ended in,
-## or went through, a team-mate where the server's shot did the opposite. The game's client
-## calls `game.combat.follow_cvars(link)`, and this is the only place that call runs out of a
-## mount against a real server: the game's own suites only see the cvar flagged replicated.
+## [b]dot-combat's `mp_teammate_passthrough` on the delivered client.[/b] The client traces its own
+## shots for tracers and impacts; on its default 1 against a server on 0 or 2 they ended in, or went
+## through, a team-mate where the server's shot did the opposite.
 func _test_teammate_cvar_reaches_the_client() -> void:
 	_section("the server's mp_teammate_passthrough reaches the client's combat, live")
 
@@ -547,8 +518,6 @@ func _test_teammate_cvar_reaches_the_client() -> void:
 	_done()
 
 
-## The client's `game.combat.rules.pass_through_level()`, found by walking the link's
-## `GameRoot` (nothing here can name the game's types); -1 when there is none.
 func _client_pass_through() -> int:
 	var root := _link.get_node_or_null(^"GameRoot") if _link != null else null
 

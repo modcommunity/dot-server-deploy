@@ -2,9 +2,6 @@ extends Node3D
 
 ## The smallest game that takes subscriptions, for workshop_solo.gd: a client scene whose map
 ## catalogue follows the content index the way a real game's does (`accepts.map_kinds`).
-##
-## It lives in the build and not in the fixture pack on purpose: a script inside a pack is
-## loaded by mount path, and what is under test is the shell's order of events, not mounting.
 
 const ACCEPTED := ["sandbox"]
 

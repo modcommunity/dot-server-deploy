@@ -1,20 +1,6 @@
 class_name TmcScriptWatch
 extends Logger
 ## Every script that failed to compile or load while `./server check` ran.
-##
-## [b]A parse failure takes no exit path.[/b] Godot prints `SCRIPT ERROR: Parse Error: Could
-## not find base class "DotGameModule"`, hands back a script that cannot be instantiated,
-## and carries on — so a boot whose game module never compiled still reached the end of
-## the selftest and printed `selftest ok`. That is exactly what a fresh clone did when
-## `./setup.sh --only-games <one game>` left `addons/dot_game` unlinked. Nothing the host asks
-## afterwards can see it: the error went to the engine's log and nowhere else.
-##
-## So the check listens to the engine's log itself. Installed with [method OS.add_logger]
-## for the length of a selftest and read once at the end; any script error, and any load
-## failure spelled the ways the engine spells them, fails the check.
-##
-## [b]Not installed on a normal run.[/b] A server that is already serving should say what
-## broke and keep serving; a CHECK exists to refuse exactly this.
 
 ## The engine's own spellings of "a script did not load". Matched on the error's text
 ## because a load failure reported from C++ (`Failed to load script ...`) arrives as a

@@ -1,40 +1,13 @@
 extends Node
-# [b]Not preloaded, and there is nothing left to preload.[/b] Every game here is
-# DELIVERED now: its files exist at `res://dot_cloud/<id>/<version>/…`, a path no constant
-# in this file can name, because the version belongs to the game and this file belongs to
-# the host. A `preload("res://game/hungry_module.gd")` used to work because the game was
-# copied into this project; there is no `game/` any more.
-#
-# What is left is what the host and the game actually agree on: the REGISTRY NAME each
-# world publishes itself under, and the module name. Those are the contract -- a host
-# finds a game's world by asking DotRegistry for a name, exactly as a module finds it --
-# so a literal here is not a shortcut past a type, it IS the interface. If a game renames
-# one, the check below reports "a hungry world is registered: false", which is the right
-# failure and names the right thing.
+# [b]Not preloaded, and there is nothing left to preload.[/b] Every game here is DELIVERED now: its
+# files exist at `res://dot_cloud/<id>/<version>/…`, a path no constant in this file can name,
+# because the version belongs to the game and this file belongs to the host.
 const HUNGRY_WORLD := &"hungry_world"
 const BUSES_GAME := &"bfh_game"
 
-## Changing the game under a running server, which is what a multi-game server is for.
-##
-## [codeblock]
-## godot --headless --path . res://examples/multigame.tscn
-## [/codeblock]
-##
-## Exits non-zero on any failure.
-##
-## It drives the **real** [TmcHost] — the same boot `./server` runs, with `auto_start` off
-## and directories of its own — rather than a second one written to look like it. Every
-## bug in that file has been an ordering bug, and a copy would have its own ordering.
-##
-## What it proves, in the order an operator meets it:
-##
-## - three games are registered from `content/`, so `changelevel` can reach any of them
-## - switching from buses to hungry unloads one module and loads another
-## - switching between hungry's two modes keeps the same module and rebinds it, because
-##   reloading would drop every connected player
-## - switching back brings buses's module back
-## - and the client is told which game it is now, which is the only thing that tells a
-##   multi-game client which of its built-in scenes to show
+## Changing the game under a running server, which is what a multi-game server is for. Exits non-
+## zero on any failure. It drives the **real** [TmcHost] — the same boot `./server` runs, with
+## `auto_start` off and directories of its own — rather than a second one written to look like it.
 
 const CONFIG := "res://examples/fixtures/multigame"
 const CONTENT := "res://content"
@@ -126,19 +99,13 @@ func _server() -> DotServer:
 
 
 ## Runs the console the way an admin does, and reports what it said.
-##
-## Through [method DotConsole.execute] rather than by calling `change_game` directly: the
-## console is what an operator and RCON both reach, and a check that bypassed it would not
-## notice a command that had stopped being registered.
 func _console(line: String) -> DotResult:
 	return _server().console.execute(line)
 
 
-## Waits for a game change to finish. Returns whether it did.
-##
-## A deadline rather than a fixed number of frames. A change frees a scene, instantiates
-## another, loads a module and puts every client back through LOADING, and how long that
-## takes depends on what else the machine is doing.
+## Waits for a game change to finish. Returns whether it did. A deadline rather than a fixed number
+## of frames. A change frees a scene, instantiates another, loads a module and puts every client
+## back through LOADING, and how long that takes depends on what else the machine is doing.
 func _until(condition: Callable, seconds: float = 10.0) -> bool:
 	var deadline := Time.get_ticks_msec() + int(seconds * 1000.0)
 
@@ -157,7 +124,6 @@ func _at_game(game_id: String) -> bool:
 		and _server().games.phase == DotGameManager.Phase.IDLE
 
 
-# --- Boot ------------------------------------------------------------------
 
 func _boot() -> bool:
 	print("")
@@ -194,23 +160,13 @@ func _teardown() -> void:
 		_host.free()
 
 
-# --- Sections --------------------------------------------------------------
 
 func _test_finds_a_map_session() -> void:
 	_section("`+map` finds the thing it has to talk to")
 
-	# [b]The whole of `sv_map` rests on one duck-typed lookup, and a duck-typed lookup
-	# that stops matching returns null rather than failing.[/b] `_find_map_session`
-	# walks the loaded game looking for something that answers `change_to` and
-	# `change_to_map`; the day a game builds its session under a different node, or
-	# dot-map renames a method, the only symptom is a `+map` that goes back to being
-	# silently ignored — which is the exact bug this setting exists to fix.
-	#
-	# So both directions are checked: that the predicate still matches a real
-	# [DotMapSession], and that it does not match something else in a real game's tree.
-	#
-	# Through `call` because `tmc_host.gd` declares no `class_name` — it is a host
-	# script the scene owns, not a type anything is meant to reference by name.
+	# [b]The whole of `sv_map` rests on one duck-typed lookup, and a duck-typed lookup that stops
+	# matching returns null rather than failing.[/b] `_find_map_session` walks the loaded game looking
+	# for something that answers `change_to` and `change_to_map`.
 	var probe := Node.new()
 	probe.name = "MapProbe"
 	var session := DotMapSession.new()
@@ -274,15 +230,7 @@ func _test_registered() -> void:
 		"and the avatar parts are not offered as a game"
 	)
 
-	# [b]The half a `kind: pack` game needs and that nothing here used to build.[/b]
-	# `DotGameManager` fetches and mounts a delivered game's content on the SERVER before
-	# it asks any client to — the scene it loads is a path inside the mount — so a tool
-	# that documents pack games and creates no cloud client can serve none of them. Every
-	# game in `content/` is builtin, which is precisely why nothing noticed.
-	#
-	# Asserted on the registry name rather than on the node, because the registry entry is
-	# the whole of what dot-server, dot-map and dot-user-avatar look for, and a client that
-	# exists without registering is a bug this family has already shipped once.
+	# Every game in `content/` is builtin, which is precisely why nothing noticed.
 	_check(
 		DotRegistry.get_service(&"dot_cloud_client") != null,
 		"a content client is registered, so a pack game could be fetched",
@@ -294,21 +242,17 @@ func _test_registered() -> void:
 func _test_switch_to_hungry() -> void:
 	_section("buses -> hungry")
 
-	# [b]With somebody in the game.[/b] Switching an EMPTY server exercises the module
-	# swap and nothing else — no entity is despawned, no peer is removed from the
-	# netcode, and the world that is about to be freed is holding nothing. A real
-	# `changelevel` happens under players, and that is a different code path: it took a
-	# browser sitting in buses to reach it, and it segfaulted the server.
+	# [b]With somebody in the game.[/b] Switching an EMPTY server exercises the module swap and nothing
+	# else — no entity is despawned, no peer is removed from the netcode, and the world that is about
+	# to be freed is holding nothing.
 	var buses: DotModule = _server().modules.get_module("buses")
 	# Buses fills its empty driving seats with bots, so the count is taken against what was
 	# there before anybody joined.
 	var before: int = buses.game.players.size()
 
-	# [b]Somebody came and went before the one who is still here.[/b] That is what a real
-	# server looks like by the time anybody types `changelevel`, and it is the difference
-	# between the two runs that found the crash: switching with one client attached is
-	# fine, and switching after another has been through leaves state behind for the
-	# change to walk over.
+	# [b]Somebody came and went before the one who is still here.[/b] That is what a real server looks
+	# like by the time anybody types `changelevel`, and it is the difference between the two runs that
+	# found the crash: switching with one client attached is fine.
 	buses.bridge.add_player(2, 4242, "Left already")
 	buses.bridge.remove_peer(2)
 
@@ -390,10 +334,9 @@ func _test_switch_between_modes() -> void:
 
 	var after := _server().modules.get_module("hungry")
 
-	# [b]The reason the host compares module PATHS and not game ids.[/b] Two game ids, one
-	# module: reloading it between them would rebuild the DotNetManager, which resets the
-	# message ids, the peer records and the clock — a disconnect for everybody, and exactly
-	# what changing the game is supposed to avoid.
+	# [b]The reason the host compares module PATHS and not game ids.[/b] Two game ids, one module:
+	# reloading it between them would rebuild the DotNetManager, which resets the message ids, the peer
+	# records and the clock — a disconnect for everybody.
 	_check(
 		after == before,
 		"the module instance survives, because both modes share it",
@@ -443,11 +386,9 @@ func _test_switch_back() -> void:
 func _test_unknown_game() -> void:
 	_section("a game that is not there")
 
-	# [b]Asserted on the outcome, not on what the console returned.[/b]
-	# `changelevel`'s handler is a coroutine — it `await`s `change_game` — so
-	# [method DotConsole.execute] reports that the command was *dispatched*, not what it
-	# decided. A check written against the return value passes whatever happens, which is
-	# worse than no check: it would go green on a server that had just wiped its own game.
+	# [b]Asserted on the outcome, not on what the console returned.[/b] `changelevel`'s handler is a
+	# coroutine — it `await`s `change_game` — so [method DotConsole.execute] reports that the command
+	# was *dispatched*, not what it decided.
 	_console("changelevel no_such_game")
 
 	# Long enough for a real change to have got somewhere, so "nothing happened" means it.
@@ -467,21 +408,8 @@ func _test_unknown_game() -> void:
 	_done()
 
 
-# --- Voting ----------------------------------------------------------------
 
 ## The players choosing the next game, on a real server, end to end.
-##
-## [b]This is the join dot-vote was built for, and it is a join nothing else runs.[/b]
-## Every check dot-vote has of its own drives its director against fixtures or against a
-## game manager built for the test; this one goes through the whole of the real thing —
-## `cfg` read into `DotVoteRules`, a `TmcVote` attached to the running server, a ballot
-## filled from `content/`, and a `change_game` that unloads one module and loads another
-## while the vote system watches the host's own `game_loaded` to know it happened.
-##
-## The family's own lesson says this is where the bugs are, and it found one: the
-## director called `begin()` on a successful apply AND the host called it again from
-## `game_loaded`, which is two entries in the play history for one play and a cooldown
-## quietly half as long as it says it is.
 func _test_vote_changes_the_game() -> void:
 	_section("the players vote for the next game")
 
@@ -589,19 +517,13 @@ func _test_vote_changes_the_game() -> void:
 			% (rocked.error.message if rocked.error != null else "")
 	)
 
-	# Opened through the real console command, which is how an operator does it — and
-	# which fails if dot-vote's commands stopped being registered on this server.
-	#
-	# [b]Spelled out of TmcVote.COMMAND_PREFIX rather than typed.[/b] The prefix is
-	# what keeps this vote from taking four command names a loaded game's own map vote
-	# already answers to, and a test that hardcoded `revote` would still pass on the
-	# day somebody dropped the prefix and reintroduced that collision.
+	# Opened through the real console command, which is how an operator does it — and which fails if
+	# dot-vote's commands stopped being registered on this server.
 	var revote := "%srevote" % TmcVote.COMMAND_PREFIX
 
-	# [b]What the shells are told, heard at the server.[/b] Nobody is connected, so every
-	# notice reaches nobody -- and `notice_sent` fires anyway, which is what lets a suite
-	# with no client assert what a client would have been sent. The half with a client is
-	# `shell_notice`.
+	# [b]What the shells are told, heard at the server.[/b] Nobody is connected, so every notice
+	# reaches nobody -- and `notice_sent` fires anyway, which is what lets a suite with no client
+	# assert what a client would have been sent. The half with a client is `shell_notice`.
 	var notices: Array[DotNotice] = []
 	var on_notice := func(n: DotNotice, _count: int) -> void: notices.append(n)
 	_server().notice_sent.connect(on_notice)

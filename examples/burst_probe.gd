@@ -5,46 +5,6 @@ extends Node
 
 ## How much a delivered game sends a browser in one frame: at the join, in play, and on a map
 ## change.
-##
-## [codeblock]
-## godot --headless --path . res://examples/burst_probe.tscn -- --game deathrun
-## tools/burst_all_games.sh                 # every delivered game, and the table
-## [/codeblock]
-##
-## [b]Why.[/b] Godot's web WebSocket peer copies every message the page receives into a 64 KiB
-## inbound buffer as it arrives and drains it once a frame; whatever overflows between two
-## frames is dropped ("Buffer payload full! Dropping data.") and a reliable message is simply
-## gone. A native client never shows it: it reads its socket only when polled. mg-look-at-me
-## lost 5 of its 32 levels in Chromium that way. So the question for every game is the most the
-## server puts on a browser's socket inside one frame.
-##
-## [b]What it does.[/b] Boots the host on the game, puts [code]slow_tcp_relay.gd[/code] in front
-## of its TCP port with the rate unlimited, and joins a real [DotClientLink] on WebSocket through
-## it. The relay is polled once a frame and records the most it carried inside any 16.7 ms (a
-## 60 Hz browser frame) and in any one poll. Seven windows, in this order:
-## - [b]join[/b]: connect to seated plus [constant JOIN_SECONDS];
-## - [b]play[/b]: [constant PLAY_SECONDS] with the game's own stand-ins;
-## - [b]crowd[/b]: [constant CROWD] - 1 more real clients (each with the game's own client scene,
-##   connected straight to the server, not through the relay) join one after another, each as
-##   soon as the last has its scene, so the measured browser hears seven JOINs, seven faces and
-##   seven chat lines inside a second or two;
-## - [b]avatars[/b]: every player's platform avatar changes at once to a document with every slot
-##   of the game's schema filled and coloured, and `player_avatar_changed` fires for each, the
-##   path a site avatar takes when the profile store answers after the seat;
-## - [b]board[/b]: the browser holds its scoreboard open with [constant CROWD] players in;
-## - [b]vote[/b]: the game's map vote opened (`revote`, the ballot a round end opens, to every
-##   player), [constant VOTE_SECONDS] open, closed (`endvote`), and what the close applies;
-## - [b]maps[/b]: a change to each other map, through the server world's `change_*_now` where it
-##   has one, otherwise through the client's map menu as a player uses it on M: `/mapmenu` in
-##   chat (the list, in notices), then `/mapmenu <id>` (with `sv_map_menu_flag` emptied, so the
-##   browser may change rather than start a vote). [constant MAP_SECONDS] each.
-## Each window must stay at or under
-## [constant LIMIT], three quarters of the browser's buffer: a frame that runs long (a level
-## being built) lets more than one server frame's worth pile up, which is why the bound is not
-## the buffer itself.
-##
-## Prints one `BURST {json}` line for the table. Exit 0 every window held, 1 one did not, 3 the
-## game's pack is not published here.
 
 const ServerWorld := preload("res://examples/server_world.gd")
 const SlowTcpRelay := preload("res://examples/slow_tcp_relay.gd")
@@ -201,7 +161,6 @@ func _run() -> void:
 	get_tree().quit(code)
 
 
-# --- Harness ------------------------------------------------------------------
 
 func _section(title: String) -> void:
 	_entered += 1
@@ -261,7 +220,6 @@ func _window(key: String, what: String, since: int = -1, also: bool = true, why:
 			_relay.peak_poll, _limit, _longest_frame / 1000, "" if why == "" else "; " + why])
 
 
-# --- Config -------------------------------------------------------------------
 
 ## As examples/enet_relay.gd writes it: the shared fixtures with this game, the vote off, a port
 ## of this probe's own, the server awake.
@@ -295,7 +253,6 @@ func _write_config() -> void:
 		FileAccess.get_file_as_string("res://examples/fixtures/game_vote_all/content.yml"))
 
 
-# --- Sections -----------------------------------------------------------------
 
 func _server() -> DotServer:
 	return _host.server as DotServer
@@ -588,14 +545,8 @@ func _maps() -> void:
 
 
 ## The map menu as a player uses it (dot-menu's M, over dot-vote's DotVoteMapMenu): `/mapmenu` in
-## chat, the list back in notices, then `/mapmenu <id>` for a row. The owner's flag emptied, so
-## this guest may change the map rather than start a vote for it.
-##
-## [b]The list is asked for again after every change, as M asks on every press.[/b] Walking a
-## list fetched once chose rows that the change before had taken off: arena's team modes, listed
-## on dm_box and refused after a change to dm_pit, which has no team spawns. So the next row is
-## the first not yet chosen in the list as it is NOW, and any row of that list refused is a
-## failure of the same check: the menu offered something it would not do.
+## chat, the list back in notices, then `/mapmenu <id>` for a row. The owner's flag emptied, so this
+## guest may change the map rather than start a vote for it.
 func _maps_by_menu() -> void:
 	var flag := _console("sv_map_menu_flag \"\"")
 	var before := _open_window()

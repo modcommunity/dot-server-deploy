@@ -2,10 +2,8 @@ class_name TmcRadioLink
 extends Node
 
 ## The shell's half of dot-radio: a `DotRadioClient` pointed at the station URL the server sends.
-##
-## Nothing plays until the player presses the `radio_toggle` key (the client's own input
-## handler calls tune_in from that gesture); this never tunes in itself. A shell built
-## without dot-radio ignores the notice.
+## Nothing plays until the player presses the `radio_toggle` key (the client's own input handler
+## calls tune_in from that gesture); this never tunes in itself.
 
 const TOPIC := "tmc.radio"
 

@@ -1,21 +1,7 @@
 extends Node
 
-## Parties on a real server: the booking keeper, the tracker, party chat and the console.
-##
-## [codeblock]
-## godot --headless --path . res://examples/party_live.tscn
-## [/codeblock]
-##
-## Exits non-zero on any failure.
-##
-## Drives the real [TmcHost] boot, as `multigame` does, because every part of [TmcParty]
-## is about ORDER — the booking has to be on the ban seam after the game's module put
-## dot-moderation there, and still on it after a `changelevel` put a new one there — and a
-## fixture that built the pieces itself would have an order of its own.
-##
-## The backbone is a stand-in that answers `GET party/{id}` with a roster, because the
-## routes a party tracker speaks are integration routes and this suite has no site. It is
-## duck-typed exactly as the real client is: [TmcParty] never names dot-auth.
+## Parties on a real server: the booking keeper, the tracker, party chat and the console. Exits non-
+## zero on any failure.
 
 const CONFIG := "res://examples/fixtures/multigame"
 const CONTENT := "res://content"
@@ -176,7 +162,6 @@ func _chat_router() -> Object:
 	return null
 
 
-# --- Boot ------------------------------------------------------------------
 
 func _boot() -> bool:
 	print("")
@@ -207,7 +192,6 @@ func _teardown() -> void:
 		_host.free()
 
 
-# --- Sections --------------------------------------------------------------
 
 func _test_built() -> void:
 	_section("what the host built")

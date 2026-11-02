@@ -1,29 +1,10 @@
 extends Node
-# [b]Nothing preloaded out of the game, because no game is in this build.[/b] Wipeout is a
-# delivered pack at `res://dot_cloud/tmc/wipeout/<version>/…`, and its courses are a second
-# pack at `res://dot_cloud/tmc/wipeout_maps/<version>/…`. Everything about the game is
-# reached through the host's module table and `describe()`, as smash_client does.
+# [b]Nothing preloaded out of the game, because no game is in this build.[/b] Wipeout is a delivered
+# pack at `res://dot_cloud/tmc/wipeout/<version>/…`, and its courses are a second pack at
+# `res://dot_cloud/tmc/wipeout_maps/<version>/…`.
 
-## A REAL client, over a REAL socket, in a DELIVERED Wipeout — with its courses delivered as
-## a server-only pack beside it.
-##
-## [codeblock]
-## godot --headless --path . res://examples/wipeout_client.tscn
-## [/codeblock]
-##
-## Exits non-zero on any failure. Needs `dist/tmc/wipeout` and `dist/tmc/wipeout_maps`
-## (`./server pack wipeout --source games/mg-wipeout`, and the same for wipeout_maps).
-##
-## [b]What only this can see.[/b] mg-wipeout's four suites run inside its own project, where
-## its courses are a link at `res://courses`. Delivered, they are not in the game's pack at
-## all, and the game does not name them: the server owner's cfg/content.yml does (the
-## fixture's), the host lays that over the descriptor's `maps`, and the game fetches each pack
-## through dot-game's DotGameContent and reads its `courses/` -- which works only if the
-## prefix it computes from the pinned key is where the pack really mounted. A wrong guess is a server that boots, plays
-## the one practice course built into the game, and logs an INFO line. So this asserts the
-## courses arrived as content, that a round runs on one of them, that the client — which was
-## never sent the course files — built the same course from the document the server sent,
-## and that a final death crosses the socket with its arena and the weapons on its floor.
+## A REAL client, over a REAL socket, in a DELIVERED Wipeout — with its courses delivered as a
+## server-only pack beside it. Exits non-zero on any failure.
 
 const CONFIG := "res://examples/fixtures/wipeout"
 
@@ -108,7 +89,6 @@ func _run() -> void:
 	get_tree().quit(1 if _failed > 0 else 0)
 
 
-# --- The harness ------------------------------------------------------------
 
 func _section(title: String) -> void:
 	_entered += 1
@@ -160,8 +140,8 @@ func _says(world: Object) -> Dictionary:
 	return world.call("describe") as Dictionary
 
 
-## The CLIENT's world: the delivered client scene under the link's `GameRoot`, whose `game`
-## property is the world it built. Found by walking, because nothing here can name its type.
+## The CLIENT's world: the delivered client scene under the link's `GameRoot`, whose `game` property
+## is the world it built.
 func _client_world() -> Object:
 	var root := _link.get_node_or_null(^"GameRoot") if _link != null else null
 
@@ -177,7 +157,6 @@ func _client_world() -> Object:
 	return null
 
 
-# --- Boot -------------------------------------------------------------------
 
 func _boot() -> bool:
 	print("")
@@ -239,7 +218,6 @@ func _teardown() -> void:
 	await get_tree().process_frame
 
 
-# --- Sections ---------------------------------------------------------------
 
 func _test_connect() -> bool:
 	_section("a client connects to a delivered game")
@@ -346,10 +324,9 @@ func _test_the_client_builds_the_course() -> void:
 	_done()
 
 
-## net_stat in a delivered game, over a real socket: typed at the game's console (which is
-## dot-console's kit), drawn by the game's menu (dot-menu), reading the link's meter
-## (dot-server's peer, wrapped by dot-core). Four addons and a pack, and the only place all
-## of them meet is a real client in the shell's shape.
+## net_stat in a delivered game, over a real socket: typed at the game's console (which is dot-
+## console's kit), drawn by the game's menu (dot-menu), reading the link's meter (dot-server's peer,
+## wrapped by dot-core).
 func _test_net_stat() -> void:
 	_section("net_stat, typed at the delivered game's console, reads the link's meter")
 
@@ -435,11 +412,9 @@ func _test_still_serving() -> void:
 	_done()
 
 
-## [b]dot-combat's `mp_teammate_passthrough` on the delivered client.[/b] The client traces its
-## own shots for tracers and impacts; on its default 1 against a server on 0 or 2 they ended in,
-## or went through, a team-mate where the server's shot did the opposite. The game's client
-## calls `game.combat.follow_cvars(link)`, and this is the only place that call runs out of a
-## mount against a real server: the game's own suites only see the cvar flagged replicated.
+## [b]dot-combat's `mp_teammate_passthrough` on the delivered client.[/b] The client traces its own
+## shots for tracers and impacts; on its default 1 against a server on 0 or 2 they ended in, or went
+## through, a team-mate where the server's shot did the opposite.
 func _test_teammate_cvar_reaches_the_client() -> void:
 	_section("the server's mp_teammate_passthrough reaches the client's combat, live")
 
@@ -463,8 +438,6 @@ func _test_teammate_cvar_reaches_the_client() -> void:
 	_done()
 
 
-## The client's `game.combat.rules.pass_through_level()`, found by walking the link's
-## `GameRoot` (nothing here can name the game's types); -1 when there is none.
 func _client_pass_through() -> int:
 	var root := _link.get_node_or_null(^"GameRoot") if _link != null else null
 

@@ -1,73 +1,20 @@
 extends SceneTree
 
-## Publish a content directory as a signed dot-cloud pack.
-##
-## [codeblock]
-## godot --headless --path . --script res://tools/pack.gd -- \
-##     --id avatars --content content --out dist --key keys/content.key
-##
-## godot --headless --path . --script res://tools/pack.gd -- --all ...
-## [/codeblock]
-##
-## Driven by `./server pack <id>`, which is the way to run it. It exists because that
-## command named `res://tools/publish.tscn` for a long time and no such file was ever
-## written: Godot printed "Cannot open file" and the launcher exited **0**, so every
-## caller -- including `export-web`, which refuses to build when a map is unpublished and
-## names this command as the fix -- was told the publish had worked.
-##
-## [b]What goes in a pack is declared, not inferred.[/b] A pack made of whatever happens
-## to sit in one folder forces a developer to duplicate files into `content/` to ship
-## them, so the avatars a game loads from `res://avatars/` and the avatars it delivers
-## would be two copies that drift. `content/<id>/pack.json` says what to put in and where
-## it lands:
-##
-## [codeblock]
-## {
-##     "version": "1.0.0",
-##     "name": "Stock avatars",
-##     "include": [
-##         "avatars/kenney",
-##         { "from": "avatars/head_stock.tscn", "to": "heads/stock.tscn" }
-##     ],
-##     "exclude": ["*.import", "*.uid"],
-##     "exclude_dirs": ["addons", "examples", "tools"]
-## }
-## [/codeblock]
-##
-## [b]`exclude` matches file NAMES; `exclude_dirs` matches directory names, at any
-## depth.[/b] Two keys rather than one pattern language because the thing a game pack
-## always has to drop is a whole tree -- `addons/` above all, which is every dot-* addon
-## the host build already has -- and a name glob cannot express "and everything under it".
-## Packing a game repository without it produced an 11.2 MiB pack of which the game was a
-## fraction: 768 files, most of them a second copy of addons the client had already.
-##
-## [b]JSON, and not another YAML file.[/b] `game.yml` is YAML because an operator edits it
-## on a live server; this is a build instruction a developer writes once, and JSON needs
-## no parser that this repository has to own -- the shell that used to do this was growing
-## an awk state machine for a one-level list, which is a second parser in a third language
-## for something `JSON.parse_string` does in a line. Same reasoning that makes dot-map's
-## catalogue and dot-cloud's own manifests JSON.
-##
-## With no `pack.json`, a directory is published whole -- and a game's `game.yml` still
-## supplies its version, name, `content_id` and `client_scene`, read through `TmcYaml`,
-## which is the server's own reader rather than a second one.
-##
-## Exit codes: 0 published, 1 called wrong, 2 nothing was published.
+## Publish a content directory as a signed dot-cloud pack. Driven by `./server pack <id>`, which is
+## the way to run it.
 
 const EXIT_OK := 0
 const EXIT_USAGE := 1
 const EXIT_FAILED := 2
 
-## Where an assembled pack is built before it is published.
-##
-## `user://` rather than beside `dist/`, so an interrupted run cannot leave a directory
-## that looks like a published content id, and so this works on a read-only checkout.
+## Where an assembled pack is built before it is published. `user://` rather than beside `dist/`, so
+## an interrupted run cannot leave a directory that looks like a published content id, and so this
+## works on a read-only checkout.
 const STAGING := "user://pack_staging"
 
-## Directories under `content/` that are not content anybody publishes.
-##
-## `global` IS publishable -- it is content every game loads and is exactly the sort of
-## thing a server delivers rather than bakes in -- so it is deliberately not here.
+## Directories under `content/` that are not content anybody publishes. `global` IS publishable --
+## it is content every game loads and is exactly the sort of thing a server delivers rather than
+## bakes in -- so it is deliberately not here.
 const NEVER := ["cache", "tmp"]
 
 ## dot-core's deriver, run inside the SOURCE project (its own addons, its own class list).
@@ -78,16 +25,8 @@ const REQUIRES_TIMEOUT_S := 600
 
 
 ## [b]A publisher that adds one file the source tree does not have: requires.json.[/b]
-##
-## `DotCloudPublisher` publishes a directory, and a game's directory is its repository -- on
-## a developer box a link to a checkout other people are working in. Writing requires.json
-## into it for the length of a publish would leave an untracked file in their tree whenever
-## a run is killed, and it is not this tool's tree. So the derived file is handed to the
-## publisher as a pack path mapped to a file elsewhere: dot-cloud's public
-## `DotCloudPublisher.extra_files` (dot-cloud API 2).
-##
-## [method _publish_one] reads the written manifest back and fails the pack when
-## requires.json is not in it.
+## `DotCloudPublisher` publishes a directory, and a game's directory is its repository -- on a
+## developer box a link to a checkout other people are working in.
 static func publisher_for(requires_file: String) -> DotCloudPublisher:
 	var pub := DotCloudPublisher.new()
 	if requires_file != "":
@@ -184,12 +123,8 @@ func _initialize() -> void:
 	quit(EXIT_OK if failed.is_empty() and published > 0 else EXIT_FAILED)
 
 
-# --- One pack ---------------------------------------------------------------
 
-## Publish one id. Returns success carrying `false` when there is deliberately nothing
-## to publish and [param strict] is off — which is what `--all` wants, and what an
-## explicitly named id must NOT get: "you asked for this one and it cannot be packed" is
-## an error, and "the set you asked for includes some that cannot" is a skip.
+## Publish one id.
 func _publish_one(
 	id: String, content_dir: String, out_dir: String, opts: Dictionary, strict: bool
 ) -> DotResult:
@@ -205,18 +140,9 @@ func _publish_one(
 
 	var meta: Dictionary = spec.value
 
-	# [b]A builtin game has nothing to publish, and publishing it anyway is worse than
-	# refusing.[/b] a builtin game's `content/<id>/` is a `game.yml` and some cvars -- the game's code is
-	# compiled into the build -- so this produced a signed, verifiable pack containing one
-	# configuration file. It mounts, it contains no game, and every symptom of using it
-	# points somewhere else. Found by running `--all`, which cheerfully published five of
-	# them.
-	#
-	# `pack/` or a `pack.json` overrides this: a game that is builtin here and also
-	# delivers content has said so explicitly.
-	# `--source` overrides all of this: naming a tree to publish IS the explicit statement
-	# the refusal below asks for, and it is how a game repository beside this one is packed
-	# without first being copied into `content/`.
+	# [b]A builtin game has nothing to publish, and publishing it anyway is worse than refusing.[/b] a
+	# builtin game's `content/<id>/` is a `game.yml` and some cvars -- the game's code is compiled into
+	# the build -- so this produced a signed, verifiable pack containing one configuration file.
 	if str(meta["kind"]) == "builtin" \
 			and not opts.has("source") \
 			and (meta["include"] as Array).is_empty() \
@@ -238,12 +164,9 @@ func _publish_one(
 	var given := str(opts.get("source", ""))
 
 	if given != "":
-		# [b]A game's pack source is its own repository, not this project's tree.[/b]
-		# setup.sh vendors all five games into ONE `game/` and one `scenes/`, so there is
-		# no directory here that is any single game -- the files are separable only by
-		# their name prefix, and `include` copies directories and files, not globs. Naming
-		# the repository sidesteps the merge entirely, and `game.yml` still supplies the
-		# id, the version and the entry scene, so nothing is said twice.
+		# [b]A game's pack source is its own repository, not this project's tree.[/b] setup.sh vendors all
+		# five games into ONE `game/` and one `scenes/`, so there is no directory here that is any single
+		# game -- the files are separable only by their name prefix.
 		if not DirAccess.dir_exists_absolute(given):
 			return DotResult.fail(
 				DotError.CODE_STATE,
@@ -265,17 +188,9 @@ func _publish_one(
 	else:
 		source = dir
 
-	# [b]A `kind: pack` game's source is its own repository, and `--all` has no way to
-	# know that.[/b] Without an `include` list, a `pack/` directory or an explicit
-	# `--source`, the fallback below is the DESCRIPTOR directory -- which for a delivered
-	# game holds `game.yml` and `pack.json` and nothing else. So `./server pack --all`
-	# republished every game as a signed, verifiable, two-file pack, overwriting the real
-	# one in `dist/` with a manifest that mounts and contains no game.
-	#
-	# Found in production, on a box already chasing a different fault: the operator ran
-	# the sweep, it reported "9 published, 0 failed", and the packs were destroyed. The
-	# builtin case has been refused since the beginning for the same reason; this is that
-	# refusal for the kind that replaced it.
+	# [b]A `kind: pack` game's source is its own repository, and `--all` has no way to know that.[/b]
+	# Without an `include` list, a `pack/` directory or an explicit `--source`, the fallback below is
+	# the DESCRIPTOR directory.
 	if str(meta["kind"]) == "pack" and not opts.has("source") \
 			and (meta["include"] as Array).is_empty() \
 			and not DirAccess.dir_exists_absolute(dir.path_join("pack")):
@@ -291,24 +206,9 @@ func _publish_one(
 		# contains some that cannot" is a skip, "you asked for this one" is an error.
 		return why if strict else DotResult.success(false)
 
-	# [b]A pack whose scripts declare `class_name` is dead before it is written.[/b] A
-	# mounted pack's globals are not registered in the host, so every cross-file type
-	# reference in it fails to compile -- and NOTHING says so at any point a person is
-	# looking: the pack publishes, uploads, downloads, verifies its signature and mounts,
-	# the scene loads, and the script silently does not attach. What reaches an operator
-	# is a game that came up with no behaviour at all:
-	#
-	#     ERR tmc.host the game's module would not load error="[state] No G2GGame is
-	#     registered." module=res://dot_cloud/g2gfast/0.1.0/game/g2g_module.gd
-	#
-	# which names the module, and the module is fine.
-	#
-	# Found in production. `tools/check.sh` has refused a new `class_name` in a game
-	# repository since the conversion, and it did not help: the box that published this
-	# had a STALE game checkout -- the upgrade command pulled the host and the addons and
-	# never the games -- so the guard was passing on a developer machine against sources
-	# the server was not using. A guard that runs where the author is does not protect the
-	# machine that publishes. This one runs at the moment the bytes are chosen.
+	# [b]A pack whose scripts declare `class_name` is dead before it is written.[/b] A mounted pack's
+	# globals are not registered in the host, so every cross-file type reference in it fails to compile
+	# -- and NOTHING says so at any point a person is looking: the pack publishes, uploads.
 	var globals := _class_names_in(source)
 
 	if not globals.is_empty():
@@ -332,10 +232,8 @@ func _publish_one(
 		)
 
 	# [b]What the pack needs of the host's addons, as requires.json at its root.[/b] dot-ci's
-	# `package.sh --pack` has always written it; this path never did, so every pack a box
-	# published for itself (setup.sh, `./server pack --source`) carried none, and a host or
-	# client with older addons could not refuse it with "needs dot-x API level N" -- it
-	# mounted it and failed to compile it instead. Derived the way package.sh derives it.
+	# `package.sh --pack` has always written it; this path never did, so every pack a box published for
+	# itself (setup.sh, `./server pack --source`) carried none.
 	var requires := derive_requires(source, STAGING.path_join("requires").path_join(str(meta["id"]).replace("/", "_") + ".json"))
 
 	if not requires.ok:
@@ -361,10 +259,9 @@ func _publish_one(
 	if str(meta["mount_root"]) != "":
 		pub.mount_root = str(meta["mount_root"])
 
-	# [b]On the publisher rather than on the staged tree.[/b] `exclude` is applied during
-	# assembly and so reaches only packs built from an `include` list -- a pack published
-	# from `pack/` or from `--source` never sees it. Directory excludes are the ones a game
-	# cannot do without, so they are applied where every route passes: `_collect`.
+	# [b]On the publisher rather than on the staged tree.[/b] `exclude` is applied during assembly and
+	# so reaches only packs built from an `include` list -- a pack published from `pack/` or from
+	# `--source` never sees it.
 	for name in (meta["exclude_dirs"] as Array):
 		pub.exclude_dirs.append(str(name))
 
@@ -385,10 +282,9 @@ func _publish_one(
 
 	var key_path := str(opts.get("key", ""))
 
-	# [b]Refused, not published unsigned.[/b] `client/content.json` ships
-	# `require_signed_manifests: true` because a pack can contain scripts, so an unsigned
-	# pack is one that every client declines to mount -- and the operator would have a
-	# directory that looks finished, serves cleanly and works nowhere.
+	# [b]Refused, not published unsigned.[/b] `client/content.json` ships `require_signed_manifests:
+	# true` because a pack can contain scripts, so an unsigned pack is one that every client declines
+	# to mount -- and the operator would have a directory that looks finished.
 	if key_path == "" or not FileAccess.file_exists(key_path):
 		return DotResult.fail(
 			DotError.CODE_STATE,
@@ -399,13 +295,9 @@ func _publish_one(
 	pub.signing_key_pem = FileAccess.get_file_as_string(key_path)
 	pub.signing_key_id = str(opts.get("key-id", "default"))
 
-	# [b]Named for the CONTENT id, not for the directory.[/b] Those are the same thing
-	# almost everywhere -- a directory with no `game.yml` takes its own name -- and where
-	# they differ it is load-bearing: hungario is three game ids over one `content_id:
-	# hungry`, because its modes are three presets of one world. The manifest URL every
-	# consumer builds is `{base}/{content id}/manifest.json`, and `dist/` is one of those
-	# bases, so publishing into `dist/hungry_classic/` writes a pack that nothing -- not
-	# the server that produced it -- can find.
+	# [b]Named for the CONTENT id, not for the directory.[/b] Those are the same thing almost
+	# everywhere -- a directory with no `game.yml` takes its own name -- and where they differ it is
+	# load-bearing: hungario is three game ids over one `content_id: hungry`.
 	var out_name := str(meta["id"])
 
 	print("")
@@ -442,24 +334,9 @@ static func _lists(result: Variant, path: String) -> bool:
 	return false
 
 
-# --- requires.json -------------------------------------------------------------
 
-## Derive [param source]'s requires.json into [param out_path], the way dot-ci's
-## `package.sh --pack` does: dot-core's `tools/dot_requires.gd`, run with `--path` the source
-## project, so the levels are those of the addons the game was built against (its own
-## linked addons) and its `requires.floor.json` is applied.
-##
-## Success carries the absolute path written, or "" when there is nothing to add:
-##
-## - the source is not a Godot project (an avatar set, a map directory): nothing compiles;
-## - its dot-core has no deriver (pinned from before it existed): said, not failed, as
-##   package.sh says it, because the pack is exactly what it was the day before;
-## - it commits its own requires.json, which then rides in the pack as one of its files,
-##   and is audited instead: used-and-undeclared or declared-above-the-build fails.
-##
-## The source must have been imported (an empty class list derives nothing, which the tool
-## refuses); a source that was not is imported once and asked again. Static so a suite can
-## run the same derivation on a game it does not publish.
+## Derive [param source]'s requires.json into [param out_path], the way dot-ci's `package.sh --pack`
+## does: dot-core's `tools/dot_requires.gd`, run with `--path` the source project.
 static func derive_requires(source: String, out_path: String) -> DotResult:
 	var src := ProjectSettings.globalize_path(source)
 
@@ -542,7 +419,6 @@ static func _godot(args: Array) -> Dictionary:
 	return {"code": code, "output": "\n".join(PackedStringArray(output))}
 
 
-# --- The descriptor ---------------------------------------------------------
 
 ## Everything the publisher needs, from `pack.json`, then `game.yml`, then defaults.
 func _read_spec(dir: String, id: String) -> DotResult:
@@ -559,9 +435,7 @@ func _read_spec(dir: String, id: String) -> DotResult:
 		"groups": {},
 		"mirrors": [],
 		# A server-owner extra pack that starts something: {"entry": "scene.tscn", "side":
-		# "server|client|both"}. It rides in the manifest's signed metadata rather than in
-		# `entry` (the manifest's entry scene), because that one names a GAME's scene and a
-		# map pack's, and a pack with both would be instantiated as a game by accident.
+		# "server|client|both"}.
 		"addon": {},
 	}
 
@@ -574,14 +448,8 @@ func _read_spec(dir: String, id: String) -> DotResult:
 	var game_yml := dir.path_join("game.yml")
 
 	if FileAccess.file_exists(game_yml):
-		# [b]`parse` returns a DotResult, not the tree.[/b] The first version of this read
-		# it as `var tree: Variant = TmcYaml.parse(...)` and then asked `tree is
-		# Dictionary`, which is never true — so every field below silently kept its
-		# default and every game published as `0.0.0` with no name and no entry scene. A
-		# pack with the wrong version in it is not a pack that fails; it is one that
-		# mounts at the wrong path forever. Fallible operations return DotResult in this
-		# family precisely so that ignoring one is visible, and this ignored it by
-		# type-testing the wrapper.
+		# [b]`parse` returns a DotResult, not the tree.[/b] The first version of this read it as `var
+		# tree: Variant = TmcYaml.parse(...)` and then asked `tree is Dictionary`, which is never true.
 		var read := TmcYaml.parse_file(game_yml)
 
 		if not read.ok:
@@ -660,7 +528,6 @@ func _read_spec(dir: String, id: String) -> DotResult:
 	return DotResult.success(meta)
 
 
-# --- Assembly ---------------------------------------------------------------
 
 ## Copy everything `include` names into [param staged], then drop what `exclude` matches.
 func _assemble(meta: Dictionary, staged: String) -> DotResult:
@@ -776,14 +643,10 @@ func _drop_matching(root: String, pattern: String) -> void:
 	dir.list_dir_end()
 
 
-# --- Odds and ends ----------------------------------------------------------
 
-## Every `class_name` declared under [param root], up to a handful worth naming.
-##
-## Text search rather than a parse: this runs over a tree that is about to be published
-## and the question is only whether the declaration is there. A `class_name` inside a
-## string or a comment would be a false positive, and in five games there has never been
-## one -- and refusing a pack that would not have worked anyway costs nothing.
+## Every `class_name` declared under [param root], up to a handful worth naming. Text search rather
+## than a parse: this runs over a tree that is about to be published and the question is only
+## whether the declaration is there.
 func _class_names_in(root: String) -> PackedStringArray:
 	var out := PackedStringArray()
 

@@ -2,26 +2,6 @@ class_name TmcGameRotation
 extends RefCounted
 
 ## Which GAMES this server plays: `cfg/content/games.yml`.
-##
-## The same format as `cfg/maps.yml` (named rotations, `random` or `cycle`, a cooldown, a plain
-## list as shorthand for `main`, wildcards), and the same code: parsing, layering and the
-## matcher are dot-core's [DotRotationSpec], not a second copy. The only difference is what a
-## candidate is: an installed game, named by its content id (`owner/name`, matched as
-## content.yml matches games) or by its game id when it has none.
-##
-## A game outside the active rotation stays installed and an admin can still change to it
-## (`changelevel`); it is left out of the game ballot, `!game_nominate`, the next game a
-## `!game_rtv` or the end of a game picks, and the content/-order fallback. `vote_exclude:` in
-## vote.yml is applied as well, on top.
-##
-## [codeblock]
-## rotation: main              # sv_game_rotation <name> switches live
-## mode: random                # random (cooldown) | cycle (written order, wraps)
-## cooldown: 2
-## games: [gamemann/*]         # a plain list is the main rotation
-## rotations:
-##   party: {mode: cycle, games: [mg-wipeout, mg-deathrun]}
-## [/codeblock]
 
 const CHANNEL := "tmc.games_rotation"
 ## Beside the download list of the same name: this reads `games:`, `rotations:` and the rest, that reads `entries:`.

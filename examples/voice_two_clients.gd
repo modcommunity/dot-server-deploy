@@ -1,28 +1,6 @@
 extends Node
 
 ## Two REAL clients over a REAL socket in a DELIVERED game: does one hear the other?
-##
-## [codeblock]
-## godot --headless --path . res://examples/voice_two_clients.tscn -- --game deathrun
-## tools/voice_all_games.sh          # every game, and the table
-## [/codeblock]
-##
-## [b]Why here.[/b] Every game's own suite proves its half on a loopback; only the shell boots
-## the game as players get it, a signed pack mounted into a build that does not contain it,
-## with each client's dot-voice manager built by the delivered client scene. This finds each
-## client's `DotVoiceManager` and the server's `DotVoiceRouter` by walking the trees (nothing
-## here can name a game's types), feeds client A a tone through a buffer source (a headless
-## run has no microphone; dot-voice's own device probe covers that layer), and asserts:
-##
-## - with `sv_voice_mode 1` (everybody), A's frames reach B through the server, stamped with
-##   A's peer id, and decode to the tone rather than silence;
-## - `sv_voice_enable 0` reaches B's manager through the replicated cvar, and nothing more
-##   arrives while it is off (armed by the frames before it); 1 brings speech back;
-## - with the game's own channel (`sv_voice_mode 0`) it reports whether B heard A, which is
-##   the game's rule (team, proximity) and not a failure.
-##
-## Prints one `VOICE {json}` line at the end for tools/voice_all_games.sh. Exit 0 all held,
-## 1 a check failed, 3 the game's pack is not published here.
 
 const ServerWorld := preload("res://examples/server_world.gd")
 const CONTENT := "res://content"
@@ -169,9 +147,7 @@ func _boot() -> bool:
 
 ## The house's own key for a player is the account in two games (look-at-me, delivery), and both
 ## clients in this process are one guest (one device id per install), so Bea's join took Ada's
-## player and kicked her ("You joined from another tab or window"): both games failed here with
-## a voice manager freed under the check. Keyed by session, as two people on two machines are
-## (burst_probe and lookatme_client do the same).
+## player and kicked her ("You joined from another tab or window").
 func _key_by_session() -> void:
 	for name in _server().modules.loaded_names():
 		var module: DotModule = _server().modules.get_module(name)

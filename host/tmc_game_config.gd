@@ -1,67 +1,8 @@
 class_name TmcGameConfig
 extends RefCounted
 
-## What a server OWNER says about each game, from `cfg/game/<game>/server.yml` and the older `cfg/server/content/overrides.yml`, laid over the game's
-## own `game.yml`.
-##
-## [codeblock]
-## defaults:                            # every game on this server
-##   cvars:
-##     sv_alltalk: "1"
-## games:
-##   game-g2gfast:                      # a game id, or its name half while unambiguous
-##     name: "Surf & Bhop"
-##     max_players: 24
-##     cvars:
-##       sv_airaccelerate: "150"
-##     metadata:                        # merged key by key into the game's metadata:
-##       map_vote:
-##         duration_sec: 1800
-##     map_owner: gamemann              # who a bare map name belongs to (see below)
-##     suggested_maps: all              # the game.yml `suggested:` map packs: all, none, or groups (dm,surf)
-##     maps:
-##       game_maps: true                # keep the maps the game's own game.yml lists
-##       add:
-##         - gamemann/surf_mesa         # the newest on the origin, re-checked every start
-##         - gamemann/bhop_grove@1.2.0  # held at that version
-##         - bhop_pit                   # bare: the owner comes from map_owner (below)
-##       remove:
-##         - gamemann/bhop_pit
-## [/codeblock]
-##
-## [b]Two owners, two files.[/b] A game's `game.yml` travels inside its pack: it is what the
-## GAME's author thinks a server should run, and the installer replaces the server's copy
-## with each new version's. Before this, the only place a server owner could change a
-## cvar, a player count, a map vote's timing or the map list was that copy, and the next
-## game update undid it -- kept as `game.yml.prev`, read by nobody. This file is never
-## written by anything but the owner, so the owner's answer survives every update and the
-## author's defaults still arrive for everything the owner did not mention.
-##
-## [b]What may be overridden is what a server owner tunes; what the game IS may not be.[/b]
-## `scene`, `client_scene`, `module`, `kind`, `content_id` and `version` decide which code
-## runs and from which mount; a server that changed them would be running a different game
-## under this one's name, and a client would be sent a scene its pack does not have. Those
-## keys here are refused with the reason rather than applied.
-##
-## [b]Order:[/b] the game's `game.yml` < `defaults:` < `games: <game>:`. Cvars and metadata
-## merge key by key (metadata recursively, so `map_vote: duration_sec` keeps the game's
-## other `map_vote` settings); a list replaces a list. The host's own metadata keys --
-## `kind`, `module`, `directory` -- win over both, as they do over `game.yml`.
-##
-## [b]A bare map name gets its owner from, in order:[/b] the game's `map_owner:`, then
-## `defaults: map_owner:`, then the game's own `sv_map_content_owner` cvar (as the effective
-## descriptor has it, this file's cvars included), then the owner half of the game's content
-## id. None of them: [member errors] names the entry. [method map_owner_for] and
-## [method qualified_rule] are the only code that decides this, and `install-games` goes
-## through [method all_map_entries], so it pins the ids the host will look up.
-##
-## [b]Unpinned maps are resolved by the installer, not here.[/b] `TmcContent` refuses a
-## map with no version because a server that resolved `@latest` per join would hand two
-## players two different packs under one map. So `./server install-games` (every start)
-## asks the origin for each unpinned map's `latest.json` and writes the answers to
-## `data/content-maps.json`, which this reads. A new upload of a map reaches a server on
-## its next restart; an origin that is down keeps the cached version; an unpinned map with
-## no cached version is left out with a warning rather than blocking the boot.
+## What a server OWNER says about each game, from `cfg/game/<game>/server.yml` and the older
+## `cfg/server/content/overrides.yml`, laid over the game's own `game.yml`.
 
 const CHANNEL := "tmc.content"
 
@@ -105,10 +46,9 @@ var games: Dictionary = {}
 ## `<owner>/<map>` -> version, from the installer's cache.
 var resolved: Dictionary = {}
 
-## `owner/collection` -> the `owner/map` ids it published when the installer last reached the
-## origin (`data/content-maps.json`, key `collections`); what an `owner/collection/*` entry in
-## `maps:` expands to. The last good expansion is kept, so a start during an outage still
-## has the maps it had.
+## `owner/collection` -> the `owner/map` ids it published when the installer last reached the origin
+## (`data/content-maps.json`, key `collections`); what an `owner/collection/*` entry in `maps:`
+## expands to.
 var collections: Dictionary = {}
 
 ## Problems found while applying, for the boot report.
@@ -161,11 +101,9 @@ static func load_from(config_dir: String, data_dir: String) -> DotResult:
 	return DotResult.success(out)
 
 
-## Reads `cfg/game/<game>/server.yml` (the game's shipped tier) then `cfg/server/game/<game>/server.yml`
-## (the operator's, never touched by an update) for every game directory, laid over what `overrides.yml` said
-## for that game (key by key: `cvars` and `metadata` merge, the rest replace). The same keys as a
-## `games:` entry, plus `sv_name` and `sv_maxplayers` for `name` and `max_players`, so the file reads like
-## the generic `server.yml`. `defaults:` has no per-game home and stays in `overrides.yml`.
+## Reads `cfg/game/<game>/server.yml` (the game's shipped tier) then
+## `cfg/server/game/<game>/server.yml` (the operator's, never touched by an update) for every game
+## directory, laid over what `overrides.yml` said for that game (key by key.
 func read_game_files(config_dir: String) -> DotResult:
 	var base := config_dir.rstrip("/")
 	var names := {}
@@ -267,12 +205,9 @@ func read(tree: Dictionary) -> DotResult:
 	return DotResult.success(null)
 
 
-## Every map entry the file names for the games in [param content], qualified: what the
-## installer resolves. The installer and the host read the same rule here
-## ([method qualified_rule]), so the id `install-games` pins is the id [method apply] looks
-## up. A bare name of a section no game in [param content] matches cannot be given an
-## owner and is skipped (the host reports the section); an unusable entry lands in
-## [member errors] and the rest still resolve.
+## Every map entry the file names for the games in [param content], qualified: what the installer
+## resolves. The installer and the host read the same rule here ([method qualified_rule]), so the id
+## `install-games` pins is the id [method apply] looks up.
 func all_map_entries(content: TmcContent = null) -> PackedStringArray:
 	var out := PackedStringArray()
 
@@ -304,11 +239,9 @@ func all_map_entries(content: TmcContent = null) -> PackedStringArray:
 	return out
 
 
-## The maps of one collection from its published `collection.json` body:
-## `{"format": 1, "id": "<owner>/<collection>", "version": "...", "packs": ["<owner>/<map>"]}`.
-## Returns a DotResult of a PackedStringArray of `owner/map` ids. A `format` newer than this
-## build reads is an error naming the collection (guessing at a newer shape would offer the
-## wrong maps), as is a body for another id or a pack that is not exactly `owner/map`.
+## The maps of one collection from its published `collection.json` body: `{"format": 1, "id":
+## "<owner>/<collection>", "version": "...", "packs": ["<owner>/<map>"]}`. Returns a DotResult of a
+## PackedStringArray of `owner/map` ids.
 static func parse_collection(collection: String, body: Variant) -> DotResult:
 	if not (body is Dictionary):
 		return DotResult.fail(DotError.CODE_INVALID, "collection %s: collection.json is not an object." % collection)
@@ -422,10 +355,6 @@ static func _suggested_mode_of(value: Variant) -> String:
 
 
 ## [param rule] (a normalised `maps:` block) with every entry qualified for [param owner].
-## `add` entries keep their `@version`; `remove` entries are ids, or a bare name when
-## [param owner] is "" (then [method _maps] matches it on the name half, because removing
-## needs no owner to be unambiguous). An `add` that cannot be qualified is dropped and
-## recorded in [member errors] with [param game] and the entry.
 func qualified_rule(game: String, rule: Dictionary, owner: String) -> Dictionary:
 	var add := PackedStringArray()
 	var remove := PackedStringArray()
@@ -529,7 +458,6 @@ func describe_lines() -> PackedStringArray:
 	return lines
 
 
-# --- Reading --------------------------------------------------------------------
 
 
 ## One section, normalised: `cvars` and `metadata` always Dictionaries, `maps` always
@@ -676,7 +604,6 @@ func _read_maps(where: String, value: Variant) -> DotResult:
 	return DotResult.success({"add": add, "remove": remove, "game_maps": game_maps})
 
 
-# --- Applying -------------------------------------------------------------------
 
 
 func _apply_section(
@@ -713,18 +640,9 @@ func _apply_section(
 	descriptor.maps = _maps(descriptor, rule)
 
 
-## When a game's maps are fetched, which only the game can say: `metadata: maps_delivery:`
-## in its game.yml.
-##
-## - `lazy` (or absent): only in `maps`, fetched when the server changes to one. For a game
-##   whose maps are large scenes, one pack each -- a gigabyte before boot otherwise.
-## - `server`: also in `server_dependencies`, which dot-server fetches and mounts BEFORE the
-##   game loads, on the server only. For a game whose maps are small documents the server
-##   sends each client itself. Without it the game fetched them during its own module load,
-##   which dot-server does not wait for: the first players were admitted to a server playing
-##   only the game's built-in course (dot-server-deploy's wipeout_client found that).
-## - `client`: also in `dependencies`, fetched before load and sent to every client in the
-##   content sync, for a game whose client builds a map from its pack itself.
+## When a game's maps are fetched, which only the game can say: `metadata: maps_delivery:` in its
+## game.yml. - `lazy` (or absent): only in `maps`, fetched when the server changes to one. For a
+## game whose maps are large scenes, one pack each -- a gigabyte before boot otherwise.
 func _maps_to_clients(descriptor: DotGameDescriptor) -> void:
 	var mode := str(descriptor.metadata.get("maps_delivery", "lazy"))
 	var into: PackedStringArray
@@ -812,10 +730,9 @@ func _maps(descriptor: DotGameDescriptor, rule: Dictionary) -> PackedStringArray
 			if at >= 0:
 				order.remove_at(at)
 
-	# What `add` means once collections are expanded: an explicit entry always wins over
-	# the same map arriving through a wildcard (it carries the pin), and `remove` takes a
-	# map out of a wildcard but never out of an explicit entry. Explicit entries are
-	# collected first so a wildcard before them cannot claim their ids.
+	# What `add` means once collections are expanded: an explicit entry always wins over the same map
+	# arriving through a wildcard (it carries the pin), and `remove` takes a map out of a wildcard but
+	# never out of an explicit entry.
 	var explicit := {}
 
 	for entry in (rule["add"] as PackedStringArray):

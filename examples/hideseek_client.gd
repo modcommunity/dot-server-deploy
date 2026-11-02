@@ -1,29 +1,10 @@
 extends Node
 # [b]Nothing preloaded out of the game, because no game is in this build.[/b] Hide & Seek is a
-# delivered pack at `res://dot_cloud/tmc/hideseek/<version>/…`, and its maps are a second pack
-# at `res://dot_cloud/tmc/hideseek_maps/<version>/…`. Everything about the game is reached
-# through the host's module table and `describe()`, as deathrun_client does.
+# delivered pack at `res://dot_cloud/tmc/hideseek/<version>/…`, and its maps are a second pack at
+# `res://dot_cloud/tmc/hideseek_maps/<version>/…`.
 
 ## A REAL client, over a REAL socket, in a DELIVERED Hide & Seek, with its maps delivered as a
-## server-only pack beside it.
-##
-## [codeblock]
-## godot --headless --path . res://examples/hideseek_client.tscn
-## [/codeblock]
-##
-## Exits non-zero on any failure. Needs `dist/tmc/hideseek` and `dist/tmc/hideseek_maps`
-## (`./server pack hideseek_maps --source games/hide-n-seek-maps`, then hideseek).
-##
-## [b]What only this can see.[/b] game-hide-n-seek's suites run inside its own project, where its
-## maps are a link at `res://maps` and its props, their measured sizes and its taunts are files
-## at `res://`. Delivered, every one of those is somewhere else: the game is mounted under a
-## versioned prefix and must find its catalogue, its models and its taunt list through
-## `HsPaths.rebase`, and the maps are `server_dependencies` mounted on the server alone, found
-## only if the prefix the game computes from the pinned key is where the pack really mounted. A
-## wrong guess at any of them is silent: a server that plays only the practice house, a
-## catalogue of nothing so every map is built bare, a taunt list nobody can play. So this
-## asserts each one from the delivered process, and that the client, never sent a map file,
-## built the same map, with every prop in it, from the document.
+## server-only pack beside it. Exits non-zero on any failure.
 
 const CONFIG := "res://examples/fixtures/hideseek"
 
@@ -105,7 +86,6 @@ func _run() -> void:
 	get_tree().quit(1 if _failed > 0 else 0)
 
 
-# --- The harness ------------------------------------------------------------
 
 func _section(title: String) -> void:
 	_entered += 1
@@ -157,8 +137,8 @@ func _says(world: Object) -> Dictionary:
 	return world.call("describe") as Dictionary
 
 
-## The CLIENT's world: the delivered client scene under the link's `GameRoot`, whose `game`
-## property is the world it built. Found by walking, because nothing here can name its type.
+## The CLIENT's world: the delivered client scene under the link's `GameRoot`, whose `game` property
+## is the world it built.
 func _client_world() -> Object:
 	var root := _link.get_node_or_null(^"GameRoot") if _link != null else null
 
@@ -174,7 +154,6 @@ func _client_world() -> Object:
 	return null
 
 
-# --- Boot -------------------------------------------------------------------
 
 func _boot() -> bool:
 	print("")
@@ -236,7 +215,6 @@ func _teardown() -> void:
 	await get_tree().process_frame
 
 
-# --- Sections ---------------------------------------------------------------
 
 func _test_connect() -> bool:
 	_section("a client connects to a delivered game")

@@ -1,41 +1,8 @@
 class_name TmcReplay
 extends Node
 
-## The last minute of every server, kept in memory, so that "save that" is possible and a
-## kick or a ban can carry a hash of what happened before it.
-##
-## [b]dot-replay was the second addon in the family that nothing constructed.[/b] It had a
-## ring for exactly this, a tap for exactly dot-server's event bus, and `evidence()` shaped
-## for exactly a punishment record -- and no server built one, the same "installed,
-## documented, wired into nothing" that `_build_logging` and `_build_security` in
-## [code]tmc_host.gd[/code] were written to close. This follows them: built for every game
-## the host runs, configured from `cfg/replay.yml`, never fatal.
-##
-## [b]What is recorded is the server's event bus and a roster, not the netcode.[/b] Every
-## event dot-server or a game fires -- connects, spawns, chat (blocked lines included),
-## commands, kicks, game changes, votes, admin actions -- goes on the `events` channel
-## through [DotReplayEventTap], and a keyframe every `replay_keyframe_seconds` holds who is
-## connected. That is what a moderator reviewing a report asks: who was there and what did
-## they do. A game's snapshots are deliberately NOT recorded here: [DotReplayNetTap] records
-## one peer's view, a view is a choice the game has to make, and a server tool that picked
-## one for every game would be recording the wrong player in most of them.
-##
-## [b]The clock is the wall clock, at the configured tick rate.[/b] dot-server drops to
-## `DotServerConfig.hibernate_tickrate` when nobody is connected, so a count of physics ticks would make
-## "the last sixty seconds" mean sixty seconds at one rate and several minutes at another,
-## and a clip saved just after somebody joined would reach back into an empty hour.
-## `tick = elapsed ms * sv_tickrate / 1000` is monotonic, which is all the recorder asks
-## ("ticks only move forward"), and it means the same thing whoever is connected.
-##
-## [b]What it costs a server, per tick[/b]: one `Time.get_ticks_msec()` and the recorder's
-## `advance()`, which is three integer comparisons when nothing is due. Once per
-## `replay_chunk_seconds` that something was recorded, the pending records are compressed
-## into a chunk (zstd over a few hundred bytes) and pushed onto the ring; once per
-## `replay_keyframe_seconds`, the session list is walked into a roster. An event costs its
-## `describe()`d data and one `var_to_bytes`. Memory is capped by `replay_ring_max_mib`
-## (32) and in practice is kilobytes: an idle server holds six roster chunks a minute. The
-## only work that is not O(1) is `replay save`, which writes what the ring holds -- on the
-## main thread, once, when an admin or a punishment asks.
+## The last minute of every server, kept in memory, so that "save that" is possible and a kick or a
+## ban can carry a hash of what happened before it.
 
 const CHANNEL := "tmc.replay"
 
@@ -261,12 +228,10 @@ func _on_game_loaded(_content_key: String) -> void:
 	begin()
 
 
-# --- Clips --------------------------------------------------------------------
 
-## Writes the last [param seconds] of the ring (0: all of it) under `clips/`, or under
-## `evidence/` when [param evidence] -- the directory decides which cap it counts against,
-## and a moderator's manual saves must never push evidence off the disk. Value: the
-## file's evidence Dictionary, [method DotReplayWriter.evidence] plus when and why.
+## Writes the last [param seconds] of the ring (0: all of it) under `clips/`, or under `evidence/`
+## when [param evidence] -- the directory decides which cap it counts against, and a moderator's
+## manual saves must never push evidence off the disk.
 func save_clip(seconds: float = 0.0, label: String = "", evidence: bool = false) -> DotResult:
 	if recorder == null or recorder.ring == null:
 		return DotResult.fail(
@@ -293,13 +258,8 @@ func save_clip(seconds: float = 0.0, label: String = "", evidence: bool = false)
 	return DotResult.success(ev)
 
 
-## A clip for a punishment, or the one saved for the previous punishment when that was
-## less than `replay_evidence_cooldown_sec` ago.
-##
-## [b]Shared on purpose.[/b] `ban` records the ban and then kicks, a guard removes a wave of
-## bots in one tick, and an admin kicks three people who were spamming together: each of
-## those is one incident, and ten identical files of the same minute is ten times the disk
-## for no more evidence.
+## A clip for a punishment, or the one saved for the previous punishment when that was less than
+## `replay_evidence_cooldown_sec` ago.
 func evidence_clip(why: String) -> DotResult:
 	var now := int(now_ms_fn.call())
 
@@ -323,13 +283,6 @@ func evidence_clip(why: String) -> DotResult:
 
 
 ## dot-server's own bans: the record is the Dictionary it just stored, emitted by reference.
-##
-## [b]Attached after the write, and written again.[/b] `DotBanManager` persists before it
-## emits and has no hook before, so the evidence goes on the stored Dictionary and the file
-## store is asked to save once more -- the file store writes the whole document, so the
-## second write carries it. A custom ban store persisted per ban and would not see it,
-## which is why the audit line below is written as well: the audit log is append-only, and
-## the final hash is only worth anything somewhere the file's holder cannot rewrite.
 func _on_ban_added(ban: Dictionary) -> void:
 	if not clip_on_punish:
 		return
@@ -349,11 +302,8 @@ func _on_ban_added(ban: Dictionary) -> void:
 	_audit(target, got.value as Dictionary)
 
 
-## A kick is not a record in dot-server -- it is an audit line and a closed socket -- so
-## the evidence is a second audit line, naming the same target.
-##
-## Kicks by an admin only: `kick` and `kickid` audit themselves, and a kick that is a
-## refused admission or the second half of a ban does not, which is the distinction wanted.
+## A kick is not a record in dot-server -- it is an audit line and a closed socket -- so the
+## evidence is a second audit line, naming the same target.
 func _on_audit(entry: Dictionary) -> void:
 	if not clip_on_punish or str(entry.get("action", "")) != "kick":
 		return
@@ -376,7 +326,6 @@ func _audit(target: String, ev: Dictionary) -> void:
 	})
 
 
-# --- dot-moderation -----------------------------------------------------------
 
 func _on_service_registered(service: StringName, instance: Object) -> void:
 	if service == MODERATION_SERVICE:
@@ -398,16 +347,8 @@ func watch_moderation(manager: Object) -> void:
 	manager.connect("punished", _on_punished)
 
 
-## dot-moderation's bans and kicks, whoever issued them: a game's `sm_ban`, a moderator
-## tool, or dot-server-security acting outside dry run.
-##
-## [b]After the record is stored, and stored again.[/b] `DotModerationManager.issue` takes
-## an `evidence` argument and none of its callers here pass one -- dot-server-security's
-## `_issue` does not, and nothing can hand it a clip before the punishment exists. So the
-## clip is merged into the record's own `evidence` field once it is emitted and the store
-## is asked to put it again, which every store answers as an upsert by id. A read-only
-## store is a centrally managed list: the record stays as it was, and the audit line
-## carries the hash instead.
+## dot-moderation's bans and kicks, whoever issued them: a game's `sm_ban`, a moderator tool, or
+## dot-server-security acting outside dry run.
 func _on_punished(punishment: Object) -> void:
 	if not clip_on_punish or punishment == null:
 		return
@@ -440,7 +381,6 @@ func _on_punished(punishment: Object) -> void:
 			})
 
 
-# --- Disk ---------------------------------------------------------------------
 
 ## Deletes the oldest `.dreplay` files in [param dir] until at most [param max_files] and
 ## [param max_bytes] remain. Evidence going is said at WARN, because a punishment names it.
@@ -530,12 +470,10 @@ func _roster() -> Array:
 	return out
 
 
-# --- The console ----------------------------------------------------------------
 
-## `replay`, `replay save [seconds] [label]`, `replay list`.
-##
-## GENERIC, like `log`: saving what just happened is what being staff is for, and what it
-## writes is bounded by the same caps as everything else here.
+## `replay`, `replay save [seconds] [label]`, `replay list`. GENERIC, like `log`: saving what just
+## happened is what being staff is for, and what it writes is bounded by the same caps as everything
+## else here.
 func _register_commands() -> void:
 	if server == null or server.console == null:
 		return

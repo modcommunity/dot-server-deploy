@@ -1,28 +1,11 @@
 extends Node
-# [b]Nothing preloaded out of the game, because no game is in this build.[/b] The playground
-# is a delivered pack at `res://dot_cloud/tmc/playground/<version>/…`, and its custom maps are
-# a second pack at `res://dot_cloud/tmc/playground_maps/<version>/…`. Everything about the
-# game is reached through the module's `game`, the client's `playground` and `describe()`.
+# [b]Nothing preloaded out of the game, because no game is in this build.[/b] The playground is a
+# delivered pack at `res://dot_cloud/tmc/playground/<version>/…`, and its custom maps are a second
+# pack at `res://dot_cloud/tmc/playground_maps/<version>/…`.
 
-## A REAL client, over a REAL socket, in a DELIVERED playground — with its custom maps
-## delivered as a `dependencies` pack beside it, mounted on the server AND the client.
-##
-## [codeblock]
-## godot --headless --path . res://examples/playground_client.tscn
-## [/codeblock]
-##
-## Exits non-zero on any failure. Needs `dist/tmc/playground` and `dist/tmc/playground_maps`
-## (`./server pack playground_maps --source games/game-playground-maps`, then playground).
-##
-## [b]What only this can see.[/b] The playground's suites read the maps from a link at
-## `res://maps/custom`. Delivered, they are a pack of their own that the CLIENT mounts too
-## (`dependencies`, the first game to use them), because a playground map is a document the
-## client builds itself: boxes, and props the server puts down. A prefix either end computes
-## wrongly is a catalogue with the custom maps silently missing on that end, and a map change
-## the client cannot follow. So this asserts the pack is a client dependency, mounted where
-## both ends compute, that both catalogues list the maps from that mount, that a change to
-## pgc_town is followed by the client with every box built, and that the map's props (doors
-## on buttons, buggies) reach the client from the server.
+## A REAL client, over a REAL socket, in a DELIVERED playground — with its custom maps delivered as
+## a `dependencies` pack beside it, mounted on the server AND the client. Exits non-zero on any
+## failure.
 
 const CONFIG := "res://examples/fixtures/playground"
 
@@ -108,7 +91,6 @@ func _run() -> void:
 	get_tree().quit(1 if _failed > 0 else 0)
 
 
-# --- The harness ------------------------------------------------------------
 
 func _section(title: String) -> void:
 	_entered += 1
@@ -160,8 +142,8 @@ func _says(world: Object) -> Dictionary:
 	return world.call("describe") as Dictionary
 
 
-## The CLIENT's playground: the delivered client scene under the link's `GameRoot`, which
-## holds it as `playground`. Found by walking, because nothing here can name its type.
+## The CLIENT's playground: the delivered client scene under the link's `GameRoot`, which holds it
+## as `playground`.
 func _client_client() -> Object:
 	var root := _link.get_node_or_null(^"GameRoot") if _link != null else null
 	if root == null:
@@ -177,7 +159,6 @@ func _client_world() -> Object:
 	return client.get("playground") as Object if client != null else null
 
 
-# --- Boot -------------------------------------------------------------------
 
 func _boot() -> bool:
 	print("")
@@ -239,7 +220,6 @@ func _teardown() -> void:
 	await get_tree().process_frame
 
 
-# --- Sections ---------------------------------------------------------------
 
 func _test_connect() -> bool:
 	_section("a client connects to a delivered game")

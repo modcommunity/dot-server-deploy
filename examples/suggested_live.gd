@@ -1,17 +1,8 @@
 extends Node
 
-## Live proof that a game's suggested packs mount from a real content origin.
-##
-## [codeblock]
-## godot --headless --path . res://examples/suggested_live.tscn -- \
-##     --game-yml ../game-arena/game.yml [--content-url https://dotgames.org/content] [--no-suggested]
-## [/codeblock]
-##
-## Runs the real shell's [code]_sync_workshop[/code] as a guest with a clean cache, the way a solo
-## start does, and prints one [code]RESULT[/code] line: the packs mounted and the suggested summary.
-## The packs in [code]game.yml[/code] come from the file given, not from a published game pack, so
-## it proves the map packs; whether the PUBLISHED game pack carries the list is a separate fetch.
-## Exit code 0 when the sync ran, 1 when it did not; the caller compares the line to what it expects.
+## Live proof that a game's suggested packs mount from a real content origin. Runs the real shell's
+## [code]_sync_workshop[/code] as a guest with a clean cache, the way a solo start does, and prints
+## one [code]RESULT[/code] line: the packs mounted and the suggested summary.
 
 const SHELL := "res://client/shell.tscn"
 const WORK := "user://suggested_live"

@@ -1,18 +1,7 @@
 extends SceneTree
 
-## Loads this deployment's [TmcConfig] the way a host does and runs one real [DotVoteDirector]
-## on its server vote, then prints what the ballot did as one JSON line.
-##
-## [b]A child process[/b], for dot-vote's `examples/layer_probe.gd` reason: `DOT_GAME_VOTE_*`
-## and `--game-vote-*` are read from the process's own environment and command line, and
-## `selftest`'s "the server vote's own layers reach a running ballot" starts this once per
-## layer. The rules are the fixture's `vote.yml` plus whatever the child was started with;
-## everything the ballot needs to be driven by hand is set AFTER loading and is none of the
-## three settings under test.
-##
-## [codeblock]
-## godot --headless --path . --script res://examples/vote_layer_probe.gd -- [--game-vote-<key>=<value> ...]
-## [/codeblock]
+## Loads this deployment's [TmcConfig] the way a host does and runs one real [DotVoteDirector] on
+## its server vote, then prints what the ballot did as one JSON line.
 
 # No `CHANNEL`: a probe that prints one line for a suite to read.
 

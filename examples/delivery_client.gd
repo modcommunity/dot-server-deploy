@@ -3,21 +3,9 @@ extends Node
 # Delivery is a delivered pack at `res://dot_cloud/tmc/delivery/<version>/…`; everything about
 # it is reached through the host's module table, `describe()` and duck typing.
 
-## A REAL client, over a REAL socket, in a DELIVERED Dangerous Delivery.
-##
-## [codeblock]
-## godot --headless --path . res://examples/delivery_client.tscn
-## [/codeblock]
-##
-## Exits non-zero on any failure. Needs `dist/tmc/delivery`
-## (`./server pack delivery --source games/mg-dangerous-delivery`).
-##
-## [b]What only this can see.[/b] mg-dangerous-delivery's suites run inside its own project,
-## where `res://routes` and `res://assets` are its own. Delivered, the routes and the truck
-## models are wherever the pack mounted, and a game that named `res://routes` would boot a
-## server with no routes and a client with box trucks. This asserts the server read every
-## route out of the mount, that the client built them from the hello, and that a truck the
-## client sets off in is driven by the client's own input across the socket.
+## A REAL client, over a REAL socket, in a DELIVERED Dangerous Delivery. Exits non-zero on any
+## failure. Needs `dist/tmc/delivery` (`./server pack delivery --source games/mg-dangerous-
+## delivery`).
 
 const CONFIG := "res://examples/fixtures/delivery"
 
@@ -97,7 +85,6 @@ func _run() -> void:
 	get_tree().quit(1 if _failed > 0 else 0)
 
 
-# --- The harness ------------------------------------------------------------
 
 func _section(title: String) -> void:
 	_entered += 1
@@ -149,8 +136,8 @@ func _says(world: Object) -> Dictionary:
 	return world.call("describe") as Dictionary
 
 
-## The CLIENT's world: the delivered client scene under the link's `GameRoot`, whose `game`
-## property is the world it built. Found by walking, because nothing here can name its type.
+## The CLIENT's world: the delivered client scene under the link's `GameRoot`, whose `game` property
+## is the world it built.
 func _client_world() -> Object:
 	var root := _link.get_node_or_null(^"GameRoot") if _link != null else null
 
@@ -166,7 +153,6 @@ func _client_world() -> Object:
 	return null
 
 
-# --- Boot -------------------------------------------------------------------
 
 func _boot() -> bool:
 	print("")
@@ -228,7 +214,6 @@ func _teardown() -> void:
 	await get_tree().process_frame
 
 
-# --- Sections ---------------------------------------------------------------
 
 func _test_connect() -> bool:
 	_section("a client connects to a delivered game")
@@ -305,10 +290,9 @@ func _test_driving_across_the_socket() -> void:
 		_done()
 		return
 
-	# The game's real way onto a route, both steps across the socket: the panel's button
-	# ("start") drives the client's truck to the route's gate, and the route begins only when
-	# the delivery is accepted there ("accept", the E at the barrier). Not `quick_start`, which
-	# would test a shortcut no player takes.
+	# The game's real way onto a route, both steps across the socket: the panel's button ("start")
+	# drives the client's truck to the route's gate, and the route begins only when the delivery is
+	# accepted there ("accept", the E at the barrier).
 	client.call("_act", "start", {"route": "dd_foothills"})
 	var key := StringName(str(client.get("bridge").get("local_key")))
 	var world := _world()

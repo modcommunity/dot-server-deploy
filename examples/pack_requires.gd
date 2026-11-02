@@ -1,22 +1,6 @@
 extends Node
 
 ## A pack this box publishes for itself carries requires.json, derived as dot-ci derives it.
-##
-## `./server pack <id> --source <repo>` (and setup.sh, which runs the same `tools/pack.gd`)
-## published every game with no requires.json, while the release path (dot-ci's
-## `package.sh --pack`) always wrote one. A box that self-published, and every client that
-## fetched from it, therefore had nothing to refuse with: a game built against newer addons
-## mounted and failed to compile instead of saying "needs dot-x API level N". This publishes
-## a first-party game the way `./server pack` does, into a scratch directory, and reads the
-## pack back.
-##
-##     godot --headless --path . res://examples/pack_requires.tscn
-##
-## Needs mg-look-at-me (the smallest first-party game) and game-arena (the one with a
-## requires.floor.json) in games/ or beside this project, imported, with their addons
-## linked. Armed by making `Pack.publisher_for` add nothing (the pack then fails to publish,
-## "published without its requires.json"), and by passing it "" (the pack then publishes
-## without one and the second check below fails).
 
 const Pack := preload("res://tools/pack.gd")
 

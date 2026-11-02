@@ -1,35 +1,8 @@
 class_name TmcAdminMenuPanel
 extends CanvasLayer
 
-## The admin menu on a player's screen: the page the server sent, numbered, chosen with a
-## number key or a click. See `host/tmc_admin_menu.gd` for what is on it and why the
-## server builds every page.
-##
-## [codeblock]
-## 1-7  choose a row       8  back, or the previous page       9  next page       0  close
-## [/codeblock]
-##
-## [b]It draws and it sends, and it decides nothing.[/b] A row carries the path the server
-## gave it; choosing it hands the path to [member send_fn] — the shell sends it on the
-## server's own envelope kind, or as the silent `/admin_menu <path>` chat command to a
-## server that does not know the kind — and the server answers with the next page, a close,
-## or a reply in chat. What an admin may do is never this panel's question, so a
-## modified client that drew rows the server never sent would be sending commands the
-## server refuses anyway.
-##
-## [b]Back is the client's.[/b] The server keeps no menu state per admin, so the panel
-## keeps the paths it has been shown and Back re-asks for the previous one. Asking rather
-## than re-drawing a cached page is deliberate: a player list from ten seconds ago is a
-## list with somebody on it who has left.
-##
-## [b]The number keys are consumed while it is open[/b], like [DotBallotPanel]'s, so a game
-## listening for them by event does not also switch weapon; a game that POLLS [Input] still
-## sees them, which no Control can take back. It takes the keys from an open ballot while it
-## is up, because an admin who opened a menu meant it.
-##
-## [b]The mouse is freed while it is open[/b] and given back the way it was found on close,
-## so a row can be clicked. A click outside the panel goes to the game, which recaptures
-## the mouse, and the number keys keep working.
+## The admin menu on a player's screen: the page the server sent, numbered, chosen with a number key
+## or a click. See `host/tmc_admin_menu.gd` for what is on it and why the server builds every page.
 
 const TOPIC := &"admin_menu"
 const NAV_COMMAND := "admin_menu"
@@ -94,11 +67,8 @@ func show_page(page: Dictionary) -> void:
 		return
 
 	var path := str(page.get("path", ""))
-	# A page reached by choosing is pushed; the same path again (a refresh after an error,
-	# a fresh player list after a command) replaces rather than stacking. A page already IN
-	# the history is a return to it, so everything after it goes: otherwise Back from a
-	# root the server sent after a command walks into the confirmation of the ban just
-	# carried out, and two quick Backs left a page in the history twice.
+	# A page reached by choosing is pushed; the same path again (a refresh after an error, a fresh
+	# player list after a command) replaces rather than stacking.
 	var at := _history.find(path)
 	if at >= 0:
 		_history.resize(at)
@@ -234,7 +204,6 @@ func submit_text(text: String) -> void:
 	_on_submit(text)
 
 
-# --- Sending ---------------------------------------------------------------------
 
 func _send_path(path: String) -> void:
 	if path == "" or not send_fn.is_valid():
@@ -276,7 +245,6 @@ static func clean_text(text: String) -> String:
 	return out.replace("\"", "'").replace(";", ",").strip_edges()
 
 
-# --- Input -----------------------------------------------------------------------
 
 func _input(event: InputEvent) -> void:
 	if not _open:
@@ -316,7 +284,6 @@ static func _number_of(key: Key) -> int:
 	return -1
 
 
-# --- Drawing ---------------------------------------------------------------------
 
 func _clean_rows(given: Variant) -> Array:
 	var out: Array = []

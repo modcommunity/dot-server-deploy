@@ -2,27 +2,8 @@ class_name TmcGameCover
 extends Node
 
 ## Keeps the shell's loading screen over a game until it is ready to be seen, then draws its
-## materials once under it so their shaders compile there and not in the middle of play.
-##
-## Three kinds of game, best first:
-##
-## [b]1. A game with a [DotLoadGate][/b] (dot-core). The shell claims the covering job by
-## putting [constant HOST_META] on its game root; a gate entering the tree under it calls
-## [method adopt_load_gate], shows no cover of its own, and from then on the gate decides:
-## its [code]closed[/code] puts the screen up, its [code]progress_changed[/code] is the
-## screen's line and bar, its [code]ready_to_show[/code] starts the warm-up here (the tree's
-## materials plus the gate's [code]warm_items()[/code]), and [code]host_finished()[/code]
-## tells it the screen is down. The gate is reached by name only (signals and methods), so a
-## gate from a newer dot-core overlay works with this shell.
-##
-## [b]2. The duck-typed root contract[/b] ([code]signal ready_to_show[/code],
-## [code]is_ready_to_show()[/code], [code]warm_up_items()[/code]) a game built before the gate
-## offers. Covered until the signal, for at most [member warm_wait_sec].
-##
-## [b]3. Anything else.[/b] Covered until a current camera inside the game exists and
-## [constant FALLBACK_SETTLE_FRAMES] physics frames have run with it, at most
-## [constant FALLBACK_MAX_SEC], then warmed and shown. A game that integrates nothing still
-## never shows its first, empty frames.
+## materials once under it so their shaders compile there and not in the middle of play. Three kinds
+## of game, best first: [b]1. A game with a [DotLoadGate][/b] (dot-core).
 
 const CHANNEL := "tmc.game_cover"
 
@@ -92,7 +73,6 @@ func mode_of(game: Node) -> String:
 	return ""
 
 
-# --- 1. A gate --------------------------------------------------------------------------
 
 ## Called by a [DotLoadGate] entering the tree under [method claim]'s root.
 func adopt_load_gate(gate: Object) -> void:
@@ -191,7 +171,6 @@ func _on_gate_gone(id: int) -> void:
 		loading.end(TmcLoadingScreen.REASON_WARM)
 
 
-# --- 2. The root contract ---------------------------------------------------------------
 
 func _watch_contract(game: Node) -> void:
 	game.connect(&"ready_to_show", _on_contract_ready.bind(game))
@@ -218,7 +197,6 @@ func _on_contract_ready(game: Node) -> void:
 	_warm_up(game, not game.has_meta(&"tmc_warmed"))
 
 
-# --- 3. Nothing at all ------------------------------------------------------------------
 
 func _watch_fallback(game: Node) -> void:
 	_fallback[game.get_instance_id()] = {"game": game, "since": Time.get_ticks_msec(), "settled": 0}
@@ -258,7 +236,6 @@ func has_camera_in(game: Node) -> bool:
 	return c2 != null and game.is_ancestor_of(c2)
 
 
-# --- Warming ----------------------------------------------------------------------------
 
 func _warm_up(game: Node, covered: bool) -> void:
 	if not is_instance_valid(game):

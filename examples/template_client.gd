@@ -1,40 +1,16 @@
 extends Node
-# [b]Nothing preloaded out of the game, because no game is in this build.[/b] The template is
-# a delivered pack: its files are at `res://dot_cloud/someone/dot-game-template/0.0.1/…`, and
-# everything about it is reached through the host's module table and `get()`, the way a host
-# is supposed to reach a game it cannot name.
+# [b]Nothing preloaded out of the game, because no game is in this build.[/b] The template is a
+# delivered pack: its files are at `res://dot_cloud/someone/dot-game-template/0.0.1/…`, and
+# everything about it is reached through the host's module table and `get()`.
 
 const Installer := preload("res://tools/install_games.gd")
 
 ## The server in a World3D of its own, away from the client in this process. See the helper.
 const ServerWorld := preload("res://examples/server_world.gd")
 
-## A game made from dot-game-template, delivered the way a third-party developer's is.
-##
-## [codeblock]
-## godot --headless --path . res://examples/template_client.tscn
-## [/codeblock]
-##
-## Exits non-zero on any failure, and exits 0 with a line saying so when the template or dot-ci
-## is not beside this project (a release tarball, a container), because there is then nothing
-## to deliver.
-##
-## [b]The whole path a developer's game takes, with the site stood in for.[/b] The template's
-## committed tree is packaged by dot-ci's `package.sh --pack` -- the exact step its release
-## workflow runs -- and the `-pack.zip` that produces is published the way website-city
-## publishes a release file ending in `-pack.zip`: unpacked, every res:// reference into the pack
-## rewritten onto the mount, signed, under `<site username>/<repo>` (here
-## `someone/dot-game-template`). The descriptor is the one inside the pack, stamped by
-## `install_games.gd`'s own `stamp_identity`. Then a real host boots it, a real client joins
-## over a real socket, and plays: it steers at a coin and the score comes back.
-##
-## [b]Why this and not smash_client.[/b] That one publishes with this project's own
-## `./server pack`, from a checkout. The template is the thing strangers copy, and what they ship
-## is a CI artifact the site signs -- so this checks that artifact, and a template that works
-## only in its own project is caught here instead of in somebody else's first release.
-##
-## The template's own suites run inside its project, where its files are at res:// and nothing
-## is mounted; this is the half they cannot reach. It packages git HEAD, so commit first.
+## A game made from dot-game-template, delivered the way a third-party developer's is. Exits non-
+## zero on any failure, and exits 0 with a line saying so when the template or dot-ci is not beside
+## this project (a release tarball, a container), because there is then nothing to deliver.
 
 const CONFIG_FIXTURE := "res://examples/fixtures/template"
 const ROOT := "user://tmc_template_client"
@@ -118,7 +94,6 @@ func _template_source() -> String:
 	return ""
 
 
-# --- The release, and the site ----------------------------------------------
 
 ## What the template's release workflow does: import, then `package.sh --pack`.
 func _package(source: String, package_sh: String) -> String:
@@ -202,7 +177,6 @@ func _publish(pack_dir: String) -> bool:
 	return published.ok and descriptor.ok
 
 
-# --- Boot, and a client -------------------------------------------------------
 
 func _boot() -> bool:
 	_section("a host boots the delivered game")
@@ -313,13 +287,11 @@ func _test_still_serving() -> void:
 	_done()
 
 
-# --- Helpers -------------------------------------------------------------------
 
 func _server() -> DotServer:
 	return _host.server as DotServer
 
 
-## The client scene the link loaded, found by walking: this build cannot name its type.
 func _client_scene() -> Node:
 	var root := _link.get_node_or_null(^"GameRoot") if _link != null else null
 	return root.get_child(0) if root != null and root.get_child_count() > 0 else null

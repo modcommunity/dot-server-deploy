@@ -1,29 +1,10 @@
 extends Node
 # [b]Nothing preloaded out of the game, because no game is in this build.[/b] Prop Hunt is a
-# delivered pack at `res://dot_cloud/tmc/prophunt/<version>/…`, and its maps are a second pack
-# at `res://dot_cloud/tmc/prophunt_maps/<version>/…`. Everything about the game is reached
-# through the host's module table and `describe()`, as deathrun_client does.
+# delivered pack at `res://dot_cloud/tmc/prophunt/<version>/…`, and its maps are a second pack at
+# `res://dot_cloud/tmc/prophunt_maps/<version>/…`.
 
-## A REAL client, over a REAL socket, in a DELIVERED Prop Hunt, with its maps delivered as a
-## server-only pack beside it.
-##
-## [codeblock]
-## godot --headless --path . res://examples/prophunt_client.tscn
-## [/codeblock]
-##
-## Exits non-zero on any failure. Needs `dist/tmc/prophunt` and `dist/tmc/prophunt_maps`
-## (`./server pack prophunt_maps --source games/mg-prop-hunt-maps`, then prophunt).
-##
-## [b]What only this can see.[/b] mg-prop-hunt's suites run inside its own project, where its
-## maps are a link at `res://maps` and its props, their measured sizes and its taunts are files
-## at `res://`. Delivered, every one of those is somewhere else: the game is mounted under a
-## versioned prefix and must find its catalogue, its models and its taunt list through
-## `PhPaths.rebase`, and the maps are `server_dependencies` mounted on the server alone, found
-## only if the prefix the game computes from the pinned key is where the pack really mounted. A
-## wrong guess at any of them is silent: a server that plays only the practice house, a
-## catalogue of nothing so every map is built bare, a taunt list nobody can play. So this
-## asserts each one from the delivered process, and that the client, never sent a map file,
-## built the same map, with every prop in it, from the document.
+## A REAL client, over a REAL socket, in a DELIVERED Prop Hunt, with its maps delivered as a server-
+## only pack beside it. Exits non-zero on any failure.
 
 const CONFIG := "res://examples/fixtures/prophunt"
 
@@ -108,7 +89,6 @@ func _run() -> void:
 	get_tree().quit(1 if _failed > 0 else 0)
 
 
-# --- The harness ------------------------------------------------------------
 
 func _section(title: String) -> void:
 	_entered += 1
@@ -160,8 +140,8 @@ func _says(world: Object) -> Dictionary:
 	return world.call("describe") as Dictionary
 
 
-## The CLIENT's world: the delivered client scene under the link's `GameRoot`, whose `game`
-## property is the world it built. Found by walking, because nothing here can name its type.
+## The CLIENT's world: the delivered client scene under the link's `GameRoot`, whose `game` property
+## is the world it built.
 func _client_world() -> Object:
 	var root := _link.get_node_or_null(^"GameRoot") if _link != null else null
 
@@ -177,7 +157,6 @@ func _client_world() -> Object:
 	return null
 
 
-# --- Boot -------------------------------------------------------------------
 
 func _boot() -> bool:
 	print("")
@@ -239,7 +218,6 @@ func _teardown() -> void:
 	await get_tree().process_frame
 
 
-# --- Sections ---------------------------------------------------------------
 
 func _test_connect() -> bool:
 	_section("a client connects to a delivered game")
@@ -349,11 +327,8 @@ func _test_the_client_builds_the_map() -> void:
 	_done()
 
 
-## [b]The BROKEN event, which a shell parses only if it has the game's newest event table.[/b]
-## A prop the server breaks is broken on the delivered client and throws its pieces there. The
-## server end is the two lines the game's own shot path runs (`break_prop`, then
-## `prop_broken`), so what is measured is the bridge's broadcast and the client's decoding of
-## an event appended last to `PhEvents.Kind`; the game's own suites never see it cross a mount.
+## [b]The BROKEN event, which a shell parses only if it has the game's newest event table.[/b] A
+## prop the server breaks is broken on the delivered client and throws its pieces there.
 func _test_a_broken_prop_reaches_the_client() -> void:
 	_section("a prop the server breaks is broken on the delivered client")
 
@@ -391,12 +366,9 @@ func _test_a_broken_prop_reaches_the_client() -> void:
 	_done()
 
 
-## [b]dot-props API level 4, drawn by the delivered client.[/b] A stand-in hides as the
-## tallest Food or Survival kit piece (models whose texture is an external `Textures/colormap.png`
-## beside them, which must load from inside the mount) and is turned on its nose, twelve steps of
-## fifteen degrees. The client must draw the model, not the box stand-in for one that would not
-## load, with its texture, upside down, its lowest point on the floor: turned about its foot, as
-## the first version did, the whole bottle was under it.
+## [b]dot-props API level 4, drawn by the delivered client.[/b] A stand-in hides as the tallest Food
+## or Survival kit piece (models whose texture is an external `Textures/colormap.png` beside them,
+## which must load from inside the mount) and is turned on its nose.
 func _test_a_leant_prop_is_drawn_on_the_floor() -> void:
 	_section("a leant prop is drawn on the floor by the delivered client")
 
@@ -518,11 +490,9 @@ func _test_still_serving() -> void:
 	_done()
 
 
-## [b]dot-combat's `mp_teammate_passthrough` on the delivered client.[/b] The client traces its
-## own shots for tracers and impacts; on its default 1 against a server on 0 or 2 they ended in,
-## or went through, a team-mate where the server's shot did the opposite. The game's client
-## calls `game.combat.follow_cvars(link)`, and this is the only place that call runs out of a
-## mount against a real server: the game's own suites only see the cvar flagged replicated.
+## [b]dot-combat's `mp_teammate_passthrough` on the delivered client.[/b] The client traces its own
+## shots for tracers and impacts; on its default 1 against a server on 0 or 2 they ended in, or went
+## through, a team-mate where the server's shot did the opposite.
 func _test_teammate_cvar_reaches_the_client() -> void:
 	_section("the server's mp_teammate_passthrough reaches the client's combat, live")
 
@@ -546,8 +516,6 @@ func _test_teammate_cvar_reaches_the_client() -> void:
 	_done()
 
 
-## The client's `game.combat.rules.pass_through_level()`, found by walking the link's
-## `GameRoot` (nothing here can name the game's types); -1 when there is none.
 func _client_pass_through() -> int:
 	var root := _link.get_node_or_null(^"GameRoot") if _link != null else null
 

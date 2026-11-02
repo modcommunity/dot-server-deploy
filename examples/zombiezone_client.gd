@@ -1,29 +1,10 @@
 extends Node
 # [b]Nothing preloaded out of the game, because no game is in this build.[/b] Zombie Zone is a
-# delivered pack at `res://dot_cloud/tmc/zombiezone/<version>/…`, and its maps are a second pack
-# at `res://dot_cloud/tmc/zombiezone_maps/<version>/…`. Everything about the game is reached
-# through the host's module table and `describe()`, as hideseek_client does.
+# delivered pack at `res://dot_cloud/tmc/zombiezone/<version>/…`, and its maps are a second pack at
+# `res://dot_cloud/tmc/zombiezone_maps/<version>/…`.
 
 ## A REAL client, over a REAL socket, in a DELIVERED Zombie Zone, with its maps delivered as a
-## server-only pack beside it.
-##
-## [codeblock]
-## godot --headless --path . res://examples/zombiezone_client.tscn
-## [/codeblock]
-##
-## Exits non-zero on any failure. Needs `dist/tmc/zombiezone` and `dist/tmc/zombiezone_maps`
-## (`./server pack zombiezone_maps --source games/zombie-zone-maps`, then zombiezone), and an
-## `addons/zed_weapons` beside `addons/zee_weapons`: the game carries both weapon packs.
-##
-## [b]What only this can see.[/b] game-zombie-zone's suites run inside its own project, where its
-## maps are a link at `res://maps` and its props, zombie bodies, sounds and box file are files at
-## `res://`. Delivered, every one is somewhere else, found through `ZzPaths.rebase`, and the
-## maps are `server_dependencies` found only if the prefix the game computes from the pinned key
-## is where the pack really mounted. A wrong guess is silent: a server that plays only the
-## practice street, a box file of nothing, a map built bare. And the zombies are the server's
-## alone, so a client that draws none is a client the replication never reached. So this asserts
-## each one from the delivered process, and that the client, never sent a map file, built the
-## same map with every prop in it and draws the server's zombies.
+## server-only pack beside it. Exits non-zero on any failure.
 
 const CONFIG := "res://examples/fixtures/zombiezone"
 
@@ -107,7 +88,6 @@ func _run() -> void:
 	get_tree().quit(1 if _failed > 0 else 0)
 
 
-# --- The harness ------------------------------------------------------------
 
 func _section(title: String) -> void:
 	_entered += 1
@@ -159,8 +139,8 @@ func _says(world: Object) -> Dictionary:
 	return world.call("describe") as Dictionary
 
 
-## The CLIENT's world: the delivered client scene under the link's `GameRoot`, whose `game`
-## property is the world it built. Found by walking, because nothing here can name its type.
+## The CLIENT's world: the delivered client scene under the link's `GameRoot`, whose `game` property
+## is the world it built.
 func _client_world() -> Object:
 	var root := _link.get_node_or_null(^"GameRoot") if _link != null else null
 
@@ -176,7 +156,6 @@ func _client_world() -> Object:
 	return null
 
 
-# --- Boot -------------------------------------------------------------------
 
 func _boot() -> bool:
 	print("")
@@ -243,7 +222,6 @@ func _teardown() -> void:
 	await get_tree().process_frame
 
 
-# --- Sections ---------------------------------------------------------------
 
 func _test_connect() -> bool:
 	_section("a client connects to a delivered game")
@@ -390,11 +368,9 @@ func _test_still_serving() -> void:
 	_done()
 
 
-## [b]dot-combat's `mp_teammate_passthrough` on the delivered client.[/b] The client traces its
-## own shots for tracers and impacts; on its default 1 against a server on 0 or 2 they ended in,
-## or went through, a team-mate where the server's shot did the opposite. The game's client
-## calls `game.combat.follow_cvars(link)`, and this is the only place that call runs out of a
-## mount against a real server: the game's own suites only see the cvar flagged replicated.
+## [b]dot-combat's `mp_teammate_passthrough` on the delivered client.[/b] The client traces its own
+## shots for tracers and impacts; on its default 1 against a server on 0 or 2 they ended in, or went
+## through, a team-mate where the server's shot did the opposite.
 func _test_teammate_cvar_reaches_the_client() -> void:
 	_section("the server's mp_teammate_passthrough reaches the client's combat, live")
 
@@ -418,8 +394,6 @@ func _test_teammate_cvar_reaches_the_client() -> void:
 	_done()
 
 
-## The client's `game.combat.rules.pass_through_level()`, found by walking the link's
-## `GameRoot` (nothing here can name the game's types); -1 when there is none.
 func _client_pass_through() -> int:
 	var root := _link.get_node_or_null(^"GameRoot") if _link != null else null
 

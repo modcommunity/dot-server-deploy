@@ -1,36 +1,9 @@
 extends Node
-# [b]Nothing preloaded out of the game, because no game is in this build.[/b] Smash Copter
-# is a delivered pack: its files are at `res://dot_cloud/tmc/smash/<version>/…` and this
-# file cannot name that path, because the version is the game's. Everything about the game
-# is reached through the host's own module table, which is where a host is supposed to reach
-# it.
+# [b]Nothing preloaded out of the game, because no game is in this build.[/b] Smash Copter is a
+# delivered pack: its files are at `res://dot_cloud/tmc/smash/<version>/…` and this file cannot name
+# that path, because the version is the game's.
 
-## A REAL client, over a REAL socket, in a DELIVERED game.
-##
-## [codeblock]
-## godot --headless --path . res://examples/smash_client.tscn
-## [/codeblock]
-##
-## Exits non-zero on any failure.
-##
-## [b]Why this exists when the game already has three suites and 280 checks.[/b] All three
-## run inside the game's own project, where its files are at `res://` and its `class_name`
-## globals are registered — which is the one condition a delivered pack never has. Two of
-## them do not open a socket at all, and the third replaces the RPC with a [Callable] so
-## that it can run both halves in one process: it exercises the encoders, the seal, the
-## prediction and the reconciliation, and it cannot see Godot's own RPC routing, the mount,
-## the publisher's path rewriting, or the host.
-##
-## Every bug this file is here to catch has the same shape: the game is correct, the pack is
-## correct, and the two do not meet. The first boot of this game against a real server found
-## a path the publisher had already rewritten being rebased a second time, a combat manager
-## setting itself up twice, and lag compensation reporting as unwired on a server where it
-## works — none of which any of the 280 checks could reach.
-##
-## Two [MultiplayerAPI] instances in one process, scoped by
-## [method SceneTree.set_multiplayer], because there is one [member SceneTree.multiplayer]
-## and two peers here want it. RPCs are routed by node path relative to each API root, so
-## both link nodes are named `Server` — the name is the routing, not a description.
+## A REAL client, over a REAL socket, in a DELIVERED game. Exits non-zero on any failure.
 
 const CONFIG := "res://examples/fixtures/smash"
 
@@ -114,7 +87,6 @@ func _run() -> void:
 	get_tree().quit(1 if _failed > 0 else 0)
 
 
-# --- The harness ------------------------------------------------------------
 
 func _section(title: String) -> void:
 	_entered += 1
@@ -153,13 +125,9 @@ func _until(condition: Callable, seconds: float = 20.0) -> bool:
 	return bool(condition.call())
 
 
-## The game's world node, found by duck typing rather than by class.
-##
-## [b]Nothing in this build can name a type the pack declares.[/b] The module is a
-## [DotModule] the host loaded out of the mount, and what hangs off it is the game's own
-## scene — so everything below asks for a PROPERTY by name and checks what came back. That
-## is the same bargain the game's own module makes with dot-game, and it is why the game
-## exposes `describe()` at all.
+## [b]Nothing in this build can name a type the pack declares.[/b] The module is a [DotModule] the
+## host loaded out of the mount, and what hangs off it is the game's own scene — so everything below
+## asks for a PROPERTY by name and checks what came back.
 func _world() -> Node:
 	var module: DotModule = _server().modules.get_module(MODULE)
 
@@ -183,7 +151,6 @@ func _world_says() -> Dictionary:
 	return said as Dictionary
 
 
-# --- Boot -------------------------------------------------------------------
 
 func _boot() -> bool:
 	print("")
@@ -227,18 +194,9 @@ func _boot() -> bool:
 	return true
 
 
-## [b]The client first, and then a frame, and then the host.[/b] The client is what holds
-## the delivered game's SCENE — the arena, the platforms, every mesh and material the pack
-## carries — under the `GameRoot` the link created. Freeing the host first leaves all of it
-## alive with nothing referencing it, and the process exits reporting a couple of hundred
-## leaked objects and resources still in use. That is only ever a warning, because the
-## process is ending either way; it is also indistinguishable at a glance from a game that
-## leaks a world per round, which this one rebuilds twenty times an hour.
-##
-## The awaits are not decoration. A [Node] taken out of the tree is freed at the end of the
-## frame, and the game's own world clears itself the same way for the same reason — so a
-## teardown with no frame between its two halves frees the host while the client's copy is
-## still queued.
+## [b]The client first, and then a frame, and then the host.[/b] The client is what holds the
+## delivered game's SCENE — the arena, the platforms, every mesh and material the pack carries —
+## under the `GameRoot` the link created.
 func _teardown() -> void:
 	if _link != null and is_instance_valid(_link):
 		_link.disconnect_from_server("test over")
@@ -264,7 +222,6 @@ func _teardown() -> void:
 	await get_tree().process_frame
 
 
-# --- Sections ---------------------------------------------------------------
 
 func _test_connect() -> bool:
 	_section("a client connects to a delivered game")
@@ -353,10 +310,9 @@ func _test_the_pack_mounted() -> void:
 	_done()
 
 
-## [b]The world, and the art it loads by path.[/b] The seventh form of the delivery
-## constraint was a prop whose model path had been rebased twice: the prop spawned, fell,
-## landed and damaged a platform while being invisible, and the only report anywhere was one
-## warning per prop. So this asks the world what it has rather than trusting that it booted.
+## [b]The world, and the art it loads by path.[/b] The seventh form of the delivery constraint was a
+## prop whose model path had been rebased twice: the prop spawned, fell, landed and damaged a
+## platform while being invisible, and the only report anywhere was one warning per prop.
 func _test_the_world_is_there() -> void:
 	_section("the delivered world built itself")
 
@@ -381,11 +337,9 @@ func _test_the_world_is_there() -> void:
 	_done()
 
 
-## A round, end to end, on the far side of a socket.
-##
-## [b]The props are the point.[/b] Nothing the cannon throws exists until a round is
-## running, and loading a prop's model is the exact line the first delivered boot died on.
-## A round that reaches a non-zero prop count is a round in which that path was walked.
+## A round, end to end, on the far side of a socket. [b]The props are the point.[/b] Nothing the
+## cannon throws exists until a round is running, and loading a prop's model is the exact line the
+## first delivered boot died on.
 func _test_a_round_runs() -> void:
 	_section("a round runs, and the cannon fires")
 
@@ -415,17 +369,15 @@ func _test_a_round_runs() -> void:
 	_done()
 
 
-## [b]What the CLIENT has, which is a different question from what the server has.[/b] The
-## field crosses the wire as a layout document and the client rebuilds it; a client that
-## rebuilt nothing is a player standing on a floor only the server can see, and every check
-## above would still pass.
+## [b]What the CLIENT has, which is a different question from what the server has.[/b] The field
+## crosses the wire as a layout document and the client rebuilds it; a client that rebuilt nothing
+## is a player standing on a floor only the server can see, and every check above would still pass.
 func _test_the_client_sees_the_field() -> void:
 	_section("the client has a field of its own")
 
-	# [b]`GameRoot`, by name, because the link does not expose it.[/b]
-	# [member DotClientLink.game_root_ref] defaults to `DotNodeRef.of_created(&"GameRoot")`,
-	# so the node exists as a child of the link and the reference to it is private. The
-	# shell's own suites reach the equivalent the same way.
+	# [b]`GameRoot`, by name, because the link does not expose it.[/b] [member
+	# DotClientLink.game_root_ref] defaults to `DotNodeRef.of_created(&"GameRoot")`, so the node exists
+	# as a child of the link and the reference to it is private.
 	var root := await _until(
 		func() -> bool:
 			var found := _link.get_node_or_null(^"GameRoot")
@@ -464,12 +416,9 @@ func _count_nodes(from: Node) -> int:
 	return total
 
 
-## [b]Two builds on one socket, in a delivered game.[/b]
-##
-## The client and the server each know a kind the other lacks (registered before the join,
-## in `_test_connect`), and the game's own netcode each registers one message type the
-## other lacks here. Neither is sent to the end that does not know it; forced onto the
-## wire anyway, each is dropped on arrival; and the round above ran over all of it.
+## [b]Two builds on one socket, in a delivered game.[/b] The client and the server each know a kind
+## the other lacks (registered before the join, in `_test_connect`), and the game's own netcode each
+## registers one message type the other lacks here.
 func _test_two_builds_on_one_socket() -> void:
 	_section("a client and a server that know different kinds share the socket")
 
@@ -521,11 +470,9 @@ func _test_two_builds_on_one_socket() -> void:
 	_done()
 
 
-## [b]The one refusal a delivered game makes by itself.[/b] A client whose message schema
-## lacks the types this game requires is told so and disconnected, by dot-game's wiring --
-## over the real socket, with dot-net's sentence as the reason, as CODE_VERSION. Driven by
-## handing the server's netcode the schema such a client would send; everything from the
-## refusal on is the real path. Last, because it ends the session.
+## [b]The one refusal a delivered game makes by itself.[/b] A client whose message schema lacks the
+## types this game requires is told so and disconnected, by dot-game's wiring -- over the real
+## socket, with dot-net's sentence as the reason, as CODE_VERSION.
 func _test_a_client_the_game_cannot_play_with() -> void:
 	_section("a client that cannot play this game's messages is disconnected in words")
 
@@ -582,10 +529,9 @@ class SkewVital extends DotNetMessage:
 		pass
 
 
-## Whatever the round did to the server, it can still be asked.
-##
-## The check a crash cannot pass by accident: a process that has segfaulted answers nothing,
-## and one that survived with its listener in pieces answers nothing either.
+## Whatever the round did to the server, it can still be asked. The check a crash cannot pass by
+## accident: a process that has segfaulted answers nothing, and one that survived with its listener
+## in pieces answers nothing either.
 func _test_still_serving() -> void:
 	_section("still serving")
 
@@ -613,11 +559,9 @@ func _test_still_serving() -> void:
 	_done()
 
 
-## [b]dot-combat's `mp_teammate_passthrough` on the delivered client.[/b] The client traces its
-## own shots for tracers and impacts; on its default 1 against a server on 0 or 2 they ended in,
-## or went through, a team-mate where the server's shot did the opposite. The game's client
-## calls `game.combat.follow_cvars(link)`, and this is the only place that call runs out of a
-## mount against a real server: the game's own suites only see the cvar flagged replicated.
+## [b]dot-combat's `mp_teammate_passthrough` on the delivered client.[/b] The client traces its own
+## shots for tracers and impacts; on its default 1 against a server on 0 or 2 they ended in, or went
+## through, a team-mate where the server's shot did the opposite.
 func _test_teammate_cvar_reaches_the_client() -> void:
 	_section("the server's mp_teammate_passthrough reaches the client's combat, live")
 
@@ -641,8 +585,6 @@ func _test_teammate_cvar_reaches_the_client() -> void:
 	_done()
 
 
-## The client's `game.combat.rules.pass_through_level()`, found by walking the link's
-## `GameRoot` (nothing here can name the game's types); -1 when there is none.
 func _client_pass_through() -> int:
 	var root := _link.get_node_or_null(^"GameRoot") if _link != null else null
 

@@ -2,31 +2,6 @@ class_name TmcReport
 extends Node
 
 ## Reports this server's own state to its listing on the site.
-##
-## [b]Why this exists at all.[/b] The other way for a listing to know a server is up is
-## for a scanner to send it a query packet, and there are three ways that fails for a
-## server like this one and only one of them is fixable from here:
-##
-## - A server behind a reverse proxy has its game port on loopback, and a reverse proxy
-##   forwards a WebSocket and not UDP. That one is fixed — [code]query_bind_ip[/code].
-## - A scanner will not query a private address, and it is right not to: dialling
-##   whatever a hostname resolves to is a request-forgery primitive aimed at somebody's
-##   own network. A development or LAN deployment is therefore unscannable by design.
-## - A query packet is lossy, rate-limited, and truncates a player list.
-##
-## A server that reports itself has none of those problems, and it is the only thing that
-## knows two facts a packet cannot carry: how many of its players are bots, and
-## [b]which games it can run[/b] — which for a multi-game server is the interesting half,
-## because the game it happens to be running right now is not what it is.
-##
-## [b]The token is a path, never a value.[/b] [code]DotAuthConfig.sensitive_keys[/code]
-## refuses [code]integration_token[/code] from the environment and from argv, because both
-## are readable by other processes and end up in [code]ps[/code] output and pasted bug
-## reports. So this takes a file, and the file is per-server: several servers share one
-## [code]cfg/[/code] directory here and each has its own listing.
-##
-## Absent a token nothing here runs and the server is simply not listed, which is the
-## correct behaviour for a LAN game and for every test.
 
 const CHANNEL := "tmc.listing"
 
@@ -39,10 +14,9 @@ var _config: DotAuthConfig = null
 var _path := ""
 
 
-## Builds the reporter, or explains why it did not.
-##
-## Never fails the boot: a server that cannot be listed is still a server, and an
-## operator who has not created an integration yet has not made a mistake.
+## Builds the reporter, or explains why it did not. Never fails the boot: a server that cannot be
+## listed is still a server, and an operator who has not created an integration yet has not made a
+## mistake.
 static func install(
 	host: Node, server: DotServer, content: TmcContent, config_path: String
 ) -> TmcReport:
@@ -59,11 +33,9 @@ static func install(
 
 func _build() -> void:
 	_config = DotAuthConfig.new()
-	# The listing borrows dot-auth's config for its backbone URL and token and never
-	# authenticates a player, so the strategy means nothing here -- but it is VALIDATED, and
-	# the default (`ticket`) demands a server_id and a public key. A file holding only a
-	# token, which is all an operator or [TmcEnroll] writes, was refused for that. INTROSPECT
-	# asks for nothing but the backbone URL; a file that names a strategy still wins.
+	# The listing borrows dot-auth's config for its backbone URL and token and never authenticates a
+	# player, so the strategy means nothing here -- but it is VALIDATED, and the default (`ticket`)
+	# demands a server_id and a public key.
 	_config.strategy = DotAuthConfig.Strategy.INTROSPECT
 	# On by default: the site draws a player's play time from the roster (join, leave, score),
 	# and enrollment already grants SERVER_USERS. `report_roster: false` in listing.json opts out.
@@ -114,13 +86,9 @@ func _build() -> void:
 	})
 
 
-## What this server looks like from outside.
-##
-## [method DotServer.to_stats_report] answers everything a single-game server has to say.
-## The one field added here is the one only this host knows: [code]games[/code], the ids
-## this server can be switched to without anybody reconnecting. A listing that files a
-## multi-game server under whatever it is running this minute is a listing that moves the
-## server every time somebody votes.
+## What this server looks like from outside. [method DotServer.to_stats_report] answers everything a
+## single-game server has to say. The one field added here is the one only this host knows:
+## [code]games[/code], the ids this server can be switched to without anybody reconnecting.
 func stats_report() -> Dictionary:
 	var report := _server.to_stats_report()
 

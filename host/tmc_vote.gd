@@ -2,88 +2,17 @@ class_name TmcVote
 extends Node
 
 ## Voting for the next game, on this server.
-##
-## [b]This is the first place in the family anybody votes for a GAME.[/b] dot-map has
-## voted for maps since it was written and two games use it; nothing has ever voted for
-## what the server should be running, because until this project there was nowhere a
-## server ran more than one. There are five games in `content/` and `changelevel`
-## switches between them under live players — so the only thing missing was letting the
-## players ask.
-##
-## [codeblock]
-## !game_nominate g2gfast
-## !game_rtv
-## Vote: g2gfast, playground, hungry_frenzy (30s)
-## !game_vote 1
-## [/codeblock]
-##
-## [b]Every one of those is prefixed, and the prefix is the whole reason this works.[/b]
-## A game loaded out of `content/` may run a vote of its own — g2gfast votes for the
-## next MAP, which is what a records server has always done — and that game's module
-## registers `rtv`, `nominate`, `timeleft` and `nextmap` before this file is ever
-## installed. [DotConsole] keeps the first registration of a name and returns it, so an
-## unprefixed game vote does not fail: it silently gets four dead commands and nine live
-## ones, and a player types `!nominate arena`, is told there is no such map, then types
-## `!nominations` and is shown an empty GAME ballot. Worse, those four names belong to
-## the game's module, so the first `changelevel` away takes them out of the console for
-## the rest of the process and nothing puts them back.
-##
-## So the server-level vote namespaces itself and the game keeps the names players'
-## fingers already know. [code]!rtv[/code] is always about what the game in front of you
-## is doing; [code]!game_rtv[/code] is always about which game is next.
-##
-## Everything about how that behaves is `cfg/vote.yml`, which is a [DotVoteRules] and
-## therefore the same fifty-five settings dot-vote documents. This file is only the
-## wiring: who counts as a player, who counts as an admin, where the announcements go,
-## and which games are not on the ballot.
-##
-## [b]Heard in chat, and seen and heard on the shell's HUD.[/b]
-## [method DotVoteDirector.announce_fn] is chat, as it always was. The countdown to a
-## ballot, the ballot's own time and every [signal DotVoteDirector.cue] go out as
-## [DotNotice]s — dot-server's one message to the client APPLICATION rather than to the
-## game on screen — and the shell's [code]TmcNoticeOverlay[/code] draws the line and plays
-## the cue out of its own catalogue. It was chat only until 2026-09-24, because the shell
-## had no channel but chat and a loaded game's wire is the game's; the pair that closed it
-## changed the signon revision, which is written up in dot-server's docs/history.md.
-##
-## [b]One HUD line, [constant NOTICE_TOPIC], and this file owns it.[/b] Each countdown
-## second replaces it; the ballot replaces it with its own time; and it is taken down by
-## [method _physics_process] the moment the director is neither counting down nor voting —
-## polled rather than signalled, because [method DotVoteDirector.cancel_countdown] emits
-## nothing, and a countdown an admin called off would otherwise run to zero on every
-## screen for a ballot that never opens.
-##
-## [b]One game is nothing to vote about.[/b] A server whose content offers one game —
-## after `vote_exclude`, counting a game's several modes as one and two installs under one
-## name as one ([method votable_count]) — installs no game vote at all: no `!game_*` commands, no clock, no
-## ballot asking the players to choose between that game and extending it. The game's own
-## MAP vote is then the only vote on the server, and it is unaffected either way: it runs
-## inside the game, on its own rules, with or without this one beside it. Where there are
-## two games or more, both run at once — the game vote on its clock and the map vote on its
-## own — which is why every command here is prefixed and the two ballots carry different
-## topics to the shell.
-##
-## [b]The ballot is drawn, not only typed.[/b] [DotVoteBallotFeed] sends the open ballot as
-## a notice's [code]data[/code] under [constant BALLOT_TOPIC] whenever it changes, to each
-## playing session with that session's own voter id, and the shell's [TmcNoticeOverlay]
-## draws it as a [DotBallotPanel]: number keys, a click, and every voter's avatar on what
-## they chose. A shell built before the field ignores it and still has the HUD line.
-##
-## Nothing is excluded by default: every installed game is a game somebody might choose.
-## `vote_exclude` takes a game off the ballot.
 
 const CHANNEL := "tmc.vote"
 
-## What every console command of the server-level vote is called, unless games.yml's
-## `commands:` block (`prefix`, `names`) says otherwise.
-##
-## See the class documentation: a game's own vote gets the bare names.
+## What every console command of the server-level vote is called, unless games.yml's `commands:`
+## block (`prefix`, `names`) says otherwise. See the class documentation: a game's own vote gets the
+## bare names.
 const COMMAND_PREFIX := "game_"
 
-## The two roles whose default name would be a lie on a vote about games.
-##
-## `nextmap` is not a map here, and `votefor` next to `game_` reads as a verb phrase
-## nobody types twice. Everything else keeps dot-vote's own name behind the prefix.
+## The two roles whose default name would be a lie on a vote about games. `nextmap` is not a map
+## here, and `votefor` next to `game_` reads as a verb phrase nobody types twice. Everything else
+## keeps dot-vote's own name behind the prefix.
 const COMMAND_NAMES := {"nextmap": "next", "vote": "vote"}
 
 ## The HUD line this vote owns on every client. See the class notes.
@@ -174,10 +103,6 @@ var _notice_text := ""
 
 
 ## Builds the whole thing and attaches it to [param p_server].
-##
-## Returns null when voting is turned off, or when fewer than [constant MIN_GAMES] games are
-## on offer — both legitimate configurations, not errors: a single-game server has nothing
-## to vote about, and its game's own map vote carries on regardless.
 static func install(
 	host: Node,
 	p_server: DotServer,
@@ -245,11 +170,6 @@ static func install(
 	# rock-the-vote just the same. See DotVoteDirector.begin_on_apply.
 	votes.director.begin_on_apply = false
 	# `dot_vote_director` belongs to whatever the loaded game registers, not to this.
-	# DotRegistry is last-wins, so leaving this on means every game's own vote is
-	# quietly displaced in the registry by the server's the moment the host boots —
-	# and a HUD that resolves the service to draw the ballot in front of the player
-	# would draw the wrong one. This director is reached through TmcVote, which the
-	# host holds, so it needs no global name at all.
 	votes.director.register_service = false
 
 	votes._operator_excluded = operator_excluded
@@ -319,18 +239,6 @@ static func install(
 
 
 ## Distinct GAMES a ballot could offer: enabled, not excluded, and counted by content id.
-##
-## [b]By content id, not by game id[/b], because one game can register several: hungario's
-## five modes are five game ids over one `tmc/hungry`, and its own map vote is already a
-## vote over exactly those five. A server running only hungario counted as five games would
-## put two ballots over the same choice on every screen. A descriptor with no content id is
-## a game of its own.
-##
-## [b]And by the name a player reads[/b], because that is all a ballot shows. A box with the
-## built-in `g2gfast` beside a published `owner/game-g2gfast` has two content ids and one
-## game, and counting it as two held a vote between g2gfast and Extend on a server that
-## runs nothing else. dot-vote now drops a choice named like the running one from the
-## ballot as well; this is the half that keeps the vote from being installed at all.
 static func votable_count(p_source: DotVoteGameSource, manager: DotGameManager) -> int:
 	var keys := {}
 	var names := {}
@@ -372,18 +280,13 @@ func _wire() -> void:
 
 		return out
 
-	# The map flag, which is what the vote's admin commands are gated on too. This asked
-	# for "changelevel" — the name of a COMMAND, not a flag anybody holds — and
-	# DotAdminFlags.granted matches exactly, so only root was ever an admin here: an
-	# admin's nomination never bypassed a cap and rtv_admin_instant never fired.
+	# The map flag, which is what the vote's admin commands are gated on too.
 	director.is_admin_fn = func(voter: StringName) -> bool:
 		var session := _session_for(voter)
 		return session != null and session.has_permission(DotAdminFlags.CHANGEMAP)
 
-	# A votekick on screen, or the loaded game's own ballot: a ballot opened on top of either
-	# would be two menus fighting for the same number keys. The due vote waits, through
-	# dot-vote's own retry. The other half — the game's ballot waiting for this one — is
-	# chained onto the game's director in _rescan().
+	# A votekick on screen, or the loaded game's own ballot: a ballot opened on top of either would be
+	# two menus fighting for the same number keys. The due vote waits, through dot-vote's own retry.
 	director.busy_fn = func() -> bool:
 		return (server.votes != null and server.votes.is_active()) or game_ballot_up()
 
@@ -408,7 +311,6 @@ func _wire() -> void:
 	director.cue.connect(_on_cue)
 
 
-# --- The HUD ------------------------------------------------------------------
 
 ## One second of the countdown to a ballot. The number is the notice's own countdown, so a
 ## client counts smoothly between these rather than jumping once a second.
@@ -514,11 +416,9 @@ func _sync_notice() -> void:
 	server.broadcast_notice(DotNotice.clear(NOTICE_TOPIC))
 
 
-## The id a session votes under.
-##
-## `u<userid>` matches [DotVoteCommands]'s default, which is what actually reads it —
-## two spellings of one key is the shape of the bug where a module looks a session up
-## by `peer_id` and gets null every time, silently.
+## The id a session votes under. `u<userid>` matches [DotVoteCommands]'s default, which is what
+## actually reads it — two spellings of one key is the shape of the bug where a module looks a
+## session up by `peer_id` and gets null every time, silently.
 func _voter_id(session: DotClientSession) -> StringName:
 	return StringName("u%d" % session.userid)
 
@@ -572,15 +472,9 @@ func change_under_way() -> bool:
 		and server.games.phase != DotGameManager.Phase.IDLE
 
 
-## Ticks the director, except while a change it (or anybody) started is landing.
-##
-## [b]The clock stands still for that long.[/b] A change takes seconds (the server fetches, every
-## client downloads, the swap happens) and during it the player count falls to 0 as clients
-## drop out to follow. A limit that ran out then found an empty server with nothing under way,
-## drew a game at random and changed away from the one just elected (`game_vote_all`, 2026-10-11:
-## arena elected, buses drawn, "the server is running arena again" failed). Held rather than
-## dropped: the change's own `begin()` restarts the clock for the game that lands, and a change
-## that fails leaves the clock where it was to expire on the next tick.
+## Ticks the director, except while a change it (or anybody) started is landing. [b]The clock stands
+## still for that long.[/b] A change takes seconds (the server fetches, every client downloads, the
+## swap happens) and during it the player count falls to 0 as clients drop out to follow.
 func _advance_director(delta: float) -> void:
 	if change_under_way():
 		return
@@ -603,18 +497,10 @@ func _on_game_loaded(_content_key: String) -> void:
 	})
 
 
-# --- The game's own vote ---------------------------------------------------------
 
-## One choice per GAME on the ballot, and none of the running game's other modes.
-##
-## [b]A game with several modes is several game ids over one content id[/b] (hungario: six), and
-## [DotVoteGameSource] lists every id. Until 2026-10-11 that put six hungario entries in a pool of
-## eighteen, so least-recently-played filling put a hungario mode on 23 of 27 ballots in
-## `game_vote_all`, and while hungario was running the game ballot offered its other modes —
-## the same choice its own mode vote already offers, decided by a full game change instead. The
-## rule [method votable_count] already followed for "is there a vote at all" now holds for the
-## ballot: a content id is one game, the first of its ids in `content/` stands for it, and the
-## running game's own modes are its own vote's to choose.
+## One choice per GAME on the ballot, and none of the running game's other modes. [b]A game with
+## several modes is several game ids over one content id[/b] (hungario: six), and
+## [DotVoteGameSource] lists every id.
 func _refresh_offer() -> void:
 	var excluded: Array[StringName] = _operator_excluded.duplicate()
 	if rotation != null:
@@ -645,12 +531,6 @@ func _refresh_offer() -> void:
 
 
 ## The loaded game's own vote directors (its map, mode or layout vote), found in the tree.
-##
-## [b]Found, not registered.[/b] A delivered game cannot name anything in this project, half the
-## games keep their director out of [DotRegistry] ([code]register_service = false[/code]), and
-## the registry is last-wins anyway. Every one of them is a [DotVoteDirector] node, and this
-## build carries that class, so a search of the tree finds each game's vote whatever it is
-## called and wherever its module put it.
 func game_directors() -> Array[DotVoteDirector]:
 	var live: Array[DotVoteDirector] = []
 
@@ -677,19 +557,6 @@ func is_on_screen() -> bool:
 
 
 ## Finds the game's directors, makes each wait for this vote, and hears its rounds.
-##
-## [b]Two ballots at once was the design until 2026-10-11[/b] ("the number keys belong to the
-## one opened last"). A minigame opens its layout ballot by itself twenty seconds into every
-## round, so on a multigame server the game ballot and the layout ballot met every time the
-## clock fell due mid-round, and a player pressing 2 voted in whichever opened last. Now each
-## waits for the other: this director through its own [code]busy_fn[/code], the game's through
-## one chained in front of whatever the game set, and dot-vote owes a ballot refused for it
-## rather than dropping it.
-##
-## [b]Rounds.[/b] The game vote's clock is the game's time; it hears nothing of rounds unless a
-## game's director does. One that is [member DotVoteDirector.round_based] says so on every
-## round's end ([signal DotVoteClock.round_ended]), and forwarding that is what lets
-## [code]time_up: finish_round[/code] in vote.yml play a round-based game's round out.
 func _rescan() -> void:
 	_rescan_in = RESCAN_SEC
 
@@ -748,15 +615,8 @@ func _on_game_round_ended(_played: int, _limit: int) -> void:
 	var _over := director.note_round_end()
 
 
-## Whether the loaded game is playing a round right now: its dot-match match is LIVE.
-##
-## Asked by the director under [code]time_up: finish_round[/code] once the clock has run out.
-## A game whose rounds this vote hears but which keeps no [DotMatch] beside its director is
-## answered true, so it keeps the hold it had before this existed.
-##
-## [b]Searched from the game's own director upwards, and never past the server.[/b] A suite
-## that runs a shell in the same process has a second, client-side match in the tree, and
-## the nearest one to the server's director is the server's.
+## Whether the loaded game is playing a round right now: its dot-match match is LIVE. Asked by the
+## director under [code]time_up: finish_round[/code] once the clock has run out.
 func round_in_progress() -> bool:
 	var found := _rounds_match()
 	return found == null or found.state == DotMatch.State.LIVE
@@ -796,10 +656,9 @@ func _rounds_match() -> DotMatch:
 	return null
 
 
-## Forgets a player who left.
-##
-## Their rock-the-vote goes and their nominations stay — dot-vote's asymmetry, and the
-## reason for it is that a rock-the-vote is a fraction of the people who are here.
+## Forgets a player who left. Their rock-the-vote goes and their nominations stay — dot-vote's
+## asymmetry, and the reason for it is that a rock-the-vote is a fraction of the people who are
+## here.
 func _on_client_left(session: DotClientSession, _reason: String) -> void:
 	director.forget_voter(_voter_id(session))
 

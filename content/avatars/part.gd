@@ -2,20 +2,6 @@
 extends Node2D
 
 ## One avatar part, drawn rather than modelled.
-##
-## [b]This file is content, not code.[/b] It ships inside `content/avatars/` in the build
-## and it is also what [DotCloudPublisher] packages into the avatar pack, so at runtime
-## there may be two copies of it on disk at different paths — one under `res://content/`
-## and one under `res://dot_cloud/hungry_avatars/<version>/`. That is exactly what
-## dot-cloud's version-namespaced mounting is for, and it is why this script has no
-## `class_name`: a global identifier registered twice from two packs is a collision the
-## engine resolves arbitrarily.
-##
-## It is deliberately a `_draw` call rather than a sprite. game-hungario ships no art, the
-## same way dot-ui ships none, and a part that is a few polygons is a part that can be
-## versioned, signed, downloaded and mounted at a realistic size without anybody having to
-## produce a texture first. Swapping these for real ones changes nothing anywhere else:
-## the contract is the scene root being a `Node2D` that answers `hungry_dress`.
 
 ## What to draw. A string rather than an enum because it crosses a pack boundary and an
 ## enum's numbering is a thing two versions of a file can disagree about.
@@ -29,12 +15,9 @@ extends Node2D
 @export_range(2.0, 400.0, 0.5) var unit: float = 18.0
 
 
-## The whole contract between a game and its avatar content.
-##
-## [param colours] is the avatar document's channels for this slot, already quantised to
-## eight bits; [param size] is how big to draw. Duck-typed on purpose: a part that does
-## not implement it is still shown, just not tinted or resized, which is a content
-## mistake that should look wrong rather than crash.
+## The whole contract between a game and its avatar content. [param colours] is the avatar
+## document's channels for this slot, already quantised to eight bits; [param size] is how big to
+## draw.
 func hungry_dress(colours: Array, size: float) -> void:
 	if colours.size() > 0 and colours[0] is Color:
 		tint_a = colours[0]

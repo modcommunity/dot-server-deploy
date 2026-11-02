@@ -1,14 +1,8 @@
 extends Node
 
-## A game published from its own repository installs on a server that has never seen it.
-##
-## The descriptor inside such a pack is written by the game's author, who cannot know the
-## address the site gives it (`<their username>/<repo>`) or the version a re-sync claims
-## (`1.2.0+r2`). `tools/install_games.gd` stamps both from what it just verified; this
-## checks that stamp without a network, because a descriptor that disagrees with its pack
-## mounts a path that does not exist and every script in the game is then "not found".
-##
-##     godot --headless --path . res://examples/install_descriptor.tscn
+## A game published from its own repository installs on a server that has never seen it. The
+## descriptor inside such a pack is written by the game's author, who cannot know the address the
+## site gives it (`<their username>/<repo>`) or the version a re-sync claims (`1.2.0+r2`).
 
 const Installer := preload("res://tools/install_games.gd")
 
@@ -106,13 +100,9 @@ func _test_template() -> void:
 	_done()
 
 
-## A game repository's own descriptor, against the one this deployment carries.
-##
-## The same game is described twice: once in its repository (travels in the pack a site
-## publishes) and once under content/ here (for `./server pack`). Two copies of one fact
-## is the drift this family keeps finding, so every field that decides what RUNS must
-## agree. The sibling checkout is read where bootstrap.sh puts it; a box without it
-## skips, visibly, rather than failing on something it was never given.
+## A game repository's own descriptor, against the one this deployment carries. The same game is
+## described twice: once in its repository (travels in the pack a site publishes) and once under
+## content/ here (for `./server pack`).
 const REPOSITORIES := {
 	"game-arena": "arena",
 	"game-playground": "playground",

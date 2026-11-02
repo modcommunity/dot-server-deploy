@@ -2,24 +2,6 @@ class_name TmcAddonEntry
 extends RefCounted
 
 ## Starts the extra packs a server owner added to a game (`cfg/addons.yml`).
-##
-## A pack declares what to start in its signed manifest metadata, written by `tools/pack.gd`
-## from `pack.json`'s `addon` key: [code]entry[/code], a scene relative to the pack's mount
-## root, and [code]side[/code], `server`, `client` or `both` (the default). After the game
-## has loaded, the server and each client call [method attach] with the dependency keys
-## they mounted, and every pack naming an entry for that side gets it instantiated under
-## the node given. A pack with no entry is just mounted.
-##
-## [b]Lives in client/ because the shell has to carry it.[/b] `host/` is not in the client
-## build, and the client half runs there. The host calls the same function, so the two
-## sides cannot read the metadata two ways.
-##
-## [b]Not the manifest's `entry_scene`.[/b] That names a game's client scene or a map pack's
-## scene, and every dependency a game lists already has one it expects to load itself.
-## Instantiating those here would start a map pack's level inside the game.
-##
-## [b]A failing entry never stops the game.[/b] The pack is the owner's, the game is what
-## the players came for: the failure is an ERROR naming the pack and the loop moves on.
 
 const CHANNEL := "tmc.content"
 

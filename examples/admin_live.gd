@@ -1,17 +1,7 @@
 extends Node
 
 ## `/admin` and the loading screen on the REAL shell, against a real server, over a socket.
-##
-## [codeblock]
-## godot --headless --path . res://examples/admin_live.tscn
-## [/codeblock]
-##
-## `admin_loading_selftest` checks each half against stand-ins. This is the only place the
-## halves meet: a chat line becomes a console command becomes a notice the shell routes to
-## its panel; a choice goes back as a silent chat line; a confirmed `changelevel` runs as
-## the admin; and while the game changes under the player, the loading screen goes up with
-## the picture the server's `loading.yml` named — served here, fetched by the shell ahead of
-## time — and comes down when the new game has spawned.
+## `admin_loading_selftest` checks each half against stand-ins.
 
 const FIXTURE := "res://examples/fixtures/admin_live"
 
@@ -145,7 +135,6 @@ func _labels() -> String:
 	return str(_panel().rows().map(func(r: Dictionary) -> String: return str(r["label"])))
 
 
-# --- The picture -----------------------------------------------------------------
 
 func _serve_media() -> void:
 	var image := Image.create(32, 18, false, Image.FORMAT_RGBA8)
@@ -191,7 +180,6 @@ func _process(_delta: float) -> void:
 		peer.disconnect_from_host()
 
 
-# --- Boot ------------------------------------------------------------------------
 
 func _boot() -> bool:
 	_section("booting")
@@ -256,14 +244,11 @@ func _me() -> DotClientSession:
 	return null
 
 
-# --- Sections --------------------------------------------------------------------
 
 func _test_connect() -> bool:
 	_section("a player joins")
 
 	_shell._connect_to("127.0.0.1:%d" % _port)
-	# In the same frame as the click, before the server has said a word: a first join used to
-	# show a grey menu for the whole download and load.
 	_check(_screen().is_showing(), "the loading screen is up the moment they press Connect")
 	_check(str(_screen().describe()["title"]).contains("127.0.0.1"),
 		"naming the server, since no document has come", str(_screen().describe()))

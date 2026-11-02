@@ -4,33 +4,8 @@ extends Node
 # and through TmcVote, which finds a loaded game's vote directors in the tree.
 
 ## The server's game vote, played through EVERY game in `content/`, with a real shell attached.
-##
-## [codeblock]
-## godot --headless --path . res://examples/game_vote_all.tscn
-## [/codeblock]
-##
-## Exits non-zero on any failure. Needs every game published in `dist/`
-## (`./server pack <id> --source games/<repo>`); with no `dist/` at all it says "skipped".
-##
-## [b]Why one suite walks all of them.[/b] `multigame` votes one change between two games with
-## nobody connected, and `shell_notice` draws the ballot over buses. Neither can say whether the
-## vote works in arena, or in a minigame whose own layout ballot opens by itself twenty seconds
-## into every round, or in a game with no rounds at all. A game reaches the game vote through
-## three things that are each game's: what it registers in the tree, whether it has a vote of its
-## own and when that one opens, and whether a real client can follow a change into it and out of
-## it. So every game is the running game once, and for each:
-##
-## - [b]Rock the vote offers a ballot[/b], typed by the client through chat, and the ballot is
-##   drawn on the shell's HUD. The client chooses "don't change" by clicking it.
-## - [b]The game's own vote waits for it[/b]: a ballot the game asks for while the game ballot is
-##   up is refused, and opens by itself once the game ballot closes.
-## - [b]The time limit offers a ballot[/b], and waits while the game's own ballot is up. A game
-##   without rounds reaches it the same way, because the game vote's clock is the game's time.
-## - [b]Never two ballots at once[/b], watched every physics frame for the whole run.
-## - [b]The winner is played[/b]: the client clicks the next game, the server unloads the old
-##   module and loads the new one, and the client downloads, mounts and enters it.
-##
-## The last game votes the first one back, so every game is both switched into and out of.
+## Exits non-zero on any failure. Needs every game published in `dist/` (`./server pack <id>
+## --source games/<repo>`); with no `dist/` at all it says "skipped".
 
 const CONFIG := "res://examples/fixtures/game_vote_all"
 
@@ -78,15 +53,8 @@ var _previous_modules := {}
 
 
 ## `-- --shot=<dir>`: while the suite runs, save `<dir>/<game>_game.png` once the game ballot is
-## drawn over each game, and `<dir>/<game>_own.png` once the game's own ballot is voting (waited
-## for up to 10 s; a game with nothing of its own to vote on has no second frame). The run goes
-## on and is checked as usual. Under xvfb-run without --headless (a null renderer saves an empty
-## frame), and with `--order` to look at a few games:
-##
-##   xvfb-run -a godot --path . --resolution 1280x720 res://examples/game_vote_all.tscn -- --shot=/tmp/ballots --order=arena,smash,wipeout
-##
-## Until 2026-10-11 a shot rendered the first game only and quit from inside the first game's
-## section, and the next section then ran against a torn-down host ("'games' on Nil").
+## drawn over each game, and `<dir>/<game>_own.png` once the game's own ballot is voting (waited for
+## up to 10 s; a game with nothing of its own to vote on has no second frame).
 var _shot_dir := ""
 
 ## Frames saved, for the summary.
@@ -106,10 +74,9 @@ func _find_lot_client() -> Node:
 
 
 func _save_shot(shot_name: String) -> void:
-	# The shell's loading cover first: the suite counts the client as playing at the link's
-	# phase, which comes before the delivered game has mounted its content and built its world,
-	# and the first game of a run (a cold shader and map cache) is the slow one. A frame taken
-	# then is the cover, not the game.
+	# The shell's loading cover first: the suite counts the client as playing at the link's phase,
+	# which comes before the delivered game has mounted its content and built its world, and the first
+	# game of a run (a cold shader and map cache) is the slow one.
 	var loading = _shell.get("loading")
 	if loading != null:
 		await _until(func() -> bool: return not loading.is_showing(), 30.0)
@@ -164,7 +131,6 @@ func _run() -> void:
 
 	DotPaths.remove_tree(DATA)
 
-	# For the whole run: a game change is where a game's RPC node used to be renamed.
 	var rpc_watch := RpcPathWatch.new()
 	OS.add_logger(rpc_watch)
 
@@ -216,7 +182,6 @@ func _run() -> void:
 	get_tree().quit(1 if _failed > 0 else 0)
 
 
-# --- The harness ------------------------------------------------------------
 
 func _section(title: String) -> void:
 	_entered += 1
@@ -344,7 +309,6 @@ func _physics_process(_delta: float) -> void:
 			_overlaps[key] = int(_overlaps.get(key, 0)) + 1
 
 
-# --- Boot -------------------------------------------------------------------
 
 func _boot() -> bool:
 	_section("booting")
@@ -432,7 +396,6 @@ func _teardown() -> void:
 		await get_tree().physics_frame
 
 
-# --- One game ---------------------------------------------------------------
 
 func _test_game(game_id: String, next: String) -> void:
 	_section("%s (then %s)" % [game_id, next])
@@ -672,13 +635,8 @@ func _test_game(game_id: String, next: String) -> void:
 	_done()
 
 
-## The vote went to [param next]: decided, under way, or done.
-##
-## [b]The game manager's pending game counts[/b], and it is set before the server fetches the
-## new game's content. Phase stays IDLE through that fetch, and mounting zombiezone's 1293
-## files on this server took 9.3 s of the 10 the click is given: a client drawing a few
-## more chat lines per frame (dot-game's box drawing the server's own lines, 2026-10-11)
-## made it 9.9 and failed the check three runs in three with the vote long since won.
+## The vote went to [param next]: decided, under way, or done. [b]The game manager's pending game
+## counts[/b], and it is set before the server fetches the new game's content.
 func _elected(next: String) -> bool:
 	var pending := _server().games.pending()
 	return (

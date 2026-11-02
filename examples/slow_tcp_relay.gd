@@ -2,22 +2,6 @@ extends RefCounted
 
 ## A slow TCP link for a suite: a client connects to [method port] instead of the server, and
 ## everything the server sends it is let through at [member rate_down] bytes a second.
-##
-## [codeblock]
-## const SlowTcpRelay := preload("res://examples/slow_tcp_relay.gd")
-## var relay := SlowTcpRelay.new()
-## relay.rate_down = 125000.0                 # 1 Mbit/s, server -> client
-## var port := relay.start(server_tcp_port)
-## # in _process: relay.poll(delta)
-## [/codeblock]
-##
-## [b]Why not dot-net's relay.[/b] `dot_net_udp_relay.gd` carries datagrams, which is ENet; a
-## WebSocket is TCP and nothing is lost on it, so what a slow link does to one is take time:
-## a joiner's reliable messages queue behind each other and the server's other work has to
-## carry on meanwhile. A queueing discipline would do it properly and needs root.
-##
-## [b]Polled, by the suite's frame.[/b] Delivery lands on frame boundaries, which is fine for a
-## rate: what is measured is seconds, not milliseconds.
 
 ## Bytes a second from the server to the client. Upstream is not limited.
 var rate_down: float = 125000.0
@@ -28,10 +12,9 @@ var burst_seconds: float = 0.05
 ## Bytes carried towards the client so far.
 var bytes_down: int = 0
 
-## The most carried towards the client inside any [member peak_window_usec] (a browser's frame:
-## its WebSocket peer holds what arrives between two frames in a 64 KiB buffer), and in any one
-## [method poll], since [method reset_peaks]. Measured with [member rate_down] unlimited
-## ([constant UNLIMITED]) these are what the server sent in a burst; see examples/burst_probe.gd.
+## The most carried towards the client inside any [member peak_window_usec] (a browser's frame: its
+## WebSocket peer holds what arrives between two frames in a 64 KiB buffer), and in any one [method
+## poll], since [method reset_peaks].
 var peak_window_usec: int = 16667
 var peak_window: int = 0
 var peak_poll: int = 0

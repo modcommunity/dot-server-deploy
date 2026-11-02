@@ -1,38 +1,10 @@
 extends Node
 # [b]Nothing preloaded out of a game, because no game is in this build.[/b] Every game here is a
-# delivered pack. Its RPC link is found by what it carries (the counters every game's link keeps),
-# not by its script, so this suite names no game's code.
+# delivered pack.
 
-## Returning to a game already played in this server process: its netcode must still work, for
-## the client that followed the changes AND for a client that joins afterwards.
-##
-## [codeblock]
-## godot --headless --path . res://examples/return_to_game.tscn
-## [/codeblock]
-##
-## Exits non-zero on any failure. Needs smash, hungry, playground and zombiezone (with its maps)
-## published in `dist/`; with no `dist/` at all it says "skipped".
-##
-## [b]The bug this exists for.[/b] Every game parents its RPC link under `Server` on both ends
-## (the node path is the routing), and before dot-server 39cecc5 no game change freed it. The
-## next time the SAME game loaded, its link collided with the leftover's name and Godot renamed
-## it `@Node@<n>`: the client that came back had every request dropped, and a fresh joiner got a
-## game whose server end it could not address. In production that was a server whose rotation
-## came back to a game. Every suite passed, because each asked only whether the client was "in"
-## the game (told of it, its scene loaded, its session playing), and all of that is the
-## framework's link, not the game's.
-##
-## [b]So this asks the game's own link.[/b] Every game's link counts the inputs it received and
-## the snapshots it received, and those counters move only when an RPC really went through that
-## node on the far end. A return is checked by both directions for the client that followed
-## (its inputs reach the server's link, the server's snapshots reach its link) and then for a
-## fresh shell that joins (snapshots reach it; once the first client has left, the server's
-## inputs are its alone). The first load of the first game is checked the same way, so a probe
-## that fails on a return fails because of the return.
-##
-## Four games of different shapes: a 3D round-based minigame (smash), a 2D game (hungario), a
-## sandbox with vehicles and props (playground) and a co-operative shooter whose maps are a
-## second pack (zombiezone). Each returned to after another game ran in between.
+## Returning to a game already played in this server process: its netcode must still work, for the
+## client that followed the changes AND for a client that joins afterwards. Exits non-zero on any
+## failure.
 
 const CONFIG := "res://examples/fixtures/return_to_game"
 
@@ -160,7 +132,6 @@ func _run() -> void:
 	get_tree().quit(1 if _failed > 0 else 0)
 
 
-# --- The harness ------------------------------------------------------------
 
 func _section(title: String) -> void:
 	_entered += 1
@@ -298,7 +269,6 @@ func _drop_shell(shell: Node) -> void:
 	await get_tree().process_frame
 
 
-# --- Boot -------------------------------------------------------------------
 
 func _boot() -> bool:
 	_section("booting")
@@ -350,7 +320,6 @@ func _teardown() -> void:
 		await get_tree().physics_frame
 
 
-# --- Steps ------------------------------------------------------------------
 
 func _change_to(game_id: String) -> void:
 	if not _at_game(game_id):
@@ -371,10 +340,9 @@ func _pass_through(game_id: String) -> void:
 	_done()
 
 
-## The netcode of [param game_id] after the change into it: both directions for the client that
-## was already here, then for a fresh shell that joins, which then stays as the client for the
-## next step. On the first load the change is the join itself, so the two "is running" checks
-## are not repeated.
+## The netcode of [param game_id] after the change into it: both directions for the client that was
+## already here, then for a fresh shell that joins, which then stays as the client for the next
+## step.
 func _probe(game_id: String, why: String, first: bool) -> void:
 	_section("%s, %s" % [game_id, why])
 

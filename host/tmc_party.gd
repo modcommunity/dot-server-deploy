@@ -1,37 +1,8 @@
 class_name TmcParty
 extends Node
 
-## Parties on this server: who from which party is here, a booking kept, party chat, and
-## an optional matchmaking queue.
-##
-## [b]Three addons that were built and wired into nothing.[/b] dot-party had a server half
-## that reports parties to the backbone and a node that keeps a booking, dot-matchmaking a
-## whole queue, and no server this tool runs constructed any of them — the same shape
-## `_build_logging` and `_build_security` in [code]tmc_host.gd[/code] were written to close,
-## and this follows them: built for every game the host runs, configured from `cfg/`,
-## never fatal.
-##
-## [b]What is built, and when.[/b]
-##
-## - [DotPartyReservations], always (unless `party_enabled: false`). With no booking it
-##   admits everybody, so it costs nothing; with one it is the only thing that keeps a
-##   private booking private. Bookings come from the backbone when there is one and from
-##   `party_reserve` at the console either way.
-## - [DotPartyServer], only with a backbone client — [TmcReport]'s, which exists when
-##   `data/listing.json` carries an integration token. Every route it speaks is an
-##   integration route, so without a credential it has nobody to report to.
-## - [DotMatchmaker], only with `mm_enabled: true` in `cfg/matchmaking.yml`.
-##
-## [b]How a player says which party they are in: a chat command, not the handshake.[/b]
-## The site has no "which party is this person in" route for a server, so the client has
-## to say. The handshake payload would be the natural place and is the invasive one: the
-## server reads a fixed set of keys out of it, and teaching it a new one is a change to
-## dot-server's signon on both ends, in every project that links it, for one optional
-## feature. A chat command is already a client-to-server channel with permissions, a rate
-## limit and an audit line, and dot-server runs it before any game's chat hook can take
-## the line. So the client shell sends `/party_claim <id>` once it has spawned, and
-## [method DotPartyServer.claim] checks the roster before believing it — naming a party
-## you are not in changes nothing.
+## Parties on this server: who from which party is here, a booking kept, party chat, and an optional
+## matchmaking queue.
 
 const CHANNEL := "tmc.party"
 
@@ -127,7 +98,6 @@ func _exit_tree() -> void:
 		bus.service_unregistered.disconnect(_on_service_unregistered)
 
 
-# --- Building -----------------------------------------------------------------
 
 func _build_reservations(backbone: Object) -> void:
 	reservations = DotPartyReservations.new()
@@ -136,13 +106,8 @@ func _build_reservations(backbone: Object) -> void:
 	reservations.policy = _config.party_policy
 	reservations.server_id = _config.party_server_id
 
-	# Seats a joining session would compete for: everybody past authentication. The one
-	# being judged is still AUTHENTICATING and is not counted against itself.
-	#
-	# Written as "not still signing on" rather than a list of the stages after it: a list
-	# missed dot-server's PROFILE stage (API level 7), where a player a module is holding
-	# has already claimed a slot, and a new stage would be missed the same way. A rejected
-	# or disconnected session is no longer in sessions() at all.
+	# Seats a joining session would compete for: everybody past authentication. The one being judged is
+	# still AUTHENTICATING and is not counted against itself.
 	reservations.seats_fn = func() -> Vector2i:
 		var occupied := 0
 
@@ -176,12 +141,8 @@ func _build_reservations(backbone: Object) -> void:
 	add_child(reservations)
 
 
-## `GET party/reservation` is served by the site since its game-backbone routes merged
-## (dot-party's docs/backbone-contract.md). A refusal now means something is wrong with
-## THIS box -- the credential is not bound to a game, or the site it points at is older --
-## and a server that cannot learn it is booked admits a party's strangers. So the first
-## one is said once at WARN, with what it means, and the rest (every 30 seconds) are left
-## to the transport's own log. It was INFO while the route did not exist anywhere.
+## `GET party/reservation` is served by the site since its game-backbone routes merged (dot-party's
+## docs/backbone-contract.md).
 func _quiet_first_fetch_failure() -> void:
 	var fetch := reservations.fetch_fn
 
@@ -265,12 +226,10 @@ static func _absolute(path: String) -> String:
 	return ProjectSettings.globalize_path("res://").path_join(path)
 
 
-# --- The ban seam, kept chained ------------------------------------------------
 
-## A game's module registers dot-moderation under `dot_ban_source` when it loads, and the
-## registry is last-wins — so the first `changelevel` after boot would quietly take the
-## booking out of every admission. Re-registering on top, chained to whoever just arrived,
-## keeps both asked.
+## A game's module registers dot-moderation under `dot_ban_source` when it loads, and the registry
+## is last-wins — so the first `changelevel` after boot would quietly take the booking out of every
+## admission. Re-registering on top, chained to whoever just arrived, keeps both asked.
 func _on_service_registered(service: StringName, instance: Object) -> void:
 	if service == BAN_SOURCE and reservations != null and instance != reservations:
 		_rechain.call_deferred()
@@ -325,12 +284,10 @@ static func _chain_reaches(start: Object, target: Object) -> bool:
 	return false
 
 
-# --- Party chat ------------------------------------------------------------------
 
-## Gives every game chat router a grouped `party` channel, once each.
-##
-## [b]Only where the game has not said anything itself.[/b] A game that ships its own
-## `party` channel, or its own `group_fn`, is the better-informed party and is left alone.
+## Gives every game chat router a grouped `party` channel, once each. [b]Only where the game has not
+## said anything itself.[/b] A game that ships its own `party` channel, or its own `group_fn`, is
+## the better-informed party and is left alone.
 func _wire_chat_routers() -> void:
 	if not _config.party_chat or reservations == null:
 		return
@@ -373,10 +330,9 @@ func _wire_chat_routers() -> void:
 		DotLog.debug(CHANNEL, "party chat is on in the game's chat", {"router": service})
 
 
-## Which party [param uid] is in on this server, or "".
-##
-## The tracker's answer when there is a tracker — it has checked a roster — and otherwise
-## the booked party's, which a console booking fills from who was here.
+## Which party [param uid] is in on this server, or "". The tracker's answer when there is a tracker
+## — it has checked a roster — and otherwise the booked party's, which a console booking fills from
+## who was here.
 func party_id_of(uid: String) -> String:
 	if uid == "":
 		return ""
@@ -401,7 +357,6 @@ func _chat_router() -> Object:
 	return null
 
 
-# --- Sessions -------------------------------------------------------------------
 
 func _players() -> Array:
 	var out := []
@@ -486,7 +441,6 @@ func _announce(line: String) -> void:
 		server.chat.broadcast_system(line)
 
 
-# --- Console --------------------------------------------------------------------
 
 func _register_commands() -> void:
 	var console := server.console
@@ -667,10 +621,9 @@ func _cmd_reserve(ctx: DotCmdContext) -> void:
 		p = _party_of_everybody_here(party_id)
 		ctx.reply("No backbone to read the roster from; booking for the %d signed-in player(s) here." % p.size())
 
-	# [b]The owner is not held to the terms they offer parties.[/b] `party_reserve_*` in
-	# cfg/party.yml is what a party booking on the site may ask for; an owner at their own
-	# console booking their own server is a different act. So the owner's terms stand in
-	# for this one booking with the gates opened and the ceiling kept.
+	# [b]The owner is not held to the terms they offer parties.[/b] `party_reserve_*` in cfg/party.yml
+	# is what a party booking on the site may ask for; an owner at their own console booking their own
+	# server is a different act.
 	var terms := reservations.policy
 	var owner := terms.duplicate() as DotPartyReservePolicy
 	owner.enabled = true
@@ -718,7 +671,6 @@ func _cmd_release(ctx: DotCmdContext) -> void:
 	ctx.reply("The party booking is released.")
 
 
-# --- Matchmaking ----------------------------------------------------------------
 
 func _cmd_mm_status(ctx: DotCmdContext) -> void:
 	if matchmaker == null:
