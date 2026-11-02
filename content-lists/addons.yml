@@ -54,7 +54,7 @@ entries:
   - repo: dot-log
     pin: v0.1.6
   - repo: dot-map
-    pin: v0.1.77
+    pin: v0.1.78
   - repo: dot-match
     pin: v0.1.5
   - repo: dot-matchmaking
