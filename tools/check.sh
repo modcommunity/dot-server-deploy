@@ -259,12 +259,18 @@ if [ "$checked_any" -eq 1 ]; then
     globals=0
     for repo in "${GAME_REPOS[@]}"; do
         game_source "$repo" || continue
+        # A linked worktree checked out inside the repository is another copy, not this game's source.
+        wt_skip=()
+        while read -r wt; do
+            [ -n "$wt" ] && wt_skip+=(--exclude-dir="$(basename "$wt")")
+        done < <(git -C "$GAME_SRC" worktree list --porcelain 2>/dev/null | sed -n 's/^worktree //p' \
+            | grep -F "$(cd "$GAME_SRC" && pwd -P)/")
         while read -r hit; do
             printf '  %sFAIL%s %s declares a class_name: %s
 ' \
                 "$RED" "$OFF" "$repo" "$hit"
             globals=$((globals + 1))
-        done < <(grep -rn '^class_name ' "$GAME_SRC" --include='*.gd' 2>/dev/null \
+        done < <(grep -rn '^class_name ' "$GAME_SRC" --include='*.gd' "${wt_skip[@]}" 2>/dev/null \
             | grep -v '/addons/' | sed "s|^$GAME_SRC/||")
     done
 

@@ -793,6 +793,9 @@ func _class_names_in(root: String) -> PackedStringArray:
 		# The host's own addons legitimately declare globals; they are not in the pack.
 		if rel.begins_with("addons/") or rel.contains("/addons/"):
 			continue
+		# A linked git worktree inside the source (a `.git` file) is not part of the game.
+		if rel.contains("/") and FileAccess.file_exists(root.path_join(rel.get_slice("/", 0)).path_join(".git")):
+			continue
 
 		for line in FileAccess.get_file_as_string(root.path_join(rel)).split("\n"):
 			if not line.begins_with("class_name "):

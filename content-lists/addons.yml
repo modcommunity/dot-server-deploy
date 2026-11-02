@@ -8,7 +8,7 @@ entries:
   - repo: dot-achievements
     pin: v0.1.6
   - repo: dot-audio
-    pin: v0.1.12
+    pin: v0.1.13
   - repo: dot-auth
     pin: v0.1.12
   - repo: dot-bot
@@ -40,7 +40,7 @@ entries:
   - repo: dot-fx
     pin: v0.3.4
   - repo: dot-game
-    pin: v0.1.42
+    pin: v0.1.44
   - repo: dot-inventory
     pin: v0.1.4
   - repo: dot-leaderboard
@@ -54,7 +54,7 @@ entries:
   - repo: dot-log
     pin: v0.1.6
   - repo: dot-map
-    pin: v0.1.73
+    pin: v0.1.75
   - repo: dot-match
     pin: v0.1.5
   - repo: dot-matchmaking
@@ -142,4 +142,4 @@ entries:
   - repo: zed-dot-weapons
     pin: v0.1.9
   - repo: zee-dot-weapons
-    pin: v0.1.49
+    pin: v0.1.50
