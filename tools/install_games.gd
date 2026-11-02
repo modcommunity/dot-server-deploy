@@ -56,6 +56,9 @@ const LATEST_TTL_DEFAULT := 900
 ## `latest.json` answers already fetched this run, by id: a pack and its update check ask once.
 var _pointers := {}
 
+## The site whose `/api/packs/latest` is asked before `latest.json` (`--site`, or `TMC_SITE_URL`); empty skips it.
+var _site := ""
+
 ## `--refresh`: ask the origin for everything, whatever the cache says.
 var _refresh := false
 const COLLECTION_FILE := "collection.json"
@@ -76,6 +79,7 @@ func _init() -> void:
 	var data_dir := str(opts.get("data", "data"))
 	var config_dir := str(opts.get("config", "cfg"))
 	var bases := _list(str(opts.get("base", "")))
+	_site = str(opts.get("site", OS.get_environment("TMC_SITE_URL"))).strip_edges()
 
 	# No --games: the packs cfg/content/games.yml lists (`pack: owner/name`, optionally pinned) are
 	# what to fetch. Its repository entries are cloned by setup.sh, not fetched here.
@@ -1421,17 +1425,46 @@ func _resolve_pointer_uncached(content_id: String, bases: PackedStringArray) -> 
 	})
 
 
-## Reads one id's `latest.json` from the first base that answers.
+## Reads one id's newest version: the site's pack API first when a site is set, then `latest.json`.
 func _fetch_pointer(content_id: String, bases: PackedStringArray, hop: int) -> DotResult:
 	var http := DotHttp.new()
 	http.name = "LatestHttp"
 	root.add_child(http)
 
+	var res := await pointer_from(content_id, _site, bases, hop, func(url: String) -> DotResult:
+		return await http.get_json(url))
+	http.queue_free()
+	return res
+
+
+## The newest-version lookup behind [method _fetch_pointer], with the transport as [param get_json]
+## (`url -> DotResult` of the parsed body) so a selftest can answer without a network.
+##
+## The pack API answers only `{version}` and a 404 for an id it does not hold, so an unknown or
+## retired id still falls through to `latest.json`, which carries `moved_to`.
+static func pointer_from(
+	content_id: String, site: String, bases: PackedStringArray, hop: int, get_json: Callable
+) -> DotResult:
 	var last := ""
+
+	if site != "":
+		var api_url := "%s/api/packs/latest?id=%s" % [site.rstrip("/"), content_id.uri_encode()]
+		var api: DotResult = await get_json.call(api_url)
+
+		if api.ok and api.value is Dictionary and str((api.value as Dictionary).get("version", "")) != "":
+			var from_api := follow_pointer(content_id, {"version": str((api.value as Dictionary)["version"])}, hop)
+
+			if from_api.ok:
+				DotLog.debug(CHANNEL, "resolved the newest version", {
+					"content": content_id, "version": from_api.value["version"], "from": api_url,
+				})
+				return from_api
+
+		DotLog.debug(CHANNEL, "the pack API had no answer; asking latest.json", {"content": content_id})
 
 	for base in bases:
 		var url := "%s/%s/%s" % [base.rstrip("/"), content_id, LATEST_FILE]
-		var res: DotResult = await http.get_json(url)
+		var res: DotResult = await get_json.call(url)
 
 		if not res.ok:
 			last = str(res.error)
@@ -1442,8 +1475,6 @@ func _fetch_pointer(content_id: String, bases: PackedStringArray, hop: int) -> D
 		# A refusal is the document's answer, not an origin outage: another base
 		# carries the same document, so asking it would only repeat the refusal.
 		if followed.ok or followed.error.code != DotError.CODE_IO:
-			http.queue_free()
-
 			if followed.ok:
 				DotLog.debug(CHANNEL, "resolved the newest version", {
 					"content": content_id, "version": followed.value["version"], "from": url,
@@ -1452,8 +1483,6 @@ func _fetch_pointer(content_id: String, bases: PackedStringArray, hop: int) -> D
 			return followed
 
 		last = "%s: %s" % [url, followed.error.message]
-
-	http.queue_free()
 
 	return DotResult.fail(
 		DotError.CODE_IO,
