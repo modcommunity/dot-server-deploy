@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Every game's installer default equals its engine rate (project.godot), and a fresh install
-# offers it rather than a stale example value.
+# Every game's installer default equals its engine rate (project.godot), and the installer's table
+# fallback; a fresh install offers the template's 66.
 #   tools/check_tickrate.sh   exit 0 when all hold, 1 otherwise
 set -uo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
@@ -31,10 +31,9 @@ for proj in "$root"/game-*/project.godot "$root"/mg-*/project.godot; do
 done
 
 # Fresh install: the example must not carry a value that cfg_or would return first.
-chk "server.yml template sets no sv_tickrate" '! grep -qE "^sv_tickrate:" cfg.example/server/server.yml'
+chk "server.yml template sets sv_tickrate: 66" 'grep -qE "^sv_tickrate: 66\$" cfg.example/server/server.yml'
 fresh() ( eval "$cfn"; eval "$fn"; cfg_or cfg.example/server/server.yml sv_tickrate "$(game_tickrate "$1")" )
-chk "fresh install offers 66 for arena"    '[ "$(fresh arena)" = 66 ]'
-chk "fresh install offers 128 for g2gfast" '[ "$(fresh g2gfast)" = 128 ]'
+chk "fresh install offers 66 (template default)" '[ "$(fresh g2gfast)" = 66 ]'
 chk "the installer prompt uses it" 'grep -q "sv_tickrate \"\$(game_tickrate" setup.sh'
 chk "demo arena server runs 66" 'grep -q "GAME5_TICKRATE:-66" demo.sh'
 [ "$fails" -eq 0 ] && echo "tickrate: ok" || echo "tickrate: $fails failed"

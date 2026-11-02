@@ -70,10 +70,8 @@ sv_allow_mobile: 1
 # RCON (rcon.yml) is the usual way in, and needs none of this.
 # sv_stdin_console_pipes: false
 
-# Simulation rate. Higher is more responsive and costs CPU and bandwidth on every
-# client as well as here. Fixed at boot. Left unset here on purpose: setup.sh asks with the
-# game's own engine rate (arena 66, g2gfast and playground 128, the rest 60) and writes it.
-# sv_tickrate: 60
+# Simulation rate, fixed at boot; 66 is the deployed default (higher costs CPU and bandwidth on every client). setup.sh offers this value and writes the answer.
+sv_tickrate: 66
 
 # What an empty server does. 1 (the default): it idles at a low tick rate while nobody is
 # connected, and every map clock waits and starts again from the top when somebody joins. 0: it
