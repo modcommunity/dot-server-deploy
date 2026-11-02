@@ -13,16 +13,15 @@ extends Node
 ## the picture the server's `loading.yml` named — served here, fetched by the shell ahead of
 ## time — and comes down when the new game has spawned.
 
-const CONFIG := "res://examples/fixtures/admin_live"
+const FIXTURE := "res://examples/fixtures/admin_live"
 
 ## The server in a World3D of its own, away from the client in this process. See the helper.
 const ServerWorld := preload("res://examples/server_world.gd")
 const CONTENT := "res://content"
-const DATA := "user://tmc_admin_live"
+## Per process, so two concurrent runs do not share or delete each other's files.
+var DATA := "user://tmc_admin_live_%d" % OS.get_process_id()
+var CONFIG := DATA + "_cfg"
 const SHELL := "res://client/shell.tscn"
-
-## Where fixtures/admin_live/loading.yml says the picture is.
-const MEDIA_PORT := 27109
 
 const TARGET_GAME := "hungry_classic"
 
@@ -56,7 +55,9 @@ func _run() -> void:
 	print("dot-server-deploy: the admin menu and the loading screen, live")
 
 	DotPaths.remove_tree(DATA)
+	DotPaths.remove_tree(CONFIG)
 	_serve_media()
+	_write_config()
 
 	if await _boot():
 		if await _test_connect():
@@ -65,6 +66,7 @@ func _run() -> void:
 
 	await _teardown()
 	DotPaths.remove_tree(DATA)
+	DotPaths.remove_tree(CONFIG)
 	if _media != null:
 		_media.stop()
 
@@ -150,8 +152,20 @@ func _serve_media() -> void:
 	image.fill(Color(0.2, 0.4, 0.9))
 	_png = image.save_png_to_buffer()
 	_media = TCPServer.new()
-	if _media.listen(MEDIA_PORT, "127.0.0.1") != OK:
+	if _media.listen(0, "127.0.0.1") != OK:
 		_media = null
+
+
+## A temp copy of the fixture whose loading.yml names the picture's free port.
+func _write_config() -> void:
+	DirAccess.make_dir_recursive_absolute(CONFIG)
+	for file in DirAccess.get_files_at(FIXTURE):
+		var text := FileAccess.get_file_as_string(FIXTURE + "/" + file)
+		if file == "loading.yml" and _media != null:
+			text = text.replace("127.0.0.1:27109", "127.0.0.1:%d" % _media.get_local_port())
+		var out := FileAccess.open(CONFIG + "/" + file, FileAccess.WRITE)
+		out.store_string(text)
+		out.close()
 
 
 func _process(_delta: float) -> void:

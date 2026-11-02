@@ -1,4 +1,4 @@
-# The picture is served by examples/admin_live.gd itself, on this port.
+# The picture is served by examples/admin_live.gd itself; it swaps 27109 for a free port in a temp copy.
 loading_images: ["http://127.0.0.1:27109/bg.png"]
 loading_tips: ["A tip from the fixture."]
 loading_title: "Admin Live"
