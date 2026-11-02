@@ -10,8 +10,12 @@
 # (docs/releases.md, "Publishing the web build"); by hand it is the fallback, and
 # ~/godot/deploy-web-shell.sh on a developer box is a wrapper that passes its .env.
 #
-# Credentials come from the environment (GAMES_S3_ACCESS_KEY, GAMES_S3_ACCESS_SECRET,
-# GAMES_S3_BUCKET, GAMES_S3_REGION), or from --env FILE. Order: file < environment <
+# Two upload paths. With --api SITE (SHELL_API) the files go through website-city's web
+# build API (docs/web-shell-api.md): the site hands out presigned PUTs, so the games store
+# can be storez and this machine holds no storage credentials, only SHELL_PUBLISH_TOKEN.
+# Without it the legacy `aws s3` path runs (GAMES_S3_ACCESS_KEY, GAMES_S3_ACCESS_SECRET,
+# GAMES_S3_BUCKET, GAMES_S3_REGION), which only works while the store is S3.
+# Credentials come from the environment or --env FILE. Order: file < environment <
 # command line. Credentials are never taken from an argument (an argument is in `ps`
 # and shell history) and never printed.
 set -euo pipefail
@@ -45,6 +49,9 @@ Usage: publish-web-shell.sh --zip FILE [options]
                     the folder holding the --like build
   --like ID         a build already in the bucket, used to find  (SHELL_LIKE, 20261014-0448)
                     the app folder when --app is not given
+  --api SITE        publish through the site's web build API    (SHELL_API)
+                    (https://tmcdev.net); needs SHELL_PUBLISH_TOKEN
+                    in the environment or --env FILE; no S3 needed
   --env FILE        GAMES_S3_* credentials and SHELL_* defaults (SHELL_ENV_FILE)
   --bucket NAME     default: $GAMES_S3_BUCKET                   (SHELL_BUCKET)
   --region NAME     default: $GAMES_S3_REGION, else us-east-1   (SHELL_REGION)
@@ -79,6 +86,7 @@ LIKE=${SHELL_LIKE:-20261014-0448}
 BUCKET=${SHELL_BUCKET:-}
 REGION=${SHELL_REGION:-}
 ORIGIN=${SHELL_ORIGIN:-}
+API=${SHELL_API:-}
 NOTES=${SHELL_NOTES:-}
 PIN=${SHELL_PIN:-0}
 NO_PUSH=${SHELL_NO_PUSH:-0}
@@ -98,6 +106,7 @@ while [ $# -gt 0 ]; do
         --bucket) BUCKET=$2; shift 2 ;;
         --region) REGION=$2; shift 2 ;;
         --origin) ORIGIN=$2; shift 2 ;;
+        --api) API=$2; shift 2 ;;
         --notes) NOTES=$2; shift 2 ;;
         --pin) PIN=1; shift ;;
         --no-push) NO_PUSH=1; shift ;;
@@ -117,6 +126,11 @@ die() { echo "error: $*" >&2; exit 1; }
 [ -f "$ZIP" ] || die "no such zip: $ZIP"
 BUILD=${BUILD:-$(date -u +%Y%m%d-%H%M)}
 ORIGIN=${ORIGIN%/}
+API=${API%/}
+if [ -n "$API" ]; then
+    : "${SHELL_PUBLISH_TOKEN:?SHELL_PUBLISH_TOKEN is not set (environment or --env FILE)}"
+    [ -n "$APP" ] || die "--api needs --app (the site cannot be asked which folder holds a build)"
+fi
 
 # A build id and an app segment are each one path segment; anything else would write
 # outside the build's own prefix.
@@ -179,7 +193,7 @@ if [ "$PIN" = 1 ]; then
         || die "this build was not exported from $REPO as it is now (above); export again, then pin"
 fi
 
-if ! command -v aws >/dev/null && { [ "$DRY" = 0 ] || [ -z "$APP" ]; }; then
+if [ -z "$API" ] && ! command -v aws >/dev/null && { [ "$DRY" = 0 ] || [ -z "$APP" ]; }; then
     echo "installing the AWS CLI (needs sudo)"
     tmp=$(mktemp -d)
     curl -sSL https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip -o "$tmp/awscli.zip"
@@ -188,7 +202,7 @@ if ! command -v aws >/dev/null && { [ "$DRY" = 0 ] || [ -z "$APP" ]; }; then
     rm -rf "$tmp"
 fi
 
-if [ "$DRY" = 0 ] || [ -z "$APP" ]; then
+if [ -z "$API" ] && { [ "$DRY" = 0 ] || [ -z "$APP" ]; }; then
     export AWS_ACCESS_KEY_ID="${GAMES_S3_ACCESS_KEY:?GAMES_S3_ACCESS_KEY is not set (environment or --env FILE)}"
     export AWS_SECRET_ACCESS_KEY="${GAMES_S3_ACCESS_SECRET:?GAMES_S3_ACCESS_SECRET is not set (environment or --env FILE)}"
     export AWS_DEFAULT_REGION="${REGION:-${GAMES_S3_REGION:-us-east-1}}"
@@ -202,11 +216,11 @@ if [ -z "$APP" ]; then
 fi
 
 PREFIX="game/$APP/$BUILD/"
-if [ "$DRY" = 0 ] && aws s3 ls "s3://$BUCKET/$PREFIX" >/dev/null 2>&1; then
+if [ "$DRY" = 0 ] && [ -z "$API" ] && aws s3 ls "s3://$BUCKET/$PREFIX" >/dev/null 2>&1; then
     die "s3://$BUCKET/$PREFIX already exists; builds are immutable, pick another --build"
 fi
 
-echo "bucket  ${BUCKET:-(dry run)} (${AWS_DEFAULT_REGION:-})"
+if [ -n "$API" ]; then echo "api     $API"; else echo "bucket  ${BUCKET:-(dry run)} (${AWS_DEFAULT_REGION:-})"; fi
 echo "target  $PREFIX  entry $ENTRY"
 
 # The same table as website-city's GameFileContentType: S3 infers nothing, and a .wasm
@@ -238,6 +252,62 @@ brotli_file() {
     else return 1; fi
 }
 
+# The site's web build API (docs/web-shell-api.md): one JSON POST per step, the token in a
+# curl config on stdin so it is never in `ps` or the shell history.
+api_call() {
+    local out code
+    out=$(mktemp -p "$work")
+    code=$(printf 'header = "Authorization: Bearer %s"\n' "$SHELL_PUBLISH_TOKEN" \
+        | curl -sS -K - -o "$out" -w '%{http_code}' -X POST -H 'Content-Type: application/json' \
+            --data-binary @"$1" "$API/api/app/v1/web/build") || die "cannot reach $API"
+    case "$code" in 2??) cat "$out" ;; *) die "web build API answered $code: $(head -c 300 "$out")" ;; esac
+}
+
+# Files to upload, one line each: key (relative to game/<app>/), local file, content type,
+# content encoding (may be empty), size, sha256 of the bytes sent.
+UPLIST=$work/uplist.tsv
+: > "$UPLIST"
+queue() { # key src type enc
+    printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$1" "$2" "$3" "$4" "$(stat -c %s "$2")" "$(sha256sum "$2" | cut -d' ' -f1)" >> "$UPLIST"
+}
+
+# Sends UPLIST through the API: begin names the files, the site answers with a presigned PUT
+# for each one it does not already hold; finalize makes it check them all and, with pin, write
+# the pointer. A PUT carries exactly the headers the site returned.
+api_publish() {
+    python3 -I - "$UPLIST" "$APP" "$BUILD" "$ENTRY" "$PIN" "$work/begin.json" <<'PY'
+import json, sys
+up, app, build, entry, pin, out = sys.argv[1:]
+files = []
+for line in open(up):
+    k, _src, t, enc, size, sha = line.rstrip("\n").split("\t")
+    files.append(dict(key=k, contentType=t, contentEncoding=enc or None, size=int(size), sha256=sha))
+json.dump(dict(action="begin", app=app, build=build, entry=entry, files=files), open(out, "w"))
+PY
+    api_call "$work/begin.json" > "$work/begin.out"
+    python3 -I - "$work/begin.out" "$UPLIST" "$work/puts.tsv" <<'PY'
+import json, sys
+res = json.load(open(sys.argv[1]))
+src = {l.split("\t")[0]: l.split("\t")[1] for l in open(sys.argv[2])}
+with open(sys.argv[3], "w") as o:
+    for p in res.get("puts", []):
+        h = "".join("\t%s: %s" % kv for kv in sorted(p.get("headers", {}).items()))
+        o.write("%s\t%s\t%s%s\n" % (p["key"], src[p["key"]], p["url"], h))
+print("api: %d files, %d to upload, %d already held" % (len(src), len(res.get("puts", [])), len(src) - len(res.get("puts", []))))
+PY
+    local key file url hdrs
+    while IFS=$'\t' read -r key file url hdrs; do
+        [ -n "$key" ] || continue
+        # The URL carries the signature; it goes to curl through a config on stdin too.
+        { printf 'url = "%s"\n' "$url"; printf '%s' "$hdrs" | tr '\t' '\n' | sed 's/.*/header = "&"/'; echo; } \
+            | curl -sS -f -K - -X PUT -T "$file" -o /dev/null || die "PUT $key failed"
+    done < "$work/puts.tsv"
+    printf '{"action":"finalize","app":"%s","build":"%s","entry":"%s","pin":%s,"manifest":%s}' \
+        "$APP" "$BUILD" "$ENTRY" "$([ "$PIN" = 1 ] && echo true || echo false)" "$(manifest_json | python3 -I -c 'import json,sys;print(json.dumps(sys.stdin.read()))')" > "$work/fin.json"
+    api_call "$work/fin.json" > "$work/fin.out"
+    python3 -I -c 'import json,sys;r=json.load(open(sys.argv[1]));print("api: finalized build %s (%s)" % (r.get("build","?"), r.get("status","?")))' "$work/fin.out"
+}
+
 # [b]The engine is shared across builds[/b]: index.wasm and the worklets come from the stock
 # template, so they go once under a content hash and the page points `executable` there.
 # A returning player then re-downloads only the pck when a new shell is published.
@@ -253,7 +323,12 @@ if [ -n "$engine_hash" ]; then
     sed -i -e "s#^\( *\)executable: \"index\",#\1executable: \"$eng\", mainPack: \"index.pck\",#" \
         -e "s#\"index.wasm\":#\"$eng.wasm\":#" "$work/build/embed.html"
     echo "engine  game/$APP/engine/$engine_hash/ (shared by every build with this template)"
-    if [ "$DRY" = 0 ] && ! aws s3 ls "s3://$BUCKET/game/$APP/engine/$engine_hash/index.wasm" >/dev/null 2>&1; then
+    if [ "$DRY" = 0 ] && [ -n "$API" ]; then
+        for e in "${ENGINE_FILES[@]}"; do
+            brotli_file "$work/build/$e" "$work/eng-$e" || die "cannot brotli $e"
+            queue "engine/$engine_hash/$e" "$work/eng-$e" "$(content_type "$e")" br
+        done
+    elif [ "$DRY" = 0 ] && ! aws s3 ls "s3://$BUCKET/game/$APP/engine/$engine_hash/index.wasm" >/dev/null 2>&1; then
         for e in "${ENGINE_FILES[@]}"; do
             brotli_file "$work/build/$e" "$work/file.br" || die "cannot brotli $e"
             aws s3 cp "$work/file.br" "s3://$BUCKET/game/$APP/engine/$engine_hash/$e" --only-show-errors \
@@ -271,6 +346,7 @@ while IFS= read -r -d '' f; do
     printf '  %-40s %s\n' "$rel" "$t"
     count=$((count + 1))
     [ "$DRY" = 1 ] && continue
+    count_src=$count
     # Precompressed: S3 and the CDN in front compress nothing (CloudFront skips files over
     # 10 MB), so an unencoded index.wasm is 39.5 MB on the wire against 6.9 MB brotli.
     # Content-Type stays the real type; only Content-Encoding says it is compressed.
@@ -282,8 +358,14 @@ while IFS= read -r -d '' f; do
                 src=$work/file.br; enc=(--content-encoding br)
             fi ;;
     esac
-    aws s3 cp "$src" "s3://$BUCKET/$PREFIX$rel" --only-show-errors \
-        --content-type "$t" --cache-control "public, max-age=31536000, immutable" "${enc[@]}"
+    if [ -n "$API" ]; then
+        # Kept until api_publish has sent it, so each file is copied aside.
+        ln -f "$src" "$work/q-$count_src" 2>/dev/null || cp "$src" "$work/q-$count_src"
+        queue "$BUILD/$rel" "$work/q-$count_src" "$t" "${enc[1]:-}"
+    else
+        aws s3 cp "$src" "s3://$BUCKET/$PREFIX$rel" --only-show-errors \
+            --content-type "$t" --cache-control "public, max-age=31536000, immutable" "${enc[@]}"
+    fi
     rm -f "$work/file.br"
 done < <(find "$work/build" -type f -print0 | sort -z)
 
@@ -294,7 +376,12 @@ if [ "$DRY" = 1 ]; then
         manifest_json
     fi
 else
-    echo "uploaded $count files to s3://$BUCKET/$PREFIX"
+    if [ -n "$API" ]; then
+        api_publish
+        echo "uploaded $count files to $PREFIX through $API"
+    else
+        echo "uploaded $count files to s3://$BUCKET/$PREFIX"
+    fi
 fi
 
 # [b]Read it back through the origin players load it from[/b], when we know it: the
@@ -314,9 +401,9 @@ if [ "$DRY" = 0 ] && [ -n "$ORIGIN" ]; then
         [ "$code" = 200 ] || [ "$code" = 206 ] || die "$ORIGIN/$APP/engine/$engine_hash/index.wasm does not answer ($code); not pinning"
     fi
     if [ -f "$work/build/shell-inputs.txt" ]; then
-        curl -fsS "$url/shell-inputs.txt" -o "$work/served.txt" \
-            && cmp -s "$work/served.txt" "$work/build/shell-inputs.txt" \
-            || die "$url/shell-inputs.txt is not the record this zip carries; not pinning"
+        if ! curl -fsS "$url/shell-inputs.txt" -o "$work/served.txt" || ! cmp -s "$work/served.txt" "$work/build/shell-inputs.txt"; then
+            die "$url/shell-inputs.txt is not the record this zip carries; not pinning"
+        fi
     fi
     echo "served  $url/$ENTRY"
 fi
@@ -324,13 +411,16 @@ fi
 # [b]The pointer comes last and only with --pin[/b]: it is the one mutable document in an
 # otherwise immutable tree, and it names the build the site should serve to solo play.
 # Short cache so the job sees a new pin within a minute; no brotli, the job reads it as is.
-if [ "$DRY" = 0 ] && [ "$PIN" = 1 ]; then
+if [ "$DRY" = 0 ] && [ "$PIN" = 1 ] && [ -n "$API" ]; then
+    echo "manifest  game/$APP/latest.json -> $BUILD (written by the site on finalize)"
+elif [ "$DRY" = 0 ] && [ "$PIN" = 1 ]; then
     manifest_json > "$work/latest.json"
     aws s3 cp "$work/latest.json" "s3://$BUCKET/game/$APP/latest.json" --only-show-errors \
         --content-type application/json --cache-control "public, max-age=60"
     echo "manifest  game/$APP/latest.json -> $BUILD"
 fi
 
+echo "build id: $BUILD (entry $ENTRY)"
 cat <<EOT
 
 -- Registration is automatic but not immediate: website-city's web-build-register cron job
