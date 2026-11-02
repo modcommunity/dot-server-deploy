@@ -269,19 +269,28 @@ func _test_the_pack_mounted() -> void:
 	_done()
 
 
+## One JSON document per route in the game source, so the count follows the game.
+func _route_count() -> int:
+	var n := 0
+	for f in DirAccess.get_files_at("res://games/mg-dangerous-delivery/routes"):
+		if f.ends_with(".json"):
+			n += 1
+	return n
+
+
 ## The routes are read out of the mount on the server, and built from the hello on the client.
 func _test_the_routes_arrived() -> void:
 	_section("every route, on both ends")
 
 	var said := _says(_world())
-	_check(int(said.get("routes", 0)) == 5, "the server read every route out of the mount", "%s" % said.get("routes", 0))
+	_check(int(said.get("routes", 0)) == _route_count(), "the server read every route out of the mount", "%s" % said.get("routes", 0))
 
-	var built := await _until(func() -> bool: return int(_says(_client_world()).get("routes", 0)) == 5, 30.0)
+	var built := await _until(func() -> bool: return int(_says(_client_world()).get("routes", 0)) == _route_count(), 30.0)
 	_check(built, "and the client built them from the documents it was sent")
 
 	var client := _client_scene()
 	var garage: Variant = client.get("bridge").get("garage_view") if client != null and client.get("bridge") != null else {}
-	_check(garage is Dictionary and ((garage as Dictionary).get("routes", []) as Array).size() == 5, "and has its garage")
+	_check(garage is Dictionary and ((garage as Dictionary).get("routes", []) as Array).size() == _route_count(), "and has its garage")
 	_done()
 
 
