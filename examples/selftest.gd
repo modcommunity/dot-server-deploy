@@ -1349,6 +1349,36 @@ func _test_game_refs() -> void:
 	_check(not TmcContent.new()._build("demo", bare).ok,
 		"a dependency with no owner is refused")
 
+	# Pack API first, latest.json after: a fake transport that records what was asked.
+	var asked := []
+	var api_up := {"v": "2.0.0"}
+	var transport := func(url: String) -> DotResult:
+		asked.append(url)
+		if url.contains("/api/packs/latest"):
+			if api_up["v"] == "":
+				return DotResult.fail(DotError.CODE_IO, "HTTP 404")
+			return DotResult.success({"version": api_up["v"]})
+		if url.ends_with("/a/b/latest.json"):
+			return DotResult.success({"version": "1.0.0"})
+		return DotResult.fail(DotError.CODE_IO, "<Error><Code>AccessDenied</Code></Error>")
+	var cdn := PackedStringArray(["https://cdn.example/content"])
+	var viaapi: DotResult = await installer.pointer_from("a/b", "https://site.example/", cdn, 0, transport)
+	_check(viaapi.ok and viaapi.value["version"] == "2.0.0" and asked.size() == 1
+			and str(asked[0]) == "https://site.example/api/packs/latest?id=a%2Fb",
+		"the pack API answers first and latest.json is not asked", str(asked))
+	api_up["v"] = ""
+	asked.clear()
+	var viacdn: DotResult = await installer.pointer_from("a/b", "https://site.example", cdn, 0, transport)
+	_check(viacdn.ok and viacdn.value["version"] == "1.0.0" and asked.size() == 2,
+		"a 404 from the pack API falls back to latest.json", str(asked))
+	asked.clear()
+	var nosite: DotResult = await installer.pointer_from("a/b", "", cdn, 0, transport)
+	_check(nosite.ok and asked.size() == 1 and str(asked[0]).ends_with("/a/b/latest.json"),
+		"with no site set only latest.json is asked", str(asked))
+	var both_down: DotResult = await installer.pointer_from("a/x", "https://site.example", cdn, 0, transport)
+	_check(not both_down.ok and both_down.error.detail.contains("misspelled"),
+		"both sources failing keeps the misspelled-id hint", str(both_down.error))
+
 	_check(installer.pointer_hint("a/b", "<Error><Code>AccessDenied</Code></Error>").contains("misspelled")
 			and installer.pointer_hint("a/b", "HTTP 404").contains("not published")
 			and installer.pointer_hint("a/b", "connection refused") == "",
