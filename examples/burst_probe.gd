@@ -50,7 +50,8 @@ const ServerWorld := preload("res://examples/server_world.gd")
 const SlowTcpRelay := preload("res://examples/slow_tcp_relay.gd")
 
 const CONTENT := "res://content"
-const PORT := 27320
+## Picked free at start so suites run side by side.
+var PORT := _free_port()
 
 ## The browser's inbound buffer (dot-core's inbound_buffer_exp 16), and the most one frame may
 ## carry towards it.
@@ -690,3 +691,11 @@ func _teardown() -> void:
 		_host.queue_free()
 		_host = null
 	await get_tree().process_frame
+
+
+func _free_port() -> int:
+	var probe := TCPServer.new()
+	var port := probe.get_local_port() if probe.listen(0, "127.0.0.1") == OK else 27300
+	probe.stop()
+
+	return port

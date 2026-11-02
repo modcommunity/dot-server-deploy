@@ -105,6 +105,9 @@ func _ready() -> void:
 ## On for `./server`; off is for anything that wants the same boot with directories of its own and no `quit()` (`examples/multigame.tscn`), so it drives the *real* boot rather than a copy.
 @export var auto_start: bool = true
 
+## Overrides the game port after the config loads: -1 binds a free port (suites that run side by side), 0 keeps the file's.
+@export var port_override: int = 0
+
 
 func _run() -> void:
 	var args := OS.get_cmdline_user_args()
@@ -366,6 +369,9 @@ func start(
 
 	config = loaded.value as TmcConfig
 
+	if port_override != 0:
+		config.server.port = port_override if port_override > 0 else _free_port()
+
 	var scanned := TmcContent.scan(_content_dir, config.games_allow)
 
 	if not scanned.ok:
@@ -389,6 +395,19 @@ func start(
 		return DotResult.fail(DotError.CODE_STATE, "The server did not come up.")
 
 	return DotResult.success(self)
+
+
+## A TCP port nothing holds right now; 0 when none could be probed.
+static func _free_port() -> int:
+	var probe := TCPServer.new()
+
+	if probe.listen(0, "127.0.0.1") != OK:
+		return 0
+
+	var port := probe.get_local_port()
+	probe.stop()
+
+	return port
 
 
 static func _absolute(path: String) -> String:

@@ -219,6 +219,7 @@ func _start_host(node_name: String) -> bool:
 	_host.auto_start = false
 	ServerWorld.add(self, _host)
 
+	_host.port_override = -1
 	var started: DotResult = await _host.start(CONFIG, CONTENT, DATA)
 
 	if not started.ok:

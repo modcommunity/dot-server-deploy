@@ -188,6 +188,7 @@ func _boot() -> bool:
 	_host.auto_start = false
 	ServerWorld.add(self, _host)
 
+	_host.port_override = -1
 	var started: DotResult = await _host.start(CONFIG, CONTENT, DATA)
 
 	if not _check(started.ok, "the host boots", str(started.error)):

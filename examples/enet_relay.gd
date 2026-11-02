@@ -80,7 +80,8 @@ const TEMPLATE := "dot-game-template"
 const TEMPLATE_ID := "someone/dot-game-template"
 const TEMPLATE_VERSION := "0.0.1"
 
-const PORT := 27310
+## Picked free at start so suites run side by side.
+var PORT := _free_port()
 
 ## What [method _publish_template] returns when the template is here and did not publish.
 const FAILED := "<failed>"
@@ -728,3 +729,11 @@ func _teardown() -> void:
 		_host.queue_free()
 		_host = null
 	await get_tree().process_frame
+
+
+func _free_port() -> int:
+	var probe := TCPServer.new()
+	var port := probe.get_local_port() if probe.listen(0, "127.0.0.1") == OK else 27300
+	probe.stop()
+
+	return port

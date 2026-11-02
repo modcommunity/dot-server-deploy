@@ -360,6 +360,7 @@ func _boot() -> bool:
 	# Its own World3D, so the server's physics space holds the server's bodies only. See the top.
 	ServerWorld.add(self, _host)
 
+	_host.port_override = -1
 	var started: DotResult = await _host.start(CONFIG, CONTENT, DATA)
 
 	if not _check(started.ok, "the host boots", str(started.error)):
