@@ -10,7 +10,7 @@ entries:
   - repo: dot-audio
     pin: v0.1.13
   - repo: dot-auth
-    pin: v0.1.12
+    pin: v0.1.13
   - repo: dot-bot
     pin: v0.1.14
   - repo: dot-bot-record
@@ -26,7 +26,7 @@ entries:
   - repo: dot-console
     pin: v0.1.8
   - repo: dot-core
-    pin: v0.1.36
+    pin: v0.1.37
   - repo: dot-economy
     pin: v0.1.5
   - repo: dot-effects
