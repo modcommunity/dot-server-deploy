@@ -193,11 +193,11 @@ for entry in "${GAME_ENTRIES[@]}"; do
         -type f \( -name '*.gd' -o -name '*.tscn' -o -name '*.tres' \) \
         -newer "$manifest" -print 2>/dev/null | head -3)"
 
+    # dist/ is a local build output, so a stale pack is a warning, not drift in the tree.
     if [ -n "$newer" ]; then
-        printf '  %sFAIL%s %s is stale; re-run ./setup.sh or ./server pack %s --source %s\n' \
-            "$RED" "$OFF" "$manifest" "$dir" "$src"
+        printf '  %sWARN%s %s is older than its source (local dist, not checked in); re-run ./setup.sh or ./server pack %s --source %s\n' \
+            "$YLW" "$OFF" "$manifest" "$dir" "$src"
         printf '%s\n' "$newer" | sed 's|^|         newer: |'
-        drift=$((drift + 1))
     fi
 done
 
@@ -209,7 +209,7 @@ if [ "$checked_any" -eq 0 ]; then
     printf '  %sok%s   no game repositories on this machine; staleness not checked\n' \
         "$GRN" "$OFF"
 elif [ "$drift" -eq 0 ]; then
-    printf '  %sok%s   every game is published and its pack is newer than its source\n' \
+    printf '  %sok%s   every game is published (staleness is reported as WARN above)\n' \
         "$GRN" "$OFF"
 else
     fails=$((fails + drift))
