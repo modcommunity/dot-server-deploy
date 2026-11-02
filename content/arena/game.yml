@@ -56,11 +56,9 @@ module: game/arena_module.gd
 
 # Set when this game is loaded, and only while it is loaded.
 #
-# 64 rather than the 128 the timer servers run: a deathmatch is judged by whether a shot
-# hit, not by a time to the millisecond, and lag compensation does the work a higher tick
-# rate would. 64 still divides the netcode's snapshot rate of 32, which is the constraint
-# that actually matters -- an uneven send spacing arrives as jitter no interpolator can
-# remove.
+# sv_tickrate (60 by default) rather than the 128 the timer servers run: a deathmatch is judged by
+# whether a shot hit, and lag compensation does the work a higher rate would. The game sends
+# snapshots a whole number of ticks apart (30 a second at 60), since uneven spacing is jitter.
 cvars:
   arena_scorelimit: "25"
 
