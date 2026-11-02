@@ -211,15 +211,14 @@ GAME5_PUBLIC_PORT="${TMC_DEMO_GAME5_PUBLIC_PORT:-6068}"
 GAME5="${TMC_DEMO_GAME5-arena}"
 GAME5_NAME="${TMC_DEMO_GAME5_NAME:-TMC Arena Server}"
 
-# 64, and deliberately NOT the 128 the two timer servers run.
+# 66 (game-arena's own rate), and deliberately NOT the 128 the two timer servers run.
 #
 # A deathmatch is judged by whether a shot hit, not by a time to the millisecond, and
 # lag compensation does the work a higher tick rate would -- the server rewinds every
-# hitbox to where the shooter saw it. 64 still divides the netcode's snapshot rate of
-# 32, which is the constraint that actually matters: an uneven send spacing arrives as
-# jitter no interpolator can remove. It is also the one number here that is checked
+# hitbox to where the shooter saw it. The tick rate must be a multiple of the
+# snapshot rate, or uneven send spacing arrives as jitter no interpolator can remove. It is also the one number here that is checked
 # end to end, because the client adopts it from HELLO rather than from its own export.
-GAME5_TICKRATE="${TMC_DEMO_GAME5_TICKRATE:-64}"
+GAME5_TICKRATE="${TMC_DEMO_GAME5_TICKRATE:-66}"
 # Where the site is reachable from a browser, which is what a sign-in code is redeemed
 # against. nginx terminates 443 for $HOST and proxies to $SITE_PORT; the port is an
 # implementation detail a page never sees.

@@ -387,6 +387,15 @@ cfg_get() {
 server_yml() { if [ ! -f cfg/server/server.yml ] && [ -f cfg/server.yml ]; then echo cfg/server.yml; else echo cfg/server/server.yml; fi; }
 net_cfg_file() { [ -f cfg/net.yml ] && echo cfg/net.yml || server_yml; }
 
+# The rate a game was built for; sv_tickrate is the one knob and dot-server applies it to
+# Engine.physics_ticks_per_second. arena's snapshot rate divides 66, not 60.
+game_tickrate() {
+    case "$1" in
+        arena) printf 66 ;;
+        *)     printf 60 ;;
+    esac
+}
+
 cfg_or() {
     local v
     v="$(cfg_get "$1" "$2" 2>/dev/null)"
@@ -566,7 +575,7 @@ if [ "$DO_FULL" -eq 1 ]; then
 
     FULL_GAME="$(ask       "Game to boot" "$(cfg_or "$(server_yml)" sv_game arena)")"
     FULL_MAXPLAYERS="$(ask "Player slots" "$(cfg_or "$(server_yml)" sv_maxplayers 64)")"
-    FULL_TICKRATE="$(ask   "Tickrate" "$(cfg_or "$(server_yml)" sv_tickrate 60)")"
+    FULL_TICKRATE="$(ask   "Tickrate" "$(cfg_or "$(server_yml)" sv_tickrate "$(game_tickrate "$FULL_GAME")")")"
     FULL_PORT="$(ask       "Port the server listens on" "$(cfg_or "$(net_cfg_file)" net_port 6064)")"
 
     case "$FULL_MAXPLAYERS" in ''|*[!0-9]*) die "player slots must be a number: $FULL_MAXPLAYERS" 2 ;; esac
