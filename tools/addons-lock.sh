@@ -160,8 +160,8 @@ cmd_check() {
         elif [ "$have" != "$want" ]; then
             echo "  !!    $repo is at ${have:0:9}, the lock says $ref (${want:0:9})"
             bad=1
-        # An untracked .uid is what --import writes for a script a tag shipped without one; it is not a change.
-        elif [ -n "$(git -C "$root" status --porcelain 2>/dev/null | grep -v '^?? .*\.uid$')" ]; then
+        # --import writes .uid files and re-extracts textures embedded in models (the tag may ship older copies); only source edits count.
+        elif [ -n "$(git -C "$root" status --porcelain 2>/dev/null | grep -v -E '\.(uid|import|jpg|jpeg|png|webp)$')" ]; then
             echo "  !!    $repo is at $ref with uncommitted changes"
             bad=1
         fi

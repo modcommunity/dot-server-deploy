@@ -88,15 +88,7 @@ func _shrink(path: String, quality: float) -> int:
 		entry.md5 = md5.finish()
 		dst.store_buffer(data)
 
-	var new_dir := dst.get_position()
-	dst.store_32(entries.size())
-	for entry in entries:
-		dst.store_32((entry.path as PackedByteArray).size())
-		dst.store_buffer(entry.path)
-		dst.store_64(entry.offset)
-		dst.store_64(entry.size)
-		dst.store_buffer(entry.md5)
-		dst.store_32(entry.flags)
+	var new_dir := _write_directory(dst, entries)
 	dst.seek(32)
 	dst.store_64(new_dir)
 	dst.close()
@@ -108,6 +100,20 @@ func _shrink(path: String, quality: float) -> int:
 		return 1
 	print("web_shrink: %d textures lossy at %.2f, %.1f MB -> %.1f MB" % [changed, quality, before / 1e6, after / 1e6])
 	return 0
+
+
+## Appends the directory after the data and returns where it starts.
+func _write_directory(dst: FileAccess, entries: Array[Dictionary]) -> int:
+	var start := dst.get_position()
+	dst.store_32(entries.size())
+	for entry in entries:
+		dst.store_32((entry.path as PackedByteArray).size())
+		dst.store_buffer(entry.path)
+		dst.store_64(entry.offset)
+		dst.store_64(entry.size)
+		dst.store_buffer(entry.md5)
+		dst.store_32(entry.flags)
+	return start
 
 
 ## The ctex re-encoded, or empty when it is not a mipmapped WebP ctex or would not shrink.
