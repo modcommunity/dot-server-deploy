@@ -46,7 +46,7 @@ host/tmc_config.gd::_apply_settings	161
 host/tmc_content.gd::_build	191
 host/tmc_game_config.gd	925
 host/tmc_game_config.gd::_maps	101
-host/tmc_host.gd	1527
+host/tmc_host.gd	1546
 host/tmc_host.gd::_apply_overrides	111
 host/tmc_host.gd::_boot	214
 host/tmc_host.gd::_run	105
