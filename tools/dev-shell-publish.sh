@@ -35,9 +35,19 @@ if [ "$publish" = 1 ]; then
     zip=$(mktemp -d)/shell.zip
     # content/ is the games' packs; a shell build is the engine and client only.
     (cd web/build && zip -qr "$zip" . -x 'content/*')
-    tools/publish-web-shell.sh --zip "$zip" --env "$env_file" --build "$build" --app "$app" --origin "$origin" \
+    tools/publish-web-shell.sh --zip "$zip" --env "$env_file" --build "$build" --app "$app" \
         --notes "dev shell, tmc-dev key" | grep -v '^INSERT\|^SELECT\|^FROM\|^ON CONFLICT\|^       '
     rm -rf "$(dirname "$zip")"
+    # dev.dotgames.org reads from storez (website-city .env GAMES_STORE=storez), not the bucket the upload above
+    # wrote, so it 404s until the build is copied across. Register first: the copy takes ACTIVE builds only.
+    if [ "$register" = 1 ] && [ "${DEV_SHELL_STOREZ_COPY:-1}" = 1 ]; then
+        DEV_SHELL_STOREZ_COPY=0 "$0" --register-only --build "$build"
+        # shellcheck disable=SC2029
+        ssh "$host" "cd \$HOME/stack/website-city && npx tsx --env-file=.env scripts/copy-s3-to-storez.ts --prefix=game/$app/$build/ --apply" | tail -1
+        code=$(curl -s -o /dev/null -w '%{http_code}' "$origin/$app/$build/$entry")
+        [ "$code" = 200 ] || { echo "error: $origin/$app/$build/$entry answers $code after the storez copy" >&2; exit 1; }
+        exit 0
+    fi
 fi
 [ "$register" = 1 ] || exit 0
 
