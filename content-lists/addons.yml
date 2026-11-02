@@ -12,7 +12,7 @@ entries:
   - repo: dot-auth
     pin: v0.1.13
   - repo: dot-bot
-    pin: v0.1.14
+    pin: v0.1.20
   - repo: dot-bot-record
     pin: v0.1.1
   - repo: dot-browser
@@ -38,7 +38,7 @@ entries:
   - repo: dot-flashlight
     pin: v0.1.2
   - repo: dot-fx
-    pin: v0.3.4
+    pin: v0.3.6
   - repo: dot-game
     pin: v0.1.47
   - repo: dot-inventory
@@ -54,7 +54,7 @@ entries:
   - repo: dot-log
     pin: v0.1.6
   - repo: dot-map
-    pin: v0.1.75
+    pin: v0.1.77
   - repo: dot-match
     pin: v0.1.5
   - repo: dot-matchmaking
@@ -64,7 +64,7 @@ entries:
   - repo: dot-moderation
     pin: v0.1.5
   - repo: dot-net
-    pin: v0.1.22
+    pin: v0.1.25
   - repo: dot-npc
     pin: v0.1.10
   - repo: dot-npc-ai
@@ -96,7 +96,7 @@ entries:
   - repo: dot-profiler
     pin: v0.1.1
   - repo: dot-props
-    pin: v0.1.10
+    pin: v0.1.12
   - repo: dot-radio
     pin: v0.1.1
   - repo: dot-trail
