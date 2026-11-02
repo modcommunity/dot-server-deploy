@@ -20,7 +20,7 @@ entries:
   - repo: dot-chat
     pin: v0.1.5
   - repo: dot-cloud
-    pin: v0.1.30
+    pin: v0.1.32
   - repo: dot-combat
     pin: v0.1.17
   - repo: dot-console
@@ -40,7 +40,7 @@ entries:
   - repo: dot-fx
     pin: v0.3.4
   - repo: dot-game
-    pin: v0.1.44
+    pin: v0.1.47
   - repo: dot-inventory
     pin: v0.1.4
   - repo: dot-leaderboard
@@ -60,7 +60,7 @@ entries:
   - repo: dot-matchmaking
     pin: v0.1.7
   - repo: dot-menu
-    pin: v0.1.20
+    pin: v0.1.23
   - repo: dot-moderation
     pin: v0.1.5
   - repo: dot-net
@@ -94,7 +94,7 @@ entries:
   - repo: dot-profile
     pin: v0.1.22
   - repo: dot-profiler
-    pin: v0.1.0
+    pin: v0.1.1
   - repo: dot-props
     pin: v0.1.10
   - repo: dot-radio

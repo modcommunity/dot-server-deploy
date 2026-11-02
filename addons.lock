@@ -9,7 +9,7 @@ dot-bot	v0.1.14
 dot-bot-record	v0.1.1
 dot-browser	v0.1.5
 dot-chat	v0.1.5
-dot-cloud	v0.1.30
+dot-cloud	v0.1.32
 dot-combat	v0.1.17
 dot-console	v0.1.8
 dot-core	v0.1.37
@@ -19,7 +19,7 @@ dot-entity	v0.1.7
 dot-flashlight	v0.1.2
 dot-friends	v0.1.5
 dot-fx	v0.3.4
-dot-game	v0.1.44
+dot-game	v0.1.47
 dot-inventory	v0.1.4
 dot-leaderboard	v0.3.1
 dot-lighting	v0.1.9
@@ -29,7 +29,7 @@ dot-log	v0.1.6
 dot-map	v0.1.75
 dot-match	v0.1.5
 dot-matchmaking	v0.1.7
-dot-menu	v0.1.20
+dot-menu	v0.1.23
 dot-moderation	v0.1.5
 dot-net	v0.1.22
 dot-npc	v0.1.10
@@ -46,7 +46,7 @@ dot-player-class	v0.1.8
 dot-player-controller	v0.3.4
 dot-procedural-generation	v0.1.4
 dot-profile	v0.1.22
-dot-profiler	v0.1.0
+dot-profiler	v0.1.1
 dot-props	v0.1.10
 dot-radio	v0.1.1
 dot-replay	v0.1.15
