@@ -44,6 +44,12 @@ func _init() -> void:
 				"active": 2,
 				"current_file": "surf_mesa_geometry.bin",
 			})
+		"job":
+			shell.call("_on_cloud_phase", 4, "Downloading game content…")
+			shell.call("_on_cloud_job", {
+				"fraction": 0.31, "done_bytes": 124_000_000, "total_bytes": 400_000_000,
+				"done_packs": 12, "total_packs": 41, "bytes_per_sec": 6_200_000.0, "eta_sec": 44.5,
+			})
 		"mounting":
 			shell.call("_on_cloud_phase", 6, "Mounting surf_mesa 1.0.0…")
 		"verifying":

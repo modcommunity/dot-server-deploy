@@ -38,6 +38,8 @@ var _identity: Label = null
 var _join: Button = null
 var _progress: ProgressBar = null
 var _detail: Label = null
+## Latest overall snapshot of a many-pack download (DotCloudJobProgress); empty when none runs.
+var _job: Dictionary = {}
 var _clear: Button = null
 var _clear_confirm: ConfirmationDialog = null
 var _content_failed: PanelContainer = null
@@ -1022,6 +1024,7 @@ func _ensure_cloud() -> void:
 	_cloud.phase_changed.connect(_on_cloud_phase)
 	_cloud.failed.connect(_on_cloud_failed)
 	_cloud.progress_changed.connect(_on_cloud_progress_detail)
+	_cloud.job_progress_changed.connect(_on_cloud_job)
 
 	add_child(_cloud)
 
@@ -1076,6 +1079,9 @@ func _on_cloud_phase(phase: int, text: String) -> void:
 				loading.begin(TmcLoadingScreen.REASON_CONTENT)
 				loading.set_progress(-1.0, text)
 
+	if phase == DotCloudClient.Phase.IDLE or phase == DotCloudClient.Phase.READY or phase == DotCloudClient.Phase.FAILED:
+		_job = {}
+
 	# The detail line belongs to the download. Anything else and it is stale.
 	if _detail != null and phase != DotCloudClient.Phase.DOWNLOADING:
 		_detail.visible = false
@@ -1097,8 +1103,41 @@ func _on_cloud_phase(phase: int, text: String) -> void:
 			_indeterminate(true)
 
 
+## One bar for the whole job: a snapshot with a single pack is the per-pack bar again, so it is ignored.
+func _on_cloud_job(snap: Dictionary) -> void:
+	_job = snap if int(snap.get("total_packs", 0)) > 1 and int(snap.get("done_packs", 0)) < int(snap.get("total_packs", 0)) else {}
+	if _job.is_empty():
+		return
+	var frac := float(_job.get("fraction", 0.0))
+	if loading != null and loading.is_showing():
+		loading.set_progress(frac, "", _job_line())
+	if _progress != null:
+		_indeterminate(false)
+		_progress.visible = true
+		_progress.value = clampf(frac, 0.0, 1.0) * 100.0
+	if _detail != null:
+		_detail.text = _job_line()
+		_detail.visible = true
+
+
+## "63.0 / 400 MiB · 3/40 packs" then "rate · ETA", the answer to "how much of everything".
+func _job_line() -> String:
+	var line := "%s · %d/%d packs" % [_bytes_pair(int(_job.get("done_bytes", 0)), int(_job.get("total_bytes", 0))), int(_job.get("done_packs", 0)), int(_job.get("total_packs", 0))]
+	var rate := float(_job.get("bytes_per_sec", 0.0))
+	var eta := float(_job.get("eta_sec", -1.0))
+	var tail := PackedStringArray()
+	if rate > 1.0:
+		tail.append("%s/s" % DotPaths.format_bytes(int(rate)))
+	if eta > 0.0 and rate > 1.0 and float(_job.get("fraction", 0.0)) > 0.02:
+		tail.append(_eta_text(eta))
+	return line if tail.is_empty() else line + "\n" + " · ".join(tail)
+
+
 ## The second line: which file, how fast, how much longer.
 func _on_cloud_progress_detail(p: Dictionary) -> void:
+	# A many-pack job owns the bar and the detail; per-file numbers would jump back to zero with every pack.
+	if not _job.is_empty():
+		return
 	if loading != null and loading.is_showing():
 		var total := int(p.get("total_bytes", 0))
 		loading.set_progress(float(p.get("fraction", 0.0)), "",
