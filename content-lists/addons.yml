@@ -102,7 +102,7 @@ entries:
   - repo: dot-trail
     pin: v0.1.2
   - repo: dot-replay
-    pin: v0.1.15
+    pin: v0.1.16
   - repo: dot-server
     pin: v0.1.28
   - repo: dot-server-query
@@ -114,7 +114,7 @@ entries:
   - repo: dot-spawn
     pin: v0.2.0
   - repo: dot-spectate
-    pin: v0.1.6
+    pin: v0.1.7
   - repo: dot-sql
     pin: v0.1.4
   - repo: dot-stats
