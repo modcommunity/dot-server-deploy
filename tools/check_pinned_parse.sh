@@ -24,7 +24,8 @@ for g in "${games[@]}"; do
     for l in "$src"/addons/*; do
         [ -L "$l" ] || continue; d="$(basename "$l")"; [ -e "$p/addons/$d" ] && continue
         repo="$(basename "$(dirname "$(dirname "$(readlink -f "$l")")")")"
-        ref="$(git -C "$SIB/$repo" tag -l 'v[0-9]*' --sort=-v:refname 2>/dev/null | head -1)"; [ -n "$ref" ] || ref=HEAD
+        ref="$(git -C "$SIB/$repo" tag -l 'v[0-9]*' --sort=-v:refname 2>/dev/null | head -1)"
+        if [ -z "$ref" ]; then ref=HEAD; echo "WARN $g: $repo has no v* tag, using HEAD"; fi
         if [ -d "$SIB/$repo/.git" ] && git -C "$SIB/$repo" archive "$ref" "addons/$d" 2>/dev/null | tar -x -C "$p"; then
             extra="$extra $repo@$ref"
         else
