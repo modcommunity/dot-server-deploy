@@ -16,5 +16,26 @@
 		"fetching": "Karten werden geladen: {name}…",
 		"have": "Karten: {name} (bereits geladen)",
 		"fetching_size": "Karten werden geladen: {name} ({size})…"
+	},
+	"connect": {
+		"failed": "Verbindung fehlgeschlagen: {reason}",
+		"disconnected": "Getrennt: {reason}",
+		"no_reason": "kein Grund angegeben"
+	},
+	"party": {
+		"line": "Gruppe: {name} ({count, plural, one {# Mitglied} other {# Mitglieder}})",
+		"following": "Deine Gruppe spielt auf {server}. Beitritt …",
+		"left": {
+			"kicked": "Du wurdest aus deiner Gruppe entfernt.",
+			"banned": "Du wurdest aus deiner Gruppe gebannt.",
+			"ended": "Deine Gruppe wurde aufgelöst.",
+			"left": "Du hast deine Gruppe verlassen."
+		}
+	},
+	"friends": {
+		"line": "Freunde: {online} von {count} online",
+		"more": "und {count} weitere",
+		"join": "Beitreten",
+		"joining": "Trete {name} bei …"
 	}
 }
