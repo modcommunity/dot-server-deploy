@@ -58,6 +58,7 @@ jobs:
         env:
             WEB_SHELL_APP: ${{ vars.WEB_SHELL_APP || 'godot' }}
             WEB_SHELL_ORIGIN: ${{ vars.WEB_SHELL_ORIGIN }}
+            WEB_SHELL_API: ${{ vars.WEB_SHELL_API || 'https://moddingcommunity.com' }}
             WEB_SHELL_BACKBONE_URL: ${{ vars.WEB_SHELL_BACKBONE_URL }}
         steps:
             - uses: actions/checkout@v4
@@ -108,12 +109,11 @@ jobs:
             - name: Settings this needs
               if: steps.need.outputs.build == 'true'
               env:
-                  S3_KEY_SET: ${{ secrets.GAMES_S3_ACCESS_KEY != '' && secrets.GAMES_S3_ACCESS_SECRET != '' && secrets.GAMES_S3_BUCKET != '' }}
+                  TOKEN_SET: ${{ secrets.SHELL_PUBLISH_TOKEN != '' }}
               run: |
                   missing=()
-                  [ "$S3_KEY_SET" = true ] || missing+=("secrets GAMES_S3_ACCESS_KEY, GAMES_S3_ACCESS_SECRET, GAMES_S3_BUCKET")
+                  [ "$TOKEN_SET" = true ] || missing+=("secret SHELL_PUBLISH_TOKEN (the site's shell publish token)")
                   [ -n "$WEB_SHELL_BACKBONE_URL" ] || missing+=("variable WEB_SHELL_BACKBONE_URL (client/auth.json's backbone_url)")
-                  [ -n "$WEB_SHELL_ORIGIN" ] || missing+=("variable WEB_SHELL_ORIGIN (the content origin, e.g. https://cdn.example.net)")
                   if [ "${#missing[@]}" -gt 0 ]; then
                       printf 'missing repository settings:\n'; printf '  %s\n' "${missing[@]}"
                       exit 1
@@ -167,16 +167,15 @@ jobs:
               if: steps.need.outputs.build == 'true'
               id: pin
               env:
-                  GAMES_S3_ACCESS_KEY: ${{ secrets.GAMES_S3_ACCESS_KEY }}
-                  GAMES_S3_ACCESS_SECRET: ${{ secrets.GAMES_S3_ACCESS_SECRET }}
-                  GAMES_S3_BUCKET: ${{ secrets.GAMES_S3_BUCKET }}
-                  GAMES_S3_REGION: ${{ secrets.GAMES_S3_REGION }}
+                  SHELL_PUBLISH_TOKEN: ${{ secrets.SHELL_PUBLISH_TOKEN }}
               run: |
                   set -euo pipefail
                   git config user.name "github-actions[bot]"
                   git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+                  # The origin is optional: with it the upload is read back before the pin.
+                  origin=(); [ -z "$WEB_SHELL_ORIGIN" ] || origin=(--origin "$WEB_SHELL_ORIGIN")
                   tools/publish-web-shell.sh --zip web/build.zip --pin \
-                      --app "$WEB_SHELL_APP" --origin "$WEB_SHELL_ORIGIN" \
+                      --api "$WEB_SHELL_API" --app "$WEB_SHELL_APP" "${origin[@]}" \
                       --notes "Exported by the web-shell workflow, run ${{ github.run_id }}, from $(git rev-parse --short HEAD)"
                   tag="$(git describe --tags --exact-match HEAD)"
                   echo "tag=$tag" >> "$GITHUB_OUTPUT"
