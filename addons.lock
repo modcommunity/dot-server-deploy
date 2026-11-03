@@ -9,7 +9,7 @@ dot-bot	v0.1.23
 dot-bot-record	v0.1.1
 dot-browser	v0.1.5
 dot-chat	v0.1.5
-dot-cloud	v0.1.38
+dot-cloud	v0.1.39
 dot-combat	v0.1.20
 dot-console	v0.1.8
 dot-core	v0.1.40
@@ -19,7 +19,7 @@ dot-entity	v0.1.7
 dot-flashlight	v0.1.3
 dot-friends	v0.1.5
 dot-fx	v0.3.7
-dot-game	v0.1.50
+dot-game	v0.1.51
 dot-inventory	v0.1.4
 dot-leaderboard	v0.3.1
 dot-lighting	v0.1.9
@@ -32,7 +32,7 @@ dot-matchmaking	v0.1.7
 dot-menu	v0.1.24
 dot-moderation	v0.1.5
 dot-net	v0.1.26
-dot-npc	v0.1.18
+dot-npc	v0.1.19
 dot-npc-ai	v0.1.11
 dot-npc-ai-director	v0.1.8
 dot-objective	v0.1.5
@@ -71,4 +71,4 @@ dot-weapon	v0.1.39
 dot-weather	v0.1.2
 dot-workbench	v0.3.0
 zed-dot-weapons	v0.1.9
-zee-dot-weapons	v0.1.58
+zee-dot-weapons	v0.1.59

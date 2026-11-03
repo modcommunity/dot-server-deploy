@@ -20,7 +20,7 @@ entries:
   - repo: dot-chat
     pin: v0.1.5
   - repo: dot-cloud
-    pin: v0.1.38
+    pin: v0.1.39
   - repo: dot-combat
     pin: v0.1.20
   - repo: dot-console
@@ -40,7 +40,7 @@ entries:
   - repo: dot-fx
     pin: v0.3.7
   - repo: dot-game
-    pin: v0.1.50
+    pin: v0.1.51
   - repo: dot-inventory
     pin: v0.1.4
   - repo: dot-leaderboard
@@ -66,7 +66,7 @@ entries:
   - repo: dot-net
     pin: v0.1.26
   - repo: dot-npc
-    pin: v0.1.18
+    pin: v0.1.19
   - repo: dot-npc-ai
     pin: v0.1.11
   - repo: dot-npc-ai-director
@@ -144,4 +144,4 @@ entries:
   - repo: zed-dot-weapons
     pin: v0.1.9
   - repo: zee-dot-weapons
-    pin: v0.1.58
+    pin: v0.1.59
