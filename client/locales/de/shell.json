@@ -1,0 +1,20 @@
+{
+	"job": {
+		"line": "{bytes} · {done} von {total, plural, one {# Paket} other {# Paketen}}"
+	},
+	"progress": {
+		"file_of": "{n} von {total}"
+	},
+	"size": "{value, number} {unit}",
+	"rate": "{size}/s",
+	"eta": {
+		"few": "einige Sekunden",
+		"seconds": "noch {n} s",
+		"minutes": "noch {n} Min."
+	},
+	"solo": {
+		"fetching": "Karten werden geladen: {name}…",
+		"have": "Karten: {name} (bereits geladen)",
+		"fetching_size": "Karten werden geladen: {name} ({size})…"
+	}
+}

@@ -66,5 +66,23 @@
 		"more": "and {count} more",
 		"join": "Join",
 		"joining": "Joining {name}…"
+	},
+	"job": {
+		"line": "{bytes} · {done} of {total, plural, one {# pack} other {# packs}}"
+	},
+	"progress": {
+		"file_of": "{n} of {total}"
+	},
+	"size": "{value, number} {unit}",
+	"rate": "{size}/s",
+	"eta": {
+		"few": "a few seconds",
+		"seconds": "{n}s left",
+		"minutes": "{n} min left"
+	},
+	"solo": {
+		"fetching": "Fetching maps: {name}…",
+		"have": "Maps: {name} (already downloaded)",
+		"fetching_size": "Fetching maps: {name} ({size})…"
 	}
 }

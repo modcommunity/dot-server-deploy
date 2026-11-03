@@ -1120,14 +1120,18 @@ func _on_cloud_job(snap: Dictionary) -> void:
 		_detail.visible = true
 
 
-## "63.0 / 400 MiB · 3/40 packs" then "rate · ETA", the answer to "how much of everything".
+## "63 / 400 MiB · 3 of 40 packs" then "rate · ETA", the answer to "how much of everything".
 func _job_line() -> String:
-	var line := "%s · %d/%d packs" % [_bytes_pair(int(_job.get("done_bytes", 0)), int(_job.get("total_bytes", 0))), int(_job.get("done_packs", 0)), int(_job.get("total_packs", 0))]
+	var total_packs := int(_job.get("total_packs", 0))
+	var line := _text("shell.job.line", {
+		"bytes": _bytes_pair(int(_job.get("done_bytes", 0)), int(_job.get("total_bytes", 0))),
+		"done": int(_job.get("done_packs", 0)), "total": total_packs,
+	}, "%s · %d of %d packs" % [_bytes_pair(int(_job.get("done_bytes", 0)), int(_job.get("total_bytes", 0))), int(_job.get("done_packs", 0)), total_packs])
 	var rate := float(_job.get("bytes_per_sec", 0.0))
 	var eta := float(_job.get("eta_sec", -1.0))
 	var tail := PackedStringArray()
 	if rate > 1.0:
-		tail.append("%s/s" % DotPaths.format_bytes(int(rate)))
+		tail.append(_rate_text(rate))
 	if eta > 0.0 and rate > 1.0 and float(_job.get("fraction", 0.0)) > 0.02:
 		tail.append(_eta_text(eta))
 	return line if tail.is_empty() else line + "\n" + " · ".join(tail)
@@ -1160,7 +1164,7 @@ func _on_cloud_progress_detail(p: Dictionary) -> void:
 
 	var rate := float(p.get("bytes_per_sec", 0.0))
 	if rate > 1.0:
-		numbers.append("%s/s" % DotPaths.format_bytes(int(rate)))
+		numbers.append(_rate_text(rate))
 
 	# [b]Only once it means something.[/b] An estimate computed from the first two
 	# hundred milliseconds of a transfer says four hours, and a player reads that
@@ -1177,7 +1181,8 @@ func _on_cloud_progress_detail(p: Dictionary) -> void:
 
 	var files_total := int(p.get("total_files", 0))
 	if files_total > 1:
-		what.append("%d of %d" % [mini(int(p.get("done_files", 0)) + 1, files_total), files_total])
+		var n := mini(int(p.get("done_files", 0)) + 1, files_total)
+		what.append(_text("shell.progress.file_of", {"n": n, "total": files_total}, "%d of %d" % [n, files_total]))
 
 	var lines := PackedStringArray()
 	if not numbers.is_empty():
@@ -1191,15 +1196,34 @@ func _on_cloud_progress_detail(p: Dictionary) -> void:
 
 ## `23.5 / 63.0 MiB` rather than `23.5 MiB / 63.0 MiB`: the panel is 215 px wide and the repeated unit wrapped.
 ## Dropped only when both sides land in the same unit.
-static func _bytes_pair(done: int, total: int) -> String:
-	var a := DotPaths.format_bytes(done)
-	var b := DotPaths.format_bytes(total)
-	var unit := b.get_slice(" ", 1) if b.contains(" ") else ""
+func _bytes_pair(done: int, total: int) -> String:
+	var a := _size_text(done)
+	var b := _size_text(total)
+	var unit := b.get_slice(" ", b.count(" ")) if b.contains(" ") else ""
 
 	if unit != "" and a.ends_with(" " + unit):
 		return "%s / %s" % [a.trim_suffix(" " + unit), b]
 
 	return "%s / %s" % [a, b]
+
+
+## A byte count with the locale's decimal separator; the unit symbols (KiB, MiB) are the same in every language.
+func _size_text(n: int) -> String:
+	if n < 0:
+		return "?"
+	var units := ["B", "KiB", "MiB", "GiB", "TiB"]
+	var v := float(n)
+	var i := 0
+	while v >= 1024.0 and i < units.size() - 1:
+		v /= 1024.0
+		i += 1
+	var shown := snappedf(v, 0.1) if i > 0 else v
+	return _text("shell.size", {"value": shown, "unit": units[i]}, DotPaths.format_bytes(n))
+
+
+func _rate_text(rate: float) -> String:
+	var size := _size_text(int(rate))
+	return _text("shell.rate", {"size": size}, "%s/s" % size)
 
 
 ## A middle-elided name, because the end of a filename identifies it: `surf_mesa_geometry_lod0.bin` cut from the right is every file in that map.
@@ -1210,16 +1234,15 @@ static func _elide(text: String, limit: int) -> String:
 	return text.substr(0, keep) + "…" + text.substr(text.length() - keep)
 
 
-## An estimate in the units a person would use for it.
-static func _eta_text(seconds: float) -> String:
-	# Short, because it shares a line with the bytes and the rate. "about 15s left" and
-	# "15s left" carry the same information and one of them fits.
+## An estimate in the units a person would use for it. Short, because it shares a line with the bytes and the rate.
+func _eta_text(seconds: float) -> String:
 	if seconds < 10.0:
-		return "a few seconds"
+		return _text("shell.eta.few", {}, "a few seconds")
 	if seconds < 90.0:
-		return "%ds left" % int(round(seconds / 5.0) * 5)
+		var s := int(round(seconds / 5.0) * 5)
+		return _text("shell.eta.seconds", {"n": s}, "%ds left" % s)
 	var minutes := int(round(seconds / 60.0))
-	return "%d min left" % minutes
+	return _text("shell.eta.minutes", {"n": minutes}, "%d min left" % minutes)
 
 
 ## `content_urls` out of `client/content.json`, or empty. Read here because DotCloudConfig has no field for it and this file is all an operator can edit in an export;
@@ -1955,7 +1978,7 @@ func _describe_solo_pack(id: String, version: String) -> String:
 	var pack_name := id.get_slice("/", 1)
 	var resolved: DotResult = await _cloud.resolve_manifest(StringName(id), version)
 	if not resolved.ok:
-		return "Fetching maps: %s…" % pack_name
+		return _text("shell.solo.fetching", {"name": pack_name}, "Fetching maps: %s…" % pack_name)
 
 	var manifest := resolved.value as DotCloudManifest
 	if manifest.display_name != "":
@@ -1963,8 +1986,9 @@ func _describe_solo_pack(id: String, version: String) -> String:
 
 	var plan := _cloud.plan_for(manifest)
 	if int(plan.get("missing_bytes", 0)) <= 0:
-		return "Maps: %s (already downloaded)" % pack_name
-	return "Fetching maps: %s (%s)…" % [pack_name, DotPaths.format_bytes(int(plan["missing_bytes"]))]
+		return _text("shell.solo.have", {"name": pack_name}, "Maps: %s (already downloaded)" % pack_name)
+	var size := _size_text(int(plan["missing_bytes"]))
+	return _text("shell.solo.fetching_size", {"name": pack_name, "size": size}, "Fetching maps: %s (%s)…" % [pack_name, size])
 
 
 ## Code and scenes of the mounted packs [param keys], in the order that lets a scene find its

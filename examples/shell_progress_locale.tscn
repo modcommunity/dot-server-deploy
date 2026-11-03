@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://examples/shell_progress_locale.gd" id="1_spl"]
+
+[node name="ShellProgressLocale" type="Node"]
+script = ExtResource("1_spl")

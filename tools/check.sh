@@ -462,6 +462,12 @@ echo
 echo "the game vote on the shell's HUD"
 "$GODOT" --headless --path . res://examples/shell_notice.tscn < /dev/null || fails=$((fails + 1))
 
+# The shell's aggregate download line in English and German, and every locale carrying every
+# progress key. Armed: a key dropped from one locale, or the line built from literals, fails.
+echo
+echo "the shell's download line, localised"
+"$GODOT" --headless --path . res://examples/shell_progress_locale.tscn < /dev/null || fails=$((fails + 1))
+
 # Solo play (client/tmc_solo.gd): what a page may name, the shell's game.yml reader against
 # TmcYaml on every game, client/solo.json against cfg.example/server/content/overrides.yml, and the session a
 # solo game reads its map packs and its way back from. Armed: an id check that accepts
