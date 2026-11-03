@@ -23,8 +23,8 @@ func _arg(name: String, fallback: String) -> String:
 
 func _run() -> void:
 	var yml := _arg("--game-yml", "")
-	if yml == "" or not FileAccess.file_exists(yml):
-		print("RESULT error=no game.yml (--game-yml)")
+	if yml == "" or FileAccess.open(yml, FileAccess.READ) == null:
+		print("RESULT error=no game.yml (--game-yml) yml=%s err=%d" % [yml, FileAccess.get_open_error()])
 		get_tree().quit(1)
 		return
 	var desc := TmcSolo.parse_descriptor(FileAccess.get_file_as_string(yml))

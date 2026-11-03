@@ -269,7 +269,7 @@ func _test_the_packs_mounted() -> void:
 	_done()
 
 
-## The maps are content, the props, the boxes and both weapon packs are the game's: all read
+## The maps are content, the props, the boxes and the weapons are the game's: all read
 ## out of their mounts.
 func _test_the_maps_arrived() -> void:
 	_section("the delivered maps, props, boxes and weapons are what the server plays with")
@@ -287,8 +287,8 @@ func _test_the_maps_arrived() -> void:
 	var boxes_said: Dictionary = (boxes as Object).call("describe") if boxes is Object else {}
 	_check(int(boxes_said.get("types", 0)) >= 8, "and the box file", str(boxes_said))
 
-	_check(ZeeWeaponPack.table().has(&"pump_shotgun") and ZeeWeaponPack.table().has(&"pistol"),
-		"and both weapon packs, the second installed by the delivered game")
+	_check(ZeeWeaponPack.table().has(&"fists") and ZeeWeaponPack.table().size() > 5,
+		"and the weapons: zee's fists plus a provider pack's guns", str(ZeeWeaponPack.table().keys()))
 
 	var started := await _until(func() -> bool: return int(_says(_world()).get("round", 0)) > 0, 40.0)
 	_check(started, "a map begins")
