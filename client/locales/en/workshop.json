@@ -1,0 +1,46 @@
+{
+	"off": "The Workshop is off in this build.",
+	"takes_none": "This game takes no subscriptions.",
+	"sign_in": "Sign in to use your subscriptions",
+	"sign_in_why": "Subscriptions belong to your account, so a guest has none.",
+	"no_native_sign_in": "This build cannot sign in yet. Play in the browser to use them.",
+	"no_list": "The list could not be fetched and none is saved on this device.",
+	"applies_next": "Changes apply the next time you start the game.",
+	"offline": "The site could not be reached. This is the last list saved on this device.",
+	"none": "No subscriptions yet",
+	"none_why": "Subscribe to maps and packs on the site and they show up here.",
+	"suggested": {
+		"title": "Suggested content (the game's map packs)",
+		"auto": "Download automatically",
+		"ask": "Ask before downloading",
+		"off": "Off"
+	},
+	"title": "Subscriptions",
+	"manage_site": "Manage subscriptions on the site",
+	"runs_code": "Runs code",
+	"via": "From the collection {name}",
+	"this_game": "On for this game",
+	"change_all_on_site": "Change for every game on the site",
+	"all_games": "On for every game",
+	"this_device": "On on this device",
+	"open_asset": "Open on the site",
+	"state": {
+		"off_game": "Off for this game",
+		"on": "On in this game",
+		"off_here": "Off for this game from the next launch",
+		"off_device": "Off on this device",
+		"failed": "Could not load: {why}",
+		"skipped": "Not loaded: {why}",
+		"later": "Subscribed; loads at the next launch"
+	},
+	"reason": {
+		"device_off": "turned off on this device",
+		"metered": "you are on a metered connection",
+		"script_policy": "it runs code that has not been approved",
+		"quota": "there is no room to store it",
+		"too_many": "too many subscriptions to load at once",
+		"incompatible": "this game cannot use it"
+	},
+	"forbidden": "This sign-in can only change this game. Use the site to change every game.",
+	"failed": "The change was not saved: {why}"
+}

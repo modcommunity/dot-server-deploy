@@ -1,0 +1,46 @@
+{
+	"off": "Der Workshop ist in dieser Version ausgeschaltet.",
+	"takes_none": "Dieses Spiel unterstützt keine Abonnements.",
+	"sign_in": "Melde dich an, um deine Abonnements zu nutzen",
+	"sign_in_why": "Abonnements gehören zu deinem Konto, ein Gast hat daher keine.",
+	"no_native_sign_in": "Diese Version kann sich noch nicht anmelden. Spiele im Browser, um sie zu nutzen.",
+	"no_list": "Die Liste konnte nicht abgerufen werden und auf diesem Gerät ist keine gespeichert.",
+	"applies_next": "Änderungen gelten beim nächsten Start des Spiels.",
+	"offline": "Die Seite war nicht erreichbar. Dies ist die zuletzt auf diesem Gerät gespeicherte Liste.",
+	"none": "Noch keine Abonnements",
+	"none_why": "Abonniere Karten und Pakete auf der Seite, dann erscheinen sie hier.",
+	"suggested": {
+		"title": "Vorgeschlagene Inhalte (die Kartenpakete des Spiels)",
+		"auto": "Automatisch herunterladen",
+		"ask": "Vor dem Herunterladen fragen",
+		"off": "Aus"
+	},
+	"title": "Abonnements",
+	"manage_site": "Abonnements auf der Seite verwalten",
+	"runs_code": "Führt Code aus",
+	"via": "Aus der Sammlung {name}",
+	"this_game": "Für dieses Spiel an",
+	"change_all_on_site": "Für alle Spiele auf der Seite ändern",
+	"all_games": "Für alle Spiele an",
+	"this_device": "Auf diesem Gerät an",
+	"open_asset": "Auf der Seite öffnen",
+	"state": {
+		"off_game": "Für dieses Spiel aus",
+		"on": "In diesem Spiel an",
+		"off_here": "Für dieses Spiel ab dem nächsten Start aus",
+		"off_device": "Auf diesem Gerät aus",
+		"failed": "Konnte nicht geladen werden: {why}",
+		"skipped": "Nicht geladen: {why}",
+		"later": "Abonniert; wird beim nächsten Start geladen"
+	},
+	"reason": {
+		"device_off": "auf diesem Gerät ausgeschaltet",
+		"metered": "du bist mit einer getakteten Verbindung online",
+		"script_policy": "es führt Code aus, der nicht freigegeben ist",
+		"quota": "es ist kein Platz zum Speichern",
+		"too_many": "zu viele Abonnements, um sie gleichzeitig zu laden",
+		"incompatible": "dieses Spiel kann es nicht nutzen"
+	},
+	"forbidden": "Diese Anmeldung kann nur dieses Spiel ändern. Nutze die Seite, um alle Spiele zu ändern.",
+	"failed": "Die Änderung wurde nicht gespeichert: {why}"
+}

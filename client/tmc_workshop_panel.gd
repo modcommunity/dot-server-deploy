@@ -150,7 +150,7 @@ func refresh() -> void:
 func _add_suggested_row() -> void:
 	if workshop.suggested.is_empty():
 		return
-	_add_line(_t("workshop.suggested", "Suggested content (the game's map packs)"), true)
+	_add_line(_t("workshop.suggested.title", "Suggested content (the game's map packs)"), true)
 	var pick := OptionButton.new()
 	pick.name = "SuggestedMode"
 	pick.custom_minimum_size = Vector2(0, TOUCH_HEIGHT)

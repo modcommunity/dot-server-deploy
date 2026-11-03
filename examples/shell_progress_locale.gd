@@ -5,7 +5,7 @@ extends Node
 
 const SHELL := "res://client/shell.tscn"
 const LOCALES := "res://client/locales"
-const CHECKS := 35
+const CHECKS := 35 + 1 + 2 * 38
 const KEYS := ["job.line", "job.unpacking", "job.unpacking_title", "job.downloading_title", "progress.file_of", "size", "rate", "eta.few", "eta.seconds", "eta.minutes", "solo.fetching", "solo.have", "solo.fetching_size"]
 
 var _passed := 0
@@ -20,6 +20,7 @@ func _ready() -> void:
 func _run() -> void:
 	print("dot-server-deploy: the shell's download line, localised")
 	_test_every_locale_has_every_key()
+	_test_workshop_keys()
 	await _test_two_languages()
 	print("%d passed, %d failed (expected %d checks)" % [_passed, _failed, CHECKS])
 	get_tree().quit(0 if _failed == 0 and _passed == CHECKS else 1)
@@ -52,6 +53,24 @@ func _test_every_locale_has_every_key() -> void:
 			_flat(parsed, "", flat)
 		for key in KEYS:
 			_check(flat.has(key), "%s has shell.%s" % [lang, key])
+
+
+## Every key the Workshop panel asks for exists in every locale, not only in its English default.
+func _test_workshop_keys() -> void:
+	var src := FileAccess.get_file_as_string("res://client/tmc_workshop_panel.gd")
+	var re := RegEx.create_from_string("_t\\(\\s*\"workshop\\.([a-z_.]+)\"")
+	var wanted := {}
+	for m in re.search_all(src):
+		wanted[m.get_string(1)] = true
+	_check(wanted.size() == 38, "the panel asks for 38 distinct workshop keys (%d)" % wanted.size())
+	for lang in ["en", "de"]:
+		var f := FileAccess.open("%s/%s/workshop.json" % [LOCALES, lang], FileAccess.READ)
+		var parsed: Variant = JSON.parse_string(f.get_as_text()) if f != null else null
+		var flat := {}
+		if parsed is Dictionary:
+			_flat(parsed, "", flat)
+		for key in wanted:
+			_check(flat.has(key), "%s has workshop.%s" % [lang, key])
 
 
 func _test_two_languages() -> void:
