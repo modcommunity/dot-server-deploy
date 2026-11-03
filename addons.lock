@@ -1,6 +1,6 @@
 # The addon commits servers install and the client shell is exported from.
 # Written by tools/addons-lock.sh write; read by setup.sh. repo<TAB>ref.
-arena-weapons	v1.4.21
+arena-weapons	v1.4.22
 dot-2d	v0.1.5
 dot-achievements	v0.1.7
 dot-audio	v0.1.13
@@ -71,4 +71,4 @@ dot-weapon	v0.1.39
 dot-weather	v0.1.2
 dot-workbench	v0.3.0
 zed-dot-weapons	v0.1.9
-zee-dot-weapons	v0.1.54
+zee-dot-weapons	v0.1.57
