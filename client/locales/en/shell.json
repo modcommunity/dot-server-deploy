@@ -68,7 +68,10 @@
 		"joining": "Joining {name}…"
 	},
 	"job": {
-		"line": "{bytes} · {done} of {total, plural, one {# pack} other {# packs}}"
+		"line": "{bytes} · {done} of {total, plural, one {# pack} other {# packs}}",
+		"unpacking": "{done} of {total}",
+		"unpacking_title": "Unpacking…",
+		"downloading_title": "Downloading…"
 	},
 	"progress": {
 		"file_of": "{n} of {total}"

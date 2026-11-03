@@ -5,8 +5,8 @@ extends Node
 
 const SHELL := "res://client/shell.tscn"
 const LOCALES := "res://client/locales"
-const CHECKS := 29
-const KEYS := ["job.line", "progress.file_of", "size", "rate", "eta.few", "eta.seconds", "eta.minutes", "solo.fetching", "solo.have", "solo.fetching_size"]
+const CHECKS := 35
+const KEYS := ["job.line", "job.unpacking", "job.unpacking_title", "job.downloading_title", "progress.file_of", "size", "rate", "eta.few", "eta.seconds", "eta.minutes", "solo.fetching", "solo.have", "solo.fetching_size"]
 
 var _passed := 0
 var _failed := 0

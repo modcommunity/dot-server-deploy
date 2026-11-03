@@ -50,6 +50,16 @@ func _init() -> void:
 				"fraction": 0.31, "done_bytes": 124_000_000, "total_bytes": 400_000_000,
 				"done_packs": 12, "total_packs": 41, "bytes_per_sec": 6_200_000.0, "eta_sec": 44.5,
 			})
+		"launch", "launch_unpack":
+			# A solo launch's one job: bytes while downloading, then an indeterminate "Unpacking n of N".
+			shell.set("_launch_job", true)
+			shell.call("_on_cloud_phase", 4, "Downloading game content…")
+			shell.call("_on_cloud_job", {
+				"fraction": 1.0 if stage == "launch_unpack" else 0.42, "done_bytes": 400_000_000 if stage == "launch_unpack" else 168_000_000,
+				"total_bytes": 400_000_000, "done_packs": 41 if stage == "launch_unpack" else 17, "total_packs": 41,
+				"bytes_per_sec": 6_200_000.0, "eta_sec": 37.4,
+				"phase": "unpack" if stage == "launch_unpack" else "download", "unpack_done": 9, "unpack_total": 41,
+			})
 		"mounting":
 			shell.call("_on_cloud_phase", 6, "Mounting surf_mesa 1.0.0…")
 		"verifying":

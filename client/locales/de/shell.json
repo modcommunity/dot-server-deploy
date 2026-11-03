@@ -1,6 +1,9 @@
 {
 	"job": {
-		"line": "{bytes} · {done} von {total, plural, one {# Paket} other {# Paketen}}"
+		"line": "{bytes} · {done} von {total, plural, one {# Paket} other {# Paketen}}",
+		"unpacking": "{done} von {total}",
+		"unpacking_title": "Entpacken…",
+		"downloading_title": "Herunterladen…"
 	},
 	"progress": {
 		"file_of": "{n} von {total}"

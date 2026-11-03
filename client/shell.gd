@@ -55,6 +55,10 @@ var _solo_button: Button = null
 var _solo_maps_check: CheckBox = null
 ## What the pack being fetched is, said in the status line over every cloud phase text.
 var _solo_pack_label: String = ""
+## True while a solo launch holds one outer job: the total line replaces every per-pack text and the bar never restarts.
+var _launch_job := false
+var _solo_key_cache: Dictionary = {}
+var _deferred_workshop := false
 var _solo_session: TmcSoloSession = null
 
 ## The connect form's own pieces beyond [member _name], [member _address] and [member _join],
@@ -1061,6 +1065,11 @@ func _report_client_behind(sentence: String) -> void:
 
 
 func _on_cloud_phase(phase: int, text: String) -> void:
+	if _launch_job and phase != DotCloudClient.Phase.FAILED:
+		# One job owns the bar, the loading cover and the text; a pack finishing is not the end of anything.
+		if loading != null:
+			loading.begin(TmcLoadingScreen.REASON_CONTENT)
+		return
 	if _status != null and text != "":
 		_status.text = _solo_pack_label if _solo_pack_label != "" else text
 
@@ -1105,6 +1114,9 @@ func _on_cloud_phase(phase: int, text: String) -> void:
 
 ## One bar for the whole job: a snapshot with a single pack is the per-pack bar again, so it is ignored.
 func _on_cloud_job(snap: Dictionary) -> void:
+	if _launch_job:
+		_on_launch_job(snap)
+		return
 	_job = snap if int(snap.get("total_packs", 0)) > 1 and int(snap.get("done_packs", 0)) < int(snap.get("total_packs", 0)) else {}
 	if _job.is_empty():
 		return
@@ -1118,6 +1130,33 @@ func _on_cloud_job(snap: Dictionary) -> void:
 	if _detail != null:
 		_detail.text = _job_line()
 		_detail.visible = true
+
+
+## The launch's one bar: bytes while downloading, an indeterminate "Unpacking n of N" afterwards.
+func _on_launch_job(snap: Dictionary) -> void:
+	_job = snap
+	var unpacking := str(snap.get("phase", "download")) == "unpack"
+	var frac := float(snap.get("fraction", 0.0))
+	var line := ""
+	if unpacking:
+		line = _text("shell.job.unpacking", {"done": int(snap.get("unpack_done", 0)), "total": int(snap.get("unpack_total", 0))},
+			"%d of %d" % [int(snap.get("unpack_done", 0)), int(snap.get("unpack_total", 0))])
+	elif int(snap.get("total_bytes", 0)) > 0:
+		line = _job_line()
+	var title := _text("shell.job.unpacking_title", {}, "Unpacking…") if unpacking else _text("shell.job.downloading_title", {}, "Downloading…")
+	if loading != null:
+		loading.begin(TmcLoadingScreen.REASON_CONTENT)
+		loading.set_progress(-1.0 if unpacking else frac, title, line)
+	if _status != null:
+		_status.text = title
+	if _progress != null:
+		_progress.visible = true
+		_indeterminate(unpacking)
+		if not unpacking:
+			_progress.value = clampf(frac, 0.0, 1.0) * 100.0
+	if _detail != null:
+		_detail.text = line
+		_detail.visible = line != ""
 
 
 ## "63 / 400 MiB · 3 of 40 packs" then "rate · ETA", the answer to "how much of everything".
@@ -1641,6 +1680,19 @@ func _start_solo(content_id: String, version: String = "") -> void:
 
 ## Everything [method _start_solo] does that can fail, so it has one way out.
 func _load_solo(content_id: String, version: String) -> DotResult:
+	_cloud.begin_job("launch")
+	_launch_job = true
+	_solo_key_cache = {}
+	_deferred_workshop = false
+	var res: DotResult = await _load_solo_inner(content_id, version)
+	_launch_job = false
+	_job = {}
+	_solo_pack_label = ""
+	_cloud.end_job()
+	return res
+
+
+func _load_solo_inner(content_id: String, version: String) -> DotResult:
 	var wanted := version
 
 	if wanted == "":
@@ -1654,6 +1706,10 @@ func _load_solo(content_id: String, version: String) -> DotResult:
 	_solo_id = content_id
 	_solo_version = wanted
 	DotLog.info(CHANNEL, "starting solo", {"content": content_id, "version": wanted})
+
+	# Everything is registered and fetched first, so the total is fixed before a byte moves; mounting follows.
+	await _prefetch_solo(content_id, wanted)
+	_cloud.job_begin_unpack()
 
 	var got: DotResult = await _cloud.ensure(StringName(content_id), wanted)
 	if not got.ok:
@@ -1722,7 +1778,11 @@ func _load_solo(content_id: String, version: String) -> DotResult:
 	# takes none and is not asked about them.
 	session.takes_subscriptions = not _game_accepts(mount).is_empty()
 	if session.takes_subscriptions:
-		session.workshop_summary = await _sync_workshop(content_id, desc["suggested"] as PackedStringArray)
+		if _deferred_workshop:
+			var mounted: DotResult = await _ensure_workshop().mount_pending()
+			session.workshop_summary = mounted.value as Dictionary if mounted.ok and mounted.value is Dictionary else {}
+		else:
+			session.workshop_summary = await _sync_workshop(content_id, desc["suggested"] as PackedStringArray)
 
 	var path := mount.path_join(safe.value)
 	_warm_hold = await _warm_pack(slice_keys)
@@ -1793,7 +1853,11 @@ func _game_accepts(mount: String) -> Dictionary:
 	var path := mount.path_join("provides.json")
 	if not FileAccess.file_exists(path):
 		return {}
-	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
+	return _accepts_from_text(FileAccess.get_file_as_string(path))
+
+
+func _accepts_from_text(text: String) -> Dictionary:
+	var parsed: Variant = JSON.parse_string(text)
 	if parsed is Dictionary:
 		var accepts: Variant = (parsed as Dictionary).get("accepts", null)
 		if accepts is Dictionary:
@@ -1865,7 +1929,7 @@ func _sync_workshop(content_id: String, suggested: PackedStringArray = PackedStr
 
 
 func _on_workshop_progress(done: int, total: int, bytes_done: int, bytes_total: int, current: String) -> void:
-	if loading == null or total <= 0:
+	if _launch_job or loading == null or total <= 0:
 		return
 	if not loading.is_showing():
 		loading.begin(TmcLoadingScreen.REASON_GAME)
@@ -1942,6 +2006,67 @@ func _restart_for_online(target: String) -> void:
 		"Close and reopen the game to join a server: a subscribed pack that runs code is loaded.")
 
 
+## The newest version of a pack named without one, resolved once per launch so the prefetch and the mount pass agree.
+func _resolve_solo_key(key: String) -> DotResult:
+	if _solo_key_cache.has(key):
+		return DotResult.success(_solo_key_cache[key])
+	var latest: DotResult = await TmcSolo.resolve_latest(self, str(TmcSolo.split_key(key)["id"]), _cloud.http_base_urls)
+	if latest.ok:
+		_solo_key_cache[key] = latest.value
+	return latest
+
+
+## Registers the game, its dependencies, map packs and subscribed packs with the launch job and downloads them all, mounting none.
+## Nothing here is fatal: a pack that cannot be fetched now is reported by the mount pass that follows, as it was before.
+func _prefetch_solo(content_id: String, version: String) -> void:
+	var game: DotResult = await _cloud.resolve_manifest(StringName(content_id), version)
+	if not game.ok:
+		return
+	var manifest := game.value as DotCloudManifest
+	await _cloud.job_register_manifest(manifest)
+
+	var keys := PackedStringArray()
+	var accepts := {}
+	var suggested := PackedStringArray()
+	var yml: DotResult = await _cloud.read_pack_file(manifest, "game.yml")
+	if yml.ok:
+		var desc := TmcSolo.parse_descriptor((yml.value as PackedByteArray).get_string_from_utf8())
+		keys.append_array(desc["dependencies"] as PackedStringArray)
+		keys.append_array(desc["server_dependencies"] as PackedStringArray)
+		suggested = desc["suggested"] as PackedStringArray
+		if not TmcSolo.skip_maps(content_id):
+			keys.append_array(TmcSolo.map_packs(content_id))
+	var provides: DotResult = await _cloud.read_pack_file(manifest, "provides.json")
+	if provides.ok:
+		accepts = _accepts_from_text((provides.value as PackedByteArray).get_string_from_utf8())
+
+	var refs: Array = []
+	for key in keys:
+		var parts := TmcSolo.split_key(key)
+		if not TmcSolo.valid_id(str(parts["id"])) or not TmcSolo.valid_version(str(parts["version"])):
+			continue
+		var id := str(parts["id"])
+		var ver := str(parts["version"])
+		if ver == "":
+			var latest: DotResult = await _resolve_solo_key(key)
+			if not latest.ok:
+				continue
+			id = str(latest.value["id"])
+			ver = str(latest.value["version"])
+		refs.append({"id": id, "version": ver})
+	if not refs.is_empty():
+		await _cloud.job_register(refs)
+
+	if not accepts.is_empty():
+		var workshop := _ensure_workshop()
+		workshop.defer_mount = true
+		await _sync_workshop(content_id, suggested)
+		workshop.defer_mount = false
+		_deferred_workshop = true
+
+	await _cloud.job_download()
+
+
 ## Fetches and mounts one pack by `<id>[@<version>]`, resolving a missing version to the newest; returns the `<id>@<version>` mounted.
 ## [param announce] names what is fetched and its size in the status line, so a download the player did not ask for is named.
 func _ensure_solo_pack(key: String, announce: bool = false) -> DotResult:
@@ -1953,13 +2078,13 @@ func _ensure_solo_pack(key: String, announce: bool = false) -> DotResult:
 		return DotResult.fail(DotError.CODE_INVALID, "Not a pack id.", key)
 
 	if version == "":
-		var latest: DotResult = await TmcSolo.resolve_latest(self, id, _cloud.http_base_urls)
+		var latest: DotResult = await _resolve_solo_key(key)
 		if not latest.ok:
 			return latest
 		id = str(latest.value["id"])
 		version = str(latest.value["version"])
 
-	if announce:
+	if announce and not _launch_job:
 		_solo_pack_label = await _describe_solo_pack(id, version)
 		_say(_solo_pack_label)
 
