@@ -34,7 +34,13 @@ for g in "${games[@]}"; do
     done
     [ -z "$extra" ] || echo "     $g also pins:$extra"
     tool="$p/addons/dot_core/tools/dot_parse_all.gd"; [ -f "$tool" ] || { echo "FAIL $g: no dot_parse_all in the pinned dot-core"; fails=$((fails+1)); continue; }
-    timeout 600 "$GODOT" --headless --path "$p" --import >/dev/null 2>&1
+    # A crash or hang during import leaves a half-built class cache, so say so rather than parse on.
+    timeout 600 "$GODOT" --headless --path "$p" --import >"$W/$g.import.log" 2>&1; irc=$?
+    if [ "$irc" -ge 124 ] || grep -aqE 'handle_crash|Program crashed|Segmentation fault' "$W/$g.import.log"; then
+        echo "FAIL $g: --import died (exit $irc; 124 = timeout, 139 = SIGSEGV)"
+        grep -aE -A12 'handle_crash|Program crashed' "$W/$g.import.log" | head -20
+        fails=$((fails+1)); continue
+    fi
     (cd "$p" && find . -name '*.gd' -not -path './.godot/*' -not -path './addons/*' | sed 's|^\./||' > "$W/$g.list")
     PARSE_LIST="$W/$g.list" timeout 900 "$GODOT" --headless --path "$p" --script res://addons/dot_core/tools/dot_parse_all.gd >"$W/$g.log" 2>&1
     bad="$(grep -aE 'PARSE_FAIL|SCRIPT ERROR|Parse Error|not declared|Could not find' "$W/$g.log" | head -5)"
