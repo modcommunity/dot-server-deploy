@@ -8,11 +8,11 @@ entries:
   - repo: dot-achievements
     pin: v0.1.7
   - repo: dot-audio
-    pin: v0.1.13
+    pin: v0.1.14
   - repo: dot-auth
     pin: v0.1.13
   - repo: dot-bot
-    pin: v0.1.20
+    pin: v0.1.23
   - repo: dot-bot-record
     pin: v0.1.1
   - repo: dot-browser
@@ -20,13 +20,13 @@ entries:
   - repo: dot-chat
     pin: v0.1.5
   - repo: dot-cloud
-    pin: v0.1.33
+    pin: v0.1.37
   - repo: dot-combat
     pin: v0.1.20
   - repo: dot-console
     pin: v0.1.8
   - repo: dot-core
-    pin: v0.1.39
+    pin: v0.1.40
   - repo: dot-economy
     pin: v0.1.5
   - repo: dot-effects
@@ -36,7 +36,7 @@ entries:
   - repo: dot-friends
     pin: v0.1.5
   - repo: dot-flashlight
-    pin: v0.1.2
+    pin: v0.1.3
   - repo: dot-fx
     pin: v0.3.7
   - repo: dot-game
@@ -66,11 +66,11 @@ entries:
   - repo: dot-net
     pin: v0.1.26
   - repo: dot-npc
-    pin: v0.1.14
+    pin: v0.1.15
   - repo: dot-npc-ai
     pin: v0.1.11
   - repo: dot-npc-ai-director
-    pin: v0.1.7
+    pin: v0.1.8
   - repo: dot-objective
     pin: v0.1.5
   - repo: dot-party
@@ -84,11 +84,11 @@ entries:
   - repo: dot-player
     pin: v0.1.5
   - repo: dot-player-char
-    pin: v0.1.58
+    pin: v0.1.59
   - repo: dot-player-class
     pin: v0.1.8
   - repo: dot-player-controller
-    pin: v0.4.3
+    pin: v0.4.4
   - repo: dot-procedural-generation
     pin: v0.1.4
   - repo: dot-profile
@@ -130,7 +130,7 @@ entries:
   - repo: dot-user-avatar
     pin: v0.1.9
   - repo: dot-vehicle
-    pin: v0.1.6
+    pin: v0.1.7
   - repo: dot-voice
     pin: v0.1.10
   - repo: dot-vote
@@ -144,4 +144,4 @@ entries:
   - repo: zed-dot-weapons
     pin: v0.1.9
   - repo: zee-dot-weapons
-    pin: v0.1.57
+    pin: v0.1.58
