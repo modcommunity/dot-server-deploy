@@ -51,6 +51,7 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first; this file is what is specifi
 ./server                      # start it;  ./server check  boots, loads the game, exits 0
 tools/check.sh                # parse, every suite, a real boot;  --long  adds every game on ENet through a lossy relay
 tools/check_boot_failures.sh  # ./server check must refuse a game that cannot compile
+tools/check_pinned_parse.sh   # every game's scripts must parse against the addons.lock tags (not the linked trees); run it after any lock change
 tools/voice_all_games.sh      # voice between two real clients, in every delivered game
 tools/package_check.sh        # the shipped (vendored) shape
 node tools/browser_check.mjs  # the only check that sees a browser
