@@ -141,6 +141,8 @@ entries:
     pin: v0.1.2
   - repo: dot-workbench
     pin: v0.3.0
+  - repo: natural-disasters
+    pin: v0.1.0
   - repo: zed-dot-weapons
     pin: v0.1.9
   - repo: zee-dot-weapons
