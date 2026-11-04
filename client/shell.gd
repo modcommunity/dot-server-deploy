@@ -1703,6 +1703,15 @@ func _load_solo_inner(content_id: String, version: String) -> DotResult:
 		content_id = str(latest.value["id"])
 		wanted = str(latest.value["version"])
 
+	elif not (await _cloud.resolve_manifest(StringName(content_id), wanted)).ok:
+		# The site pins the newest READY upload; the CDN may only hold a later one.
+		var newest: DotResult = await TmcSolo.resolve_latest(self, content_id, _cloud.http_base_urls)
+		if newest.ok and TmcSolo.falls_back(wanted, str(newest.value["version"])):
+			DotLog.warn(CHANNEL, "pinned solo version has no manifest; using the newest published",
+				{"content": content_id, "pinned": wanted, "using": newest.value["version"]})
+			content_id = str(newest.value["id"])
+			wanted = str(newest.value["version"])
+
 	_solo_id = content_id
 	_solo_version = wanted
 	DotLog.info(CHANNEL, "starting solo", {"content": content_id, "version": wanted})

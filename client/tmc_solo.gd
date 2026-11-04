@@ -78,6 +78,11 @@ static func _arg(args: PackedStringArray, name: String) -> String:
 	return ""
 
 
+## True when a pinned version that could not be fetched should give way to the published one.
+static func falls_back(pinned: String, latest: String) -> bool:
+	return pinned != "" and latest != "" and pinned != latest and valid_version(latest)
+
+
 ## Reads one `latest.json` body: `{version, moved_to}`. Pure, so the selftest drives it. [param hop]
 ## is how many `moved_to` links were already followed.
 static func follow_pointer(content_id: String, body: Variant, hop: int) -> DotResult:
@@ -296,7 +301,9 @@ static func map_packs(content_id: String) -> PackedStringArray:
 static func split_key(key: String) -> Dictionary:
 	var at := key.rfind("@")
 	if at > 0:
-		return {"id": key.substr(0, at), "version": key.substr(at + 1)}
+		var ver := key.substr(at + 1)
+		# "@latest" means the published pointer; used literally it asks for <id>/latest/manifest.json.
+		return {"id": key.substr(0, at), "version": "" if ver == "latest" else ver}
 	return {"id": key, "version": ""}
 
 
