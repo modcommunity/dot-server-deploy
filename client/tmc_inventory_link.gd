@@ -75,13 +75,13 @@ func _on_event(args: Array) -> void:
 	var b := _ensure_bridge()
 	if b == null:
 		return
-	_answer(b, message, origin)
+	_answer(b, message, origin, event.source)
 
 
-func _answer(b: RefCounted, message: Dictionary, origin: String) -> void:
+func _answer(b: RefCounted, message: Dictionary, origin: String, source: Variant = null) -> void:
 	var reply: Dictionary = await b.handle(message, origin)
 	if reply.is_empty():
 		return
-	var parent: Variant = DotWeb.get_global("parent")
-	if parent != null:
-		parent.postMessage(JSON.stringify(reply), origin)
+	var target: Variant = source if source != null else DotWeb.get_global("parent")
+	if target != null:
+		target.postMessage(JSON.stringify(reply), origin)

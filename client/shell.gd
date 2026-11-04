@@ -1304,7 +1304,7 @@ func _configured_inventory_origins() -> PackedStringArray:
 	if list is Array:
 		for o in (list as Array):
 			var one := str(o).strip_edges()
-			if one != "" and one != "*":
+			if one != "" and one != "*" and one != "null":
 				out.append(one)
 	return out
 
