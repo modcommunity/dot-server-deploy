@@ -18,6 +18,7 @@ The reasoning behind [../CLAUDE.md](../CLAUDE.md)'s rules. The operator's view o
 | [releases.md](releases.md) | Release orders, what needs a new shell, `addons.lock`, self-update, `sv_web_build`, `sv_web_requires`, `sv_web_loader`, publishing the web build |
 | [addon-packs.md](addon-packs.md) | Addon releases reaching players by a restart, and the end-to-end proof |
 | [native-client.md](native-client.md) | `export-native`, the bare `--`, presets, macOS |
+| [web-inventory-bridge.md](web-inventory-bridge.md) | The postMessage protocol an embedding page uses to manage downloaded content |
 | [web-client.md](web-client.md) | The shell: sign-in, refusals, clear downloaded content, TLS |
 | [game-vote.md](game-vote.md) | The vote for the next game, on the HUD and as a ballot |
 | [admin-menu.md](admin-menu.md) | `/admin`, `warn`, game menu layers, the loading screen |

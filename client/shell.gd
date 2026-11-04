@@ -117,6 +117,7 @@ var loading: TmcLoadingScreen = null
 var radio_link: TmcRadioLink = null
 ## dot-trail's client and menu page. See [TmcTrailLink].
 var trail_link: TmcTrailLink = null
+var inventory_link: TmcInventoryLink = null
 
 ## Whether this connection has put a game on screen yet.
 var _has_spawned := false
@@ -211,6 +212,13 @@ func _ready() -> void:
 		_ensure_cloud()
 		return _cloud
 	add_child(trail_link)
+	inventory_link = TmcInventoryLink.new()
+	inventory_link.name = "InventoryLink"
+	inventory_link.origins = _configured_inventory_origins()
+	inventory_link.cloud_fn = trail_link.cloud_fn
+	inventory_link.clear_fn = request_clear
+	add_child(inventory_link)
+	inventory_link.start()
 
 	# Claims the covering job for every DotLoadGate a game makes under the game root, so
 	# only the loading screen shows, never the gate's own cover as well.
@@ -1282,6 +1290,23 @@ func _eta_text(seconds: float) -> String:
 		return _text("shell.eta.seconds", {"n": s}, "%ds left" % s)
 	var minutes := int(round(seconds / 60.0))
 	return _text("shell.eta.minutes", {"n": minutes}, "%d min left" % minutes)
+
+
+## Origins allowed to use the inventory bridge; empty (the default) leaves it off.
+func _configured_inventory_origins() -> PackedStringArray:
+	var out := PackedStringArray()
+	if not FileAccess.file_exists(CONTENT_CONFIG):
+		return out
+	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(CONTENT_CONFIG))
+	if not (parsed is Dictionary):
+		return out
+	var list: Variant = (parsed as Dictionary).get("inventory_origins", null)
+	if list is Array:
+		for o in (list as Array):
+			var one := str(o).strip_edges()
+			if one != "" and one != "*":
+				out.append(one)
+	return out
 
 
 ## `content_urls` out of `client/content.json`, or empty. Read here because DotCloudConfig has no field for it and this file is all an operator can edit in an export;

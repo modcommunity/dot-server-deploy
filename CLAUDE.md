@@ -17,6 +17,7 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first; this file is what is specifi
 | [docs/releases.md](docs/releases.md) | any release: addon, game or shell; `addons.lock`; `web/shell-build`; exporting |
 | [docs/addon-packs.md](docs/addon-packs.md) | `client/boot.tscn`, `_advertise_addons`, the update-and-restart path |
 | [docs/native-client.md](docs/native-client.md) | `export-native`, launch arguments, presets |
+| [docs/web-inventory-bridge.md](docs/web-inventory-bridge.md) | `client/tmc_inventory_link.gd`, the page's downloaded-content bridge |
 | [docs/web-client.md](docs/web-client.md) | `client/shell.gd`, sign-in, clearing downloads, TLS |
 | [docs/game-vote.md](docs/game-vote.md) | `host/tmc_vote.gd`, `cfg/addon/dot_vote/vote.yml`, the notice overlay |
 | [docs/admin-menu.md](docs/admin-menu.md) | `/admin`, `cfg/addon/dot_menu/admin_menu.yml`, the loading screen |
