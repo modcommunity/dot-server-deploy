@@ -20,7 +20,7 @@ entries:
   - repo: dot-chat
     pin: v0.1.5
   - repo: dot-cloud
-    pin: v0.1.39
+    pin: v0.1.40
   - repo: dot-combat
     pin: v0.1.20
   - repo: dot-console
