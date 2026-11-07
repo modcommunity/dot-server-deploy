@@ -10,6 +10,8 @@ var catalogue: DotMapCatalogue = null
 
 func _ready() -> void:
 	add_to_group(&"ws_test_game")
+	if Engine.has_meta(&"ws_ready_probe"):
+		(Engine.get_meta(&"ws_ready_probe") as Callable).call()
 	catalogue = DotMapCatalogue.new()
 	catalogue.follow_content(DotContentIndex.shared(), PackedStringArray(ACCEPTED))
 	if "--shots" in OS.get_cmdline_user_args():

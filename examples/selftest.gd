@@ -790,6 +790,10 @@ func _test_addon_announce() -> void:
 	_check(out.size() == 1 and out[0]["repo"] == "dot-core", "a repository whose site id is a data pack is not announced as an addon")
 	_check(out[0]["id"] == "modcommunity/dot-core" and out[0]["version"] == "0.1.30", "the others keep id and version")
 	_check(Host.addon_set_from(lock, PackedStringArray(["arena_weapons"])).is_empty(), "nothing left to announce is an empty set")
+
+	var pins: Variant = JSON.parse_string(Host.pack_pins_json(out, {"modcommunity/dot-core": "9.9.9", "ow/map_a": "1.0.0"}))
+	_check(pins is Dictionary and pins.get("ow/map_a") == "1.0.0" and pins.get("modcommunity/dot-core") == "9.9.9", "sv_pack_pins lists mounted packs, and what is mounted wins over the lock")
+	_check(Host.pack_pins_json([], {}) == "", "nothing pinned reports nothing")
 	_done()
 
 
