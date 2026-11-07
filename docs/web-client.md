@@ -96,3 +96,7 @@ The preset's `exclude_filter` leaves out `addons/dot_map/surfaces/*/*` (the PBR 
 ## Ambience rides in a pack too
 
 The preset also leaves out `addons/dot_audio/stock/ambience/*` (nine beds, 2.1 MB) and `addons/dot_audio/stock/moods/*` (the eight-mood set with its `moods.json`, 8 MB); footsteps, weapons and the rest of the stock stay. `DotAudioStock` resolves the beds and `moods_directory()` through `DotAudioStock.fallback_roots`, so a host that mounts a pack carrying `ambience/` and `moods/` adds its folder there before the director\x27s `setup()` (dot-audio\x27s `examples/stock_pack_selftest`). `tools/shell_pck_check.sh` fails if either is back in the pck. On the local full addon set the Web pck went from 133,345,060 to 122,754,604 bytes (10.6 MB more). Not done yet: publishing the audio pack and mounting it in the shell boot. The people glb move is not done.
+
+## The exclusions are Web-only
+
+The surface, ambience and mood exclusions above sit in the Web preset's `exclude_filter` alone; the Linux, Windows and macOS presets ship the textures, beds and moods, because a desktop build has no pack-mounting shell to resolve them from. The Web preset's `include_filter` also names `*.html` (dot-ci's `check-export-filter.sh` fails a Web preset without it). `tools/shell_pck_check.sh` asserts both from the preset text.
