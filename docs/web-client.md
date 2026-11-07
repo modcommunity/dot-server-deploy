@@ -88,3 +88,7 @@ The shell fills the resource cache with `DotCloudSliceLoader` (dot-cloud) before
 ## The CSP-safe page script
 
 The game origin's CSP is `script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' blob:`, with no `unsafe-eval`, so `JavaScriptBridge.eval` throws `EvalError`. dot-core's `addons/dot_core/web/dot_web.js` defines `window.dotWeb` (keyboard lock, postMessage to the parent, storage estimate, downloads, `publish`) and the tab guard; `DotWeb` reaches it with `get_interface`, never eval. `embed.html` names it in its source and `install_dot_web` in `tools/server.in` copies it beside the build and patches `index.html`. A dot-core older than the file makes `export-web` warn and build without it. dot-ci's `check-no-js-eval.py` fails any repository that evaluates a string.
+
+## Surface textures ride in a pack, not the shell
+
+The preset's `exclude_filter` leaves out `addons/dot_map/surfaces/*/*` (the PBR textures; `dot_map_surfaces.gd` and the shaders stay). On a local export with the full addon set the Web pck went from 147,819,264 to 133,345,060 bytes (14.5 MB). A host that mounts a pack carrying `surfaces/<kind>/*` adds its folder to `DotMapSurfaces.fallback_roots`; a texture missing from the build is then read from there (dot-map's `examples/surfaces_pack_selftest`). `tools/shell_pck_check.sh` exports the pck and fails if a texture is back in it. Not done yet: publishing the surfaces pack and mounting it in the shell boot. Games vendor their own kinds ([dot-map surfaces](../../dot-map/docs/surfaces.md)) and are unaffected.
