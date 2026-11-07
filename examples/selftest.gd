@@ -1129,6 +1129,13 @@ func _test_content_lists() -> void:
 	var bm := TmcContentLists.map_rotation(gl.value, "one", PackedStringArray(["a"]))
 	_check(not bm.ok and bm.error.message.contains("'b'"), "map_rotation names an uninstalled map")
 	_check(not TmcContentLists.map_rotation(gl.value, "nope", PackedStringArray()).ok, "map_rotation refuses an unknown game")
+	_put(root + "/content/games.yml", "entries:\n  - repo: g1\n    content: one\n    maps:\n      - a\n      - id: b\n        time_limit: 600\n  - repo: g2\n")
+	var tl := TmcContentLists.load_list("games", root)
+	var tr := TmcContentLists.map_rotation(tl.value, "one", PackedStringArray(["a", "b"])) if tl.ok else tl
+	_check(tr.ok and tr.value["maps"] == PackedStringArray(["a", "b"]) and tr.value["time_limits"] == {"b": 600.0}, "a maps: item may carry its own time_limit")
+	_check(TmcContentLists.map_rotation(tl.value, "g2", PackedStringArray(["x"])).value["time_limits"].is_empty(), "no time_limit means none set")
+	_put(root + "/content/games.yml", "entries:\n  - repo: g1\n    maps:\n      - id: a\n        time_limit: -5\n")
+	_check(not TmcContentLists.load_list("games", root).ok, "a non-positive time_limit is refused")
 	_put(root + "/content/games.yml", "entries:\n  - repo: g1\n    rotation: fast\n")
 	_check(not TmcContentLists.load_list("games", root).ok, "an unknown rotation mode is refused")
 	var cyc := TmcGameRotation.from_order(PackedStringArray(["bee", "ay"]))
