@@ -7,7 +7,7 @@ extends Node
 const WORK := "user://tmc_workshop_solo"
 const SHELL := "res://client/shell.tscn"
 const GAME := "gamemann/ws-game"
-const CHECKS := 65
+const CHECKS := 66
 const ACCEPTS := {"kinds": ["map", "script"], "map_kinds": ["sandbox"]}
 const HttpServer := preload("res://examples/fixtures/ws_http_server.gd")
 const Backbone := preload("res://examples/fixtures/ws_backbone.gd")
