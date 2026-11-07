@@ -2,7 +2,7 @@
 //
 //   node tools/leave_prompt_check.mjs
 //
-// The page guard dot-game's DotGameClient installs is lifted from its source and run in a stub
+// The page guard (dot-core's web/dot_web.js, which dot-game's DotGameClient arms) is loaded and run in a stub
 // game on a second origin, inside the frame tmc-loader.js builds. Closing the tab (with
 // beforeunload run, as Ctrl+W does) must raise the dialog once the guard is armed and the
 // player has clicked in the frame, must not before, and must not when the loader's frame
@@ -13,11 +13,10 @@ const pw = (await import(process.env.PLAYWRIGHT_CORE ?? '/home/christian/stack/w
 const { chromium } = pw;
 
 const loader = fs.readFileSync(new URL('../web/tmc-loader.js', import.meta.url), 'utf8');
-const clientGd = process.env.DOT_GAME_CLIENT
-  ?? new URL('../../dot-game/addons/dot_game/runtime/dot_game_client.gd', import.meta.url);
-const m = /const _GUARD_JS := """([\s\S]*?)"""/.exec(fs.readFileSync(clientGd, 'utf8'));
-if (!m) { console.log('FAIL could not find _GUARD_JS in ' + clientGd); process.exit(1); }
-const guardJs = m[1].replace(/\\\\/g, '\\');
+const dotWebPath = process.env.DOT_WEB_JS
+  ?? new URL('../../dot-core/addons/dot_core/web/dot_web.js', import.meta.url);
+const guardJs = fs.readFileSync(dotWebPath, 'utf8');
+if (!guardJs.includes('__dotTabGuard')) { console.log('FAIL no __dotTabGuard in ' + dotWebPath); process.exit(1); }
 
 function listen(handler) {
   return new Promise(res => {
