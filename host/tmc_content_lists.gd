@@ -14,7 +14,7 @@ const _ID_CHARS := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ01234567
 const _PIN_CHARS := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._+-"
 
 
-## Value: an Array of {kind: "repo"|"pack", id, pin, content, maps, rotation}, in list order (`maps` is a
+## Value: an Array of {kind: "repo"|"pack", id, pin, content, maps, rotation, time_limits}, in list order (`maps` is a
 ## PackedStringArray, `rotation` "" when the entry does not say). Fails with CODE_PARSE for
 ## a file that is not yml and CODE_INVALID naming the file and entry for a bad one.
 static func load_list(kind: String, config_dir: String, default_dir: String = DEFAULT_DIR) -> DotResult:
@@ -90,7 +90,7 @@ static func game_order(entries: Array, installed: PackedStringArray, wanted: Pac
 	return DotResult.success(out)
 
 
-## The map rotation of one game: Value {maps: PackedStringArray, rotation: String}. The entry's `maps:` list
+## The map rotation of one game: Value {maps: PackedStringArray, rotation: String, time_limits: Dictionary of map id to seconds, only maps that set one}. The entry's `maps:` list
 ## is the order; absent means [param installed_maps] sorted. A map the entry names that is not installed, or a
 ## [param game_id] the list does not hold, fails with CODE_INVALID naming it and what is available.
 static func map_rotation(entries: Array, game_id: String, installed_maps: PackedStringArray) -> DotResult:
@@ -98,6 +98,7 @@ static func map_rotation(entries: Array, game_id: String, installed_maps: Packed
 	maps.sort()
 	var mode := "sequential"
 	var found := false
+	var limits := {}
 	for e: Dictionary in entries:
 		if _game_id(e) != game_id and e["id"] != game_id:
 			continue
@@ -108,12 +109,13 @@ static func map_rotation(entries: Array, game_id: String, installed_maps: Packed
 				return DotResult.fail(DotError.CODE_INVALID, "games.yml: game '%s' lists map '%s', which is not installed (installed: %s)." % [game_id, m, ", ".join(maps)])
 		if not listed.is_empty():
 			maps = listed
+		limits = e.get("time_limits", {})
 		if String(e.get("rotation", "")) != "":
 			mode = String(e["rotation"])
 		break
 	if not found:
 		return DotResult.fail(DotError.CODE_INVALID, "Unknown game '%s': games.yml does not list it." % game_id)
-	return DotResult.success({"maps": maps, "rotation": mode})
+	return DotResult.success({"maps": maps, "rotation": mode, "time_limits": limits})
 
 
 static func _game_id(e: Dictionary) -> String:
@@ -157,6 +159,7 @@ static func _entry(raw: Variant, kind: String) -> DotResult:
 	var content := ""
 	var maps := PackedStringArray()
 	var rotation := ""
+	var time_limits := {}
 	if raw is String:
 		var parts := (raw as String).split("@", true, 1)
 		pin = parts[1] if parts.size() > 1 else ""
@@ -178,9 +181,22 @@ static func _entry(raw: Variant, kind: String) -> DotResult:
 			if not (d["maps"] is Array):
 				return DotResult.fail(DotError.CODE_INVALID, "maps: is a list of map ids")
 			for m in d["maps"]:
-				if String(m) == "" or not _all_in(String(m), _ID_CHARS):
-					return DotResult.fail(DotError.CODE_INVALID, "'%s' is not a map id" % m)
-				maps.append(String(m))
+				var map_id := ""
+				if m is Dictionary:
+					# {id: surf_x, time_limit: 600}: a map with its own time limit in seconds.
+					for k in m:
+						if not ["id", "time_limit"].has(String(k)):
+							return DotResult.fail(DotError.CODE_INVALID, "unknown key '%s' in a maps: item" % k)
+					map_id = String(m.get("id", ""))
+					if "time_limit" in m:
+						if not ((m["time_limit"] is int or m["time_limit"] is float) and float(m["time_limit"]) > 0.0):
+							return DotResult.fail(DotError.CODE_INVALID, "time_limit: for map '%s' is a number of seconds above 0" % map_id)
+						time_limits[map_id] = float(m["time_limit"])
+				else:
+					map_id = String(m)
+				if map_id == "" or not _all_in(map_id, _ID_CHARS):
+					return DotResult.fail(DotError.CODE_INVALID, "'%s' is not a map id" % map_id)
+				maps.append(map_id)
 		for part in ["repo", "pack"]:
 			if String(d.get(part, "")).contains("@"):
 				if pin != "":
@@ -212,7 +228,7 @@ static func _entry(raw: Variant, kind: String) -> DotResult:
 		return DotResult.fail(DotError.CODE_INVALID, "maps: and rotation: belong in games.yml")
 	if rotation != "" and not ROTATIONS.has(rotation):
 		return DotResult.fail(DotError.CODE_INVALID, "rotation: is %s, got '%s'" % [" | ".join(ROTATIONS), rotation])
-	return DotResult.success({"kind": "repo" if repo != "" else "pack", "id": id, "pin": pin, "content": content, "maps": maps, "rotation": rotation})
+	return DotResult.success({"kind": "repo" if repo != "" else "pack", "id": id, "pin": pin, "content": content, "maps": maps, "rotation": rotation, "time_limits": time_limits})
 
 
 static func _all_in(text: String, allowed: String) -> bool:
