@@ -7,7 +7,7 @@ extends Node
 const WORK := "user://tmc_workshop_solo"
 const SHELL := "res://client/shell.tscn"
 const GAME := "gamemann/ws-game"
-const CHECKS := 61
+const CHECKS := 65
 const ACCEPTS := {"kinds": ["map", "script"], "map_kinds": ["sandbox"]}
 const HttpServer := preload("res://examples/fixtures/ws_http_server.gd")
 const Backbone := preload("res://examples/fixtures/ws_backbone.gd")
@@ -45,6 +45,7 @@ func _run() -> void:
 		await _test_guest()
 		await _test_solo_with_subscription()
 		await _test_the_panel()
+		await _test_suggested_after_start()
 		await _test_online_never_syncs()
 		await _test_code_pack_restarts_first()
 
@@ -140,16 +141,16 @@ func _site(method: String, path: String, query: Dictionary, headers: Dictionary,
 	}}
 
 
-func _make_game() -> void:
-	var dir := WORK.path_join("src_game")
+func _make_game(id: String = GAME, extra: String = "") -> void:
+	var dir := WORK.path_join("src_" + id.replace("/", "_"))
 	DotPaths.write_text(dir.path_join("game.yml"),
-		"name: Workshop Game\ncontent_id: %s\nversion: 1.0.0\nclient_scene: game.tscn\n" % GAME)
+		"name: Workshop Game\ncontent_id: %s\nversion: 1.0.0\nclient_scene: game.tscn\n%s" % [id, extra])
 	DotPaths.write_text(dir.path_join("game.tscn"),
 		"[gd_scene load_steps=2 format=3]\n\n[ext_resource type=\"Script\" path=\"res://examples/workshop_solo_game.gd\" id=\"1\"]\n\n"
 		+ "[node name=\"Game\" type=\"Node3D\"]\nscript = ExtResource(\"1\")\n")
 	DotPaths.write_text(dir.path_join("provides.json"), JSON.stringify({
 		"schema": 1, "title": "Workshop Game", "kinds": [], "accepts": ACCEPTS, "entries": []}))
-	_publish(dir, GAME, "tmc")
+	_publish(dir, id, "tmc")
 
 
 func _make_pack(id: String, kind: String, code: bool = false) -> void:
@@ -353,6 +354,33 @@ func _test_the_panel() -> void:
 	_check(_has_text(none, "takes no subscriptions"), "a game that takes none says so")
 	none.queue_free()
 
+	_done()
+
+
+func _test_suggested_after_start() -> void:
+	_section("a solo start does not wait for the game's suggested packs")
+
+	const GAME2 := "gamemann/ws-game2"
+	_make_game(GAME2, "suggested:\n  - gamemann/ws-nope\n")
+	_token = "tok-alice"
+	_items = [_item("ws_map")]
+	_ws.suggested = []
+	var at_ready: Array[int] = [-1]
+	Engine.set_meta(&"ws_ready_probe", func() -> void:
+		at_ready[0] = _ws.suggested.size())
+	await _shell.call("_start_solo", GAME2, "1.0.0")
+	Engine.remove_meta(&"ws_ready_probe")
+
+	_check(_session() != null and _game_node() != null, "the game started")
+	_check(at_ready[0] == 0, "the game's scene came up before any suggested pack was declared to the sync", str(at_ready[0]))
+	var waited := 0
+	while bool(_shell.get("_late_sync")) and waited < 600:
+		await get_tree().process_frame
+		waited += 1
+	_check(_ws.suggested.size() == 1, "the suggested sync then ran with the game's declaration", str(_ws.suggested.size()))
+	_check(not bool(_shell.get("_late_sync")), "and finished")
+
+	_ws.suggested = []
 	_done()
 
 

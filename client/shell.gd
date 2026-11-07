@@ -59,6 +59,7 @@ var _solo_pack_label: String = ""
 var _launch_job := false
 var _solo_key_cache: Dictionary = {}
 var _deferred_workshop := false
+var _late_sync := false
 var _solo_session: TmcSoloSession = null
 
 ## The connect form's own pieces beyond [member _name], [member _address] and [member _join],
@@ -1816,7 +1817,8 @@ func _load_solo_inner(content_id: String, version: String) -> DotResult:
 			var mounted: DotResult = await _ensure_workshop().mount_pending()
 			session.workshop_summary = mounted.value as Dictionary if mounted.ok and mounted.value is Dictionary else {}
 		else:
-			session.workshop_summary = await _sync_workshop(content_id, desc["suggested"] as PackedStringArray)
+			# Subscribed content only: the suggested map packs are fetched after the scene is up.
+			session.workshop_summary = await _sync_workshop(content_id)
 
 	var path := mount.path_join(safe.value)
 	_warm_hold = await _warm_pack(slice_keys)
@@ -1849,6 +1851,8 @@ func _load_solo_inner(content_id: String, version: String) -> DotResult:
 	loading.end(TmcLoadingScreen.REASON_CONTENT)
 	_say("")
 	_watch_game_ready()
+	if session.takes_subscriptions:
+		_sync_suggested_later(content_id, desc["suggested"] as PackedStringArray)
 
 	var shown := session.display_name if session.display_name != "" else content_id
 	if _solo_button != null:
@@ -1962,8 +1966,22 @@ func _sync_workshop(content_id: String, suggested: PackedStringArray = PackedStr
 	return res.value as Dictionary if res.value is Dictionary else {}
 
 
+## Fetches the game's suggested packs once its scene is running, so a solo start never waits on
+## them. On the web the default "all" becomes "ask": ~1 GB of packs is never fetched unasked.
+func _sync_suggested_later(content_id: String, suggested: PackedStringArray) -> void:
+	if suggested.is_empty():
+		return
+	var workshop := _ensure_workshop()
+	if DotPlatform.is_web() and (workshop.device == null or workshop.device.suggested_mode() == "") \
+			and workshop.config.workshop_suggested == DotCloudSuggested.MODE_ALL:
+		workshop.config.workshop_suggested = DotCloudSuggested.MODE_ASK
+	_late_sync = true
+	await _sync_workshop(content_id, suggested)
+	_late_sync = false
+
+
 func _on_workshop_progress(done: int, total: int, bytes_done: int, bytes_total: int, current: String) -> void:
-	if _launch_job or loading == null or total <= 0:
+	if _launch_job or _late_sync or loading == null or total <= 0:
 		return
 	if not loading.is_showing():
 		loading.begin(TmcLoadingScreen.REASON_GAME)
@@ -2061,13 +2079,11 @@ func _prefetch_solo(content_id: String, version: String) -> void:
 
 	var keys := PackedStringArray()
 	var accepts := {}
-	var suggested := PackedStringArray()
 	var yml: DotResult = await _cloud.read_pack_file(manifest, "game.yml")
 	if yml.ok:
 		var desc := TmcSolo.parse_descriptor((yml.value as PackedByteArray).get_string_from_utf8())
 		keys.append_array(desc["dependencies"] as PackedStringArray)
 		keys.append_array(desc["server_dependencies"] as PackedStringArray)
-		suggested = desc["suggested"] as PackedStringArray
 		if not TmcSolo.skip_maps(content_id):
 			keys.append_array(TmcSolo.map_packs(content_id))
 	var provides: DotResult = await _cloud.read_pack_file(manifest, "provides.json")
@@ -2094,7 +2110,7 @@ func _prefetch_solo(content_id: String, version: String) -> void:
 	if not accepts.is_empty():
 		var workshop := _ensure_workshop()
 		workshop.defer_mount = true
-		await _sync_workshop(content_id, suggested)
+		await _sync_workshop(content_id)
 		workshop.defer_mount = false
 		_deferred_workshop = true
 

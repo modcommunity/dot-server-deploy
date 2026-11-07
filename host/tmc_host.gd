@@ -282,6 +282,12 @@ func _selftest_operator_surface() -> bool:
 		printerr("selftest FAILED: sv_web_requires is not a NOTIFY cvar the query reports")
 		return false
 
+	var pack_pins := server.console.find_cvar("sv_pack_pins")
+
+	if pack_pins == null or not pack_pins.has_flag(DotConVar.FLAG_NOTIFY):
+		printerr("selftest FAILED: sv_pack_pins is not a NOTIFY cvar the query reports")
+		return false
+
 	# The addon versions a joining client is told about. Empty on a box with a lock means every player keeps the addons their shell was exported with, however old.
 	# Through `get`, not the property: a box's dot-server may predate it, and a typed access would stop this whole script compiling there.
 	var announced: Variant = server.get("addon_set")
@@ -670,6 +676,7 @@ func _boot() -> bool:
 	_register_log_commands()
 	_register_web_build()
 	_register_web_loader()
+	_register_pack_pins()
 	_build_security()
 
 	for descriptor in content.games:
@@ -1001,6 +1008,59 @@ func _publish_requires() -> void:
 	cvar.set_value("" if merged.is_empty() else JSON.stringify(merged))
 
 
+## Versions of the packs mounted so far (maps, games, their dependencies), by content id.
+var _mounted_versions: Dictionary = {}
+
+
+## Registers `sv_pack_pins`: compact JSON of content id to version for every pack this server runs at a pinned version -- the addons its lock names (`modcommunity/dot-*`)
+## and each pack mounted from the site. The site's content-retention sweep reads it so it never deletes a map or addon version a live server is pinned to.
+## Always registered (NOTIFY, so the query reports it); empty until something is pinned.
+func _register_pack_pins() -> void:
+	if server == null or server.console == null:
+		return
+
+	server.console.cvar(
+		"sv_pack_pins", "",
+		"JSON of the pack versions this server is pinned to, by content id. Set by the host; the site keeps these versions from its retention sweep.",
+		DotConVar.FLAG_NOTIFY
+	)
+	_publish_pack_pins()
+
+
+func _publish_pack_pins() -> void:
+	var cvar := server.console.find_cvar("sv_pack_pins") if server != null and server.console != null else null
+
+	if cvar == null:
+		return
+
+	var announced: Variant = server.get("addon_set")
+	cvar.set_value(pack_pins_json(announced if announced is Array else [], _mounted_versions))
+
+
+## `{content id: version}` as compact JSON, from the announced addon set (`addon_set_from` entries) and the mounted packs. Empty string when nothing is pinned.
+## A mounted pack wins over the addon entry for the same id: it is what is actually loaded. Keys are sorted, so the value only changes when a version does.
+static func pack_pins_json(addon_set: Array, mounted: Dictionary) -> String:
+	var pins := {}
+
+	for entry in addon_set:
+		var id := str(entry.get("id", ""))
+		var version := str(entry.get("version", ""))
+
+		if id != "" and version != "":
+			pins[id] = version
+
+	for id in mounted:
+		var version := str(mounted[id])
+
+		if str(id) != "" and version != "":
+			pins[str(id)] = version
+
+	if pins.is_empty():
+		return ""
+
+	return JSON.stringify(pins, "", true)
+
+
 ## One path segment, as the site checks it (website-city `IsReleaseId`): it becomes part of
 ## a URL the site hands a browser, so anything else is ignored there anyway.
 const _WEB_LOADER_PATTERN := "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
@@ -1239,6 +1299,8 @@ func _on_content_ready(manifest: DotCloudManifest, mount_prefix: String) -> void
 		return
 
 	_record_requires(manifest, mount_prefix)
+	_mounted_versions[manifest.content_id] = manifest.version
+	_publish_pack_pins()
 
 	DotLog.info(CHANNEL, "content ready", {
 		"content": manifest.key(),
