@@ -30,7 +30,19 @@ Layers, weakest first: the shipped default, `cfg/content/<file>`, then the opera
 
 A bad entry (both or neither of `repo` and `pack`, a name with a path in it, a pin with odd characters) fails with `DotError.CODE_INVALID` naming the file and entry number; a file that is not yml fails with `CODE_PARSE`. `examples/selftest.gd` covers the default, replace, merge, server override, pin and bad entries.
 
-A `games.yml` entry may also carry `maps: [id, ...]` (the rotation, in that order) and `rotation: sequential|random|vote`; absent means every installed map sorted by name, sequential. `TmcContentLists.game_order` (games.yml order, then unlisted installed games sorted) and `map_rotation` (one game's maps and mode) give these, and fail with `CODE_INVALID` naming an unknown game or a listed map that is not installed. A rotation file such as `cfg/addon/dot_map/maps.yml` wins when it exists.
+A `games.yml` entry may also carry `maps: [id, ...]` (the rotation, in that order) and `rotation: sequential|random|vote`; absent means every installed map sorted by name, sequential. A map may carry its own time limit in seconds: a `maps:` item written as a block mapping (`- id: surf_b` then `time_limit: 600`; the yml reader has no flow mappings) (`map_rotation` returns these as `time_limits`).
+
+A whole rotation is a few lines:
+
+```yaml
+entries:
+  - repo: game-arena
+    rotation: random
+    maps:
+      - surf_a
+      - id: surf_b
+        time_limit: 600
+``` `TmcContentLists.game_order` (games.yml order, then unlisted installed games sorted) and `map_rotation` (one game's maps and mode) give these, and fail with `CODE_INVALID` naming an unknown game or a listed map that is not installed. A rotation file such as `cfg/addon/dot_map/maps.yml` wins when it exists.
 
 **Who reads them:** `setup.sh`, `tools/check_lists.sh`, `tools/package_check.sh`, `tools/addons-lock.sh`, `tools/game_source.sh` (`game_entries`, so `check.sh` and `play.sh`) read them from bash through `tools/content_lists.sh`; `install-games` fetches the `pack:` entries when it is given no `--games`. A pin in `addons.yml` is what `setup.sh` checks out; an entry without one falls back to `addons.lock`. `addons.lock` is still what the shell build writes and checks.
 
