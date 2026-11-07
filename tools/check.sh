@@ -44,7 +44,7 @@ done < <(find host client examples -name '*.gd' 2>/dev/null | sort)
 
 echo
 echo "shell scripts"
-for f in setup.sh tools/server.in docker-entrypoint.sh docker-healthcheck.sh tools/content_trust.sh tools/check_content_trust.sh tools/check.sh tools/check_boot_failures.sh tools/check_lists.sh tools/check_tickrate.sh tools/check_deploy_modes.sh tools/check_self_update.sh tools/check_supervise.sh tools/check_channels.sh tools/deploy-modes.sh tools/enet_relay_all_games.sh; do
+for f in setup.sh tools/server.in docker-entrypoint.sh docker-healthcheck.sh tools/content_trust.sh tools/check_content_trust.sh tools/check.sh tools/check_boot_failures.sh tools/check_lists.sh tools/check_tickrate.sh tools/check_deploy_modes.sh tools/check_self_update.sh tools/check_supervise.sh tools/check_channels.sh tools/import_defs.sh tools/check_import_defs.sh tools/deploy-modes.sh tools/enet_relay_all_games.sh; do
     [ -f "$f" ] || continue
     if bash -n "$f" 2>/dev/null; then
         printf '  %sok%s   %s\n' "$GRN" "$OFF" "$f"
@@ -69,6 +69,7 @@ bash tools/check_publish_manifest.sh || fails=$((fails + 1))
 bash tools/check_self_update.sh || fails=$((fails + 1))
 bash tools/check_supervise.sh || fails=$((fails + 1))
 bash tools/check_channels.sh || fails=$((fails + 1))
+bash tools/check_import_defs.sh || fails=$((fails + 1))
 
 echo
 echo "the published games"

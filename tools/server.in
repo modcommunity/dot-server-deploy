@@ -179,6 +179,9 @@ usage() {
                         `run` does this for you when TMC_GAMES is set.
     fetch-lock          Fetch the packs content.lock.json pins (hash-checked, once) into
                         content/packs/. `run` does this when the lock exists; TMC_NO_LOCK=1 skips it.
+    import-defs         Post a game's deployment/*.json (stat, achievement, leaderboard defs and
+                        game-listing) to the site with the integration token in data/listing.json.
+                        --game-dir DIR (required), --dry-run (validate only), --url, --token-file.
     export-web          Build the browser client into web/build, plus the
                         loader website-city uploads. Takes --base and --zip.
     export-native       Build the native client the desktop app installs, into
@@ -352,6 +355,7 @@ USAGE
 case "${1:-}" in
     run|check|config|games|export-web|export-native|stamp-loader) COMMAND="$1"; shift ;;
     install-games|index|cfg-migrate|fetch-lock) COMMAND="$1"; shift ;;
+    import-defs) shift; exec "$PROJECT/tools/import_defs.sh" "$@" ;;
     pack|publish)
         COMMAND="pack"; shift
         PACK_ID="${1:-}"
