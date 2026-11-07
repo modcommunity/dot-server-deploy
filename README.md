@@ -241,6 +241,8 @@ The YAML reader is a deliberately small subset and refuses everything else with 
 ./server games                what is in content/
 ./server install-games        fetch the games in --games from the content origin
 ./server index                publish the catalogue a server installs FROM
+./server import-defs --game-dir DIR [--dry-run]
+                              post the game's deployment/*.json (stat, achievement, leaderboard defs, game listing) to the site
 ./server export-web           build the browser client
 ./server export-native        build the native client, for every platform
 ./server --help               every option
@@ -250,6 +252,8 @@ The YAML reader is a deliberately small subset and refuses everything else with 
 ```
 
 Exit codes are meaningful, so a supervisor can tell a misconfiguration from a crash: `2` usage, `3` no runtime, `4` no project, `5` bad config, `6` port in use, `7` bad content.
+
+`import-defs` reads the integration token from `data/listing.json` (or `--token-file`) and hands it to curl on stdin, never argv. `--dry-run` asks the site to validate and report its plan without writing. The achievement, leaderboard and listing routes need a credential scoped to the game; the server-scoped enrollment token only covers stats.
 
 **Secrets are not options.** `--rcon-password` is refused outright: argv is readable by every other process on the machine and ends up in pasted bug reports, which is why `DotConfig` refuses secrets from argv and the environment too.
 
