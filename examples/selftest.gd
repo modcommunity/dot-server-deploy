@@ -11,7 +11,7 @@ const RoundsWithoutMatch := preload("res://examples/fixtures/rounds_without_matc
 
 const Host := preload("res://host/tmc_host.gd")
 
-const CHECKS := 463
+const CHECKS := 465
 
 var _passed := 0
 var _failed := 0
@@ -1353,6 +1353,25 @@ func _test_game_refs() -> void:
 	var both_down: DotResult = await installer.pointer_from("a/x", "https://site.example", cdn, 0, transport)
 	_check(not both_down.ok and both_down.error.detail.contains("misspelled"),
 		"both sources failing keeps the misspelled-id hint", str(both_down.error))
+
+	# The restart half of dot-cloud auto-update: after the exit-75 restart install-games asks again
+	# and must see the version published meanwhile, including through a moved_to pointer.
+	var pub := {"v": "1.0.0", "moved": ""}
+	var live := func(url: String) -> DotResult:
+		if url.ends_with("/a/old/latest.json") and pub["moved"] != "":
+			return DotResult.success({"moved_to": pub["moved"]})
+		if url.ends_with("/a/b/latest.json") or url.ends_with("/a/new/latest.json"):
+			return DotResult.success({"version": pub["v"]})
+		return DotResult.fail(DotError.CODE_IO, "HTTP 404")
+	var before: DotResult = await installer.pointer_from("a/b", "", cdn, 0, live)
+	pub["v"] = "2.0.0"
+	var after: DotResult = await installer.pointer_from("a/b", "", cdn, 0, live)
+	_check(before.ok and after.ok and before.value["version"] == "1.0.0" and after.value["version"] == "2.0.0",
+		"a restart after a newer pack was published resolves the new version", str(after))
+	pub["moved"] = "a/new"
+	var moved_after: DotResult = await installer.pointer_from("a/old", "", cdn, 0, live)
+	_check(moved_after.ok and moved_after.value["moved_to"] == "a/new" and moved_after.value["version"] == "",
+		"a moved_to in latest.json is handed back through the same resolver the client shell uses", str(moved_after))
 
 	_check(installer.pointer_hint("a/b", "<Error><Code>AccessDenied</Code></Error>").contains("misspelled")
 			and installer.pointer_hint("a/b", "HTTP 404").contains("not published")

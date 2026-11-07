@@ -187,6 +187,7 @@ content_type_for() {
         *.svg)   printf 'image/svg+xml' ;;
         *.ico)   printf 'image/x-icon' ;;
         *.css)   printf 'text/css; charset=utf-8' ;;
+        *.zip)   printf 'application/zip' ;;   # dot-cloud bundles/<hash>.zip
         *.wav)   printf 'audio/wav' ;;
         *.ogg)   printf 'audio/ogg' ;;
         # `.pck` and anything else. Octet-stream is correct for a pack: it is
