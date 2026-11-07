@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Proves the client shell's pck does not carry dot-map's surface textures (they ride in a dot-cloud pack and resolve through
-# DotMapSurfaces.fallback_roots; dot-map's examples/surfaces_pack_selftest proves that half). Prints the pck size.
+# Proves the client shell's pck does not carry dot-map's surface textures or dot-audio's ambience beds and mood set (they ride in a dot-cloud pack and resolve through
+# DotMapSurfaces.fallback_roots / DotAudioStock.fallback_roots; dot-map's examples/surfaces_pack_selftest and dot-audio's
+# examples/stock_pack_selftest prove that half). Prints the pck size.
 #   heavy -- tools/shell_pck_check.sh
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
@@ -16,4 +17,9 @@ if grep -Eq 'addons/dot_map/surfaces/[a-z_]+/[^/]+\.(jpg|webp|ctex|import)' <<<"
     echo "FAIL: surface textures are still in the shell pck"; exit 1
 fi
 grep -q 'addons/dot_map/surfaces/dot_map_surfaces.gd' <<<"$paths" || { echo "FAIL: DotMapSurfaces script missing"; exit 1; }
-echo "OK: surface textures are out of the shell pck, DotMapSurfaces is in"
+if grep -Eq 'addons/dot_audio/stock/(ambience|moods)/' <<<"$paths"; then
+    echo "FAIL: ambience beds or the mood set are still in the shell pck"; exit 1
+fi
+grep -q 'addons/dot_audio/core/dot_audio_stock.gd' <<<"$paths" || { echo "FAIL: DotAudioStock script missing"; exit 1; }
+grep -q 'addons/dot_audio/stock/footsteps/' <<<"$paths" || { echo "FAIL: footsteps should stay in the shell"; exit 1; }
+echo "OK: surface textures and ambience are out of the shell pck, DotMapSurfaces and DotAudioStock are in"
