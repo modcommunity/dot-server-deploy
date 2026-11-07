@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 #
-# Push a game's stat catalog JSON (stats/stat-defs.json) to the site.
+# Push a game's stat catalog JSON (deployment/stat-defs.json) to the site.
 #
-#   ./deploy/import-stat-defs.sh --file stats/stat-defs.json --token-file cfg/integration.token
+#   ./deploy/import-stat-defs.sh --file deployment/stat-defs.json --token-file cfg/integration.token
 #   ./deploy/import-stat-defs.sh --file ... --token-file ... --preview
 #   ./deploy/import-stat-defs.sh --file ... --token-file ... --overwrite
 #
@@ -11,7 +11,7 @@
 # the app) and goes to curl on stdin, so it never appears in argv or ps.
 set -euo pipefail
 
-FILE="stats/stat-defs.json"; TOKEN_FILE=""; URL="${TMC_SITE_URL:-https://moddingcommunity.com}"
+FILE="deployment/stat-defs.json"; TOKEN_FILE=""; URL="${TMC_SITE_URL:-https://moddingcommunity.com}"
 APPLY=true; OVERWRITE=false
 
 die() { echo "error: $*" >&2; exit "${2:-1}"; }
