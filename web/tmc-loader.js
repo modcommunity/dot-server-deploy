@@ -56,13 +56,31 @@
   var ENGINE_BASE = '@ENGINE_BASE@';
   var MOUNT_ID = 'tmc-game-canvas';
 
-  var boot = window.__TMC_GAME__ || {};
-  var mount = document.getElementById(MOUNT_ID);
+  // How long to wait for the page to put the mount in the document. The player appends
+  // this script from an effect, which can run a frame or two before its portal div is
+  // committed, so "not there yet" is normal and "not there after a few seconds" is the
+  // error. Polling is cheap and stops at the first hit.
+  var MOUNT_WAIT_MS = 3000;
+  var MOUNT_POLL_MS = 50;
 
-  if (!mount) {
-    console.error('[TMC] no #' + MOUNT_ID + ' to mount into');
-    return;
+  var boot = window.__TMC_GAME__ || {};
+
+  function waitForMount() {
+    var started = Date.now();
+    (function look() {
+      var found = document.getElementById(MOUNT_ID);
+      if (found) return run(found);
+      if (Date.now() - started >= MOUNT_WAIT_MS) {
+        console.error(
+          '[TMC] no #' + MOUNT_ID + ' to mount into (waited ' + MOUNT_WAIT_MS + ' ms)'
+        );
+        return;
+      }
+      setTimeout(look, MOUNT_POLL_MS);
+    })();
   }
+
+  function run(mount) {
 
   // Whatever a previous mount left behind. Cheap and total: there is no state to
   // preserve, because the state lives inside the iframe's own document.
@@ -762,4 +780,7 @@
       if (mount) mount.innerHTML = '';
     },
   };
+  }
+
+  waitForMount();
 })();
