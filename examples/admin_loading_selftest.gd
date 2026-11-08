@@ -2,7 +2,7 @@ extends Node
 
 ## The admin menu and the loading screen, both halves, without a server.
 
-const CHECKS := 186
+const CHECKS := 192
 
 var _passed := 0
 var _failed := 0
@@ -957,6 +957,18 @@ func _test_loading_client() -> void:
 	_check(screen.is_showing(), "the warm-up ending leaves a game change's screen up")
 	screen.end(TmcLoadingScreen.REASON_GAME)
 	_check(not screen.is_showing(), "and both over takes it down")
+
+	# A live solo game, or the late sync of suggested packs, is never walled off by a fetch.
+	_check(not TmcLoadingScreen.may_block_live_game(true, true, false), "a live solo game is not covered by a fetch")
+	_check(not TmcLoadingScreen.may_block_live_game(true, false, true), "nor by the suggested packs' late sync")
+	_check(TmcLoadingScreen.may_block_live_game(false, true, true), "but the launch (not live yet) is covered")
+	_check(TmcLoadingScreen.may_block_live_game(true, false, false), "and an online map change keeps its screen")
+
+	# Every reason that starts is timed for its begin/end log line.
+	screen.begin(TmcLoadingScreen.REASON_WARM, "", "", true)
+	_check(screen._reason_at.has(TmcLoadingScreen.REASON_WARM), "a reason that began is timed")
+	screen.end(TmcLoadingScreen.REASON_WARM)
+	_check(screen._reason_at.is_empty(), "and no longer once it ended")
 
 	screen.adopt({"next": {"game": "arena", "entry": {}}, "show": true})
 	_check(screen.is_showing() and screen.describe()["next"]["game"] == "arena",

@@ -69,6 +69,10 @@ var _next: Dictionary = {}
 var _next_at := -1.0
 
 var _reasons: Dictionary = {}
+## reason -> msec it began, for the begin/end log lines.
+var _reason_at: Dictionary = {}
+## msec the cover was shown (for the end line).
+var _shown_msec := 0
 var _pending_content_at := -1.0
 var _last_activity := 0.0
 var _visible := false
@@ -224,11 +228,13 @@ func begin(reason: StringName, game_id: String = "", game_name: String = "", ins
 
 	if reason == REASON_CONTENT:
 		# Delayed: see [member show_delay_sec].
+		_note_begin(reason)
 		_reasons[REASON_CONTENT] = true
 		if not _visible and _pending_content_at < 0.0:
 			_pending_content_at = _now()
 		return
 
+	_note_begin(reason)
 	_reasons[reason] = true
 	_show()
 	if instant and _visible:
@@ -240,6 +246,7 @@ func begin(reason: StringName, game_id: String = "", game_name: String = "", ins
 
 ## Something the screen was covering finished.
 func end(reason: StringName) -> void:
+	_note_end(reason)
 	_reasons.erase(reason)
 	if reason == REASON_CONTENT:
 		_pending_content_at = -1.0
@@ -249,6 +256,33 @@ func end(reason: StringName) -> void:
 
 func is_showing() -> bool:
 	return _visible
+
+
+## Whether a fetch or sync that starts while a game is live may put the blocking cover over it.
+## It may not in a solo game, nor for a late sync of suggested packs: the game covers its own
+## map changes with its load gate, and the player must never be walled off from a match that
+## is running because a download is going on behind it. [param live] is "the game is on
+## screen and the menu is hidden".
+static func may_block_live_game(live: bool, solo: bool, late_sync: bool) -> bool:
+	return not (live and (solo or late_sync))
+
+
+## One always-on line per reason that starts, so a browser console pins what raised a cover.
+func _note_begin(reason: StringName) -> void:
+	if _reasons.has(reason) or _reason_at.has(reason):
+		return
+	_reason_at[reason] = Time.get_ticks_msec()
+	DotLog.info(CHANNEL, "[TMC] cover begin: %s" % String(reason), {
+		"reason": String(reason), "showing": _visible, "game": _game_id})
+
+
+func _note_end(reason: StringName) -> void:
+	if not _reason_at.has(reason):
+		return
+	var ms := Time.get_ticks_msec() - int(_reason_at[reason])
+	_reason_at.erase(reason)
+	DotLog.info(CHANNEL, "[TMC] cover end: %s %d ms" % [String(reason), ms], {
+		"reason": String(reason), "ms": ms, "showing": _visible})
 
 
 ## The download's progress, 0..1, and what it is doing. Negative is "no fraction".
@@ -351,6 +385,7 @@ func _show() -> void:
 		return
 	_visible = true
 	_shown_at = _now()
+	_shown_msec = Time.get_ticks_msec()
 	_last_activity = _shown_at
 	_apply_entry()
 	_status.text = "Loading %s…" % _game_name if _game_name != "" else "Loading…"
@@ -370,6 +405,10 @@ func _hide(finished: bool) -> void:
 	if not _visible:
 		return
 	_visible = false
+	var shown_ms := Time.get_ticks_msec() - _shown_msec
+	DotLog.info(CHANNEL, "[TMC] cover down: %d ms" % shown_ms, {
+		"ms": shown_ms, "finished": finished, "status": _status.text if _status != null else ""})
+	_reason_at.clear()
 	_next = {}
 	_next_at = -1.0
 	_stop_music()

@@ -1094,8 +1094,13 @@ func _on_cloud_phase(phase: int, text: String) -> void:
 			DotCloudClient.Phase.IDLE, DotCloudClient.Phase.READY, DotCloudClient.Phase.FAILED:
 				loading.end(TmcLoadingScreen.REASON_CONTENT)
 			_:
-				loading.begin(TmcLoadingScreen.REASON_CONTENT)
-				loading.set_progress(-1.0, text)
+				# A solo game, or the suggested packs fetched after the scene is up, never
+				# walls the live game off: the game covers its own map change with its gate.
+				if _cover_may_block():
+					loading.begin(TmcLoadingScreen.REASON_CONTENT)
+					loading.set_progress(-1.0, text)
+				else:
+					DotLog.info(CHANNEL, "[TMC] cover skipped: content fetch during live play", {"phase": phase, "text": text})
 
 	if phase == DotCloudClient.Phase.IDLE or phase == DotCloudClient.Phase.READY or phase == DotCloudClient.Phase.FAILED:
 		_job = {}
@@ -1980,8 +1985,16 @@ func _sync_suggested_later(content_id: String, suggested: PackedStringArray) -> 
 	_late_sync = false
 
 
+## Whether a download that starts now may put the blocking loading cover over the game.
+func _cover_may_block() -> bool:
+	var live := _has_spawned and _menu != null and not _menu.visible
+	return TmcLoadingScreen.may_block_live_game(live, _solo_session != null, _late_sync)
+
+
 func _on_workshop_progress(done: int, total: int, bytes_done: int, bytes_total: int, current: String) -> void:
 	if _launch_job or _late_sync or loading == null or total <= 0:
+		return
+	if not _cover_may_block():
 		return
 	if not loading.is_showing():
 		loading.begin(TmcLoadingScreen.REASON_GAME)
