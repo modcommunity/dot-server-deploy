@@ -1,0 +1,24 @@
+# game-arena's deathmatch and gun game maps, as the packs arena-dm-maps publishes (one pack per
+# map, unpinned: the newest on the content origin, checked every start). A delivered pack has no
+# local root, so each manifest carries "movement": "walk" and the maps are walked, not surfed.
+# Add the surf maps (arena-surf-dm-maps) the same way once they are published. cp-orange-x3 is
+# not listed: it is not published.
+maps:
+  add:
+    - gamemann/aim-forts
+    - gamemann/blackhawkdown
+    - gamemann/crackhouse
+    - gamemann/dm-hot-cn-v1
+    - gamemann/dm-industrial-gamma
+    - gamemann/dm-morpheus
+    - gamemann/dm-overwatch
+    - gamemann/dm-scarletdevilmansion
+    - gamemann/gg-canyon
+    - gamemann/gg-fy-snow
+    - gamemann/gg-garage
+    - gamemann/gg-krusty-krab
+    - gamemann/gg-lego-arena
+    - gamemann/gg-punishment
+    - gamemann/gg-simpsons-x
+    - gamemann/gg-woods
+    - gamemann/welcometomexicov6
