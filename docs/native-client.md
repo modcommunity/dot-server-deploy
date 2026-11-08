@@ -12,6 +12,10 @@ It builds the shell for Linux, Windows and macOS, writes one archive per platfor
 
 The desktop app's builder drops a pair when its value is missing. `{udpPort}` is the server's own A2S `udp:<port>` keyword (spy records it as `meta.enetPort`; the site's app API hands it to the app as `udpPort`). Without it a native client tried UDP at the join port, which behind nginx is the TLS port, and fell back to WebSocket after 2.5 s. Other user arguments (`--locale-language de`, `--locale-pseudo true`) go after the same `--`.
 
+## Signing in: `--auth-code`
+
+A player signed into the desktop app should join as themselves, which a TICKET server with `allow_guests=false` requires. The app asks the site's `POST /play/launch` for a launch and gets a 60 s single-use handoff (`tmc_gh_...`, only when the viewer is signed in and the server signs in through TMC), then appends `--auth-code <code>` after the bare `--`. The shell redeems it with `DotAuthClient.redeem_handoff` at ITS OWN backbone (`client/auth.json` or `--auth-backbone-url`), never a URL named in argv. A refused or missing code leaves a guest. The site's `{authCode}` URI token carries the same value for a template that wants it.
+
 ## Presets
 
 - **`export_presets.example.cfg` is tracked; `export_presets.cfg` is not.** The editor rewrites the real file, so it is gitignored like `cfg/`; `setup.sh` and `setup.ps1` copy the example in when there is none and never overwrite one.
