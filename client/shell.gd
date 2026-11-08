@@ -323,11 +323,33 @@ func _user_arg(name: String) -> String:
 	return ""
 
 
+## The launcher's sign-in code from `--auth-code <code>`, or "". A well-formed `tmc_gh_` code only (closed character set), so a stray value never reaches the backbone.
+func _launcher_auth_code() -> String:
+	if DotPlatform.is_web():
+		return ""
+
+	var code := _user_arg("--auth-code").strip_edges()
+
+	if not code.begins_with("tmc_gh_"):
+		return ""
+
+	for i in code.length():
+		var c := code.unicode_at(i)
+		var ok := (c >= 48 and c <= 57) or (c >= 65 and c <= 90) or (c >= 97 and c <= 122) or c == 45 or c == 95
+		if not ok:
+			return ""
+
+	return code
+
+
 ## Signs in against the backbone when the page offers a way: inside the TMC player the site hands over a single-use code ([DotAuthWebHandoff]);
 ## elsewhere `sign_in()` fails at once and the player stays a guest, because a device-code flow puts a code to read in front of someone who wanted Play.
 ## The name is a LABEL, not proof: a server that needs to know who somebody is verifies that itself.
 func _sign_in(resumed: Dictionary = {}) -> void:
-	if not DotAuthWebHandoff.supported():
+	# The desktop app's single-use code (`--auth-code`), minted by the site's /play/launch for a signed-in player. Native only: the page handoff is the web's.
+	var launcher_code := _launcher_auth_code()
+
+	if launcher_code == "" and not DotAuthWebHandoff.supported():
 		return
 
 	_auth = DotAuthClient.new()
@@ -353,7 +375,12 @@ func _sign_in(resumed: Dictionary = {}) -> void:
 
 	# `try_web_handoff`, not `sign_in`: `sign_in()` falls through to a device-code login, which cost every bare-link shell
 	# two backbone requests per page load for a code nobody can read.
-	var res: DotResult = await _auth.try_web_handoff()
+	var res: DotResult
+	if launcher_code != "":
+		# Redeemed at this client's own backbone (`--auth-backbone-url` / auth.json), never a URL argv names. Single-use, 60 s: a failure leaves a guest.
+		res = await _auth.redeem_handoff(launcher_code)
+	else:
+		res = await _auth.try_web_handoff()
 
 	# A restart onto newer addons must not sign a member out: the page's code is single-use and already spent, so the handoff fails here;
 	# the stored credentials are used only for the member the update recorded (a guest stays a guest).
