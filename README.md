@@ -255,6 +255,8 @@ Exit codes are meaningful, so a supervisor can tell a misconfiguration from a cr
 
 `import-defs` reads the integration token from `data/listing.json` (or `--token-file`) and hands it to curl on stdin, never argv. `--dry-run` asks the site to validate and report its plan without writing. The achievement, leaderboard and listing routes need a credential scoped to the game; the server-scoped enrollment token only covers stats.
 
+`tools/game_listing.py GAME_DIR...` writes a game's `deployment/game-listing.json` from its `game.yml` (pack id = `content_id`) and README; it keeps an existing file, `--check` verifies, `--force` rewrites. `tools/check_game_listing.sh` tests it.
+
 **Secrets are not options.** `--rcon-password` is refused outright: argv is readable by every other process on the machine and ends up in pasted bug reports, which is why `DotConfig` refuses secrets from argv and the environment too.
 
 ## Installing games, instead of carrying all of them
