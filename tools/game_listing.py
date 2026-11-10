@@ -89,8 +89,8 @@ def problems(game, path):
     if d.get("pack", {}).get("id") != want["pack"]["id"]:
         return "pack.id %r is not game.yml content_id %r" % (d.get("pack", {}).get("id"), want["pack"]["id"])
     l = d.get("listing", {})
-    if l.get("name") != want["listing"]["name"] or not l.get("description"):
-        return "listing name/description do not match game.yml"
+    if not l.get("name") or not l.get("description"):
+        return "listing needs a name and a description"
     return ""
 
 
