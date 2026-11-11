@@ -95,20 +95,10 @@ foreach ($repo in $NativeRepos) {
     $script:CurRepo = $repo; $script:CurAddon = $addon; $script:RepoDir = $repoDir
     $projectsDir = Split-Path -Parent $repoDir
     $lib = Join-Path $repoDir "addons\$addon\bin"
-    $stamp = Join-Path $lib '.natives'
-
-    # dot-bootstrap keeps ONE stamp ("<tag> <platform>") per library folder, so fetching
-    # macos-arm64 and then macos-x86_64 made each undo the other's stamp and download
-    # both every run. Here each platform keeps its own (.natives-<platform>) and is
-    # swapped into .natives around the call; the twin of fetch-natives.sh.
+    # Fetch-Natives keeps one stamp per platform (.natives-<platform>), like fetch_natives.
     foreach ($p in $Platform) {
         $script:CurPlat = $p
-        $per = Join-Path $lib ".natives-$p"
-        if (Test-Path -LiteralPath $per) { Copy-Item -Force -LiteralPath $per -Destination $stamp }
         Fetch-Natives $Root
-        if ((Test-Path -LiteralPath $stamp) -and ((Get-Content -LiteralPath $stamp -Raw).Trim() -split ' ')[1] -eq $p) {
-            Copy-Item -Force -LiteralPath $stamp -Destination $per
-        }
     }
     $ext = Join-Path $repoDir "addons\$addon\$addon.gdextension"
     $hostLib = Join-Path $lib $Platform[0]
