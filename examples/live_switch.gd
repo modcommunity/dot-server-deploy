@@ -11,6 +11,7 @@ const CONFIG := "res://examples/fixtures/multigame"
 
 ## The server in a World3D of its own, away from the client in this process. See the helper.
 const ServerWorld := preload("res://examples/server_world.gd")
+const PublishedPacks := preload("res://examples/published_packs.gd")
 const CONTENT := "res://content"
 const DATA := "user://tmc_live_switch"
 
@@ -44,6 +45,11 @@ func _ready() -> void:
 
 func _run() -> void:
 	print("dot-server-deploy: changing games under a live client")
+
+	if not PublishedPacks.has("tmc/buses"):
+		print("skipped: tmc/buses is not published in dist/ (./setup.sh, or ./server pack buses --source games/mg-buses-from-hell)")
+		get_tree().quit(0)
+		return
 
 	DotPaths.remove_tree(DATA)
 
