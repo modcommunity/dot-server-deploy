@@ -1814,6 +1814,26 @@ if [ "$DO_UPDATE" -eq 1 ]; then
     fi
 fi
 
+# [b]The native library of an addon that has one (dot-sim), unpacked at its locked tag.[/b]
+# tools/fetch-natives.sh lifts dot-bootstrap's fetcher (checksummed, stamped, a local
+# build kept); no zip for this platform, or offline, is a warning and the GDScript twins
+# run. Never reaches export-web: the Web preset excludes the .gdextension.
+if [ -x tools/fetch-natives.sh ]; then
+    step "native libraries"
+    natives_args=()
+    [ "$DO_CLONE" -eq 1 ] || natives_args+=(--no-clone)
+    tools/fetch-natives.sh "${natives_args[@]}" || warn "native libraries: see above (GDScript runs)"
+fi
+# Godot loads a GDExtension only once an import has listed it in
+# .godot/extension_list.cfg, so a library that arrived under --no-import (the egg,
+# upgrade.sh, the container's entrypoint) would sit on disk unused, GDScript running.
+NATIVE_UNLISTED=""
+for ext in "$ROOT"/addons/*/*.gdextension; do
+    [ -f "$ext" ] || continue
+    grep -qF "res://${ext#"$ROOT"/}" "$ROOT/.godot/extension_list.cfg" 2>/dev/null \
+        || { NATIVE_UNLISTED="${ext#"$ROOT"/}"; break; }
+done
+
 # [b]--vendor throws the clones away once they have been copied.[/b] Vendoring says this
 # tree is to carry CONTENT rather than checkouts: a container's final stage and a
 # release tarball copy the project directory whole, and fifty repositories under
@@ -1891,19 +1911,6 @@ else
     [ "$FROM_LINK"   -gt 0 ] && WHERE+=("$FROM_LINK already linked elsewhere")
     [ "$FROM_VENDOR" -gt 0 ] && WHERE+=("$FROM_VENDOR already vendored")
     ok "${#ADDONS[@]} addons in addons/ ($(IFS=', '; echo "${WHERE[*]}"))"
-fi
-
-# [b]The native libraries, which neither a clone nor a vendored copy carries.[/b]
-# dot-sim's Rust motor, snapshot codec and bot sight scan come from its release zip,
-# checked against natives.lock; without them the server runs the GDScript twins, the
-# same results and slower, and says so only in its startup "dot-sim native" line. Godot
-# loads a GDExtension only once an import has listed it, so an install forces one.
-natives_installed="$("$ROOT/tools/fetch-natives.sh" --root "$ROOT")" \
-    || warn "a native library failed its checksum and was not installed (GDScript runs, slower)"
-if [ "${natives_installed:-0}" -gt 0 ] 2>/dev/null; then
-    FORCE_IMPORT=1
-    FORCE_IMPORT_WHY="a native library was installed"
-    FORCE_IMPORT_NOTE="Godot loads a GDExtension only after an import lists it."
 fi
 
 # --- 3. Leftovers from when the games were vendored ------------------------
@@ -2019,14 +2026,15 @@ elif [ "${FORCE_IMPORT:-0}" -eq 1 ]; then
     # names is no longer on disk. The message says which, because "overridden" with no
     # reason is the line that gets read as the script being unreliable.
     warn "${FORCE_IMPORT_WHY:-a vendored game directory was removed}, so --no-import is being overridden"
-    if [ -n "${FORCE_IMPORT_NOTE:-}" ]; then
-        printf '       %s\n' "$FORCE_IMPORT_NOTE"
-    else
-        printf '       its class_name entries are still in the class cache, pointing at\n'
-        printf '       files that are gone. Only an import rewrites that.\n'
-    fi
+    printf '       its class_name entries are still in the class cache, pointing at\n'
+    printf '       files that are gone. Only an import rewrites that.\n'
     "$GODOT" --headless --path "$ROOT" --import >/dev/null 2>&1
     ok "class_name globals registered"
+elif [ -n "$NATIVE_UNLISTED" ]; then
+    step "importing"
+    warn "$NATIVE_UNLISTED is not in the last import's extension list, so --no-import is being overridden"
+    "$GODOT" --headless --path "$ROOT" --import >/dev/null 2>&1
+    ok "native library listed"
 elif import_is_stale; then
     step "importing"
     warn "an addon is newer than the class cache, so --no-import is being overridden"

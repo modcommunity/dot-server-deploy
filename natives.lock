@@ -1,7 +1,0 @@
-# The native libraries tools/fetch-natives.sh installs, and their digests.
-# Written by tools/fetch-natives.sh --pin from each release's SHA256SUMS.natives;
-# review the diff. repo<TAB>tag<TAB>platform<TAB>sha256(zip).
-dot-sim	v0.2.3	linux-arm64	ddece23597e4e97c51f15f2dedb5772aaec3a756b9f258bbe9a9b49ca0ca3c9e
-dot-sim	v0.2.3	linux-x86_64	cbd003d24822c1fc17267e03a42926a3a9b4ddf64d2ced9549af2df1f61eed53
-dot-sim	v0.2.3	macos-x86_64	2c48ae399fe20d125d44463ba998c21b77eae1b3d3453fcb2df2fb75acc4aa54
-dot-sim	v0.2.3	windows-x86_64	5d196c54200aa511236f8d74a64625e29738aa522eac2754f60d64adb634db7d
