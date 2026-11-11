@@ -56,21 +56,28 @@ GAMES_REPOS="${GAMES_REPOS:-$TMC_ROOT/games}"
 ## setup.sh's clone: what is fetched is what is ACTUALLY absent rather than the list of
 ## games in the abstract, so a box that already has them fetches nothing.
 game_source() {
-    local repo="$1" dir
+    local repo="$1" dir name tsv="$TMC_ROOT/../dot-bootstrap/projects.tsv" names
     GAME_SRC=""; GAME_KIND=""
 
+    # games.yml names a repository by its current name; a checkout may still sit under an old one
+    # (projects.tsv column 3) until the next sync, and is the same repository.
+    names="$repo"
+    [ -f "$tsv" ] && names="$repo $(awk -F'\t' -v r="$repo" '$1 !~ /^#/ && NF { n = split($3, a, ","); hit = ($1 == r); for (i = 1; i <= n; i++) if (a[i] == r) hit = 1
+        if (hit) { out = out " " $1; for (i = 1; i <= n; i++) out = out " " a[i] } } END { print out }' "$tsv")"
+    for name in $names; do
     for dir in ${GAMES_DIR:+"$GAMES_DIR"} "$GAMES_REPOS" "$TMC_ROOT/.."; do
-        [ -d "$dir/$repo/game" ] || [ -f "$dir/$repo/project.godot" ] || continue
+        [ -d "$dir/$name/game" ] || [ -f "$dir/$name/project.godot" ] || continue
         # Resolved, so games/<repo> -> ../../<repo> and the sibling itself are one
         # answer rather than two. A caller comparing timestamps or greping for a
         # class_name against both would otherwise do it twice.
-        GAME_SRC="$(cd "$dir/$repo" && pwd -P)"
+        GAME_SRC="$(cd "$dir/$name" && pwd -P)"
         case "$dir" in
             "$GAMES_REPOS")   GAME_KIND="repos" ;;
             "$TMC_ROOT/..")   GAME_KIND="sibling" ;;
             *)                GAME_KIND="dir" ;;
         esac
         return 0
+    done
     done
 
     return 1

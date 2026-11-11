@@ -217,7 +217,10 @@ func _test_map_list() -> void:
 	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(TmcSolo.SOLO_CONFIG))
 	for id: Variant in ((parsed as Dictionary).get("maps", {}) as Dictionary):
 		var name := str(id).get_slice("/", 1)
-		if not known.has(name) and not RENAMED_PACK.values().has(name):
+		var listed_name := false
+		for k in known:
+			listed_name = listed_name or _names(k).has(name)
+		if not listed_name and not RENAMED_PACK.values().has(name):
 			strays.append(str(id))
 	_check(strays.is_empty(), "every game solo.json names is in games.yml", ", ".join(strays))
 
@@ -292,13 +295,34 @@ func _games(checked_out := true) -> PackedStringArray:
 	return out
 
 
-## games/<repo>, then beside this project.
+## games/<repo>, then beside this project; under any name dot-bootstrap's projects.tsv gives the repo.
 func _source(repo: String) -> String:
 	var here := ProjectSettings.globalize_path("res://")
-	for dir in [here.path_join("games").path_join(repo), here.path_join("..").path_join(repo).simplify_path()]:
-		if FileAccess.file_exists(str(dir).path_join("project.godot")):
-			return str(dir)
+	for name in _names(repo):
+		for dir in [here.path_join("games").path_join(name), here.path_join("..").path_join(name).simplify_path()]:
+			if FileAccess.file_exists(str(dir).path_join("project.godot")):
+				return str(dir)
 	return ""
+
+
+## [param repo] and every other name projects.tsv gives it (column 1 is current, column 3 the old names).
+func _names(repo: String) -> PackedStringArray:
+	var out := PackedStringArray([repo])
+	var tsv := ProjectSettings.globalize_path("res://").path_join("../dot-bootstrap/projects.tsv").simplify_path()
+	if not FileAccess.file_exists(tsv):
+		return out
+	for line in FileAccess.get_file_as_string(tsv).split("\n"):
+		if line.begins_with("#") or line.strip_edges() == "":
+			continue
+		var cols := line.split("\t")
+		var row := PackedStringArray([cols[0]])
+		if cols.size() > 2:
+			row.append_array(cols[2].strip_edges().split(","))
+		if row.has(repo):
+			for n in row:
+				if not out.has(n):
+					out.append(n)
+	return out
 
 
 func _section(title: String) -> void:
