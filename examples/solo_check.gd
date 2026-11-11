@@ -13,6 +13,10 @@ const STOCK_CONTENT := "res://cfg.example/server/content/overrides.yml"
 
 ## Games whose maps are NOT fetched by the shell before a solo game starts, and why. Each
 ## one is a map list the shell deliberately does not copy, so the drift check skips it.
+## Repos whose pack id was renamed while the directory kept its name (see setup.sh repo_url):
+## solo.json is keyed by the pack id, overrides.yml by the game.
+const RENAMED_PACK := {"mg-deathrun": "game-deathrun", "mg-prop-hunt": "game-prop-hunt"}
+
 const NOT_PREFETCHED := {
 	# One pack per map, about 50 MB each: the game fetches the one it changes to itself
 	# (`g2g: fetching a map this build does not have`), as a server does.
@@ -200,7 +204,7 @@ func _test_map_list() -> void:
 		if want.is_empty():
 			continue
 		compared += 1
-		var have := TmcSolo.map_packs("gamemann/%s" % repo)
+		var have := TmcSolo.map_packs("gamemann/%s" % RENAMED_PACK.get(str(repo), str(repo)))
 		if have != want:
 			drift.append("%s: solo.json %s, cfg.example %s" % [repo, have, want])
 
@@ -212,7 +216,8 @@ func _test_map_list() -> void:
 	var strays := PackedStringArray()
 	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(TmcSolo.SOLO_CONFIG))
 	for id: Variant in ((parsed as Dictionary).get("maps", {}) as Dictionary):
-		if not known.has(str(id).get_slice("/", 1)):
+		var name := str(id).get_slice("/", 1)
+		if not known.has(name) and not RENAMED_PACK.values().has(name):
 			strays.append(str(id))
 	_check(strays.is_empty(), "every game solo.json names is in games.yml", ", ".join(strays))
 
