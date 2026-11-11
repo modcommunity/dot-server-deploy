@@ -24,7 +24,7 @@ node tools/browser_update_check.mjs --build <old-lock export>  # the addon updat
 ## Server-side suites
 
 - `examples/multigame.tscn`: boots buses and switches games; the game vote's rules (`begin_on_apply`, one game = no vote) and its notices at the server.
-- `examples/live_switch.tscn`: `changelevel` between games under live players. It names any game it cannot list, offer or vote for.
+- `examples/live_switch.tscn`: `changelevel` between games under live players. It names any game it cannot list, offer or vote for. Needs `tmc/buses` published in `dist/` or installed; on a clean checkout it prints "skipped" and exits 0, as `game_vote_all` does (`examples/published_packs.gd`).
 - `examples/reconnect.tscn`: a client in `PLAYING` is not proof of a join. `DotClientLink` enters `PLAYING` itself after sending `loaded`; the suite also waits for the server session in `SPAWNED` on both connects.
 - `examples/game_vote_all.tscn`: the game vote through EVERY game with a real shell attached, each switched into and out of by a click: rock the vote, the game's own ballot waiting and following, the time limit, one entry per game, never two ballots in a frame, the last game's modules gone. Needs every game published in `dist/` (it names any that is not), g2gfast's maps in `dist/maps/<owner>/` (searched by the host since 2026-10-11). About three and a half minutes.
   - `-- --shot=<dir>` under `xvfb-run -a godot --path . --resolution 1280x720` (no `--headless`: a null renderer saves an empty frame) saves `<game>_game.png` once the game ballot is drawn and `<game>_own.png` once the game's own ballot is voting, for every game, and the run is checked as usual. `-- --order=arena,smash,wipeout` plays only those (arena stays first: the fixture boots into it).
