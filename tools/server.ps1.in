@@ -267,6 +267,22 @@ function Invoke-ExportNative {
         Die "no export_presets.cfg -- the editor rewrites that file so it is not tracked. Copy export_presets.example.cfg over it, or run .\setup.ps1." 5
     }
 
+    # The native library for each machine being built (dot-sim): tools\fetch-natives.ps1,
+    # dot-bootstrap's fetcher. Never export-web.
+    $natPlat = @()
+    foreach ($t in $targets) {
+        switch ($t) {
+            'linux'   { $natPlat += 'linux-x86_64' }
+            'windows' { $natPlat += 'windows-x86_64' }
+            'macos'   { $natPlat += 'macos-arm64'; $natPlat += 'macos-x86_64' }
+        }
+    }
+    $fetchNatives = Join-Path $Project 'tools\fetch-natives.ps1'
+    if (Test-Path -LiteralPath $fetchNatives) {
+        try { & $fetchNatives -Platform $natPlat }
+        catch { Note "native libraries: $($_.Exception.Message) (the build runs GDScript)" }
+    }
+
     if (-not $BuildVersion) {
         # Built by pieces rather than as one format string: a custom .NET date format
         # gives `/` and `:` culture-dependent meanings, and a version that comes out
@@ -805,6 +821,26 @@ switch ($Command) {
         # The two things that have to be true about a map the preset excluded. Shared
         # with export-native, which excludes the same directory for the same reason.
         Test-ExcludedMaps (Join-Path $Project 'web\build\index.pck')
+
+        # A .gdextension in a web build stops every script. The preset excludes it; a box
+        # whose export_presets.cfg is an older copy would ship the unpacked natives.
+        # Searched in chunks (a pck is large); ISO-8859-1 keeps one byte to one char.
+        $needle = '.gdextension'
+        $latin = [System.Text.Encoding]::GetEncoding(28591)
+        $webPck = Join-Path $Project 'web\build\index.pck'
+        $fs = [System.IO.File]::OpenRead($webPck); $tail = ''; $hit = $false
+        try {
+            $buf = New-Object byte[] 4194304
+            while (($n = $fs.Read($buf, 0, $buf.Length)) -gt 0) {
+                $chunk = $tail + $latin.GetString($buf, 0, $n)
+                if ($chunk.IndexOf($needle, [System.StringComparison]::Ordinal) -ge 0) { $hit = $true; break }
+                $tail = $chunk.Substring([Math]::Max(0, $chunk.Length - $needle.Length + 1))
+            }
+        } finally { $fs.Dispose() }
+        if ($hit) {
+            Remove-Item -Force $webPck
+            Die "the Web export carries a .gdextension (the unpacked native library); add *.gdextension and addons/*/bin/* to the Web preset's exclude_filter (export_presets.example.cfg has it)." 3
+        }
 
         $embed = Join-Path $Project 'web\embed.html'
         if (Test-Path -LiteralPath $embed) {

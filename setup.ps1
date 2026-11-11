@@ -443,6 +443,20 @@ if (Test-Path -LiteralPath $presets) {
     Warn "export_presets.example.cfg is missing; the export commands will have no presets"
 }
 
+Step "native libraries"
+
+# The native library of an addon that has one (dot-sim), unpacked at its locked tag:
+# tools/fetch-natives.ps1, the twin of tools/fetch-natives.sh, which lifts dot-bootstrap's
+# Fetch-Natives. No zip for this machine, or offline, is a warning and the GDScript twins
+# run. Never reaches export-web: the Web preset excludes the .gdextension.
+$fetchNatives = Join-Path $Root 'tools/fetch-natives.ps1'
+if (Test-Path -LiteralPath $fetchNatives) {
+    try {
+        if ($NoDownload) { & $fetchNatives -NoClone } else { & $fetchNatives }
+        if ($LASTEXITCODE -ne 0) { Warn "native libraries: see above (GDScript runs)" }
+    } catch { Warn "native libraries: $($_.Exception.Message) (GDScript runs)" }
+}
+
 # --- 6. server.ps1 / server.cmd -------------------------------------------
 #
 # [b]server.cmd used to be the whole Windows launcher, and it was nine lines.[/b] It
