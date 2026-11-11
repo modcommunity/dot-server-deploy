@@ -25,6 +25,7 @@ if [ -z "${GODOT:-}" ]; then
 fi
 RED=$'\033[31m'; GRN=$'\033[32m'; YLW=$'\033[33m'; OFF=$'\033[0m'
 fails=0
+skips=0   # SKIPs: checks that did not run because this box has no dist/ pack; the verdict counts them
 
 # [b]A suite that boots a delivered game needs that game's signed pack in dist/.[/b] A fresh worktree
 # has no dist/ (setup.sh builds it), and the host then looks for res://content/<id>/manifest.json and
@@ -36,6 +37,7 @@ have_packs() {
     for id in "$@"; do [ -f "dist/tmc/$id/manifest.json" ] || missing="$missing tmc/$id"; done
     [ -z "$missing" ] && return 0
     printf '  %sSKIP%s needs a pack that dist/ lacks here (./setup.sh builds it):%s\n' "$YLW" "$OFF" "$missing"
+    skips=$((skips + 1))
     return 1
 }
 
@@ -290,8 +292,11 @@ elif [ "$drift" -ne 0 ]; then
     fails=$((fails + drift))
 fi
 
-[ -n "$nodist_note" ] && printf '  %sSKIP%s no dist/ here (setup.sh has not built packs), so not checked:%s\n' \
-    "$YLW" "$OFF" "$nodist_note"
+if [ -n "$nodist_note" ]; then
+    printf '  %sSKIP%s no dist/ here (setup.sh has not built packs), so not checked:%s\n' \
+        "$YLW" "$OFF" "$nodist_note"
+    skips=$((skips + $(wc -w <<<"$nodist_note")))
+fi
 
 # Printed whatever the verdict was, and printed at all because "every game is published"
 # over a build missing two of them is true and misleading in the same line.
@@ -635,8 +640,14 @@ fi
 
 echo
 if [ "$fails" -eq 0 ]; then
-    printf '%sall checks passed%s\n' "$GRN" "$OFF"
+    if [ "$skips" -gt 0 ]; then
+        printf '%sall checks that ran passed%s (%d SKIPPED, not run: no dist/ pack here)\n' "$GRN" "$OFF" "$skips"
+    else
+        printf '%sall checks passed%s\n' "$GRN" "$OFF"
+    fi
 else
-    printf '%s%d failed%s\n' "$RED" "$fails" "$OFF"
+    printf '%s%d failed%s' "$RED" "$fails" "$OFF"
+    [ "$skips" -gt 0 ] && printf ' (%d more SKIPPED, not run: no dist/ pack here)' "$skips"
+    printf '\n'
 fi
 exit $((fails > 0))

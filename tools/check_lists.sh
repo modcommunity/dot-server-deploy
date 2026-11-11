@@ -101,14 +101,18 @@ else
     TSV=../dot-bootstrap/projects.tsv
     if [ -f "$TSV" ]; then
         missing=""; strange=""
-        while IFS=$'\t' read -r repo url; do
+        while IFS=$'\t' read -r repo url aliases; do
             case "$repo" in ''|'#'*) continue ;; esac
             case "$url" in *zees-games/*) ;; *) continue ;; esac
             [ -f "../$repo/game.yml" ] || continue
-            printf '%s\n' "${GL_REPOS[@]}" | grep -qxF "$repo" || missing="$missing $repo"
+            printf '%s\n' "${GL_REPOS[@]}" | grep -qxF -e "$repo" $(printf -- "-e %s " ${aliases//,/ }) || missing="$missing $repo"
         done < "$TSV"
+        # A renamed repository is listed under its NEW name with the old ones in column 3
+        # (the header of projects.tsv), and a checkout may still sit under the old one until
+        # the next sync moves it, so an alias is the same repository, not a stranger.
         for repo in "${GL_REPOS[@]}"; do
-            grep -qE "^$repo"$'\t' "$TSV" || strange="$strange $repo"
+            awk -F'\t' -v r="$repo" '$1 !~ /^#/ { if ($1 == r) f = 1; n = split($3, a, ","); for (i = 1; i <= n; i++) if (a[i] == r) f = 1 } END { exit !f }' "$TSV" \
+                || strange="$strange $repo"
         done
         [ -z "$missing" ] && good "every game repository in projects.tsv with a game.yml is in games.yml" \
             || bad "game repositories with a game.yml that games.yml does not name:$missing"
