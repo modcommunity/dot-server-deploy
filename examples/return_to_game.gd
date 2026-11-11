@@ -23,9 +23,9 @@ const PLAN := [
 	["smash", true],
 	["hungry_classic", false],
 	["smash", true],
-	["playground", false],
+	["playlot", false],
 	["zombiezone", false],
-	["playground", true],
+	["playlot", true],
 	["zombiezone", true],
 	["hungry_classic", true],
 ]

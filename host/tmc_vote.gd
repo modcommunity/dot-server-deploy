@@ -131,7 +131,7 @@ static func install(
 	var source := DotVoteGameSource.of(p_server.games)
 
 	for id in excluded:
-		source.excluded.append(StringName(id))
+		source.excluded.append(StringName(_current_id(p_server.games.games, str(id))))
 
 	# The rotation's exclusions count towards "is there anything to vote about": a rotation
 	# that leaves one game is a server with one game on offer.
@@ -689,3 +689,17 @@ func rules_summary() -> String:
 		rules.enum_name("method").replace("_", " "),
 		rules.enum_name("tie_break").replace("_", " "),
 	]
+
+
+## The id a game goes by now, for an id an operator wrote: a `vote_exclude: [playground]` written
+## before the rename has to keep the renamed game off the ballot. Unknown ids come back as given.
+static func _current_id(games: Array, id: String) -> String:
+	for descriptor: DotGameDescriptor in games:
+		if descriptor != null and descriptor.game_id == id:
+			return id
+
+	for descriptor: DotGameDescriptor in games:
+		if descriptor != null and TmcContent.answers_to_former(descriptor, id):
+			return descriptor.game_id
+
+	return id

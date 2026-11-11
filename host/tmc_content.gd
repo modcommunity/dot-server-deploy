@@ -93,7 +93,7 @@ static func scan(
 		# [b]The allow list is applied HERE and nowhere else.[/b] Four things read the scanned set -- the
 		# `games` listing, `changelevel`, the vote menu and the boot game -- so a filter applied at any
 		# one of them lets the other three offer a game this server was told not to run.
-		if not allow.is_empty() and not name in allow:
+		if not allow.is_empty() and not name in allow and not _allowed_by_former_id(index.root, name, allow):
 			index.skipped.append("%s (not in the games list)" % name)
 			continue
 
@@ -151,6 +151,47 @@ static func scan(
 	})
 
 	return DotResult.success(index)
+
+
+## True when a games list names this directory's game by an id it had before a rename. A
+## descriptor that cannot be read is left to the skip: the list did not name it.
+static func _allowed_by_former_id(root_dir: String, name: String, allow: PackedStringArray) -> bool:
+	var path := "%s/%s/%s" % [root_dir, name, DESCRIPTOR]
+
+	if not FileAccess.file_exists(path):
+		return false
+
+	var parsed := TmcYaml.parse_file(path)
+
+	if not parsed.ok or not (parsed.value is Dictionary):
+		return false
+
+	var probe := DotGameDescriptor.new()
+	probe.game_id = name
+	probe.metadata = {"former_ids": TmcYaml.at(parsed.value as Dictionary, "metadata.former_ids", [])}
+
+	for wanted in allow:
+		if answers_to_former(probe, wanted):
+			return true
+
+	return false
+
+
+## True when [param game_id] is one of the descriptor's `metadata.former_ids`, exactly or by its
+## name half -- the rule dot-server's DotGameManagerState.find_game applies.
+static func answers_to_former(descriptor: DotGameDescriptor, game_id: String) -> bool:
+	var former: Variant = descriptor.metadata.get("former_ids", [])
+
+	if not (former is Array):
+		return false
+
+	for old: Variant in (former as Array):
+		var spelled := str(old)
+
+		if spelled == game_id or (not game_id.contains("/") and spelled.get_slice("/", spelled.get_slice_count("/") - 1) == game_id):
+			return true
+
+	return false
 
 
 func _build(name: String, tree: Dictionary) -> DotResult:
@@ -321,6 +362,17 @@ func find(game_id: String) -> DotGameDescriptor:
 
 	for descriptor in games:
 		if descriptor.game_id.ends_with("/" + game_id):
+			if found != null:
+				return null
+			found = descriptor
+
+	if found != null:
+		return found
+
+	# A renamed game keeps answering to its old id, so a server.yml or TMC_GAME written for it
+	# still boots it. Exact ids were tried first, so a game that took over the name wins.
+	for descriptor in games:
+		if answers_to_former(descriptor, game_id):
 			if found != null:
 				return null
 			found = descriptor

@@ -401,7 +401,7 @@ game_tickrate() {
     done
     case "$g" in
         arena)             printf 66 ;;
-        g2gfast|playground) printf 128 ;;
+        g2gfast|playlot|playground) printf 128 ;;
         *)                 printf 60 ;;
     esac
 }
@@ -2482,7 +2482,9 @@ if [ "$DO_FULL" -eq 1 ]; then
     # any of that existed can finally be checked. A server whose sv_game names
     # nothing boots into the default game and says so in one line of a log nobody has opened
     # yet, which looks like the setting being ignored.
-    if [ -n "$FULL_GAME" ] && [ ! -f "content/$FULL_GAME/game.yml" ]; then
+    # A renamed game lists its old id under former_ids, and the server still boots it by that id.
+    if [ -n "$FULL_GAME" ] && [ ! -f "content/$FULL_GAME/game.yml" ] \
+        && ! grep -qsE "^[[:space:]]*former_ids:.*[[, ]$FULL_GAME[], ]" content/*/game.yml; then
         have=""
         for gy in content/*/game.yml; do
             [ -f "$gy" ] || continue

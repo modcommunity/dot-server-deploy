@@ -38,7 +38,7 @@ Releasing an addon, a game or a new web shell has an order, and CI refuses a ski
 
 ```bash
 ./play.sh                  # a server and the browser client, on the loopback
-./play.sh playground       # start on a particular game
+./play.sh playlot          # start on a particular game
 ./play.sh games            # what else is in content/
 ./play.sh status
 ./play.sh down
@@ -79,7 +79,7 @@ Windows: `setup.bat` (a shim for `setup.ps1`), then `.\server.ps1`. It takes the
   Return takes the answer in the brackets. Nothing happens until the end.
 
     Server name [TMC Test Server]
-    games here now: arena g2gfast hungry_classic playground
+    games here now: arena g2gfast hungry_classic playlot
     Game to boot [arena]
     Player slots [64]
     Tickrate [60]
@@ -420,7 +420,7 @@ Every one of these was published and booted as a pack — mounted, module loaded
 | --- | --- | --- | --- | --- | --- |
 | `arena` | `games/game-arena` | `dist/arena` — 140 files, 3.1 MiB | `scenes/arena_server.tscn` | `game/arena.tscn` | `game/arena_module.gd` |
 | `g2gfast` | `games/game-g2gfast` | `dist/g2gfast` — 171 files, 3.1 MiB | `scenes/g2g_server.tscn` | `game/g2g.tscn` | `game/g2g_module.gd` |
-| `playground` | `games/game-playground` | `dist/playground` — 76 files, 755 KiB | `scenes/pg_server.tscn` | `game/playground.tscn` | `game/playground_module.gd` |
+| `playlot` | `games/game-playground` | `dist/playground` — 76 files, 755 KiB | `scenes/pg_server.tscn` | `game/playground.tscn` | `game/playground_module.gd` |
 | `hungry_classic` `hungry_frenzy` `hungry_gauntlet` | `games/game-hungario` | `dist/hungry` — 65 files, 644 KiB | `game/modes/<mode>.tscn` | `game/client/hungry_client.tscn` | `game/hungry_module.gd` |
 
 `exclude_dirs` is `addons`, `examples`, `tools`, `screenshots` everywhere, plus `imported` for g2gfast — `maps/imported/` is 66 MB of converted geometry that is published as its own packs, and a game pack carrying it would deliver every map to every player on connect — and `web` for hungario, which has a browser build of its own in the repository.

@@ -799,7 +799,7 @@ func _members_of(wildcard: String) -> PackedStringArray:
 	return out
 
 
-## The section for a descriptor: by its whole id, by its content id, then by its name half.
+## The section for a descriptor: by its whole id, by its content id, by its name half, then by a former id.
 func _section_for(descriptor: DotGameDescriptor) -> Dictionary:
 	return section_in(games, descriptor)
 
@@ -808,7 +808,7 @@ func _section_for(descriptor: DotGameDescriptor) -> Dictionary:
 ## same way and a second copy of the lookup would let the two files disagree about which
 ## game `g2gfast` means.
 static func section_in(sections: Dictionary, descriptor: DotGameDescriptor) -> Dictionary:
-	for key in [descriptor.game_id, descriptor.content_id, _name_half(descriptor.game_id)]:
+	for key in _spellings(descriptor):
 		if key != "" and sections.has(key):
 			return sections[key]
 
@@ -819,19 +819,33 @@ func _matching(content: TmcContent, key: String) -> Array:
 	var out := []
 
 	for descriptor in content.games:
-		if key in [descriptor.game_id, descriptor.content_id, _name_half(descriptor.game_id)]:
+		if key in _spellings(descriptor):
 			out.append(descriptor)
 
 	return out
 
 
-## Whether a `games:` key names any game on this server, by the same three spellings.
+## Whether a `games:` key names any game on this server, by the same spellings.
 static func key_matches_any(key: String, content: TmcContent) -> bool:
 	for descriptor in content.games:
-		if key in [descriptor.game_id, descriptor.content_id, _name_half(descriptor.game_id)]:
+		if key in _spellings(descriptor):
 			return true
 
 	return false
+
+
+## What a `games:` key may call a game: its id, its content id, its name half, then the ids it
+## had before a rename -- after the current ones, so a section for the new id wins.
+static func _spellings(descriptor: DotGameDescriptor) -> Array:
+	var out: Array = [descriptor.game_id, descriptor.content_id, _name_half(descriptor.game_id)]
+	var former: Variant = descriptor.metadata.get("former_ids", [])
+
+	if former is Array:
+		for old: Variant in (former as Array):
+			out.append(str(old))
+			out.append(_name_half(str(old)))
+
+	return out
 
 
 static func _name_half(id: String) -> String:

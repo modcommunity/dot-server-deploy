@@ -15,7 +15,8 @@ chk "setup.sh defines game_tickrate" '[ -n "$fn" ]'
 tbl() ( cd "$(mktemp -d)" && eval "$fn" && game_tickrate "$1" )
 chk "table: arena 66"      '[ "$(tbl arena)" = 66 ]'
 chk "table: g2gfast 128"   '[ "$(tbl g2gfast)" = 128 ]'
-chk "table: playground 128" '[ "$(tbl playground)" = 128 ]'
+chk "table: playlot 128" '[ "$(tbl playlot)" = 128 ]'
+chk "table: playground (its former id) 128" '[ "$(tbl playground)" = 128 ]'
 chk "table: unknown 60"    '[ "$(tbl hungario)" = 60 ]'
 
 # Against the real engine rates, when the sibling repositories are checked out.

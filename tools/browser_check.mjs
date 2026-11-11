@@ -54,7 +54,7 @@ page.on('websocket', ws => {
   sockets.push(ws.url());
 
   // A server BROWSER queries servers that may be down, and a refused query is the
-  // correct outcome of asking — game-playground seeds `127.0.0.1:27015` on a first run
+  // correct outcome of asking — game-playlot seeds `127.0.0.1:27015` on a first run
   // because that is where a launcher puts a server, and nothing is listening there on a
   // developer's machine. Counting that as a failure made this check cry wolf, and a
   // check that always reports one failure is a check whose failures stop being read.

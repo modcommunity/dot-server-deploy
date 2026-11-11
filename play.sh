@@ -3,7 +3,7 @@
 # play.sh -- a game server and the browser client, on this machine, in one command.
 #
 #   ./play.sh                 start both and print the link
-#   ./play.sh playground      start on that game instead of the default
+#   ./play.sh playlot         start on that game instead of the default
 #   ./play.sh down            stop what this started
 #   ./play.sh status          what is running
 #   ./play.sh games           what can be played
