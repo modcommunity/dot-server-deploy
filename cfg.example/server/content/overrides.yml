@@ -79,7 +79,7 @@ defaults:
 games:
   game-g2gfast:
     maps:
-      # The bhop and surf courses, one pack each, from github.com/zees-games/g2gfast-maps.
+      # The bhop and surf courses, one pack each, from github.com/zees-games/airdrift-maps.
       # Left out: bhop_eazy, bhop_lego2 and buses_from_hell_fixed have no finish line;
       # bhop_arcane_v2 carries a texture the publisher refuses; surf_quilavar and
       # surf_beginner are not published yet.
@@ -113,7 +113,7 @@ games:
 
   game-arena:
     maps:
-      # The combat surf maps, one pack each, from github.com/zees-games/arena-surf-dm-maps.
+      # The combat surf maps, one pack each, from github.com/zees-games/fc-surf-dm-maps.
       # Its three built-in maps need no pack.
       add:
         - gamemann/arena-surf-dm-maps-surf_10x_final
@@ -155,7 +155,7 @@ games:
         - gamemann/arena-surf-dm-maps-surf_torque2
         - gamemann/arena-surf-dm-maps-surf_velocity
         - gamemann/arena-surf-dm-maps-surf_xiv_v2a
-        # The deathmatch and gun game maps, one pack each, from github.com/zees-games/arena-dm-maps.
+        # The deathmatch and gun game maps, one pack each, from github.com/zees-games/fc-dm-maps.
         - gamemann/aim-forts
         - gamemann/blackhawkdown
         - gamemann/dm-hot-cn-v1
