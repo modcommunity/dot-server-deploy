@@ -20,6 +20,28 @@ GODOT="${GODOT:-godot}"
 RED=$'\033[31m'; GRN=$'\033[32m'; YLW=$'\033[33m'; OFF=$'\033[0m'
 fails=0
 
+# [b]An unprovisioned checkout (a fresh worktree, the PH copy) has no cfg/ and no ./server.[/b]
+# Both are gitignored products of setup.sh, so the boot checks below used to fail with "no
+# config directory ... (run ./setup.sh)" on every such box. setup.sh itself cannot be run
+# here (it links or clones every addon repository, and a worktree has them only as links),
+# so write the two products it makes for this purpose: cfg/ from the templates, never
+# overwriting a file, and ./server from tools/server.in (setup.sh step "configuration" and
+# its `sed ... tools/server.in > server`). Anything past that is setup.sh's, not this.
+if [ ! -d cfg ] || [ ! -x ./server ]; then
+    echo "provisioning (cfg/ and ./server are missing)"
+    mkdir -p cfg content/global data
+    cp -rn cfg.example/. cfg/ 2>/dev/null
+    if [ ! -x ./server ] && [ -f tools/server.in ]; then
+        sed "s|@GODOT@|$(command -v "$GODOT")|g" tools/server.in > server && chmod +x server
+    fi
+    if [ -d cfg/server ] && [ -x ./server ]; then
+        printf '  %sok%s   cfg/ and ./server written (what setup.sh --no-games would write)\n' "$GRN" "$OFF"
+    else
+        printf '  %sFAIL%s could not write cfg/ and ./server\n' "$RED" "$OFF"
+        fails=$((fails + 1))
+    fi
+fi
+
 echo "importing"
 "$GODOT" --headless --path . --import >/dev/null 2>&1
 
@@ -129,6 +151,7 @@ game_was_skipped() {
 drift=0
 checked_any=0
 skipped_note=""
+nodist_note=""
 
 for entry in "${GAME_ENTRIES[@]}"; do
     repo="${entry%%:*}"
@@ -178,7 +201,13 @@ for entry in "${GAME_ENTRIES[@]}"; do
     [ -n "$cid" ] || cid="$dir"
 
     manifest="dist/$cid/manifest.json"
-    if [ ! -f "$manifest" ]; then
+    if [ ! -d dist ]; then
+        # [b]No dist/ at all means setup.sh never built packs here[/b] (a fresh worktree, the
+        # PH copy), which says nothing about whether this game publishes. Said out loud and
+        # counted separately. Once dist/ exists a missing manifest is still a FAIL.
+        nodist_note="$nodist_note $dir"
+        continue
+    elif [ ! -f "$manifest" ]; then
         printf '  %sFAIL%s %s is not published (no %s); re-run ./setup.sh\n' \
             "$RED" "$OFF" "$dir" "$manifest"
         drift=$((drift + 1))
@@ -211,12 +240,15 @@ if [ "$checked_any" -eq 0 ]; then
     # running -- which is exactly how the old copy-staleness guard went stale.
     printf '  %sok%s   no game repositories on this machine; staleness not checked\n' \
         "$GRN" "$OFF"
-elif [ "$drift" -eq 0 ]; then
+elif [ "$drift" -eq 0 ] && [ -z "$nodist_note" ]; then
     printf '  %sok%s   every game is published (staleness is reported as WARN above)\n' \
         "$GRN" "$OFF"
-else
+elif [ "$drift" -ne 0 ]; then
     fails=$((fails + drift))
 fi
+
+[ -n "$nodist_note" ] && printf '  %sSKIP%s no dist/ here (setup.sh has not built packs), so not checked:%s\n' \
+    "$YLW" "$OFF" "$nodist_note"
 
 # Printed whatever the verdict was, and printed at all because "every game is published"
 # over a build missing two of them is true and misleading in the same line.
