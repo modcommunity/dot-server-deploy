@@ -12,6 +12,7 @@ const BUSES_GAME := &"bfh_game"
 const CONFIG := "res://examples/fixtures/multigame"
 const CONTENT := "res://content"
 const DATA := "user://tmc_multigame"
+const PublishedPacks := preload("res://examples/published_packs.gd")
 
 ## Every check this suite runs, including the one that compares against it. The section
 ## counter cannot see a section that aborted after announcing itself — its remaining checks
@@ -37,6 +38,11 @@ func _ready() -> void:
 
 func _run() -> void:
 	print("dot-server-deploy: changing games")
+
+	if not PublishedPacks.has("tmc/buses"):
+		print("skipped: tmc/buses is not published in dist/ (./setup.sh, or ./server pack buses --source games/mg-buses-from-hell)")
+		get_tree().quit(0)
+		return
 
 	DotPaths.remove_tree(DATA)
 
