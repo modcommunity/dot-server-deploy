@@ -243,7 +243,11 @@ func _test_connect() -> bool:
 	_client_side.add_child(_link)
 
 	_link.spawned.connect(func() -> void: _spawned[0] = true)
-	_link.disconnected.connect(func(reason: String) -> void: _refused[0] = reason)
+	# The first reason is the one a player is shown: the server's notice, then the transport's own
+	# "Connection to the server was lost." as the socket closes behind it, which must not replace it.
+	_link.disconnected.connect(func(reason: String) -> void:
+		if _refused[0] == "":
+			_refused[0] = reason)
 
 	var connecting: DotResult = await _link.connect_to_server("127.0.0.1:%d" % _host.config.server.port)
 

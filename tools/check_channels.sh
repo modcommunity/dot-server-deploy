@@ -57,11 +57,14 @@ CHANNEL=stable; lock_moved && bad "stable: no tag still moved" || ok "stable: no
 
 # the launcher accepts and rejects the values (a fresh launcher from server.in, as setup.sh writes it)
 L="$PWD/.channels-launcher.$$"; sed "s|@GODOT@|$(command -v godot)|g" "$SRC" >"$L"; chmod +x "$L"; trap 'rm -rf "$W" "$L"' EXIT
+# A port nothing listens on: the launcher refuses a busy one before it looks at anything else, and
+# the default 6064 is a real server's on a shared box (PH ran four of these at once).
+P="$(python3 -c 'import socket; s = socket.socket(); s.bind(("", 0)); print(s.getsockname()[1])' 2>/dev/null || echo 47613)"
 for v in latest @latest stable @stable; do
-    out="$(TMC_NO_INSTALL=1 TMC_AUTO_UPDATE=never TMC_CHANNEL=$v "$L" --dry-run 2>&1)"; rc=$?
+    out="$(TMC_NO_INSTALL=1 TMC_AUTO_UPDATE=never TMC_CHANNEL=$v "$L" --port "$P" --dry-run 2>&1)"; rc=$?
     [ $rc -eq 0 ] && ok "launcher accepts TMC_CHANNEL=$v" || bad "launcher refused TMC_CHANNEL=$v: $(printf '%s' "$out" | tail -1)"
 done
-out="$(TMC_NO_INSTALL=1 TMC_AUTO_UPDATE=never "$L" --channel beta --dry-run 2>&1)"; rc=$?
+out="$(TMC_NO_INSTALL=1 TMC_AUTO_UPDATE=never "$L" --port "$P" --channel beta --dry-run 2>&1)"; rc=$?
 [ $rc -ne 0 ] && printf '%s' "$out" | grep -q "latest or stable" && ok "launcher refuses --channel beta" || bad "launcher accepted --channel beta"
 
 [ "$fails" -eq 0 ]
