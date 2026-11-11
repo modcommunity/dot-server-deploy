@@ -1312,6 +1312,18 @@ do_export_native() {
 
   ./setup.sh does this for you." 5
 
+    # The native library for each machine being built (dot-sim): tools/fetch-natives.sh,
+    # dot-bootstrap's fetcher. Never export-web.
+    local nplat=()
+    for t in "${targets[@]}"; do
+        case "$t" in
+            linux)   nplat+=(--platform linux-x86_64) ;;
+            windows) nplat+=(--platform windows-x86_64) ;;
+            macos)   nplat+=(--platform macos-arm64 --platform macos-x86_64) ;;
+        esac
+    done
+    "$PROJECT/tools/fetch-natives.sh" "${nplat[@]}" || warn "native libraries: see above (the build runs GDScript)"
+
     [ -n "$BUILD_VERSION" ] || BUILD_VERSION="1.$(date -u +%Y%m%d).$(date -u +%H%M)"
 
     # Godot caches its text->binary scene conversions in .godot/exported/, and --import
@@ -1466,6 +1478,12 @@ case "$COMMAND" in
         # Shared with `export-native`, which excludes the same directory for the same
         # reason -- the story that put the check here is on the function.
         check_excluded_maps "$PROJECT/web/build/index.pck"
+        # A .gdextension in a web build stops every script. The preset excludes it; a box
+        # whose export_presets.cfg is an older copy would ship the unpacked natives.
+        if grep -qaF '.gdextension' "$PROJECT/web/build/index.pck"; then
+            rm -f "$PROJECT/web/build/index.pck"
+            die "the Web export carries a .gdextension (the unpacked native library); add *.gdextension and addons/*/bin/* to the Web preset's exclude_filter (export_presets.example.cfg has it)." 3
+        fi
         check_lock_exported "$PROJECT/web/build/index.pck"
 
         # 3D textures to lossy WebP for the browser only; desktop keeps the addons' lossless
