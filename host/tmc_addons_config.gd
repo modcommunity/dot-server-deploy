@@ -19,6 +19,12 @@ const SECTION_KEYS: PackedStringArray = ["add", "remove"]
 ## `defaults: add:`, as written (`owner/pack` or `owner/pack@version`).
 var defaults_add: PackedStringArray = PackedStringArray()
 
+## `namespaces:`, extra owners (`owner/`) or ids whose packs may replace a shell's addons, as written. The same list belongs in the operator's own shell build ([TmcAddonNamespaces]).
+var namespaces: PackedStringArray = PackedStringArray()
+
+## `overlays:`, `owner/repo@version` addon packs to announce to clients beyond `addons.lock`.
+var overlays: PackedStringArray = PackedStringArray()
+
 ## `games:`, game key as written -> `{"add": PackedStringArray, "remove": PackedStringArray}`.
 var games: Dictionary = {}
 
@@ -60,7 +66,7 @@ static func load_from(config_dir: String, data_dir: String) -> DotResult:
 ## Takes a parsed `content/addons.yml` apart, refusing what it would otherwise have to guess at.
 func read(tree: Dictionary) -> DotResult:
 	for key: String in tree:
-		if not key in ["defaults", "games", "entries", "merge", "remove"]:
+		if not key in ["defaults", "games", "namespaces", "overlays", "entries", "merge", "remove"]:
 			return DotResult.fail(
 				DotError.CODE_INVALID,
 				"Unknown top-level key '%s'." % key,
@@ -87,6 +93,27 @@ func read(tree: Dictionary) -> DotResult:
 
 		defaults_add = added.value
 
+	var spaces := _read_namespaces(tree.get("namespaces", []))
+
+	if not spaces.ok:
+		return spaces
+
+	namespaces = spaces.value
+	var over := _read_list("overlays", "overlays", tree.get("overlays", []))
+
+	if not over.ok:
+		return over
+
+	for entry in (over.value as PackedStringArray):
+		var ref := TmcGameRef.parse(entry)
+
+		if str(ref["version"]) == "" or not TmcAddonNamespaces.covers(TmcAddonNamespaces.resolve(namespaces), str(ref["id"])):
+			return DotResult.fail(
+				DotError.CODE_INVALID, "overlays: %s needs @version and an owner listed under namespaces:." % entry,
+				"a creator's addon is announced only when its owner is trusted"
+			)
+
+	overlays = over.value
 	var listed: Variant = tree.get("games", {})
 
 	if listed == null or (listed is String and str(listed) == ""):
@@ -307,6 +334,44 @@ func _read_list(where: String, field: String, value: Variant) -> DotResult:
 			out.append(str(one.value))
 
 	return DotResult.success(out)
+
+
+func _read_namespaces(value: Variant) -> DotResult:
+	var out := PackedStringArray()
+
+	if value == null or (value is String and str(value) == ""):
+		return DotResult.success(out)
+
+	if not (value is Array):
+		return DotResult.fail(DotError.CODE_INVALID, "namespaces: must be a list of owner/ or owner/repo.")
+
+	for raw in value:
+		var entry := str(raw).strip_edges()
+
+		if not TmcAddonNamespaces.is_valid(entry):
+			return DotResult.fail(
+				DotError.CODE_INVALID, "namespaces: '%s' is not owner/ or owner/repo." % entry,
+				"no wildcards; an owner ends in a slash"
+			)
+
+		if not out.has(entry):
+			out.append(entry)
+
+	return DotResult.success(out)
+
+
+## `{dir, repo, id, version}` for each `overlays:` entry, in the shape `addon_set_from` returns.
+## The directory is the repository with underscores for dashes, the inverse of `TmcHost.addon_repo`.
+func overlay_set() -> Array:
+	var out: Array = []
+
+	for entry in overlays:
+		var ref := TmcGameRef.parse(entry)
+		var id := str(ref["id"])
+		var repo := id.get_slice("/", 1)
+		out.append({"dir": repo.replace("-", "_"), "repo": repo, "id": id, "version": str(ref["version"]).trim_prefix("v")})
+
+	return out
 
 
 static func _id_of(entry: String) -> String:

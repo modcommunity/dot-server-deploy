@@ -35,3 +35,8 @@
 # games:
 #   game-g2gfast:
 #     add: [someone/speedrun-hud@1.0.0]
+
+# Creator addons that REPLACE a shell's own addon (rare; read docs/addon-packs.md first):
+#   namespaces: [alice/]               owners you trust; put the same lines in cfg/addons/namespaces.txt of the shell you export
+#   overlays: [alice/dot-ui@1.0.0]     announced to clients next to addons.lock's set; needs @version and a listed owner
+# A stock shell never takes these: only a shell built with the namespace file does.

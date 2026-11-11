@@ -132,9 +132,7 @@ var _joining := false
 ## number here because the link does it in one synchronous call.
 var _join_marks: Dictionary = {}
 
-## Whose packs may replace this build's addons: the organisation's, and the one addon that
-## is not theirs (the weapons pack, published under its author). See [DotCloudAddonSet].
-const ADDON_NAMESPACES := ["modcommunity/", "gamemann/zee-dot-weapons", "gamemann/arena-weapons"]
+## Whose packs may replace this build's addons is [TmcAddonNamespaces] (first-party defaults plus the operator's `cfg/addons/namespaces.txt`). See [DotCloudAddonSet].
 
 ## Set while newer addons are being fetched for the server just left.
 var _addons_updating := false
@@ -1464,7 +1462,7 @@ func _on_server_info(_challenge: Dictionary, target: String) -> void:
 		return
 
 	var addons := DotCloudAddonSet.new(_cloud)
-	addons.namespaces = PackedStringArray(ADDON_NAMESPACES)
+	addons.namespaces = TmcAddonNamespaces.load_shell()
 	var decided := addons.plan_for(link.server_addons)
 	var refused: Dictionary = decided["refused"]
 

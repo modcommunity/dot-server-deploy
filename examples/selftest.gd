@@ -11,7 +11,7 @@ const RoundsWithoutMatch := preload("res://examples/fixtures/rounds_without_matc
 
 const Host := preload("res://host/tmc_host.gd")
 
-const CHECKS := 481
+const CHECKS := 488
 
 var _passed := 0
 var _failed := 0
@@ -791,6 +791,20 @@ func _test_addon_announce() -> void:
 	_check(out.size() == 1 and out[0]["repo"] == "dot-core", "a repository whose site id is a data pack is not announced as an addon")
 	_check(out[0]["id"] == "modcommunity/dot-core" and out[0]["version"] == "0.1.30", "the others keep id and version")
 	_check(Host.addon_set_from(lock, PackedStringArray(["arena_weapons"])).is_empty(), "nothing left to announce is an empty set")
+
+	var cfg := TmcAddonsConfig.new()
+	var bad := cfg.read({"overlays": ["alice/dot-x@1.0.0"]})
+	_check(not bad.ok, "an overlay whose owner is not under namespaces: is refused")
+	cfg = TmcAddonsConfig.new()
+	_check(cfg.read({"namespaces": ["alice/"], "overlays": ["alice/dot-x@v1.0.0"]}).ok, "a trusted owner's overlay is read")
+	var mixed := Host.merge_overlays(out, cfg.overlay_set())
+	_check(mixed.size() == 2 and mixed[1]["dir"] == "dot_x" and mixed[1]["id"] == "alice/dot-x" and mixed[1]["version"] == "1.0.0", "the overlay is announced beside the lock's set")
+	_check(not TmcAddonsConfig.new().read({"namespaces": ["*"]}).ok and not TmcAddonsConfig.new().read({"namespaces": ["alice"]}).ok, "a wildcard or a bare name is not a namespace")
+
+	var spaces := TmcAddonNamespaces.resolve(PackedStringArray(["alice/", "bad entry", "modcommunity/"]))
+	_check(spaces.size() == 4 and TmcAddonNamespaces.covers(spaces, "alice/dot-x") and not TmcAddonNamespaces.covers(spaces, "alicia/dot-x"), "operator namespaces extend the defaults; owner prefix needs the slash")
+	_check(TmcAddonNamespaces.parse_lines("# c\nalice/ # me\n\n") == PackedStringArray(["alice/"]), "the namespaces file is one entry per line with comments")
+	_check(TmcAddonNamespaces.covers(TmcAddonNamespaces.DEFAULTS, "gamemann/arena-weapons") and not TmcAddonNamespaces.covers(TmcAddonNamespaces.DEFAULTS, "gamemann/arena-weapons-evil"), "the defaults keep their exact-id entries exact")
 
 	var pins: Variant = JSON.parse_string(Host.pack_pins_json(out, {"modcommunity/dot-core": "9.9.9", "ow/map_a": "1.0.0"}))
 	_check(pins is Dictionary and pins.get("ow/map_a") == "1.0.0" and pins.get("modcommunity/dot-core") == "9.9.9", "sv_pack_pins lists mounted packs, and what is mounted wins over the lock")
