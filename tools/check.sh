@@ -26,6 +26,19 @@ fi
 RED=$'\033[31m'; GRN=$'\033[32m'; YLW=$'\033[33m'; OFF=$'\033[0m'
 fails=0
 
+# [b]A suite that boots a delivered game needs that game's signed pack in dist/.[/b] A fresh worktree
+# has no dist/ (setup.sh builds it), and the host then looks for res://content/<id>/manifest.json and
+# the origin, finds neither and the boot "fails" for a reason that is the box's, not the code's. Same
+# rule as the published-games check above: no pack here is a SKIP, a broken one is still a FAIL.
+# Usage: if have_packs smash; then <run the suite>; fi
+have_packs() {
+    local id missing=""
+    for id in "$@"; do [ -f "dist/tmc/$id/manifest.json" ] || missing="$missing tmc/$id"; done
+    [ -z "$missing" ] && return 0
+    printf '  %sSKIP%s needs a pack that dist/ lacks here (./setup.sh builds it):%s\n' "$YLW" "$OFF" "$missing"
+    return 1
+}
+
 # [b]Prerequisites of a clean worktree.[/b] A fresh worktree gets addons/ as copies or links
 # of whatever the main checkout holds, which can be stale (an old dot_cloud makes client/shell.gd
 # fail to parse). When the sibling dot-* repositories exist, relink addons/ to them, and let
@@ -477,7 +490,7 @@ echo "changing games under a live client"
 # globals are registered.
 echo
 echo "a real client in a delivered game"
-"$GODOT" --headless --path . res://examples/smash_client.tscn || fails=$((fails + 1))
+if have_packs smash; then "$GODOT" --headless --path . res://examples/smash_client.tscn || fails=$((fails + 1)); fi
 echo
 # The template a third-party developer starts from, packaged by dot-ci's package.sh the way its
 # release packages it, signed the way the site signs a -pack.zip, and joined by a real client
@@ -515,7 +528,7 @@ timeout 300 "$GODOT" --headless --path . res://examples/lookatme_client.tscn || 
 # server sent resolved to the dead one. Nothing errored anywhere.
 echo
 echo "reconnecting after the server restarts"
-"$GODOT" --headless --path . res://examples/reconnect.tscn || fails=$((fails + 1))
+if have_packs buses; then "$GODOT" --headless --path . res://examples/reconnect.tscn || fails=$((fails + 1)); fi
 
 # Back to a game this process already ran: its own RPC link must carry inputs and snapshots,
 # for the client that followed and for a fresh joiner. Every other suite asks only whether
@@ -532,7 +545,7 @@ timeout 600 "$GODOT" --headless --path . res://examples/return_to_game.tscn < /d
 # multigame.
 echo
 echo "the game vote on the shell's HUD"
-"$GODOT" --headless --path . res://examples/shell_notice.tscn < /dev/null || fails=$((fails + 1))
+if have_packs buses; then "$GODOT" --headless --path . res://examples/shell_notice.tscn < /dev/null || fails=$((fails + 1)); fi
 
 # The shell's aggregate download line in English and German, and every locale carrying every
 # progress key. Armed: a key dropped from one locale, or the line built from literals, fails.
@@ -569,7 +582,7 @@ timeout 600 "$GODOT" --headless --path . res://examples/game_vote_rounds.tscn < 
 # with the rechain disabled, two of its checks fail.
 echo
 echo "parties, bookings and party chat"
-"$GODOT" --headless --path . res://examples/party_live.tscn < /dev/null || fails=$((fails + 1))
+if have_packs buses; then "$GODOT" --headless --path . res://examples/party_live.tscn < /dev/null || fails=$((fails + 1)); fi
 
 # The admin menu and the loading screen. The first suite is both halves against stand-ins
 # and needs nothing; the second is the real shell on a real socket -- /admin from chat, a
@@ -579,7 +592,7 @@ echo "parties, bookings and party chat"
 echo
 echo "the admin menu and the loading screen"
 "$GODOT" --headless --path . res://examples/admin_loading_selftest.tscn || fails=$((fails + 1))
-"$GODOT" --headless --path . res://examples/admin_live.tscn < /dev/null || fails=$((fails + 1))
+if have_packs buses; then "$GODOT" --headless --path . res://examples/admin_live.tscn < /dev/null || fails=$((fails + 1)); fi
 echo
 echo "dot-trail's install (addon linked or not)"
 "$GODOT" --headless --path . res://examples/trail_wiring.tscn || fails=$((fails + 1))
@@ -590,9 +603,12 @@ if [ -n "$cfg_aside" ]; then mv "$cfg_aside" cfg; cfg_aside=""; fi
 if [ -x ./server ]; then
     echo
     echo "booting"
-    ./server check >/dev/null 2>&1 \
+    # The default game is fatalcontact, whose pack is dist/tmc/arena.
+    if have_packs arena; then
+        ./server check >/dev/null 2>&1 \
         && printf '  %sok%s   the server boots, loads its default game, and shuts down\n' "$GRN" "$OFF" \
         || { printf '  %sFAIL%s ./server check\n' "$RED" "$OFF"; fails=$((fails + 1)); }
+    fi
 else
     printf '  %s--%s   ./server is not built; run ./setup.sh\n' "$RED" "$OFF"
 fi
