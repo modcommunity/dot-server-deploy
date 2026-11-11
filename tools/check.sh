@@ -52,9 +52,11 @@ echo "importing"
 # clean scripts as parse failures, which is the way a guard stops being read.
 # Hence ( were )? rather than the literal 4.4 wording.
 echo "parsing"
+# A loaded GDExtension (dot-sim, tools/fetch-natives.sh) prints its "Initialize godot-rust" banner
+# on every run; it is not a script's output.
 while read -r f; do
     out="$("$GODOT" --headless --path . --check-only --script "res://${f#./}" 2>&1 \
-        | grep -Ev '^(Godot Engine v|$)' \
+        | grep -Ev '^(Godot Engine v|Initialize godot-rust |$)' \
         | grep -Eiv 'ObjectDB instances( were)? leaked|resources still in use|Pages in use exist at exit|at: (cleanup|clear|~PagedAllocator)')"
     if [ -n "$out" ]; then
         printf '  %sFAIL%s %s\n%s\n' "$RED" "$OFF" "$f" "$out"
