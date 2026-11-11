@@ -2095,7 +2095,12 @@ func _prefetch_solo(content_id: String, version: String) -> void:
 	if not game.ok:
 		return
 	var manifest := game.value as DotCloudManifest
-	await _cloud.job_register_manifest(manifest)
+	var all_groups := PackedStringArray(["*"]) # solo has no server to say which map, so total every group
+	var takes_groups := DotAddonApi.build_level("dot_cloud") >= 23
+	if takes_groups:
+		await _cloud.job_register_manifest(manifest, all_groups)
+	else:
+		await _cloud.job_register_manifest(manifest)
 
 	var keys := PackedStringArray()
 	var accepts := {}
@@ -2125,7 +2130,10 @@ func _prefetch_solo(content_id: String, version: String) -> void:
 			ver = str(latest.value["version"])
 		refs.append({"id": id, "version": ver})
 	if not refs.is_empty():
-		await _cloud.job_register(refs)
+		if takes_groups:
+			await _cloud.job_register(refs, all_groups)
+		else:
+			await _cloud.job_register(refs)
 
 	if not accepts.is_empty():
 		var workshop := _ensure_workshop()
