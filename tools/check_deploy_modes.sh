@@ -17,7 +17,7 @@ check() { if "${@:2}" >/dev/null 2>&1; then good "$1"; else bad "$1"; fi; }
 
 T="$(mktemp -d)"
 trap 'rm -rf "$T"' EXIT
-ARGS=(--name "Check server" --game arena --games gamemann/game-g2gfast --port 6100 --max-players 16)
+ARGS=(--name "Check server" --game fatalcontact --games gamemann/game-g2gfast --port 6100 --max-players 16)
 
 # Dry run: the plan is printed, nothing exists afterwards.
 for m in compose pterodactyl; do

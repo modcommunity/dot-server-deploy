@@ -46,9 +46,9 @@ loading_show_delay_sec: 0.25
 #     images: ["https://example.com/loading/surf.jpg"]
 #     tips:
 #       - "Hold space to bunny hop."
-#   arena:
-#     image: "https://example.com/loading/arena.jpg"
-#     music: "https://example.com/loading/arena.ogg"
+#   fatalcontact:
+#     image: "https://example.com/loading/fatalcontact.jpg"
+#     music: "https://example.com/loading/fatalcontact.ogg"
 
 # --- Per map, by map id ----------------------------------------------------------------
 #

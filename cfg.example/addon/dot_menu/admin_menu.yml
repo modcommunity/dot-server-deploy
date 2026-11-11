@@ -18,7 +18,7 @@
 # "Everyone else", and the players you cannot outrank are skipped and counted.
 #
 # GAMES ADD THEIR OWN. A game's game.yml can carry `metadata: admin_menu:` in the same
-# shape as this file (see content/arena/game.yml), and a game's code can add items and
+# shape as this file (see content/fatalcontact/game.yml), and a game's code can add items and
 # lists while it is loaded. They appear under a category named after the game, and go
 # when the game changes. Everything in THIS file is applied last, so you can rename or
 # remove a game's items here too.

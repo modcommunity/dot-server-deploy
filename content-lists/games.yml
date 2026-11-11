@@ -10,7 +10,7 @@ entries:
   - repo: game-playground
     content: playlot
   - repo: game-arena
-    content: arena
+    content: fatalcontact
   - repo: mg-buses-from-hell
     content: buses
   - repo: mg-smash-copter

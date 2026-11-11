@@ -57,7 +57,7 @@ Each entry is `<owner>/<name>` with optional `@<version>`/`@latest`. **`install-
 
 On such a box `setup.sh` would clone, import and publish every game for nothing, and generate a content signing key on a machine that should only consume signed content.
 
-- **`--only-games` is a trap here.** The addon list is derived from the games being built, so `--only-games g2gfast` links g2gfast's addons and unlinks the rest; the first time somebody adds `arena` to `TMC_GAMES` it downloads, mounts, and fails to compile. A box that decides at runtime which games it runs cannot know at install time which addons they need.
+- **`--only-games` is a trap here.** The addon list is derived from the games being built, so `--only-games g2gfast` links g2gfast's addons and unlinks the rest; the first time somebody adds `fatalcontact` to `TMC_GAMES` it downloads, mounts, and fails to compile. A box that decides at runtime which games it runs cannot know at install time which addons they need.
 - **`--no-games` is the right flag.** It sets `GAMES=()` plus `PUBLISHED_GAMES=1`, the existing "publish nothing" statement: no keygen, no import, no pack, and the addon derivation falls back to the full `ADDONS_ALL`.
 - A map nobody published cannot be found: g2gfast's `maps/imported/` travels as one pack per map, so an origin serving the game and not its maps gives a server that logs `could not fetch the map …` and carries on.
 

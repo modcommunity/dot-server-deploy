@@ -1,6 +1,6 @@
 # The constraint that decides what a delivered game may look like
 
-**This build contains no game.** Every game id is `kind: pack`: `setup.sh` turns each game repository into a signed dot-cloud pack in `dist/` (`./server pack <id> --source <repo>`), the server finds it there by content id, and a client downloads it on connect. A built-in game would be a game that has to be re-exported to change, and a client that contains one game contains the machinery for all of them. When nothing names a game the server boots `arena` (`default: true` in its `game.yml`).
+**This build contains no game.** Every game id is `kind: pack`: `setup.sh` turns each game repository into a signed dot-cloud pack in `dist/` (`./server pack <id> --source <repo>`), the server finds it there by content id, and a client downloads it on connect. A built-in game would be a game that has to be re-exported to change, and a client that contains one game contains the machinery for all of them. When nothing names a game the server boots `fatalcontact` (`default: true` in its `game.yml`).
 
 ## The root cause
 

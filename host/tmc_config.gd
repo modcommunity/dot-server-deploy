@@ -936,7 +936,7 @@ func _apply_settings(file: String, tree: Dictionary) -> DotResult:
 			continue
 
 		if name == "games":
-			# A list, or one string, as `content_urls` below takes either (`games: arena` is what an operator with one game writes).
+			# A list, or one string, as `content_urls` below takes either (`games: fatalcontact` is what an operator with one game writes).
 			# Not a console line: dot-server has no cvar for the set of games a host offers; `sv_game` picks one OF these, so the two spellings are deliberately unalike.
 			# Each entry through TmcGameRef, as the command-line override is, so `gamemann/game-g2gfast01@1.2.0` in a file means the same directory as in a panel field.
 			if value is Array:

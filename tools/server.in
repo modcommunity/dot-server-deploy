@@ -282,7 +282,7 @@ usage() {
 
   Anything after -- is handed to the server console once it is up:
 
-    ./server -- +sv_cheats 1 +changelevel arena
+    ./server -- +sv_cheats 1 +changelevel fatalcontact
 
   With one exception, and it is the one worth knowing: `+map ID` is read by the
   HOST, not by the console. The console's +command half runs when the listener
@@ -545,7 +545,7 @@ yield_to_file OPT_GAMES games --games TMC_GAMES "$(cfg_lists games)"
 # [b]The list reaches the SERVER too, and not only the installer.[/b] Installing the two
 # games this box is for does not by itself stop it offering the eight already sitting in
 # its content directory -- a development tree, a box that was reinstalled onto, or any
-# checkout of this repository has all of them -- so a panel that says "arena, g2gfast"
+# checkout of this repository has all of them -- so a panel that says "fatalcontact, g2gfast"
 # would be describing a server whose vote menu offered ten. `keep` is the one mode that
 # deliberately does not narrow it.
 HIDE_GAMES="$OPT_GAMES"
@@ -965,7 +965,7 @@ has_listed_packs() {
 ## 0 everything asked for is here, 2 none of it is, 3 some of it is not.
 do_install_games() {
     if [ -z "$OPT_GAMES" ]; then
-        note "no games list: TMC_GAMES, --games arena,g2gfast, or packs in cfg/content/games.yml"
+        note "no games list: TMC_GAMES, --games fatalcontact,g2gfast, or packs in cfg/content/games.yml"
         note "without one this server offers whatever is already in $CONTENT_DIR"
         # The maps an owner added still need a version each; the tool resolves only those.
         has_owner_maps || has_owner_addons || has_listed_packs || return 0

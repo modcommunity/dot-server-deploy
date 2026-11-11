@@ -17,7 +17,7 @@ const CONTENT := "res://content"
 const DATA := "user://tmc_game_vote_rounds"
 const SHELL := "res://client/shell.tscn"
 
-const ORDER := ["arena", "smash", "prophunt", "buses"]
+const ORDER := ["fatalcontact", "smash", "prophunt", "buses"]
 
 ## The packs the games need, prophunt's maps among them.
 const NEEDS := ["tmc/arena", "tmc/smash", "tmc/prophunt", "tmc/prophunt_maps", "tmc/buses"]
@@ -26,7 +26,7 @@ const NEEDS := ["tmc/arena", "tmc/smash", "tmc/prophunt", "tmc/prophunt_maps", "
 ## `fixtures/game_vote_rounds/content.yml`, read back off the running match's [DotMatchRules]. One
 ## check per game listed.
 const RULES := {
-	"arena": {"score_limit": 50, "time_limit_sec": 50.0, "warmup_sec": 0.0},
+	"fatalcontact": {"score_limit": 50, "time_limit_sec": 50.0, "warmup_sec": 0.0},
 }
 
 ## Games whose one person is the hunted and would end a round early by being caught: given an
@@ -73,7 +73,7 @@ func _run() -> void:
 	for id: String in NEEDS:
 		if not FileAccess.file_exists("res://dist/%s/manifest.json" % id):
 			print("skipped: dist/%s is not published here" % id)
-			print("  ./server pack arena --source games/game-arena")
+			print("  ./server pack fatalcontact --source games/game-arena")
 			print("  ./server pack smash --source games/mg-smash-copter")
 			print("  ./server pack prophunt_maps --source games/mg-prop-hunt-maps")
 			print("  ./server pack prophunt --source games/mg-prop-hunt")

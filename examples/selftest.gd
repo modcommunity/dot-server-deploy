@@ -11,7 +11,7 @@ const RoundsWithoutMatch := preload("res://examples/fixtures/rounds_without_matc
 
 const Host := preload("res://host/tmc_host.gd")
 
-const CHECKS := 477
+const CHECKS := 479
 
 var _passed := 0
 var _failed := 0
@@ -1811,6 +1811,7 @@ func _test_former_game_id() -> void:
 	if not _check(all.ok, "the shipped content scans", str(all.error)):
 		_check(false, "(skipped)"); _check(false, "(skipped)"); _check(false, "(skipped)")
 		_check(false, "(skipped)"); _check(false, "(skipped)"); _check(false, "(skipped)")
+		_check(false, "(skipped)"); _check(false, "(skipped)")
 		_done()
 		return
 
@@ -1832,6 +1833,17 @@ func _test_former_game_id() -> void:
 		if found != null else false, "and a section under the new id wins over the old")
 	_check(TmcVote._current_id(content.games, "playground") == "playlot",
 		"vote_exclude: [playground] keeps playlot off the ballot")
+
+	# arena was renamed fatalcontact the same way, and it is the default game besides.
+	var dm := content.find("arena")
+	_check(dm != null and dm.game_id == "fatalcontact" and content.default_game == "fatalcontact",
+		"find(\"arena\") is fatalcontact, still the default game",
+		(dm.game_id if dm != null else "null") + " default " + content.default_game)
+	var dm_only := TmcContent.scan("res://content", PackedStringArray(["arena"]))
+	var dm_kept := dm_only.value as TmcContent if dm_only.ok else null
+	_check(dm_kept != null and dm_kept.ids() == PackedStringArray(["fatalcontact"]) and dm_kept.missing.is_empty(),
+		"a games list naming arena keeps fatalcontact and reports nothing missing",
+		str(dm_kept.ids()) + " missing " + str(dm_kept.missing) if dm_kept != null else str(dm_only.error))
 
 	_done()
 

@@ -1,7 +1,7 @@
-# arena. The default game, which a server runs when nothing names another, and the reference game: a 3D dev-textured deathmatch, and the only place
+# fatalcontact (formerly arena). Zee's Fatal Contact. The default game, which a server runs when nothing names another, and the reference game: a 3D dev-textured deathmatch, and the only place
 # dot-player-controller, dot-combat, dot-loadout, dot-match and dot-ui run in one process.
 #
-#     changelevel arena
+#     changelevel fatalcontact
 #
 # WHY IT IS HERE AND NOT ONLY IN ITS OWN REPOSITORY. game-arena has had a netcode bridge
 # and a headless suite since it was written and no client anybody could sit down at: no
@@ -35,7 +35,7 @@
 #
 # game-arena references its own files by relative path and rebases its own res:// strings,
 # which is what makes it correct both in a build and at res://dot_cloud/arena/<version>/.
-# Published with `./server pack arena --source games/game-arena`.
+# Published with `./server pack fatalcontact --source games/game-arena`.
 #
 # ONE MAP, AND THAT IS THE GAME. `dm_box` is an ArenaMap -- a list of AABBs that becomes
 # meshes, static bodies and analytic trace geometry from ONE description, so the server's
@@ -43,7 +43,8 @@
 # here on purpose: this game's geometry IS its gameplay, and a rotation would be the
 # thing to add after a second map exists rather than before.
 
-name: Arena
+name: "Zee's Fatal Contact"
+# Still the published pack's id: renaming it is a re-publish on the content origin.
 content_id: tmc/arena
 version: 0.1.0
 kind: pack
@@ -103,8 +104,11 @@ cvars:
 # admin holding that command's flag. A server owner can rename or remove these in their own
 # cfg/admin_menu.yml, which always wins.
 metadata:
+  # The id this game had before it was renamed. `changelevel arena`, an allow list
+  # or a cfg/game/arena/ written for it still reach this game.
+  former_ids: [arena]
   admin_menu:
-    title: "Arena"
+    title: "Fatal Contact"
     items:
       arena_restart:
         label: "Restart the match"
