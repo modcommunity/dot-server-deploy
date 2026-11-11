@@ -78,5 +78,16 @@ else
     out="$(natrun)"
     ! grep -q 'installed into' <<<"$out" && [ -f "$T/p/dot-sim/addons/dot_sim/bin/.natives-macos-arm64" ] && [ -f "$T/p/dot-sim/addons/dot_sim/bin/.natives-macos-x86_64" ]
     t "macOS arm64 + x86_64 together: the second run downloads nothing (per-arch stamps)" $?
+    # Each zip's .gdextension names only its own platform; after both, it must name both
+    # (export-native --platform all shipped linux and windows without their entry).
+    mkdir -p "$T/p/dot-sim/ci"
+    printf '# platform\ttarget\trunner\tfile\tkey\nmacos-arm64\ta\tr\tlib{crate}.dylib\tmacos.arm64\nmacos-x86_64\tx\tr\tlib{crate}.dylib\tmacos.x86_64\nwindows-x86_64\tw\tr\t{crate}.dll\twindows.x86_64\n' > "$T/p/dot-sim/ci/targets.tsv"
+    printf '[configuration]\nentry_symbol = "e"\n\n[libraries]\nmacos.x86_64 = "x"\n' > "$T/p/dot-sim/addons/dot_sim/dot_sim.gdextension"
+    natrun >/dev/null
+    g="$T/p/dot-sim/addons/dot_sim/dot_sim.gdextension"
+    grep -qF 'macos.arm64 = "res://addons/dot_sim/bin/macos-arm64/libdot_sim.dylib"' "$g" \
+        && grep -qF 'macos.x86_64 = "res://addons/dot_sim/bin/macos-x86_64/libdot_sim.dylib"' "$g" \
+        && ! grep -q windows "$g" && grep -q 'entry_symbol = "e"' "$g"
+    t "the .gdextension names every platform whose library is present, and keeps [configuration]" $?
 fi
 exit $((bad > 0))

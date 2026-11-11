@@ -2,150 +2,150 @@
 # Shipped default; an operator replaces it with cfg/content/addons.yml (see docs/content-lists.md).
 entries:
   - repo: arena-weapons
-    pin: v1.4.27
+    pin: v1.4.28
   - repo: dot-2d
-    pin: v0.1.6
+    pin: v0.1.7
   - repo: dot-achievements
-    pin: v0.1.8
+    pin: v0.1.9
   - repo: dot-audio
-    pin: v0.1.15
+    pin: v0.1.17
   - repo: dot-auth
-    pin: v0.1.14
+    pin: v0.1.15
   - repo: dot-bot
     pin: v0.1.24
   - repo: dot-bot-record
-    pin: v0.1.2
+    pin: v0.1.3
   - repo: dot-browser
     pin: v0.1.6
   - repo: dot-chat
-    pin: v0.1.6
+    pin: v0.1.7
   - repo: dot-cloud
-    pin: v0.1.43
+    pin: v0.1.44
   - repo: dot-combat
-    pin: v0.1.21
+    pin: v0.1.22
   - repo: dot-console
-    pin: v0.1.9
+    pin: v0.1.10
   - repo: dot-core
-    pin: v0.1.42
+    pin: v0.1.43
   - repo: dot-economy
     pin: v0.1.6
   - repo: dot-effects
     pin: v0.1.9
   - repo: dot-entity
-    pin: v0.1.8
+    pin: v0.1.9
   - repo: dot-friends
     pin: v0.1.6
   - repo: dot-flashlight
     pin: v0.1.4
   - repo: dot-fx
-    pin: v0.3.9
+    pin: v0.3.10
   - repo: dot-game
     pin: v0.1.54
   - repo: dot-inventory
-    pin: v0.1.5
+    pin: v0.1.6
   - repo: dot-leaderboard
-    pin: v0.3.2
+    pin: v0.3.3
   - repo: dot-lighting
-    pin: v0.1.10
-  - repo: dot-loadout
     pin: v0.1.11
+  - repo: dot-loadout
+    pin: v0.1.12
   - repo: dot-locale
     pin: v0.1.6
   - repo: dot-log
     pin: v0.1.7
   - repo: dot-map
-    pin: v0.1.81
+    pin: v0.1.82
   - repo: dot-match
-    pin: v0.1.6
+    pin: v0.1.7
   - repo: dot-matchmaking
     pin: v0.1.8
   - repo: dot-menu
-    pin: v0.1.27
+    pin: v0.1.28
   - repo: dot-moderation
     pin: v0.1.6
   - repo: dot-net
-    pin: v0.1.28
+    pin: v0.1.31
   - repo: dot-npc
-    pin: v0.1.20
+    pin: v0.1.22
   - repo: dot-npc-ai
-    pin: v0.1.12
+    pin: v0.1.13
   - repo: dot-npc-ai-director
-    pin: v0.1.9
+    pin: v0.1.10
   - repo: dot-objective
-    pin: v0.1.6
+    pin: v0.1.7
   - repo: dot-party
     pin: v0.1.6
   - repo: dot-peer-to-peer
     pin: v0.1.5
   - repo: dot-physics
-    pin: v0.1.8
-  - repo: dot-platform
     pin: v0.1.9
+  - repo: dot-platform
+    pin: v0.1.10
   - repo: dot-player
     pin: v0.1.6
   - repo: dot-player-char
-    pin: v0.1.62
+    pin: v0.1.63
   - repo: dot-player-class
     pin: v0.1.9
   - repo: dot-player-controller
-    pin: v0.4.6
+    pin: v0.4.8
   - repo: dot-procedural-generation
     pin: v0.1.5
   - repo: dot-profile
-    pin: v0.1.24
+    pin: v0.1.25
   - repo: dot-profiler
-    pin: v0.1.2
-  - repo: dot-props
-    pin: v0.1.14
-  - repo: dot-radio
-    pin: v0.1.2
-  - repo: dot-trail
     pin: v0.1.3
+  - repo: dot-props
+    pin: v0.1.15
+  - repo: dot-radio
+    pin: v0.1.3
+  - repo: dot-trail
+    pin: v0.1.4
   - repo: dot-replay
-    pin: v0.1.17
+    pin: v0.1.18
   - repo: dot-server
-    pin: v0.1.31
+    pin: v0.1.32
   - repo: dot-server-query
-    pin: v0.1.7
+    pin: v0.1.8
   - repo: dot-server-security
     pin: v0.1.6
   - repo: dot-settings
-    pin: v0.1.6
+    pin: v0.1.7
   - repo: dot-sim
-    pin: v0.2.3
+    pin: v0.2.4
   - repo: dot-spawn
-    pin: v0.2.1
+    pin: v0.2.2
   - repo: dot-spectate
-    pin: v0.1.9
+    pin: v0.1.10
   - repo: dot-sql
     pin: v0.1.5
   - repo: dot-stats
-    pin: v0.1.17
-  - repo: dot-team
-    pin: v0.1.9
-  - repo: dot-timer
-    pin: v0.1.10
-  - repo: dot-ui
     pin: v0.1.18
+  - repo: dot-team
+    pin: v0.1.10
+  - repo: dot-timer
+    pin: v0.1.11
+  - repo: dot-ui
+    pin: v0.1.19
   - repo: dot-user
     pin: v0.1.6
   - repo: dot-user-avatar
     pin: v0.1.10
   - repo: dot-vehicle
-    pin: v0.1.9
+    pin: v0.1.10
   - repo: dot-voice
     pin: v0.1.12
   - repo: dot-vote
     pin: v0.1.17
   - repo: dot-weapon
-    pin: v0.1.43
+    pin: v0.1.44
   - repo: dot-weather
     pin: v0.1.3
   - repo: dot-workbench
-    pin: v0.3.1
+    pin: v0.3.2
   - repo: natural-disasters
-    pin: v0.1.1
+    pin: v0.1.3
   - repo: zed-dot-weapons
-    pin: v0.1.11
+    pin: v0.1.12
   - repo: zee-dot-weapons
-    pin: v0.1.60
+    pin: v0.1.61
