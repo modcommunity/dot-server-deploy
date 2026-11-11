@@ -1814,6 +1814,17 @@ if [ "$DO_UPDATE" -eq 1 ]; then
     fi
 fi
 
+# [b]The native library of an addon that has one (dot-sim), unpacked at its locked tag.[/b]
+# tools/fetch-natives.sh lifts dot-bootstrap's fetcher (checksummed, stamped, a local
+# build kept); no zip for this platform, or offline, is a warning and the GDScript twins
+# run. Never reaches export-web: the Web preset excludes the .gdextension.
+if [ -x tools/fetch-natives.sh ]; then
+    step "native libraries"
+    natives_args=()
+    [ "$DO_CLONE" -eq 1 ] || natives_args+=(--no-clone)
+    tools/fetch-natives.sh "${natives_args[@]}" || warn "native libraries: see above (GDScript runs)"
+fi
+
 # [b]--vendor throws the clones away once they have been copied.[/b] Vendoring says this
 # tree is to carry CONTENT rather than checkouts: a container's final stage and a
 # release tarball copy the project directory whole, and fifty repositories under
