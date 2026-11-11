@@ -111,6 +111,8 @@ entries:
     pin: v0.1.6
   - repo: dot-settings
     pin: v0.1.6
+  - repo: dot-sim
+    pin: v0.2.3
   - repo: dot-spawn
     pin: v0.2.1
   - repo: dot-spectate
