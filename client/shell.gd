@@ -1756,7 +1756,9 @@ func _load_solo_inner(content_id: String, version: String) -> DotResult:
 	await _prefetch_solo(content_id, wanted)
 	_cloud.job_begin_unpack()
 
-	var got: DotResult = await _cloud.ensure(StringName(content_id), wanted)
+	# "*" asks for every download group (dot-cloud 22): a solo host serves any map. Older dot-cloud reads it as
+	# a group no file has, which is what an empty list already fetched there.
+	var got: DotResult = await _cloud.ensure(StringName(content_id), wanted, PackedStringArray(["*"]))
 	if not got.ok:
 		return got
 
@@ -2156,7 +2158,7 @@ func _ensure_solo_pack(key: String, announce: bool = false) -> DotResult:
 		_solo_pack_label = await _describe_solo_pack(id, version)
 		_say(_solo_pack_label)
 
-	var got: DotResult = await _cloud.ensure(StringName(id), version)
+	var got: DotResult = await _cloud.ensure(StringName(id), version, PackedStringArray(["*"]))  # every group, as above
 	if not got.ok:
 		_solo_pack_label = ""
 		return got
