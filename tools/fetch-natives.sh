@@ -78,6 +78,23 @@ for repo in $NATIVE_REPOS; do
         fetch_natives "$ROOT"
     done
     lib="$repo_root/addons/$addon"
+    # [b]Each platform zip carries a .gdextension naming only its own library[/b] (it is
+    # built on one CI runner), so unpacking linux, windows and macos in a row left the
+    # last one's: export-native --platform all shipped linux and windows clients whose
+    # .gdextension had no entry for them, and they ran GDScript. The repository's
+    # ci/targets.tsv says which file each platform's library is; list every one present,
+    # the same way its ci/install.sh does.
+    ext="$lib/$addon.gdextension" targets="$repo_root/ci/targets.tsv"
+    if [ -f "$ext" ] && [ -f "$targets" ]; then
+        {
+            sed '/^\[libraries\]/,$d' "$ext"
+            echo "[libraries]"
+            awk -F'\t' '$0!~/^#/ && NF>=5 {print $1"\t"$4"\t"$5}' "$targets" | while IFS=$'\t' read -r plat pat key; do
+                f="${pat//\{crate\}/$addon}"
+                if [ -f "$lib/bin/$plat/$f" ]; then echo "$key = \"res://addons/$addon/bin/$plat/$f\""; fi
+            done
+        } > "$ext.tmp" && mv "$ext.tmp" "$ext"
+    fi
     if [ -f "$lib/$addon.gdextension" ] && [ -n "$(ls -A "$lib/bin/$HOST_PLAT" 2>/dev/null)" ]; then
         ok "$repo: native motor=on (${PLATFORMS[*]})"
     else
