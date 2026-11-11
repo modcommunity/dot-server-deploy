@@ -34,7 +34,7 @@ grep -q '\.natives-' tools/fetch-natives.sh && grep -q '\.natives-' tools/fetch-
 t "per-platform stamps in both fetchers (macOS arm64 + x86_64 do not undo each other)" $?
 if command -v pwsh >/dev/null 2>&1; then
     for f in setup.ps1 tools/server.ps1.in tools/fetch-natives.ps1; do
-        pwsh -NoProfile -Command '$e=$null; [void][System.Management.Automation.Language.Parser]::ParseFile($args[0],[ref]$null,[ref]$e); if($e){$e|%{$_.ToString()}; exit 1}' "$f" >/dev/null
+        PSFILE="$f" pwsh -NoProfile -Command '$e=$null; [void][System.Management.Automation.Language.Parser]::ParseFile($env:PSFILE,[ref]$null,[ref]$e); if($e){$e|%{$_.ToString()}; exit 1}' >/dev/null
         t "pwsh parses $f" $?
     done
 else

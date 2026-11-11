@@ -16,9 +16,36 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 # A dev run must not reset this checkout to origin (self_update in server.in).
 export TMC_AUTO_UPDATE=never
 
-GODOT="${GODOT:-godot}"
+# godot is not on PATH in every shell (a hv lane is not a login shell): fall back to the
+# per-user install before anything below runs it.
+if [ -z "${GODOT:-}" ]; then
+    if command -v godot >/dev/null 2>&1; then GODOT=godot
+    elif [ -x "$HOME/.local/bin/godot" ]; then GODOT="$HOME/.local/bin/godot"
+    else GODOT=godot; fi
+fi
 RED=$'\033[31m'; GRN=$'\033[32m'; YLW=$'\033[33m'; OFF=$'\033[0m'
 fails=0
+
+# [b]Prerequisites of a clean worktree.[/b] A fresh worktree gets addons/ as copies or links
+# of whatever the main checkout holds, which can be stale (an old dot_cloud makes client/shell.gd
+# fail to parse). When the sibling dot-* repositories exist, relink addons/ to them, and let
+# the natives check find dot-bootstrap. Skipped with TMC_CHECK_NO_RELINK=1.
+if [ -z "${TMC_CHECK_NO_RELINK:-}" ]; then
+    for d in "$(cd .. && pwd)" "${TMC_REPOS_DIR:-$HOME/godot}"; do
+        [ -d "$d/dot-core" ] && { REPOS_DIR="$d"; break; }
+    done
+    if [ -n "${REPOS_DIR:-}" ]; then
+        [ -z "${DOT_BOOTSTRAP:-}" ] && [ -d "$REPOS_DIR/dot-bootstrap" ] && export DOT_BOOTSTRAP="$REPOS_DIR/dot-bootstrap"
+        # stale = addons/dot_core is not (a link into) the dot-core repository
+        stale=0
+        case "$(readlink -f addons/dot_core 2>/dev/null)" in */dot-core/addons/dot_core) ;; *) stale=1 ;; esac
+        if [ "$stale" = 1 ] || [ ! -e addons/dot_core ]; then
+            echo "relinking addons/ to $REPOS_DIR"
+            ./setup.sh --no-games --no-import --no-clone --no-download --godot "$GODOT" --addons-dir "$REPOS_DIR" >/dev/null 2>&1 \
+                || echo "  (setup.sh relink failed; continuing with the addons present)"
+        fi
+    fi
+fi
 
 # [b]An unprovisioned checkout (a fresh worktree, the PH copy) has no cfg/ and no ./server.[/b]
 # Both are gitignored products of setup.sh, so the boot checks below used to fail with "no
