@@ -104,7 +104,7 @@ func _test_template() -> void:
 ## described twice: once in its repository (travels in the pack a site publishes) and once under
 ## content/ here (for `./server pack`).
 const REPOSITORIES := {
-	"game-arena": "arena",
+	"game-arena": "fatalcontact",
 	"game-playground": "playlot",
 	"game-g2gfast": "g2gfast",
 	"game-hungario": "hungry_classic",

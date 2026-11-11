@@ -7,7 +7,7 @@ const CONTENT := "res://content"
 
 ## game id (sv_game) -> the packs it needs in dist/.
 const PACKS := {
-	"arena": ["tmc/arena"],
+	"fatalcontact": ["tmc/arena"],
 	"buses": ["tmc/buses"],
 	"deathrun": ["tmc/deathrun", "tmc/deathrun_maps"],
 	"delivery": ["tmc/delivery"],

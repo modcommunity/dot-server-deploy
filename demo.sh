@@ -8,7 +8,7 @@
 #   ./demo.sh servers   the five of them, by name and number
 #
 # Every command below takes a server first, by number (1..5) or by what it runs
-# (buses, hungry, g2gfast, playlot, arena -- surf, sandbox, playground and dm also work).
+# (buses, hungry, g2gfast, playlot, fatalcontact -- surf, sandbox, playground, dm and arena also work).
 # Leave it out and it means server 1, which is what these did before they could
 # mean anything else.
 #
@@ -21,7 +21,7 @@
 #   ./demo.sh games  [<server>]             what that server can switch to.
 #
 #     ./demo.sh switch 2 hungry_frenzy      ./demo.sh map surf surf_mesa
-#     ./demo.sh rcon arena status           ./demo.sh map 4 pg_lobby
+#     ./demo.sh rcon dm status              ./demo.sh map 4 pg_lobby
 #
 # WHAT THIS IS FOR
 #
@@ -36,7 +36,7 @@
 #   game server 2     the same build on :6080, running hungry_classic
 #   game server 3     the same build on :6090, running g2gfast at 128 ticks
 #   game server 4     the same build on :6100, running playlot at 128 ticks
-#   game server 5     the same build on :6110, running arena at 64 ticks
+#   game server 5     the same build on :6110, running fatalcontact at 64 ticks
 #   nginx             already running; terminates TLS on :6064 -> :6070,
 #                     :6065 -> :6080, :6066 -> :6090, :6067 -> :6100 and
 #                     :6068 -> :6110, and serves the exported client at /game/
@@ -194,7 +194,7 @@ GAME4_TICKRATE="${TMC_DEMO_GAME4_TICKRATE:-128}"
 
 # A FIFTH SERVER, and the one that took the longest to be able to run at all.
 #
-# arena is the family's REFERENCE game -- the only place dot-player-controller, dot-combat,
+# fatalcontact (formerly arena) is the family's REFERENCE game -- the only place dot-player-controller, dot-combat,
 # dot-loadout, dot-match and dot-ui are all present at once -- and until now it was the
 # reference game with nothing to sit down at. It had a netcode bridge, a headless suite
 # that played a whole deathmatch, and no camera rig, no input sampling and no renderer.
@@ -208,8 +208,8 @@ GAME4_TICKRATE="${TMC_DEMO_GAME4_TICKRATE:-128}"
 # apart collide on a listener `ss` cannot see.
 GAME5_PORT="${TMC_DEMO_GAME5_PORT:-6110}"
 GAME5_PUBLIC_PORT="${TMC_DEMO_GAME5_PUBLIC_PORT:-6068}"
-GAME5="${TMC_DEMO_GAME5-arena}"
-GAME5_NAME="${TMC_DEMO_GAME5_NAME:-TMC Arena Server}"
+GAME5="${TMC_DEMO_GAME5-fatalcontact}"
+GAME5_NAME="${TMC_DEMO_GAME5_NAME:-TMC Fatal Contact Server}"
 
 # 66 (game-arena's own rate), and deliberately NOT the 128 the two timer servers run.
 #
@@ -671,7 +671,7 @@ SERVERS=(
     "2 hungry     $GAME2_PORT $GAME2_PUBLIC_PORT  Hungry"
     "3 g2gfast    $GAME3_PORT $GAME3_PUBLIC_PORT  the bhop/surf timer"
     "4 playlot    $GAME4_PORT $GAME4_PUBLIC_PORT  the sandbox"
-    "5 arena      $GAME5_PORT $GAME5_PUBLIC_PORT  the deathmatch"
+    "5 fatalcontact $GAME5_PORT $GAME5_PUBLIC_PORT  the deathmatch"
 )
 
 ## Accepted spellings that are not the alias itself. A person who types `surf` means
@@ -681,7 +681,7 @@ server_alias() {
     case "$1" in
         surf|bhop|timer) printf 'g2gfast' ;;
         sandbox|props|playground) printf 'playlot' ;;
-        dm|deathmatch)   printf 'arena' ;;
+        dm|deathmatch|arena) printf 'fatalcontact' ;;
         hungry_classic|hungry_frenzy) printf 'hungry' ;;
         *) printf '%s' "$1" ;;
     esac
@@ -765,7 +765,7 @@ reject_unknown_server() {
 ##
 ## [b]The whole rule, because the ambiguity is real and there is no clever way out of
 ## it:[/b] four of the five server aliases are also game ids -- `buses`, `g2gfast`,
-## `playlot` and `arena` -- so a single word cannot say which of the two it is.
+## `playlot` and `fatalcontact` -- so a single word cannot say which of the two it is.
 ##
 ##   - two or more arguments: the first names a server, and must.
 ##   - one argument that is a bare 1..5: a server, since no game or map is a number.
@@ -846,7 +846,7 @@ map_command_for() {
     case "$1" in
         g2gfast)    printf 'g2g_map' ;;
         playlot|playground) printf 'pg_map' ;;
-        arena)      printf 'arena_map' ;;
+        fatalcontact|arena) printf 'arena_map' ;;
         *)          printf 'map' ;;
     esac
 }

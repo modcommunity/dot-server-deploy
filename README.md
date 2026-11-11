@@ -18,7 +18,7 @@ I intend on reviewing code, testing, and editing documentation regularly. If you
 ```bash
 git clone https://github.com/modcommunity/dot-server-deploy && cd dot-server-deploy
 ./setup.sh              # fetches a Godot runtime, links the addons, writes ./server
-./server --games arena  # installs the game if needed, then starts the server
+./server --games fatalcontact  # installs the game if needed, then starts the server
 ./server --help         # every command and option
 ```
 
@@ -79,8 +79,8 @@ Windows: `setup.bat` (a shim for `setup.ps1`), then `.\server.ps1`. It takes the
   Return takes the answer in the brackets. Nothing happens until the end.
 
     Server name [TMC Test Server]
-    games here now: arena g2gfast hungry_classic playlot
-    Game to boot [arena]
+    games here now: fatalcontact g2gfast hungry_classic playlot
+    Game to boot [fatalcontact]
     Player slots [64]
     Tickrate [60]
     Port the server listens on [6064]
@@ -96,7 +96,7 @@ Windows: `setup.bat` (a shim for `setup.ps1`), then `.\server.ps1`. It takes the
   This is the whole of it:
 
     - set up the project: runtime, addons, games, cfg/, ./server
-    - cfg/server/server.yml: TMC Test Server, game arena, 64 slots, 60 tick
+    - cfg/server/server.yml: TMC Test Server, game fatalcontact, 64 slots, 60 tick
     - cfg/net.yml: port 6064, bound to 127.0.0.1 (nginx is the way in)
     - install nginx and certbot if they are missing
     - open 80 and 443 in ufw
@@ -182,7 +182,7 @@ cfg/                 what an operator edits. Written on first run, and not in th
 content/             what the server serves
   global/              loaded by every game
   avatars/             cosmetic parts, published as a pack of their own
-  arena/               the default game
+  fatalcontact/        the default game (formerly arena; `arena` still reaches it)
     game.yml             what it is, where its scene is inside the pack
     pack.json            what its pack leaves out
 
@@ -248,7 +248,7 @@ The YAML reader is a deliberately small subset and refuses everything else with 
 ./server --help               every option
 
 ./server --port 27015 --name "My server"
-./server -- +sv_cheats 1 +changelevel arena
+./server -- +sv_cheats 1 +changelevel fatalcontact
 ```
 
 Exit codes are meaningful, so a supervisor can tell a misconfiguration from a crash: `2` usage, `3` no runtime, `4` no project, `5` bad config, `6` port in use, `7` bad content.
@@ -264,9 +264,9 @@ Exit codes are meaningful, so a supervisor can tell a misconfiguration from a cr
 A server holds the games it is for, and fetches them:
 
 ```bash
-./server --games g2gfast,arena          # install them if needed, then start
-TMC_GAMES=g2gfast,arena ./server        # the same thing, for a panel with no shell
-./server install-games --games arena    # just the install, no server
+./server --games g2gfast,fatalcontact       # install them if needed, then start
+TMC_GAMES=g2gfast,fatalcontact ./server     # the same thing, for a panel with no shell
+./server install-games --games fatalcontact # just the install, no server
 ```
 
 A game is two halves, the signed pack and its `game.yml` descriptor; `./server index` publishes the descriptors beside the packs (run it after `./server pack --all`), and the packs are fetched at startup, not at first join, so nobody waits on a download mid-game. Details, ids and the installer's rules: [docs/installing-games.md](docs/installing-games.md).
@@ -553,7 +553,7 @@ Player commands                     Kick
 
 **Every item is a console line**, run as you. "Ban → Bob → 1 day → Spamming → Yes" runs `ban #12 1d Spamming` exactly as if you had typed it, so the reply, the audit log entry and the immunity check are the same ones. Ban, change game and change map ask "Yes, do it" first. **Player info** shows the ids, the address (to anyone with `kick`, as `whois` does), time on the server, ping, whether they are silenced, and their record of warnings, kicks and bans. It also links straight to every action you could take on them.
 
-**Fun commands and powers depend on the game.** Each game says which of these it can do, and only those are shown. In arena, Slap shoves and hurts by the amount you pick ("Just a shove", 5, 10, 25, 50); a game without the ability simply has no Slap row. Most of these can target "Everyone" or "Everyone else", and anybody you cannot outrank is skipped and counted. Give lists what the game itself can hand out.
+**Fun commands and powers depend on the game.** Each game says which of these it can do, and only those are shown. In Fatal Contact, Slap shoves and hurts by the amount you pick ("Just a shove", 5, 10, 25, 50); a game without the ability simply has no Slap row. Most of these can target "Everyone" or "Everyone else", and anybody you cannot outrank is skipped and counted. Give lists what the game itself can hand out.
 
 **`warn <player> <reason>`** is added when the server has no `warn` of its own. The player sees it on screen and in chat (never with your name), and it goes on their record when the game keeps one.
 
@@ -563,12 +563,12 @@ Player commands                     Kick
 
 A game can add entries two ways, and both go when the game changes. The server owner's `cfg/addon/dot_menu/admin_menu.yml` is applied last, so an owner can rename or remove anything a game adds, or turn all of it off with `admin_menu_game_items: false`.
 
-**In `game.yml`**, as data. This is how arena adds its two:
+**In `game.yml`**, as data. This is how Fatal Contact adds its two:
 
 ```yaml
 metadata:
   admin_menu:
-    title: "Arena"                 # the category its items go under
+    title: "Fatal Contact"         # the category its items go under
     items:
       arena_restart:
         label: "Restart the match"
@@ -676,7 +676,7 @@ A game left out is left out *everywhere except `dist/`*: **a pack an earlier run
 | --- | --- |
 | `--only-games buses-from-hell` | 27 |
 | `--only-games hungario` | 42 |
-| `--only-games arena` | 45 |
+| `--only-games fatalcontact` | 45 |
 | `--only-games g2gfast` | 46 |
 | `--only-games playground` | 48 |
 | all six (the default) | 53 |

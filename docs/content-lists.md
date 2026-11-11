@@ -21,7 +21,7 @@ entries:
   - dot-vote@v0.2.1               # pinned to a tag or commit
   - repo: game-arena
     pin: v1.0.0
-    content: arena                # games.yml only: the content directory
+    content: fatalcontact         # games.yml only: the content directory
   - pack: gamemann/surf_mesa      # a dot-cloud pack id
     pin: 1.2.0
 ```

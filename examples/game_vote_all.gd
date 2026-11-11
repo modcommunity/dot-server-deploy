@@ -21,14 +21,14 @@ const SHELL := "res://client/shell.tscn"
 ## Every game in the family, in the order they are played. hungario is one game over several ids
 ## (its modes); one of them stands for it, and its mode vote is its own vote.
 const ORDER := [
-	"arena", "playlot", "g2gfast", "hungry_classic", "hideseek", "zombiezone", "smash",
+	"fatalcontact", "playlot", "g2gfast", "hungry_classic", "hideseek", "zombiezone", "smash",
 	"buses", "wipeout", "deathrun", "delivery", "lookatme", "prophunt",
 ]
 
 ## Checks per game section, whichever branch it takes.
 const PER_GAME := 17
 
-## The games this run plays: [constant ORDER], or `-- --order=arena,smash,wipeout`. The first
+## The games this run plays: [constant ORDER], or `-- --order=fatalcontact,smash,wipeout`. The first
 ## is always ORDER's first, because the fixture boots into it (`sv_game`); an order without it
 ## has it put in front.
 var _order: Array = ORDER.duplicate()

@@ -3,7 +3,7 @@
 # Make this server a service that comes back after a reboot.
 #
 #   sudo ./deploy/install-systemd.sh
-#   sudo ./deploy/install-systemd.sh --name arena --user games --no-start
+#   sudo ./deploy/install-systemd.sh --name fatalcontact --user games --no-start
 #
 # Writes /etc/systemd/system/<name>.service, enables it, starts it, and then CHECKS
 # THAT IT IS STILL RUNNING -- an installer that reports success while the unit

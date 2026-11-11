@@ -78,7 +78,7 @@ services:
       TMC_PORT: "6064"
       # TMC_NAME: "My server"
       # TMC_MAX_PLAYERS: "64"
-      # TMC_GAME: "arena"
+      # TMC_GAME: "fatalcontact"
 
       # --- Installing games instead of carrying them ---------------------------
       #
@@ -103,7 +103,7 @@ services:
       # Pair this with `--build-arg TMC_BUILD_GAMES=none` (see the Dockerfile) for
       # an image that carries no game and installs every one of them, or use the
       # docker-compose.games.yml overlay, which sets both.
-      # TMC_GAMES: "g2gfast,arena"
+      # TMC_GAMES: "g2gfast,fatalcontact"
       # TMC_CONTENT_URL: "https://dotgames.org/content"
       # TMC_GAMES_MODE: "hide"
 

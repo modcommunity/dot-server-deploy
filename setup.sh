@@ -187,7 +187,7 @@ GAMES_DIR="${TMC_GAMES_DIR:-}"
 # Two switches rather than one, because the two questions are asked from opposite ends:
 # a deployment knows the one game it serves (--only-games), and a developer knows the
 # one that is broken or huge (--skip-games). Given both, --only-games decides the set
-# and --skip-games narrows it -- which is the order that makes `--only-games arena,buses
+# and --skip-games narrows it -- which is the order that makes `--only-games fatalcontact,buses
 # --skip-games buses` mean something rather than contradict itself.
 #
 # TMC_ONLY_GAMES / TMC_SKIP_GAMES are the same switches for a unit file, a compose file
@@ -400,7 +400,7 @@ game_tickrate() {
         return
     done
     case "$g" in
-        arena)             printf 66 ;;
+        fatalcontact|arena) printf 66 ;;
         g2gfast|playlot|playground) printf 128 ;;
         *)                 printf 60 ;;
     esac
@@ -583,7 +583,7 @@ if [ "$DO_FULL" -eq 1 ]; then
     done
     [ -n "$installed_games" ] && printf '    %sgames here now:%s%s\n' "$DIM" "$OFF" "$installed_games" >&2
 
-    FULL_GAME="$(ask       "Game to boot" "$(cfg_or "$(server_yml)" sv_game arena)")"
+    FULL_GAME="$(ask       "Game to boot" "$(cfg_or "$(server_yml)" sv_game fatalcontact)")"
     FULL_MAXPLAYERS="$(ask "Player slots" "$(cfg_or "$(server_yml)" sv_maxplayers 64)")"
     FULL_TICKRATE="$(ask   "Tickrate" "$(cfg_or "$(server_yml)" sv_tickrate "$(game_tickrate "$FULL_GAME")")")"
     FULL_PORT="$(ask       "Port the server listens on" "$(cfg_or "$(net_cfg_file)" net_port 6064)")"
@@ -2126,7 +2126,7 @@ fi
 # it.[/b] tools/check.sh walks the GAMES list in this script and fails a game whose
 # source is here and whose pack is not -- which is exactly right for a build that went
 # wrong, and exactly wrong for a build that left it out on purpose. A developer box has
-# all six repositories beside it, so without this line `./setup.sh --only-games arena`
+# all six repositories beside it, so without this line `./setup.sh --only-games fatalcontact`
 # is followed by a check reporting five failures, and a check that cries wolf on a
 # supported flag is a check people learn to skip.
 #

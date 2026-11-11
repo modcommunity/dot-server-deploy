@@ -162,7 +162,7 @@ query_bind_ip: "*"
 #
 #games:
 #  - g2gfast
-#  - arena
+#  - fatalcontact
 
 # Where this server fetches content it does not have, tried in order.
 #

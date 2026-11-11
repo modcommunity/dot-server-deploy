@@ -12,7 +12,7 @@ const CONTENT := "res://content"
 
 ## game id (sv_game) -> the packs it needs in dist/. dot-game-template is packaged by this run.
 const PACKS := {
-	"arena": ["tmc/arena"],
+	"fatalcontact": ["tmc/arena"],
 	"buses": ["tmc/buses"],
 	"deathrun": ["tmc/deathrun", "tmc/deathrun_maps"],
 	"delivery": ["tmc/delivery"],

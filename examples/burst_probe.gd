@@ -32,7 +32,7 @@ const MAX_MAPS := 6
 
 ## game id (sv_game) -> the packs it needs in dist/. As examples/enet_relay.gd has it.
 const PACKS := {
-	"arena": ["tmc/arena"],
+	"fatalcontact": ["tmc/arena"],
 	"buses": ["tmc/buses"],
 	"deathrun": ["tmc/deathrun", "tmc/deathrun_maps"],
 	"delivery": ["tmc/delivery"],
