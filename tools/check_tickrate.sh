@@ -15,7 +15,8 @@ chk "setup.sh defines game_tickrate" '[ -n "$fn" ]'
 tbl() ( cd "$(mktemp -d)" && eval "$fn" && game_tickrate "$1" )
 chk "table: fatalcontact 66" '[ "$(tbl fatalcontact)" = 66 ]'
 chk "table: arena (its former id) 66" '[ "$(tbl arena)" = 66 ]'
-chk "table: g2gfast 128"   '[ "$(tbl g2gfast)" = 128 ]'
+chk "table: airdrift 128"  '[ "$(tbl airdrift)" = 128 ]'
+chk "table: g2gfast (its former id) 128" '[ "$(tbl g2gfast)" = 128 ]'
 chk "table: playlot 128" '[ "$(tbl playlot)" = 128 ]'
 chk "table: playground (its former id) 128" '[ "$(tbl playground)" = 128 ]'
 chk "table: unknown 60"    '[ "$(tbl hungario)" = 60 ]'
@@ -35,7 +36,7 @@ done
 # Fresh install: the example must not carry a value that cfg_or would return first.
 chk "server.yml template sets sv_tickrate: 66" 'grep -qE "^sv_tickrate: 66\$" cfg.example/server/server.yml'
 fresh() ( eval "$cfn"; eval "$fn"; cfg_or cfg.example/server/server.yml sv_tickrate "$(game_tickrate "$1")" )
-chk "fresh install offers 66 (template default)" '[ "$(fresh g2gfast)" = 66 ]'
+chk "fresh install offers 66 (template default)" '[ "$(fresh airdrift)" = 66 ]'
 chk "the installer prompt uses it" 'grep -q "sv_tickrate \"\$(game_tickrate" setup.sh'
 chk "demo fatalcontact server runs 66" 'grep -q "GAME5_TICKRATE:-66" demo.sh'
 [ "$fails" -eq 0 ] && echo "tickrate: ok" || echo "tickrate: $fails failed"
