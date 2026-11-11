@@ -8,7 +8,7 @@
 #   ./demo.sh servers   the five of them, by name and number
 #
 # Every command below takes a server first, by number (1..5) or by what it runs
-# (buses, hungry, g2gfast, playground, arena -- surf, sandbox and dm also work).
+# (buses, hungry, g2gfast, playlot, arena -- surf, sandbox, playground and dm also work).
 # Leave it out and it means server 1, which is what these did before they could
 # mean anything else.
 #
@@ -35,7 +35,7 @@
 #   the game server   dot-server, loopback :6070, serving games out of content/
 #   game server 2     the same build on :6080, running hungry_classic
 #   game server 3     the same build on :6090, running g2gfast at 128 ticks
-#   game server 4     the same build on :6100, running playground at 128 ticks
+#   game server 4     the same build on :6100, running playlot at 128 ticks
 #   game server 5     the same build on :6110, running arena at 64 ticks
 #   nginx             already running; terminates TLS on :6064 -> :6070,
 #                     :6065 -> :6080, :6066 -> :6090, :6067 -> :6100 and
@@ -172,7 +172,7 @@ GAME3_TICKRATE="${TMC_DEMO_GAME3_TICKRATE:-128}"
 
 # A FOURTH SERVER, and the first one here that is not a race against a clock.
 #
-# playground is the physics sandbox: dot-props, dot-player-controller, dot-timer, dot-map
+# playlot is the physics sandbox: dot-props, dot-player-controller, dot-timer, dot-map
 # and dot-leaderboard in one process. It is here because the three servers above are all
 # somebody trying to WIN something, and a server browser that only ever shows competitive
 # games says nothing about whether this platform can carry the other kind. It is also the
@@ -184,8 +184,8 @@ GAME3_TICKRATE="${TMC_DEMO_GAME3_TICKRATE:-128}"
 # apart collide on a listener `ss` cannot see.
 GAME4_PORT="${TMC_DEMO_GAME4_PORT:-6100}"
 GAME4_PUBLIC_PORT="${TMC_DEMO_GAME4_PUBLIC_PORT:-6067}"
-GAME4="${TMC_DEMO_GAME4-playground}"
-GAME4_NAME="${TMC_DEMO_GAME4_NAME:-TMC Playground Server}"
+GAME4="${TMC_DEMO_GAME4-playlot}"
+GAME4_NAME="${TMC_DEMO_GAME4_NAME:-TMC Playlot Server}"
 
 # 128, like the timer server and for the same reason: pg_lobby has a jump course on its
 # bonus track and a run set at 64 is quantised twice as coarsely as one set at 128. It
@@ -670,7 +670,7 @@ SERVERS=(
     "1 buses      $GAME_PORT  $PUBLIC_PORT        Buses From Hell"
     "2 hungry     $GAME2_PORT $GAME2_PUBLIC_PORT  Hungry"
     "3 g2gfast    $GAME3_PORT $GAME3_PUBLIC_PORT  the bhop/surf timer"
-    "4 playground $GAME4_PORT $GAME4_PUBLIC_PORT  the sandbox"
+    "4 playlot    $GAME4_PORT $GAME4_PUBLIC_PORT  the sandbox"
     "5 arena      $GAME5_PORT $GAME5_PUBLIC_PORT  the deathmatch"
 )
 
@@ -680,7 +680,7 @@ SERVERS=(
 server_alias() {
     case "$1" in
         surf|bhop|timer) printf 'g2gfast' ;;
-        sandbox|props)   printf 'playground' ;;
+        sandbox|props|playground) printf 'playlot' ;;
         dm|deathmatch)   printf 'arena' ;;
         hungry_classic|hungry_frenzy) printf 'hungry' ;;
         *) printf '%s' "$1" ;;
@@ -700,8 +700,8 @@ server_port() {
     return 1
 }
 
-## The canonical alias of whatever a person typed: `4`, `sandbox` and `playground` all
-## come back `playground`. Every lookup that needs to know WHICH GAME a server runs goes
+## The canonical alias of whatever a person typed: `4`, `sandbox` and `playlot` all
+## come back `playlot`. Every lookup that needs to know WHICH GAME a server runs goes
 ## through this rather than through the number, because the number means nothing to
 ## anything but this table.
 server_key() {
@@ -765,7 +765,7 @@ reject_unknown_server() {
 ##
 ## [b]The whole rule, because the ambiguity is real and there is no clever way out of
 ## it:[/b] four of the five server aliases are also game ids -- `buses`, `g2gfast`,
-## `playground` and `arena` -- so a single word cannot say which of the two it is.
+## `playlot` and `arena` -- so a single word cannot say which of the two it is.
 ##
 ##   - two or more arguments: the first names a server, and must.
 ##   - one argument that is a bare 1..5: a server, since no game or map is a number.
@@ -845,7 +845,7 @@ do_switch() {
 map_command_for() {
     case "$1" in
         g2gfast)    printf 'g2g_map' ;;
-        playground) printf 'pg_map' ;;
+        playlot|playground) printf 'pg_map' ;;
         arena)      printf 'arena_map' ;;
         *)          printf 'map' ;;
     esac

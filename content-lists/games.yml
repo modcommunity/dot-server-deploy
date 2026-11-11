@@ -8,7 +8,7 @@ entries:
   - repo: game-playground-maps
     content: playground_maps
   - repo: game-playground
-    content: playground
+    content: playlot
   - repo: game-arena
     content: arena
   - repo: mg-buses-from-hell

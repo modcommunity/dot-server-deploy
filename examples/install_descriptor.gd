@@ -105,7 +105,7 @@ func _test_template() -> void:
 ## content/ here (for `./server pack`).
 const REPOSITORIES := {
 	"game-arena": "arena",
-	"game-playground": "playground",
+	"game-playground": "playlot",
 	"game-g2gfast": "g2gfast",
 	"game-hungario": "hungry_classic",
 	"mg-smash-copter": "smash",

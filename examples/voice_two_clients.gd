@@ -16,7 +16,7 @@ const PACKS := {
 	"murdermystery": ["tmc/murdermystery", "tmc/murdermystery_maps"],
 	"hungry_classic": ["tmc/hungry"],
 	"lookatme": ["tmc/lookatme"],
-	"playground": ["tmc/playground"],
+	"playlot": ["tmc/playground"],
 	"prophunt": ["tmc/prophunt", "tmc/prophunt_maps"],
 	"smash": ["tmc/smash"],
 	"wipeout": ["tmc/wipeout", "tmc/wipeout_maps"],

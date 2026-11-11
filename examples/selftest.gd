@@ -11,7 +11,7 @@ const RoundsWithoutMatch := preload("res://examples/fixtures/rounds_without_matc
 
 const Host := preload("res://host/tmc_host.gd")
 
-const CHECKS := 467
+const CHECKS := 477
 
 var _passed := 0
 var _failed := 0
@@ -39,6 +39,7 @@ func _run() -> void:
 	_test_layered_cfg()
 	_test_content_lists()
 	_test_content()
+	_test_former_game_id()
 	_test_owner_maps()
 	await _test_map_collections()
 	_test_game_refs()
@@ -1800,6 +1801,41 @@ func _content_of(game: DotGameDescriptor) -> TmcContent:
 	return content
 
 
+## playground was renamed playlot. A deployment's server.yml, games list, cfg/game.yml section
+## and vote_exclude written for the old id must still reach the game.
+func _test_former_game_id() -> void:
+	_section("a renamed game answers to its former id")
+
+	var all := TmcContent.scan("res://content")
+
+	if not _check(all.ok, "the shipped content scans", str(all.error)):
+		_check(false, "(skipped)"); _check(false, "(skipped)"); _check(false, "(skipped)")
+		_check(false, "(skipped)"); _check(false, "(skipped)"); _check(false, "(skipped)")
+		_done()
+		return
+
+	var content := all.value as TmcContent
+	var found := content.find("playground")
+	_check(found != null and found.game_id == "playlot", "find(\"playground\") is playlot",
+		found.game_id if found != null else "null")
+	_check(content.find("playlot") == found, "and find(\"playlot\") is the same game")
+
+	var narrowed := TmcContent.scan("res://content", PackedStringArray(["playground"]))
+	var kept := narrowed.value as TmcContent if narrowed.ok else null
+	_check(kept != null and kept.ids() == PackedStringArray(["playlot"]) and kept.missing.is_empty(),
+		"a games list naming playground keeps playlot and reports nothing missing",
+		str(kept.ids()) + " missing " + str(kept.missing) if kept != null else str(narrowed.error))
+
+	var section := TmcGameConfig.section_in({"playground": {"marker": 1}}, found) if found != null else {}
+	_check(section.get("marker", 0) == 1, "a cfg section keyed playground applies to playlot", str(section))
+	_check(TmcGameConfig.section_in({"playground": {"marker": 1}, "playlot": {"marker": 2}}, found).get("marker", 0) == 2
+		if found != null else false, "and a section under the new id wins over the old")
+	_check(TmcVote._current_id(content.games, "playground") == "playlot",
+		"vote_exclude: [playground] keeps playlot off the ballot")
+
+	_done()
+
+
 func _test_content() -> void:
 	_section("the content index")
 
@@ -1918,8 +1954,8 @@ func _test_deployed_map_clocks() -> void:
 			])
 
 	_check(
-		untimed.has("playground"),
-		"the playground ships with its map clock stopped (%s)" % ", ".join(untimed),
+		untimed.has("playlot"),
+		"the playlot ships with its map clock stopped (%s)" % ", ".join(untimed),
 		"the check below is about nothing if no shipped game stops its map clock"
 	)
 	_check(

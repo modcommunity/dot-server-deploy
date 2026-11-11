@@ -14,7 +14,7 @@ const ServerWorld := preload("res://examples/server_world.gd")
 const CONTENT := "res://content"
 const DATA := "user://tmc_playground_client"
 
-const GAME := "playground"
+const GAME := "playlot"
 const CONTENT_ID := "tmc/playground"
 const MAPS_ID := &"tmc/playground_maps"
 const MAPS_VERSION := "0.1.0"
@@ -56,7 +56,7 @@ func _run() -> void:
 			or not DirAccess.dir_exists_absolute(ProjectSettings.globalize_path("res://dist/tmc/playground_maps")):
 		print("skipped: dist/tmc/playground and dist/tmc/playground_maps are not published here")
 		print("  ./server pack playground_maps --source games/game-playground-maps")
-		print("  ./server pack playground --source games/game-playground")
+		print("  ./server pack playlot --source games/game-playground")
 		get_tree().quit(0)
 		return
 

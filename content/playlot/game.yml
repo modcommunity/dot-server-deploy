@@ -1,13 +1,13 @@
-# playground. A physics sandbox in the shape the genre grew up on: hold Q for a menu of
+# playlot (formerly playground). A physics sandbox in the shape the genre grew up on: hold Q for a menu of
 # props, NPCs and weapons, click one and it is yours; a physics gun that holds and
 # freezes, a gravity gun that punts. Plus a jump course on pg_lobby's bonus track,
 # because a jump course is not a movement genre and it is what says the timer is not a
 # surf-and-bhop thing.
 #
-#     changelevel playground
+#     changelevel playlot
 #
 # kind: pack -- delivered, for the reason content/arena/game.yml sets out.
-# Published with `./server pack playground --source games/game-playground`.
+# Published with `./server pack playlot --source games/game-playground`.
 #
 # ITS PROPS WERE ALREADY WRITTEN THIS WAY, which is why this game was the easiest to
 # move: every entity and every weapon in the catalogue is named by PATH
@@ -26,7 +26,8 @@
 # the world and nothing else; changing a GAME replaces the module, the netcode and every
 # client's scene and puts everybody through signon.
 
-name: Playground
+name: "Zee's Playlot"
+# Still the published pack's id: renaming it is a re-publish on the content origin.
 content_id: tmc/playground
 version: 0.1.0
 kind: pack
@@ -80,6 +81,9 @@ cvars:
 #     extend_seconds: 900
 #     max_extends: 4
 metadata:
+  # The id this game had before it was renamed. `changelevel playground`, an allow list
+  # or a cfg/game/playground/ written for it still reach this game.
+  former_ids: [playground]
   map_vote:
     trigger: rtv_only
     duration_sec: 0
