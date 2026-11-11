@@ -72,9 +72,16 @@ for repo in $NATIVE_REPOS; do
     repo_root="$(cd "$(cd "$ROOT/addons/$addon" && pwd -P)/../.." && pwd -P)"
     PROJECTS_DIR="$(dirname "$repo_root")"
     on_disk() { basename "$repo_root"; }
+    # dot-bootstrap keeps ONE stamp ("<tag> <platform>") per library folder, so fetching
+    # macos-arm64 and then macos-x86_64 (export-native --platform macos) made each undo
+    # the other's stamp and download both every run. Here each platform keeps its own
+    # (.natives-<platform>) and is swapped into .natives around the call.
+    stampdir="$repo_root/addons/$addon/bin"
     for p in "${PLATFORMS[@]}"; do
         native_platform() { echo "$p"; }
+        [ -f "$stampdir/.natives-$p" ] && cp "$stampdir/.natives-$p" "$stampdir/.natives"
         fetch_natives "$ROOT"
+        [ -f "$stampdir/.natives" ] && [ "$(cut -d' ' -f2 "$stampdir/.natives")" = "$p" ] && cp "$stampdir/.natives" "$stampdir/.natives-$p"
     done
     lib="$repo_root/addons/$addon"
     if [ -f "$lib/$addon.gdextension" ] && [ -n "$(ls -A "$lib/bin/$HOST_PLAT" 2>/dev/null)" ]; then
