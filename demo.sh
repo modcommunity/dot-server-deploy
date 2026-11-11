@@ -211,7 +211,7 @@ GAME5_PUBLIC_PORT="${TMC_DEMO_GAME5_PUBLIC_PORT:-6068}"
 GAME5="${TMC_DEMO_GAME5-fatalcontact}"
 GAME5_NAME="${TMC_DEMO_GAME5_NAME:-TMC Fatal Contact Server}"
 
-# 66 (game-arena's own rate), and deliberately NOT the 128 the two timer servers run.
+# 66 (game-fatal-contact's own rate), and deliberately NOT the 128 the two timer servers run.
 #
 # A deathmatch is judged by whether a shot hit, not by a time to the millisecond, and
 # lag compensation does the work a higher tick rate would -- the server rewinds every

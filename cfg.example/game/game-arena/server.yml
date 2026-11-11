@@ -1,7 +1,7 @@
-# game-arena's deathmatch and gun game maps, as the packs arena-dm-maps publishes (one pack per
+# game-fatal-contact's deathmatch and gun game maps, as the packs fc-dm-maps publishes (one pack per
 # map, unpinned: the newest on the content origin, checked every start). A delivered pack has no
 # local root, so each manifest carries "movement": "walk" and the maps are walked, not surfed.
-# Add the surf maps (arena-surf-dm-maps) the same way once they are published. cp-orange-x3 is
+# Add the surf maps (fc-surf-dm-maps) the same way once they are published. cp-orange-x3 is
 # not listed: it is not published.
 maps:
   add:

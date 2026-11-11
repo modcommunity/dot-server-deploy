@@ -71,7 +71,7 @@
 # data/content-maps.json; a map is fetched the first time the server changes to it. An
 # upload of a new version reaches this server on its next restart, and if the origin is
 # down at a restart every map keeps the version it had. Only a game that reads its
-# descriptor's maps uses this list (game-g2gfast does); a game that ships all its maps as
+# descriptor's maps uses this list (game-airdrift does); a game that ships all its maps as
 # one pack names that pack in its own game.yml instead.
 
 defaults:
