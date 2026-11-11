@@ -586,7 +586,8 @@ func _prefetch(
 
 		print("  fetching %s@%s" % [content_id, version])
 
-		var res: DotResult = await cloud.ensure(StringName(content_id), version)
+		# "*" is every download group (dot-cloud 22): a server may switch to any map. Older builds fetch the ungrouped set.
+		var res: DotResult = await cloud.ensure(StringName(content_id), version, PackedStringArray(["*"]))
 
 		if not res.ok:
 			# [b]Not fatal.[/b] A pack that could not be fetched now is fetched on first use, exactly as it
@@ -1176,7 +1177,7 @@ func _resolve_addon_packs(
 
 		if cloud != null:
 			print("  fetching %s@%s" % [id, version])
-			var res: DotResult = await cloud.ensure(StringName(id), version)
+			var res: DotResult = await cloud.ensure(StringName(id), version, PackedStringArray(["*"]))  # every group
 
 			if not res.ok and res.error.code == DotError.CODE_VERSION:
 				# This build's addons cannot run it: leave it out so no game depends on it.
