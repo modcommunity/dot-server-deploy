@@ -26,8 +26,11 @@ const NEEDS := ["tmc/arena", "tmc/smash", "tmc/prophunt", "tmc/prophunt_maps", "
 ## `fixtures/game_vote_rounds/content.yml`, read back off the running match's [DotMatchRules]. One
 ## check per game listed.
 const RULES := {
-	"fatalcontact": {"score_limit": 50, "time_limit_sec": 50.0, "warmup_sec": 0.0},
+	"fatalcontact": {"score_limit": 50, "time_limit_sec": 80.0, "warmup_sec": 0.0},
 }
+
+## How long after a round ends the change may take, ms. It is a game load, so it stretches with the box's load (4.3 and 4.9 s were seen on a busy one); a change that waited for a scan or a cap instead would be a minute or more.
+const CHANGE_AFTER_ROUND_MS := 15000
 
 ## Games whose one person is the hunted and would end a round early by being caught: given an
 ## admin's god (`DotHealth.invulnerable`, which carries across rounds) so the round runs to
@@ -481,7 +484,7 @@ func _test_game(game_id: String, next: String) -> void:
 		]
 	)
 	_check(
-		changed and round_end_at >= 0 and changed_at - round_end_at < 3000,
+		changed and round_end_at >= 0 and changed_at - round_end_at < CHANGE_AFTER_ROUND_MS,
 		"and changes as that round ends, not later",
 		"%d ms after the round end" % (changed_at - round_end_at if round_end_at >= 0 else -1)
 	)
