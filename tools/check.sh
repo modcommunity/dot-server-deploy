@@ -403,6 +403,13 @@ fi
 
 echo
 echo "the selftest"
+# The example suites read examples/fixtures, but DotAddonConfig also reads res://cfg, and an
+# operator tier there (the provisioned cfg/ above, or a real install's) outranks the legacy
+# fixture files: 78 selftest checks and the game-vote ballot of multigame fail on a box that
+# has cfg/ (multigame is 73 passed, 0 failed with it aside). Put cfg/ aside until the booted
+# server below, the one place that needs it.
+cfg_aside=""
+if [ -d cfg ]; then cfg_aside="cfg.suites-aside.$$"; mv cfg "$cfg_aside"; trap '[ -d "$cfg_aside" ] && [ ! -d cfg ] && mv "$cfg_aside" cfg' EXIT; fi
 "$GODOT" --headless --path . res://examples/selftest.tscn || fails=$((fails + 1))
 
 echo "a game published from its own repository"
@@ -546,6 +553,7 @@ echo "the admin menu and the loading screen"
 echo
 echo "dot-trail's install (addon linked or not)"
 "$GODOT" --headless --path . res://examples/trail_wiring.tscn || fails=$((fails + 1))
+if [ -n "$cfg_aside" ]; then mv "$cfg_aside" cfg; cfg_aside=""; fi
 
 # The other half: a real DotServer, a real listener, the default game loaded and a module in
 # it. Everything the selftest cannot reach without starting one.

@@ -27,6 +27,9 @@ for proj in "$root"/game-*/project.godot "$root"/mg-*/project.godot; do
     [ -f "$proj" ] || continue
     d="$(basename "$(dirname "$proj")")"
     case "$d" in *-maps) continue ;; esac
+    # A linked worktree (.git is a file) is a branch copy named game-<repo>-<task>, not a
+    # game: its name is no installer id, so the table cannot answer for it. Only the repo itself.
+    [ -d "$root/$d/.git" ] || continue
     want="$(sed -n 's/^common\/physics_ticks_per_second=\([0-9][0-9]*\).*/\1/p' "$proj" | head -1)"
     want="${want:-60}"
     chk "$d default equals its project.godot ($want)" '[ "$(tbl "${d#game-}")" = "$want" ]'
