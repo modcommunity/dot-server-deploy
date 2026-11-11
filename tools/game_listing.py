@@ -7,7 +7,10 @@
 
 pack.id is game.yml's content_id (what content.lock.json and the published pack carry).
 name is game.yml's name. The description is the "In this 3D game, ..." sentence(s) of the README's
-opening paragraph, markdown stripped. A repo named mg-* is a MINIGAME, anything else a GAME.
+opening paragraph, markdown stripped. A MINIGAME is a game
+whose game.yml says `tmc_kind: MINIGAME`, or whose repository (or an old name in column 3 of
+dot-bootstrap's projects.tsv, so a renamed game-deathrun is still the mg-deathrun it was) is named
+mg-*; anything else is a GAME. TMC_PROJECTS_TSV overrides where projects.tsv is looked for.
 --check accepts a hand-edited file: it needs the format header, pack.id equal to content_id, the
 listing's name and a non-empty description. Imported by tools/import_defs.sh (listing route).
 """
@@ -50,6 +53,29 @@ def describe(readme):
     return "", "3D"
 
 
+def repo_names(game):
+    """The repository's name plus every other name projects.tsv gives it (renames, column 3)."""
+    me = os.path.basename(os.path.abspath(game))
+    tsv = os.environ.get("TMC_PROJECTS_TSV") or os.path.join(os.path.dirname(os.path.abspath(game)), "dot-bootstrap", "projects.tsv")
+    names = {me}
+    if os.path.isfile(tsv):
+        for line in open(tsv, encoding="utf-8"):
+            if line.startswith("#"):
+                continue
+            cols = line.rstrip("\n").split("\t")
+            row = {cols[0]} | set(cols[2].split(",") if len(cols) > 2 else [])
+            if me in row:
+                names |= row
+    return names
+
+
+def is_minigame(game, y):
+    kind = y.get("tmc_kind", "").upper()
+    if kind:
+        return kind == "MINIGAME"
+    return any(n.startswith("mg-") for n in repo_names(game))
+
+
 def build(game):
     y = yml_top(os.path.join(game, "game.yml"))
     cid, name = y.get("content_id", ""), y.get("name", "")
@@ -58,7 +84,7 @@ def build(game):
     desc, dim = describe(os.path.join(game, "README.md"))
     if not desc:
         raise ValueError("README.md has no 'In this 3D game, ...' paragraph")
-    mini = os.path.basename(os.path.abspath(game)).startswith("mg-")
+    mini = is_minigame(game, y)
     tags = [dim.upper(), "Multiplayer"] + (["Minigame"] if mini else [])
     return {"format": FORMAT, "version": 1, "listing": {
         "name": name, "description": desc, "tags": tags, "platforms": ["PLATFORM_WEB"],

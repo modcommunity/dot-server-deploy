@@ -3,13 +3,13 @@
 entries:
   - repo: game-hungario
     content: hungry_classic
-  - repo: game-g2gfast
+  - repo: game-airdrift
     content: airdrift
-  - repo: game-playground-maps
+  - repo: playlot-maps
     content: playground_maps
-  - repo: game-playground
+  - repo: game-playlot
     content: playlot
-  - repo: game-arena
+  - repo: game-fatal-contact
     content: fatalcontact
   - repo: mg-buses-from-hell
     content: buses
@@ -21,7 +21,7 @@ entries:
     content: wipeout
   - repo: mg-deathrun-maps
     content: deathrun_maps
-  - repo: mg-deathrun
+  - repo: game-deathrun
     content: deathrun
   - repo: mg-dangerous-delivery
     content: delivery
@@ -29,7 +29,7 @@ entries:
     content: lookatme
   - repo: mg-prop-hunt-maps
     content: prophunt_maps
-  - repo: mg-prop-hunt
+  - repo: game-prop-hunt
     content: prophunt
   - repo: hide-n-seek-maps
     content: hideseek_maps

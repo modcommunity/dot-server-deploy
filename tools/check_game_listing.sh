@@ -34,5 +34,15 @@ sed -i 's#gamemann/game-demo#gamemann/mg-demo#' "$f"
 python3 -I "$TOOL" --check "$G" >/dev/null 2>&1 && bad "--check passes a wrong pack.id" || ok "--check fails on a pack.id that is not content_id"
 python3 -I "$TOOL" --force "$G" >/dev/null 2>&1; python3 -I "$TOOL" --check "$G" >/dev/null 2>&1 && ok "--force rewrites it" || bad "--force did not repair"
 
+# A renamed minigame (mg-demo -> game-demo, old name in projects.tsv column 3) stays a minigame;
+# game.yml's tmc_kind wins over any name.
+R="$W/game-demo"; mkdir -p "$R"; cp "$G/game.yml" "$G/README.md" "$R/"
+printf '# header\ngame-demo\tgit@x:game-demo.git\tmg-demo\n' >"$W/projects.tsv"
+TMC_PROJECTS_TSV="$W/projects.tsv" python3 -I "$TOOL" "$R" >/dev/null 2>&1
+command -v jq >/dev/null && { [ "$(jq -r .listing.tmcKind "$R/deployment/game-listing.json")" = MINIGAME ] && ok "a renamed minigame (old mg-* name in projects.tsv) is still a minigame" || bad "renamed minigame lost its kind"; }
+rm -rf "$R/deployment"; printf 'tmc_kind: GAME\n' >>"$R/game.yml"
+TMC_PROJECTS_TSV="$W/projects.tsv" python3 -I "$TOOL" "$R" >/dev/null 2>&1
+command -v jq >/dev/null && { [ "$(jq -r .listing.tmcKind "$R/deployment/game-listing.json")" = GAME ] && ok "game.yml tmc_kind overrides the names" || bad "tmc_kind ignored"; }
+
 [ "$fails" -eq 0 ] && exit 0
 exit 1
