@@ -711,6 +711,33 @@ if ($Command -eq 'run') {
     }
 }
 
+# --- dot-core's page script -------------------------------------------------
+
+# Twin of install_dot_web in tools/server.in. The game origin's CSP has no
+# 'unsafe-eval', so every browser call DotWeb makes is a named function in dot-core's
+# dot_web.js, loaded in <head> before the engine's own script. embed.html names it in
+# its source; index.html is Godot's, so it is patched here.
+function Install-DotWeb([string]$Build) {
+    $js = Join-Path $Project 'addons\dot_core\web\dot_web.js'
+    if (-not (Test-Path -LiteralPath $js)) {
+        Write-Warning 'addons\dot_core\web\dot_web.js is missing (dot-core older than the CSP-safe DotWeb): this web build has no keyboard lock, leave prompt or parent messages'
+        return
+    }
+    Copy-Item -LiteralPath $js -Destination (Join-Path $Build 'dot_web.js') -Force
+    foreach ($name in 'index.html', 'embed.html') {
+        $page = Join-Path $Build $name
+        if (-not (Test-Path -LiteralPath $page)) { continue }
+        $html = [IO.File]::ReadAllText($page)
+        if (-not $html.Contains('dot_web.js')) {
+            $html = $html.Replace('<head>', "<head>`n<script src=`"dot_web.js`"></script>")
+            [IO.File]::WriteAllText($page, $html, (New-Object Text.UTF8Encoding($false)))
+        }
+        if (-not ([IO.File]::ReadAllText($page)).Contains('src="dot_web.js"')) {
+            Die "$page does not load dot_web.js, so DotWeb has no page side" 3
+        }
+    }
+}
+
 # --- The loader ------------------------------------------------------------
 
 function Write-Loader {
@@ -784,6 +811,7 @@ switch ($Command) {
             Copy-Item -LiteralPath $embed -Destination (Join-Path $Project 'web\build\embed.html') -Force
         }
 
+        Install-DotWeb (Join-Path $Project 'web\build')
         Write-Loader
         Write-Host "  wrote $(Join-Path $Project 'web\build')"
         exit 0
