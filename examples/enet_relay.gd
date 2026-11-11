@@ -16,7 +16,7 @@ const PACKS := {
 	"buses": ["tmc/buses"],
 	"deathrun": ["tmc/deathrun", "tmc/deathrun_maps"],
 	"delivery": ["tmc/delivery"],
-	"g2gfast": ["tmc/g2gfast"],
+	"airdrift": ["tmc/g2gfast"],
 	"hideseek": ["tmc/hideseek", "tmc/hideseek_maps"],
 	"murdermystery": ["tmc/murdermystery", "tmc/murdermystery_maps"],
 	"hungry_classic": ["tmc/hungry"],

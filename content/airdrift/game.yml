@@ -1,11 +1,11 @@
-# g2gfast. A bunny-hop and surf timer server, in the shape the genre grew up on:
+# airdrift (formerly g2gfast). A bunny-hop and surf timer server, in the shape the genre grew up on:
 # the movement cvars under their own names, a timer counted in ticks with sub-tick
 # zone crossings, styles, records, and a replay bot running the server record.
 #
-#     changelevel g2gfast
+#     changelevel airdrift
 #
 # kind: pack -- delivered, for the reason content/fatalcontact/game.yml sets out.
-# Published with `./server pack g2gfast --source games/game-g2gfast`.
+# Published with `./server pack airdrift --source games/game-g2gfast`.
 #
 # ITS IMPORTED MAPS ARE NOT IN THIS PACK, and that is deliberate: `maps/imported/` is 66 MB
 # of converted geometry published as one pack per map, so a player downloads the map the
@@ -23,7 +23,8 @@
 # geometry with a different sv_airaccelerate, and a timer server runs a ROTATION
 # rather than a mode. Both maps are in the catalogue and `g2g_map` switches them.
 
-name: g2gfast
+name: "Zee's Airdrift"
+# Still the published pack's id: renaming it is a re-publish on the content origin.
 content_id: tmc/g2gfast
 version: 0.1.0
 kind: pack
@@ -142,4 +143,9 @@ cvars:
 #     max_extends: 3           # at most this many times
 #   vote:
 #     time_limit_sec: 2400
+
+metadata:
+  # The id this game had before it was renamed. `changelevel g2gfast`, an allow list
+  # or a cfg/game/g2gfast/ written for it still reach this game.
+  former_ids: [g2gfast]
 

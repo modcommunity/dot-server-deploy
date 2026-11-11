@@ -21,7 +21,7 @@ const SHELL := "res://client/shell.tscn"
 ## Every game in the family, in the order they are played. hungario is one game over several ids
 ## (its modes); one of them stands for it, and its mode vote is its own vote.
 const ORDER := [
-	"fatalcontact", "playlot", "g2gfast", "hungry_classic", "hideseek", "zombiezone", "smash",
+	"fatalcontact", "playlot", "airdrift", "hungry_classic", "hideseek", "zombiezone", "smash",
 	"buses", "wipeout", "deathrun", "delivery", "lookatme", "prophunt",
 ]
 

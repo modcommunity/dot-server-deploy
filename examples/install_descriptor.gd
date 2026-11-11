@@ -106,7 +106,7 @@ func _test_template() -> void:
 const REPOSITORIES := {
 	"game-arena": "fatalcontact",
 	"game-playground": "playlot",
-	"game-g2gfast": "g2gfast",
+	"game-g2gfast": "airdrift",
 	"game-hungario": "hungry_classic",
 	"mg-smash-copter": "smash",
 	"mg-buses-from-hell": "buses",

@@ -45,9 +45,9 @@ func _init() -> void:
 	# The version is read from the descriptor rather than written here: a probe carrying
 	# its own copy of a version number is a probe that keeps passing against last week's
 	# pack after somebody bumps it.
-	var descriptor := TmcYaml.parse_file("res://content/g2gfast/game.yml")
+	var descriptor := TmcYaml.parse_file("res://content/airdrift/game.yml")
 	if not descriptor.ok:
-		print("  [FAIL] could not read content/g2gfast/game.yml: ", str(descriptor.error))
+		print("  [FAIL] could not read content/airdrift/game.yml: ", str(descriptor.error))
 		quit(1)
 		return
 

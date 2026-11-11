@@ -8,7 +8,7 @@
 #   ./demo.sh servers   the five of them, by name and number
 #
 # Every command below takes a server first, by number (1..5) or by what it runs
-# (buses, hungry, g2gfast, playlot, fatalcontact -- surf, sandbox, playground, dm and arena also work).
+# (buses, hungry, airdrift, playlot, fatalcontact -- surf, sandbox, playground, g2gfast, dm and arena also work).
 # Leave it out and it means server 1, which is what these did before they could
 # mean anything else.
 #
@@ -34,7 +34,7 @@
 #
 #   the game server   dot-server, loopback :6070, serving games out of content/
 #   game server 2     the same build on :6080, running hungry_classic
-#   game server 3     the same build on :6090, running g2gfast at 128 ticks
+#   game server 3     the same build on :6090, running airdrift at 128 ticks
 #   game server 4     the same build on :6100, running playlot at 128 ticks
 #   game server 5     the same build on :6110, running fatalcontact at 64 ticks
 #   nginx             already running; terminates TLS on :6064 -> :6070,
@@ -143,7 +143,7 @@ export DOT_CHAT_RELAY_COMMAND_SOURCE="${TMC_DEMO_RELAY_SOURCE:-2}"
 
 # A THIRD SERVER, and the first one in this demonstration that is not a 2D game.
 #
-# g2gfast is the bunny-hop and surf timer: dot-player-controller, dot-timer, dot-map and
+# airdrift (formerly g2gfast) is the bunny-hop and surf timer: dot-player-controller, dot-timer, dot-map and
 # dot-leaderboard in one process, which is four addons the other two servers never
 # load. It is here because a server browser showing two games of the same shape proves
 # less than one showing two of different shapes, and because the timer is the part of
@@ -153,7 +153,7 @@ export DOT_CHAT_RELAY_COMMAND_SOURCE="${TMC_DEMO_RELAY_SOURCE:-2}"
 # apart collide on a listener `ss` cannot see.
 GAME3_PORT="${TMC_DEMO_GAME3_PORT:-6090}"
 GAME3_PUBLIC_PORT="${TMC_DEMO_GAME3_PUBLIC_PORT:-6066}"
-GAME3="${TMC_DEMO_GAME3-g2gfast}"
+GAME3="${TMC_DEMO_GAME3-airdrift}"
 GAME3_NAME="${TMC_DEMO_GAME3_NAME:-TMC Bhop/Surf Server}"
 
 # [b]The tick rate is the one setting this server cannot take from cfg/.[/b] All three
@@ -669,7 +669,7 @@ do_status() {
 SERVERS=(
     "1 buses      $GAME_PORT  $PUBLIC_PORT        Buses From Hell"
     "2 hungry     $GAME2_PORT $GAME2_PUBLIC_PORT  Hungry"
-    "3 g2gfast    $GAME3_PORT $GAME3_PUBLIC_PORT  the bhop/surf timer"
+    "3 airdrift   $GAME3_PORT $GAME3_PUBLIC_PORT  the bhop/surf timer"
     "4 playlot    $GAME4_PORT $GAME4_PUBLIC_PORT  the sandbox"
     "5 fatalcontact $GAME5_PORT $GAME5_PUBLIC_PORT  the deathmatch"
 )
@@ -679,7 +679,7 @@ SERVERS=(
 ## be strict about a name only this file uses is a worse script.
 server_alias() {
     case "$1" in
-        surf|bhop|timer) printf 'g2gfast' ;;
+        surf|bhop|timer|g2gfast) printf 'airdrift' ;;
         sandbox|props|playground) printf 'playlot' ;;
         dm|deathmatch|arena) printf 'fatalcontact' ;;
         hungry_classic|hungry_frenzy) printf 'hungry' ;;
@@ -736,11 +736,11 @@ list_servers() {
 }
 
 ## The first argument if it names a server, otherwise nothing -- so `switch buses` and
-## `switch 3 g2gfast` are both unambiguous and neither needs a flag.
+## `switch 3 airdrift` are both unambiguous and neither needs a flag.
 ##
 ## [b]`buses` is both a server name and a game id, and that is the one collision.[/b]
 ## It resolves as a SERVER only when something follows it, which is what `switch buses
-## g2gfast` means and is the reading that cannot be got any other way; `switch buses`
+## airdrift` means and is the reading that cannot be got any other way; `switch buses`
 ## alone means putting server 1 into the buses game. The old spelling
 ## of every command in this file therefore still does what it did.
 ## Two arguments where the first names no server is a typo. Stop, rather than treat it
@@ -764,7 +764,7 @@ reject_unknown_server() {
 ## function that only prints "1" cannot say which of those it saw.
 ##
 ## [b]The whole rule, because the ambiguity is real and there is no clever way out of
-## it:[/b] four of the five server aliases are also game ids -- `buses`, `g2gfast`,
+## it:[/b] four of the five server aliases are also game ids -- `buses`, `airdrift`,
 ## `playlot` and `fatalcontact` -- so a single word cannot say which of the two it is.
 ##
 ##   - two or more arguments: the first names a server, and must.
@@ -844,7 +844,7 @@ do_switch() {
 ## DotMapCommands with default names answers to.
 map_command_for() {
     case "$1" in
-        g2gfast)    printf 'g2g_map' ;;
+        airdrift|g2gfast) printf 'g2g_map' ;;
         playlot|playground) printf 'pg_map' ;;
         fatalcontact|arena) printf 'arena_map' ;;
         *)          printf 'map' ;;

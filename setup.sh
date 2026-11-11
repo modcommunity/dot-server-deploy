@@ -401,7 +401,7 @@ game_tickrate() {
     done
     case "$g" in
         fatalcontact|arena) printf 66 ;;
-        g2gfast|playlot|playground) printf 128 ;;
+        airdrift|g2gfast|playlot|playground) printf 128 ;;
         *)                 printf 60 ;;
     esac
 }
