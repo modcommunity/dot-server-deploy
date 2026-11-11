@@ -26,7 +26,9 @@
 
 ## Whose packs may replace the build's addons
 
-`ADDON_NAMESPACES` in `client/shell.gd` (`modcommunity/` and two first-party packs) is the `namespaces` list `DotCloudAddonSet.plan_for` takes an overlay from. It decides only whose pack may **replace** the shell's own `addons/<dir>`, which then runs for every game the shell plays, from the boot scene, before sign-in. That is shell code, so it stays first-party.
+`TmcAddonNamespaces` (`client/tmc_addon_namespaces.gd`) is the `namespaces` list `DotCloudAddonSet.plan_for` takes an overlay from: the first-party defaults (`modcommunity/` and two first-party packs) plus what an operator who exports their own shell writes in `cfg/addons/namespaces.txt` (one `owner/` or `owner/repo` per line; the presets already include `cfg/addons/*`). It decides only whose pack may **replace** the shell's own `addons/<dir>`, which then runs for every game the shell plays, from the boot scene, before sign-in. So it is read from the shell build and **never from a server**: a server that could extend it could replace the player's code.
+
+The server side is `cfg/content/addons.yml`: `namespaces:` (the owners the operator trusts; it must match the shell build's file) and `overlays: [owner/repo@version]`, addon packs announced in `addon_set` beside `addons.lock`'s. An overlay whose owner is not under `namespaces:` fails the boot. A player on a stock shell refuses it (`refused` in the debug log) and joins on the build's own copy.
 
 It is not what a creator needs. A pack a server owner adds (`cfg/content/addons.yml`, `defaults: add:`) arrives as `content_extra`, is mounted under `res://dot_cloud/<id>/<version>/`, and its `entry` scene is started by `TmcAddonEntry` on the `side` its signed manifest names, with no namespace check: a creator's approved, signed pack already runs in the browser without the shell trusting its owner. Proven on dev with `sp-creator/probe` (`an extra pack started ... side=client`).
 

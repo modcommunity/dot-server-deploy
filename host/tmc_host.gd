@@ -870,11 +870,37 @@ func _advertise_addons() -> void:
 
 	var dirs := DirAccess.get_directories_at("res://addons")
 	var announced := addon_set_from(FileAccess.get_file_as_string(ADDONS_LOCK), dirs)
+	# An operator's `overlays:` ride beside the lock's; one for a dir the lock names replaces it.
+	var loaded := TmcAddonsConfig.load_from(_config_dir, _absolute(_data_dir))
+
+	if loaded.ok:
+		announced = merge_overlays(announced, (loaded.value as TmcAddonsConfig).overlay_set())
+	else:
+		DotLog.warn(CHANNEL, "addons.yml overlays not announced: %s" % loaded.error.message)
+
 	server.set("addon_set", announced)
 
 	DotLog.info(CHANNEL, "the addon versions clients are told about", {
 		"addons": announced.size(), "lock": ADDONS_LOCK,
 	})
+
+
+## [param base] with [param extra] laid over it by `dir`.
+static func merge_overlays(base: Array, extra: Array) -> Array:
+	var out: Array = []
+
+	for entry: Dictionary in base:
+		var replaced := false
+
+		for over: Dictionary in extra:
+			if over["dir"] == entry["dir"]:
+				replaced = true
+
+		if not replaced:
+			out.append(entry)
+
+	out.append_array(extra)
+	return out
 
 
 ## Addon repositories whose id on the site is a Workshop data pack (provides.json, weapons/), not the addon directory; a shell cannot overlay it as an addon.
