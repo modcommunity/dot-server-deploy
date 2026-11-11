@@ -152,6 +152,7 @@ func _ready() -> void:
 	# `?log=debug` on the page URL raises the level in a browser build, which has no command line.
 	var verbose := "--verbose" in OS.get_cmdline_user_args() or DotWeb.query_param("log") == "debug"
 	DotLog.set_level(DotLog.Level.DEBUG if verbose else DotLog.Level.INFO)
+	DotLog.info(CHANNEL, TmcNativeStatus.line())
 
 	TmcSiteDefault.apply(AUTH_CONFIG)
 

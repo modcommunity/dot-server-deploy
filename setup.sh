@@ -1893,6 +1893,19 @@ else
     ok "${#ADDONS[@]} addons in addons/ ($(IFS=', '; echo "${WHERE[*]}"))"
 fi
 
+# [b]The native libraries, which neither a clone nor a vendored copy carries.[/b]
+# dot-sim's Rust motor, snapshot codec and bot sight scan come from its release zip,
+# checked against natives.lock; without them the server runs the GDScript twins, the
+# same results and slower, and says so only in its startup "dot-sim native" line. Godot
+# loads a GDExtension only once an import has listed it, so an install forces one.
+natives_installed="$("$ROOT/tools/fetch-natives.sh" --root "$ROOT")" \
+    || warn "a native library failed its checksum and was not installed (GDScript runs, slower)"
+if [ "${natives_installed:-0}" -gt 0 ] 2>/dev/null; then
+    FORCE_IMPORT=1
+    FORCE_IMPORT_WHY="a native library was installed"
+    FORCE_IMPORT_NOTE="Godot loads a GDExtension only after an import lists it."
+fi
+
 # --- 3. Leftovers from when the games were vendored ------------------------
 #
 # [b]A vendored game left over from before the flip POISONS the class registry, and
@@ -2006,8 +2019,12 @@ elif [ "${FORCE_IMPORT:-0}" -eq 1 ]; then
     # names is no longer on disk. The message says which, because "overridden" with no
     # reason is the line that gets read as the script being unreliable.
     warn "${FORCE_IMPORT_WHY:-a vendored game directory was removed}, so --no-import is being overridden"
-    printf '       its class_name entries are still in the class cache, pointing at\n'
-    printf '       files that are gone. Only an import rewrites that.\n'
+    if [ -n "${FORCE_IMPORT_NOTE:-}" ]; then
+        printf '       %s\n' "$FORCE_IMPORT_NOTE"
+    else
+        printf '       its class_name entries are still in the class cache, pointing at\n'
+        printf '       files that are gone. Only an import rewrites that.\n'
+    fi
     "$GODOT" --headless --path "$ROOT" --import >/dev/null 2>&1
     ok "class_name globals registered"
 elif import_is_stale; then

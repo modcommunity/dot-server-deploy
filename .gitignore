@@ -3,6 +3,9 @@
 
 # Every dot-* addon is a separate repository. setup.sh links or copies them in.
 /addons/
+# tools/fetch-natives.sh stages its downloads here and removes them.
+/.natives-fetch.*
+/.natives.lock.*
 
 # The games were VENDORED here once — copied into one game/ and one scenes/ at this
 # project's root, because a .tscn names its scripts by absolute res:// path. They are

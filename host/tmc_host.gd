@@ -587,6 +587,8 @@ func _boot() -> bool:
 	# Before the server exists, because the first line this boot emits is the interesting one: the router registers itself as a DotLog sink on entering the tree,
 	# so what is built before it is not covered, and a log is most wanted for why the boot went wrong.
 	_build_logging()
+	# Which dot-sim modules run native and which run their GDScript twins (same results, slower).
+	DotLog.info(CHANNEL, TmcNativeStatus.line())
 
 	server = DotServer.new()
 	server.name = "Server"

@@ -1123,6 +1123,50 @@ ensure_lock_exported() {
     printf '  export_presets.cfg now exports addons.lock (a copy older than the tracked presets)\n'
 }
 
+# [b]The Web preset may not carry a native library.[/b] tools/fetch-natives.sh installs
+# dot-sim's .gdextension and bin/ for the server, and a plain web template that finds a
+# .gdextension in its pack stops every script (dot-sim docs/web.md). The tracked presets
+# exclude both; this adds them to an older copy, and check_web_has_no_natives reads the
+# pack afterwards, because Godot leaves a .gdextension out of extension_list.cfg only
+# when the file itself was left out.
+WEB_NATIVE_EXCLUDES="addons/dot_sim/*.gdextension, addons/dot_sim/bin/*"
+ensure_web_excludes_natives() {
+    local cfg="$PROJECT/export_presets.cfg" tmp
+
+    [ -f "$cfg" ] || return 0
+    tmp="$(mktemp "$PROJECT/.export_presets.XXXXXX")" || die "could not write a temporary file" 5
+    awk -v add="$WEB_NATIVE_EXCLUDES" '
+        /^\[preset\.[0-9]+\]$/ { web = 0 }
+        /^platform="Web"$/     { web = 1 }
+        web && /^exclude_filter=/ && index($0, "addons/dot_sim/bin/*") == 0 {
+            value = substr($0, length("exclude_filter=\"") + 1)
+            sub(/"$/, "", value)
+            print "exclude_filter=\"" (value == "" ? add : value ", " add) "\""
+            changed = 1
+            next
+        }
+        { print }
+        END { exit changed ? 0 : 3 }
+    ' "$cfg" > "$tmp"
+    case $? in
+        0) mv "$tmp" "$cfg" || die "could not update $cfg" 5
+           printf '  export_presets.cfg: the Web preset now excludes the dot-sim native library\n' ;;
+        3) rm -f "$tmp" ;;
+        *) rm -f "$tmp"; die "could not update $cfg" 5 ;;
+    esac
+}
+
+check_web_has_no_natives() {
+    local pck="$1"
+    [ -f "$pck" ] || return 0
+    if grep -qaF 'dot_sim.gdextension' "$pck"; then
+        die "$pck carries addons/dot_sim/dot_sim.gdextension.
+
+    A plain web template stops every script when it finds one. The Web preset's
+    exclude_filter needs: $WEB_NATIVE_EXCLUDES" 3
+    fi
+}
+
 # Writes res://client/build_stamp.gd, which client/shell_version.gd reads to show the shell's
 # commit on its first screens. Generated per export and git-ignored: a tracked copy would be
 # dirty after every export and wrong after every commit. A .gd rather than a data file
@@ -1324,6 +1368,24 @@ do_export_native() {
     # the cache is cheap.
     rm -rf "$PROJECT/.godot/exported"
 
+    # [b]Each client carries dot-sim's library for its own platform.[/b] setup.sh installs
+    # only this machine's; the export copies whichever ones the .gdextension names into
+    # the build, beside the binary. A platform with no pinned library ships the GDScript
+    # twins, which play the same. Godot exports only an extension the import has listed.
+    local natives=() n t
+    for t in "${targets[@]}"; do
+        case "$t" in
+            linux)   natives+=(linux-x86_64) ;;
+            windows) natives+=(windows-x86_64) ;;
+            macos)   natives+=(macos-arm64 macos-x86_64) ;;
+        esac
+    done
+    if [ -x "$PROJECT/tools/fetch-natives.sh" ]; then
+        n="$("$PROJECT/tools/fetch-natives.sh" --root "$PROJECT" --platform "$(IFS=,; echo "${natives[*]}")")" \
+            || die "a native library failed its checksum (tools/fetch-natives.sh said which)" 5
+        [ "${n:-0}" -gt 0 ] 2>/dev/null && "$GODOT" --headless --path "$PROJECT" --import >/dev/null 2>&1
+    fi
+
     local target preset outdir binary entry archive api_platform row
     local published=()
 
@@ -1439,6 +1501,7 @@ case "$COMMAND" in
     export-web)
         ensure_export_templates
         ensure_lock_exported
+        ensure_web_excludes_natives
         stamp_shell_version
         mkdir -p "$PROJECT/web/build"
 
@@ -1467,6 +1530,7 @@ case "$COMMAND" in
         # reason -- the story that put the check here is on the function.
         check_excluded_maps "$PROJECT/web/build/index.pck"
         check_lock_exported "$PROJECT/web/build/index.pck"
+        check_web_has_no_natives "$PROJECT/web/build/index.pck"
 
         # 3D textures to lossy WebP for the browser only; desktop keeps the addons' lossless
         # imports. The page's progress bar needs the new pck size, so it is re-stamped.
