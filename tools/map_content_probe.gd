@@ -1,6 +1,6 @@
 extends SceneTree
 
-# [b]Loaded out of the MOUNT, not preloaded, because the game is not in this build.[/b] game-g2gfast
+# [b]Loaded out of the MOUNT, not preloaded, because the game is not in this build.[/b] game-airdrift
 # is a delivered pack: its scripts exist at `res://dot_cloud/g2gfast/<version>/game/…`, a path no
 # constant here can name, because the version belongs to the game and this file belongs to the host.
 

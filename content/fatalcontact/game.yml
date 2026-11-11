@@ -3,7 +3,7 @@
 #
 #     changelevel fatalcontact
 #
-# WHY IT IS HERE AND NOT ONLY IN ITS OWN REPOSITORY. game-arena has had a netcode bridge
+# WHY IT IS HERE AND NOT ONLY IN ITS OWN REPOSITORY. game-fatal-contact has had a netcode bridge
 # and a headless suite since it was written and no client anybody could sit down at: no
 # camera rig, no input sampling, no renderer. It was the reference game with nothing to
 # reference. Adding it here is what turned that around, and — exactly as this family's
@@ -33,7 +33,7 @@
 # path outside dot-cloud's mount -- a server that could name one could ask every client
 # to load any scene in its build -- so a relative path is the only spelling that resolves.
 #
-# game-arena references its own files by relative path and rebases its own res:// strings,
+# game-fatal-contact references its own files by relative path and rebases its own res:// strings,
 # which is what makes it correct both in a build and at res://dot_cloud/arena/<version>/.
 # Published with `./server pack fatalcontact --source games/game-arena`.
 #
