@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
-# Publishes the exported DEV web shell (web/build, from dev-shell.sh) to the dev games bucket and registers
-# it on the dev_games site, so games.tmcdev.net frames a shell that trusts the tmc-dev pack key.
+# Publishes the exported DEV web shell (web/build, from dev-shell.sh) to the dev site's game store (storez) and registers
+# it on the dev sites, so tmcdev.net and games.tmcdev.net frame a shell that trusts the tmc-dev pack key.
 #
 #   tools/dev-shell-publish.sh [--build ID] [--no-register]      (dev-shell.sh runs it; --no-publish there skips it)
 #   tools/dev-shell-publish.sh --register-only --build ID        (deploy-web-shell.sh --dev runs this after its upload)
 #
-# Dev only: credentials come from ~/godot/.env.dev (the dev bucket), the origin is dev.dotgames.org, the
-# app segment is `godot`, and nothing is pinned. Secrets are read by the tools that need them and never printed.
+# Dev only. The upload goes through the dev site's web build API (publish-web-shell.sh --api, docs/web-shell-api.md;
+# site DEV_SHELL_API, default https://tmcdev.net), which writes to whatever store the site runs on (GAMES_STORE=storez),
+# so no bucket credentials are involved. SHELL_PUBLISH_TOKEN, the dev site's SHELL_PUBLISH machine key (Admin -> Game ->
+# Releases, or SetShellPublishKey), comes from ~/godot/.env.dev and is never printed. The origin is dev.dotgames.org,
+# the app segment is `godot`, and nothing is pinned.
 # The WebGameBuild row is inserted on dev01 over ssh into BOTH dev databases: dev_games (games.tmcdev.net) and tmc_dev
 # (tmcdev.net, which every app reads its engine from; app 69 "godot" is the shared engine app). Without the tmc_dev row
 # every app says "This game has no engine location configured". Both URLs stay on dev01 and are never printed.
@@ -15,6 +18,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 env_file=${DEV_SHELL_ENV:-$HOME/godot/.env.dev} origin=https://dev.dotgames.org app=godot
+api_site=${DEV_SHELL_API:-https://tmcdev.net}
 host=${DEV_SHELL_HOST:-dev01} remote_envs=${DEV_GAMES_REMOTE_ENVS:-\$HOME/stack/website-city/.env.dev-games \$HOME/stack/website-city/.env}
 build= entry= register=1 publish=1
 while [ $# -gt 0 ]; do
@@ -32,22 +36,17 @@ case $build in */*|*..*|*" "*) echo "error: not a single path segment: $build" >
 
 if [ "$publish" = 1 ]; then
     [ -d web/build ] || { echo "error: no web/build; run tools/dev-shell.sh first" >&2; exit 1; }
+    grep -q '^SHELL_PUBLISH_TOKEN=.' "$env_file" 2>/dev/null || [ -n "${SHELL_PUBLISH_TOKEN:-}" ] ||
+        { echo "error: no SHELL_PUBLISH_TOKEN in $env_file or the environment (the dev site's SHELL_PUBLISH key)" >&2; exit 1; }
+    case $api_site in *moddingcommunity.com*) echo "error: refusing the production site for a dev shell" >&2; exit 1 ;; esac
     zip=$(mktemp -d)/shell.zip
     # content/ is the games' packs; a shell build is the engine and client only.
     (cd web/build && zip -qr "$zip" . -x 'content/*')
-    tools/publish-web-shell.sh --zip "$zip" --env "$env_file" --build "$build" --app "$app" \
-        --notes "dev shell, tmc-dev key" | grep -v '^INSERT\|^SELECT\|^FROM\|^ON CONFLICT\|^       '
+    tools/publish-web-shell.sh --zip "$zip" --env "$env_file" --api "$api_site" --origin "$origin" --build "$build" \
+        --app "$app" --notes "dev shell, tmc-dev key" | grep -v '^INSERT\|^SELECT\|^FROM\|^ON CONFLICT\|^       '
     rm -rf "$(dirname "$zip")"
-    # dev.dotgames.org reads from storez (website-city .env GAMES_STORE=storez), not the bucket the upload above
-    # wrote, so it 404s until the build is copied across. Register first: the copy takes ACTIVE builds only.
-    if [ "$register" = 1 ] && [ "${DEV_SHELL_STOREZ_COPY:-1}" = 1 ]; then
-        DEV_SHELL_STOREZ_COPY=0 "$0" --register-only --build "$build"
-        # shellcheck disable=SC2029
-        ssh "$host" "cd \$HOME/stack/website-city && npx tsx --env-file=.env scripts/copy-s3-to-storez.ts --prefix=game/$app/$build/ --apply" | tail -1
-        code=$(curl -s -o /dev/null -w '%{http_code}' "$origin/$app/$build/$entry")
-        [ "$code" = 200 ] || { echo "error: $origin/$app/$build/$entry answers $code after the storez copy" >&2; exit 1; }
-        exit 0
-    fi
+    code=$(curl -s -o /dev/null -w '%{http_code}' "$origin/$app/$build/$entry")
+    [ "$code" = 200 ] || { echo "error: $origin/$app/$build/$entry answers $code after the upload" >&2; exit 1; }
 fi
 [ "$register" = 1 ] || exit 0
 
