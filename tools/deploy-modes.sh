@@ -2,7 +2,7 @@
 #
 # Write the files for running a server in Docker Compose or on a Pterodactyl panel.
 #
-#   tools/deploy-modes.sh --mode compose --out ./my-server --name "My server" --games gamemann/game-g2gfast
+#   tools/deploy-modes.sh --mode compose --out ./my-server --name "My server" --games gamemann/game-airdrift
 #   tools/deploy-modes.sh --mode pterodactyl --out ./panel --name "My server"
 #   add --dry-run to list what would be written and write nothing
 #
@@ -12,7 +12,7 @@
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-MODE="" OUT="" DRY=0 NAME="My TMC server" GAME="g2gfast" GAMES="gamemann/game-g2gfast"
+MODE="" OUT="" DRY=0 NAME="My TMC server" GAME="game-airdrift" GAMES="gamemann/game-airdrift"
 PORT=6064 MAXP=64 RCON="" DOMAIN="" PROJECT="$ROOT"
 
 die() { printf 'deploy-modes: %s\n' "$1" >&2; exit "${2:-1}"; }

@@ -30,9 +30,9 @@
     "variables": [
         {
             "name": "Games",
-            "description": "The games this server installs and offers, comma-separated, as `owner/name@version`: `gamemann/game-g2gfast@latest`, `gamemann/mg-buses-from-hell@v0.1.2`, `asher/game-testing@1.0.0`. The owner is the publisher's site username (`modcommunity` for official packs), the name is their repository, and the version is a release: `@latest` (or no version) is the newest published, and `@v1.2.0` and `@1.2.0` are the same pin. Checked on every start: a pinned version that changed, or a newer release under `@latest`, is installed then, and the game.yml it replaces is kept as game.yml.prev. The descriptor that says how to start a game comes out of its signed pack, so any member's game installs exactly like ours. A game lands in a directory named after the NAME half, and that short name is what TMC_GAME and `changelevel` take; two owners who published the same name cannot both be listed, and the second is refused with both names in the log. Anything else already in content/ is not offered. A bare name with no owner (`arena`) is a game already in content/. Leave it empty to offer everything the install brought, which is what a development box wants and not what a panel does.",
+            "description": "The games this server installs and offers, comma-separated, as `owner/name@version`: `gamemann/game-airdrift@latest`, `gamemann/mg-buses-from-hell@v0.1.2`, `asher/game-testing@1.0.0`. The owner is the publisher's site username (`modcommunity` for official packs), the name is their repository, and the version is a release: `@latest` (or no version) is the newest published, and `@v1.2.0` and `@1.2.0` are the same pin. Checked on every start: a pinned version that changed, or a newer release under `@latest`, is installed then, and the game.yml it replaces is kept as game.yml.prev. The descriptor that says how to start a game comes out of its signed pack, so any member's game installs exactly like ours. A game lands in a directory named after the NAME half, and that short name is what TMC_GAME and `changelevel` take; two owners who published the same name cannot both be listed, and the second is refused with both names in the log. Anything else already in content/ is not offered. A bare name with no owner (`arena`) is a game already in content/. Leave it empty to offer everything the install brought, which is what a development box wants and not what a panel does.",
             "env_variable": "TMC_GAMES",
-            "default_value": "gamemann/game-g2gfast",
+            "default_value": "gamemann/game-airdrift",
             "user_viewable": true,
             "user_editable": true,
             "rules": "nullable|string|max:512",
@@ -40,9 +40,9 @@
         },
         {
             "name": "Game",
-            "description": "Which of GAMES boots: its full id, `gamemann/game-g2gfast`, or just the name (`game-g2gfast`) while only one owner's game in GAMES has that name. It has to be one of GAMES.",
+            "description": "Which of GAMES boots: its full id, `gamemann/game-airdrift`, or just the name (`game-airdrift`) while only one owner's game in GAMES has that name. It has to be one of GAMES.",
             "env_variable": "TMC_GAME",
-            "default_value": "gamemann/game-g2gfast",
+            "default_value": "gamemann/game-airdrift",
             "user_viewable": true,
             "user_editable": true,
             "rules": "required|string|max:160",
