@@ -11,7 +11,7 @@ const RoundsWithoutMatch := preload("res://examples/fixtures/rounds_without_matc
 
 const Host := preload("res://host/tmc_host.gd")
 
-const CHECKS := 492
+const CHECKS := 496
 
 var _passed := 0
 var _failed := 0
@@ -788,7 +788,7 @@ func _test_addon_announce() -> void:
 	_section("the addon set a server announces")
 	var lock := "arena-weapons\tv1.4.10\ndot-core\tv0.1.30\n"
 	var out := Host.addon_set_from(lock, PackedStringArray(["arena_weapons", "dot_core"]))
-	_check(out.size() == 2 and out[0]["id"] == "gamemann/arena-weapons" and out[0]["version"] == "1.4.10", "a game addon's pack is announced under its author, at the lock's version")
+	_check(out.size() == 2 and out[0]["id"] == "gamemann/fc-weapons" and out[0]["repo"] == "fc-weapons" and out[0]["version"] == "1.4.10", "a game addon's pack is announced under its author and published name, at the lock's version")
 	_check(out[1]["id"] == "modcommunity/dot-core" and out[1]["version"] == "0.1.30", "a dot-* addon keeps the organisation's id and version")
 	_check(Host.addon_set_from(lock, PackedStringArray(["natural_disasters"])).is_empty(), "an addon the lock does not name is not announced")
 
@@ -806,7 +806,8 @@ func _test_addon_announce() -> void:
 	_check(TmcAddonNamespaces.parse_lines("# c\nalice/ # me\n\n") == PackedStringArray(["alice/"]), "the namespaces file is one entry per line with comments")
 	_check(TmcAddonNamespaces.covers(TmcAddonNamespaces.DEFAULTS, "gamemann/arena-weapons") and not TmcAddonNamespaces.covers(TmcAddonNamespaces.DEFAULTS, "gamemann/arena-weapons-evil"), "the defaults keep their exact-id entries exact")
 	for dir: String in ["arena_weapons", "zee_weapons", "zed_weapons", "natural_disasters"]:
-		var id := Host.content_owner(Host.addon_repo(dir)) + "/" + Host.addon_repo(dir)
+		var id := str(TmcAddonNamespaces.pack_for(dir)["id"])
+		_check(str(TmcAddonNamespaces.pack_for(dir)["repo"]) == id.get_file(), "%s's pack repo is its id's name, as the addon set requires" % dir)
 		_check(TmcAddonNamespaces.covers(TmcAddonNamespaces.DEFAULTS, id), "the shell takes %s's overlay (%s), since it does not carry it" % [dir, id])
 
 	var pins: Variant = JSON.parse_string(Host.pack_pins_json(out, {"modcommunity/dot-core": "9.9.9", "ow/map_a": "1.0.0"}))
