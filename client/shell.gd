@@ -987,9 +987,6 @@ func _indeterminate(on: bool) -> void:
 ## Creates the content client, once, before the first connection.
 ## The trusted key comes from a file and is the whole of the security here: a mounted pack can contain scripts. `trusted_keys` is in `sensitive_keys`, so no query string can make itself a publisher;
 ## with no `res://client/content.json` the build plays only the games it already has.
-var _pack_roots: TmcPackRoots
-
-
 func _ensure_cloud() -> void:
 	if _cloud != null and is_instance_valid(_cloud):
 		return
@@ -1040,10 +1037,6 @@ func _ensure_cloud() -> void:
 	_cloud.failed.connect(_on_cloud_failed)
 	_cloud.progress_changed.connect(_on_cloud_progress_detail)
 	_cloud.job_progress_changed.connect(_on_cloud_job)
-
-	# A mounted pack that carries an addon's heavy assets (the weapons' models) is put on that addon's fallback list.
-	_pack_roots = TmcPackRoots.new()
-	_pack_roots.attach(_cloud)
 
 	add_child(_cloud)
 
