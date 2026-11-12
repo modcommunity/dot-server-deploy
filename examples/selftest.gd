@@ -798,7 +798,7 @@ func _test_addon_announce() -> void:
 	cfg = TmcAddonsConfig.new()
 	_check(cfg.read({"namespaces": ["alice/"], "overlays": ["alice/dot-x@v1.0.0"]}).ok, "a trusted owner's overlay is read")
 	var mixed := Host.merge_overlays(out, cfg.overlay_set())
-	_check(mixed.size() == 2 and mixed[1]["dir"] == "dot_x" and mixed[1]["id"] == "alice/dot-x" and mixed[1]["version"] == "1.0.0", "the overlay is announced beside the lock's set")
+	_check(mixed.size() == 3 and mixed[2]["dir"] == "dot_x" and mixed[2]["id"] == "alice/dot-x" and mixed[2]["version"] == "1.0.0", "the overlay is announced beside the lock's set")
 	_check(not TmcAddonsConfig.new().read({"namespaces": ["*"]}).ok and not TmcAddonsConfig.new().read({"namespaces": ["alice"]}).ok, "a wildcard or a bare name is not a namespace")
 
 	var spaces := TmcAddonNamespaces.resolve(PackedStringArray(["alice/", "bad entry", "modcommunity/"]))
