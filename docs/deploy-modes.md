@@ -13,7 +13,7 @@ Run `./setup.sh --full` and the first question is this one. To skip the question
 ## Docker Compose
 
 ```bash
-./setup.sh --mode compose --out ~/my-server --name "Friday night" --games gamemann/game-g2gfast --game g2gfast --port 6064
+./setup.sh --mode compose --out ~/my-server --name "Friday night" --games gamemann/game-airdrift --game game-airdrift --port 6064
 cd ~/my-server
 docker compose up -d --build
 docker compose ps        # "healthy" once the server answers on its game port
