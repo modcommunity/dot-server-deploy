@@ -223,3 +223,8 @@ net_max_pps: 0
 # Maximum snapshots per second sent to a client. 0 = use the game's own rate. Never
 # above the game's tick rate; it is lowered to a divisor of the tick rate if need be.
 net_max_update_rate: 0
+
+# Run physics on its own thread (physics/3d/run_on_separate_thread). Read by ./server, which writes
+# override.cfg before the engine starts. Default off: no measured gain on a headless server, and a
+# space query is then safe only inside the physics step. See docs/operator-config.md. TMC_PHYSICS_THREAD=1 does the same.
+# sv_physics_thread: 0
