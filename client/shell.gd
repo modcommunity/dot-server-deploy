@@ -1801,6 +1801,13 @@ func _load_solo_inner(content_id: String, version: String) -> DotResult:
 	_solo_version = wanted
 	DotLog.info(CHANNEL, "starting solo", {"content": content_id, "version": wanted})
 
+	# The game addons its pack requires (zee_weapons for Prop Hunt, arena_weapons for Fatal Contact)
+	# are not in this shell: fetched as the overlay a server would announce, then a restart into it.
+	# Asked of the store before the pack is fetched, because the pack's own requirement check refuses
+	# it while one is missing. Returns only when nothing is missing or it cannot be had.
+	if await _solo_overlay(content_id, await _solo_needs(content_id, wanted)):
+		return DotResult.success(null)
+
 	# Everything is registered and fetched first, so the total is fixed before a byte moves; mounting follows.
 	await _prefetch_solo(content_id, wanted)
 	_cloud.job_begin_unpack()
@@ -1835,12 +1842,6 @@ func _load_solo_inner(content_id: String, version: String) -> DotResult:
 		if not dep.ok:
 			return DotResult.fail(dep.error.code,
 				"This game needs %s, which could not be downloaded." % key, str(dep.error))
-
-	# The game addons its scripts name (arena_weapons for Fatal Contact) are not in this shell:
-	# fetched as the overlay a server would announce, then a restart into it, before any of
-	# the game's scripts is parsed. Returns only when nothing is missing or it cannot be had.
-	if await _solo_overlay(content_id, mount):
-		return DotResult.success(null)
 
 	var session := TmcSoloSession.new()
 	session.name = "Solo"
@@ -1934,23 +1935,42 @@ func _load_solo_inner(content_id: String, version: String) -> DotResult:
 
 
 
-## The addons a game's pack says it needs (`addons` in its `requires.floor.json`) that this
-## shell neither carries nor has mounted, fetched as the overlay a server would announce and
-## restarted into, as [method _update_addons] does for a join. True when a restart is under way
-## (the caller stops there); false to play on what is here, which is also the answer after a
-## failed start on the same overlay or [constant MAX_UPDATE_RESTARTS] restarts for it.
-func _solo_overlay(content_id: String, mount: String) -> bool:
-	var path := mount.path_join(SOLO_FLOOR_FILE)
-	if not FileAccess.file_exists(path):
-		return false
+## The addons a game's pack names (`addons` in its `requires.json` and `requires.floor.json`),
+## read from the store before the pack is fetched: dir -> level. Empty when the pack has neither.
+func _solo_needs(content_id: String, version: String) -> Dictionary:
+	var needs := {}
+	var game: DotResult = await _cloud.resolve_manifest(StringName(content_id), version)
+	if not game.ok:
+		return needs
+	for file in SOLO_REQUIRE_FILES:
+		var read: DotResult = await _cloud.read_pack_file(game.value as DotCloudManifest, file)
+		if read.ok:
+			needs.merge(solo_addons_in((read.value as PackedByteArray).get_string_from_utf8()))
+	return needs
 
-	var floors: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
-	var needs: Variant = (floors as Dictionary).get("addons", {}) if floors is Dictionary else {}
-	if not (needs is Dictionary):
-		return false
 
+## The `addons` map of a requires file's text (dir -> level); empty for anything else.
+static func solo_addons_in(text: String) -> Dictionary:
+	var json := JSON.new()
+	var out := {}
+	if json.parse(text) != OK or not (json.data is Dictionary):
+		return out
+	var addons: Variant = (json.data as Dictionary).get("addons", {})
+	if addons is Dictionary:
+		for dir: Variant in addons:
+			if dir is String and str(dir).is_valid_filename() and not str(dir).contains("."):
+				out[dir] = addons[dir]
+	return out
+
+
+## The addons in [param needs] (from [method _solo_needs]) that this shell neither carries nor
+## has mounted, fetched as the overlay a server would announce and restarted into, as
+## [method _update_addons] does for a join. True when a restart is under way (the caller stops
+## there); false to play on what is here, which is also the answer after a failed start on the
+## same overlay or [constant MAX_UPDATE_RESTARTS] restarts for it.
+func _solo_overlay(content_id: String, needs: Dictionary) -> bool:
 	var announce: Array = []
-	for dir: String in (needs as Dictionary):
+	for dir: String in needs:
 		if DirAccess.dir_exists_absolute("res://addons/%s" % dir):
 			continue
 		var pack := TmcAddonNamespaces.pack_for(dir)
@@ -2020,8 +2040,9 @@ func _solo_overlay(content_id: String, mount: String) -> bool:
 	return true
 
 
-## Where a game's pack names the addons (and their API floors) it was built against.
-const SOLO_FLOOR_FILE := "requires.floor.json"
+## Where a game's pack names the addons it needs (and their API floors): the hard requirements
+## dot-cloud checks before mounting, and the floors it was built against.
+const SOLO_REQUIRE_FILES: PackedStringArray = ["requires.json", "requires.floor.json"]
 
 
 ## This process is playing alone: packs mounted from here on are `solo`, and the index offers
