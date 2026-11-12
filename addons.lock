@@ -5,7 +5,7 @@ dot-2d	v0.1.7
 dot-achievements	v0.1.9
 dot-audio	v0.1.17
 dot-auth	v0.1.15
-dot-bot	v0.1.25
+dot-bot	v0.1.26
 dot-bot-record	v0.1.3
 dot-browser	v0.1.6
 dot-chat	v0.1.7
@@ -44,7 +44,7 @@ dot-platform	v0.1.10
 dot-player	v0.1.6
 dot-player-char	v0.1.64
 dot-player-class	v0.1.9
-dot-player-controller	v0.4.9
+dot-player-controller	v0.4.10
 dot-procedural-generation	v0.1.5
 dot-profile	v0.1.25
 dot-profiler	v0.1.3
