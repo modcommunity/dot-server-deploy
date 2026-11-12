@@ -11,7 +11,7 @@ const RoundsWithoutMatch := preload("res://examples/fixtures/rounds_without_matc
 
 const Host := preload("res://host/tmc_host.gd")
 
-const CHECKS := 496
+const CHECKS := 503
 
 var _passed := 0
 var _failed := 0
@@ -813,6 +813,19 @@ func _test_addon_announce() -> void:
 	var pins: Variant = JSON.parse_string(Host.pack_pins_json(out, {"modcommunity/dot-core": "9.9.9", "ow/map_a": "1.0.0"}))
 	_check(pins is Dictionary and pins.get("ow/map_a") == "1.0.0" and pins.get("modcommunity/dot-core") == "9.9.9", "sv_pack_pins lists mounted packs, and what is mounted wins over the lock")
 	_check(Host.pack_pins_json([], {}) == "", "nothing pinned reports nothing")
+
+	# Download groups: the game names them per dir, the shell unions what it is about to build.
+	var named := Host.with_groups(out, Host.sanitize_groups({"arena_weapons": PackedStringArray(["weapon-b", "weapon-a"]), "dot_nowhere": ["x"], "dot_core": [3]}))
+	_check(named[0]["groups"] == ["weapon-b", "weapon-a"] and not named[1].has("groups") and not out[0].has("groups"), "the game's groups ride its dir's entry only, on a copy; a malformed list is dropped")
+	var server := [
+		{"dir": "arena_weapons", "groups": ["weapon-rifle", "weapon-awp"]}, {"dir": "dot_ui"}, {"dir": "zee_weapons", "groups": ["weapon-awp", "weapon-x"]},
+	]
+	_check(TmcAddonGroups.needed_groups(server, {"arena_weapons": {}, "dot_ui": {}}) == PackedStringArray(["weapon-awp", "weapon-rifle"]), "an entry without groups adds none to the union")
+	_check(TmcAddonGroups.needed_groups(server, {"dot_ui": {}}) == PackedStringArray(["*"]), "nothing named is everything")
+	_check(TmcAddonGroups.needed_groups([{"dir": "a", "groups": ["*"]}, {"dir": "b", "groups": ["g"]}], {"a": {}, "b": {}}) == PackedStringArray(["*"]) and TmcAddonGroups.needed_groups([{"dir": "a", "groups": "g"}], {"a": {}}) == PackedStringArray(["*"]), "a wildcard or a malformed field is everything")
+	_check(TmcAddonGroups.wanted_groups(server, {"arena_weapons": {}, "zee_weapons": {}}, {"groups": ["weapon-knife"]}) == PackedStringArray(["weapon-awp", "weapon-knife", "weapon-rifle", "weapon-x"]), "never narrower than the running overlay")
+	_check(TmcAddonGroups.wanted_groups(server, {"arena_weapons": {}}, {"addons": {}}) == PackedStringArray(["*"]), "a plan from before groups took everything, and keeps it")
+	_check(TmcAddonGroups.covers(PackedStringArray(["a", "b"]), PackedStringArray(["b"])) and not TmcAddonGroups.covers(PackedStringArray(["a"]), PackedStringArray(["a", "b"])) and not TmcAddonGroups.covers(PackedStringArray(["a"]), PackedStringArray(["*"])) and TmcAddonGroups.covers(PackedStringArray(["*"]), PackedStringArray(["z"])), "an overlay covers a server only with every group it needs")
 	_done()
 
 

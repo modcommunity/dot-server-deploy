@@ -10,6 +10,18 @@
 4. The main scene `client/boot.tscn` (dot-cloud's `dot_cloud_boot.gd`, which names no addon class) mounts the overlay before anything is compiled and hands over to `client/shell.tscn`.
 5. The shell confirms the start, goes back to the server and joins on the newer addons.
 
+## Download groups: only the weapons the game uses
+
+A pack can split files into download groups (dot-cloud's `groups.json`; arena-weapons has one group per weapon, `weapon-<id>`). Once the game's module is loaded, `TmcHost._advertise_addon_groups` asks it for `addon_groups()` (duck-typed: `{dir: [group, ...]}`) and re-announces the set with a `groups` list on those dirs' entries. game-arena names the groups of every weapon its server can hand out.
+
+The shell builds the overlay with the union of what the wanted entries name (`TmcAddonGroups`, `client/tmc_addon_groups.gd`), because dot-cloud takes one group list for a whole overlay:
+
+- **Everything (`*`) when unsure**: no wanted entry names groups (an older server, a game that names none, a failed module), or one names `*` or something malformed.
+- **An entry without the field adds nothing.** A pack without `groups.json` has only ungrouped files, which every selection takes. So a game that narrows one grouped pack has to name every grouped pack its server runs; today only arena-weapons has groups.
+- **Never narrower than the running overlay**: its groups are unioned in, so moving between servers does not restart twice.
+- **A group the mounted overlay lacks is a rebuild**, not a top-up: a deferred group cannot be fetched into a mounted overlay. If a server's game needs groups the running overlay was built without (same versions), the shell rebuilds it with the union and restarts, under the same two-restart bound as an update.
+- A dot-cloud without groups (0.1.47 and older) has no `groups` property; the shell then sets nothing and takes everything. Solo play builds with everything.
+
 ## Rules
 
 - **A desktop relaunch passes both halves of the command line.** `OS.get_cmdline_args()` stops at the bare `--`, and everything this shell reads is after it ([native-client.md](native-client.md#the-launch-arguments-need-the-bare---)).
