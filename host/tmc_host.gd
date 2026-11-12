@@ -87,6 +87,9 @@ var _module_path := ""
 ## Whether the last game change failed to bring its module up.
 ## Fatal at boot and merely loud afterwards: a server running a game with no netcode is worse than one that refused to start, but refusing once players are on it drops them.
 var _module_failed := false
+## What `_advertise_addons` announced before any game named its download groups, and the groups the current game's module names (`addon_groups()`).
+var _addon_announced: Array = []
+var _addon_groups := {}
 
 
 func _ready() -> void:
@@ -880,10 +883,83 @@ func _advertise_addons() -> void:
 	else:
 		DotLog.warn(CHANNEL, "addons.yml overlays not announced: %s" % loaded.error.message)
 
-	server.set("addon_set", announced)
+	_addon_announced = announced
+	server.set("addon_set", with_groups(announced, _addon_groups))
 
 	DotLog.info(CHANNEL, "the addon versions clients are told about", {
 		"addons": announced.size(), "lock": ADDONS_LOCK,
+	})
+
+
+## [param entries] with a `groups` list on each entry whose dir [param groups] names: the download groups (dot-cloud's `groups.json`) a client
+## needs of that pack for this game. An entry the game does not name gets no field, which a client reads as everything.
+static func with_groups(entries: Array, groups: Dictionary) -> Array:
+	var out: Array = []
+
+	for entry: Dictionary in entries:
+		var copy := entry.duplicate(true)
+		var dir := str(copy.get("dir", ""))
+
+		if groups.has(dir):
+			copy["groups"] = (groups[dir] as Array).duplicate()
+
+		out.append(copy)
+
+	return out
+
+
+## The module's `addon_groups()` as `{dir: [group, ...]}` of strings, or nothing. Duck-typed, because a game's module is not this shell's class;
+## anything malformed for a dir drops that dir (its clients then take the whole pack) rather than the game.
+static func sanitize_groups(raw: Variant) -> Dictionary:
+	var out := {}
+
+	if not (raw is Dictionary):
+		return out
+
+	for key: Variant in raw:
+		var value: Variant = raw[key]
+
+		if not (key is String or key is StringName) or not (value is Array or value is PackedStringArray):
+			continue
+
+		var names: Array = []
+		var ok := true
+
+		for group: Variant in value:
+			if not (group is String or group is StringName) or str(group) == "":
+				ok = false
+				break
+
+			names.append(str(group))
+
+		if ok and not names.is_empty():
+			out[str(key)] = names
+
+	return out
+
+
+## Re-announces the addon set with the current game's download groups. After the module loads, because the module is what knows the game's weapons.
+## A failed or absent module names none, so clients take every group, which is always safe.
+func _advertise_addon_groups() -> void:
+	if server == null or not ("addon_set" in server) or _addon_announced.is_empty():
+		return
+
+	var raw: Variant = null
+	var module: Object = server.modules.get_module(_module_name) if _module_name != "" else null
+
+	if module != null and module.has_method("addon_groups"):
+		raw = module.call("addon_groups")
+
+	var groups := sanitize_groups(raw)
+
+	if groups == _addon_groups:
+		return
+
+	_addon_groups = groups
+	server.set("addon_set", with_groups(_addon_announced, groups))
+
+	DotLog.info(CHANNEL, "the download groups clients are told about", {
+		"module": _module_name, "groups": groups,
 	})
 
 
@@ -1338,6 +1414,7 @@ func _on_game_loaded(_content_key: String) -> void:
 		return
 
 	await _load_game_module()
+	_advertise_addon_groups()
 	_attach_addon_entries()
 	_publish_requires()
 

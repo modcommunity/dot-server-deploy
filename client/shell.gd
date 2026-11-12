@@ -1476,6 +1476,13 @@ func _on_server_info(_challenge: Dictionary, target: String) -> void:
 		DotLog.debug(CHANNEL, "addons this server runs that are not taken", {"refused": refused})
 
 	var wanted: Dictionary = decided["wanted"]
+	var plan := DotCloudAddonSet.read_plan()
+	var running: Dictionary = plan if DotCloudAddonSet.mounted_this_boot(plan) else {}
+	# A dot-cloud before download groups (0.1.47) has no `groups` and takes every group.
+	var grouped := "groups" in addons
+
+	if wanted.is_empty() and grouped:
+		wanted = _groups_top_up(running, target)
 
 	if wanted.is_empty():
 		return
@@ -1494,14 +1501,43 @@ func _on_server_info(_challenge: Dictionary, target: String) -> void:
 		})
 		return
 
+	if grouped:
+		addons.set("groups", TmcAddonGroups.wanted_groups(link.server_addons, wanted, running))
+
 	DotLog.info(CHANNEL, "this server runs newer addons; updating before joining", {
-		"server": target, "addons": wanted.keys(),
+		"server": target, "addons": wanted.keys(), "groups": addons.get("groups") if grouped else "*",
 	})
 
 	_addons_updating = true
 	# Deferred: this runs inside the link's challenge handler, which goes on to send
 	# credentials on the socket after it returns.
 	_update_addons.call_deferred(addons, wanted, target, attempt)
+
+
+## The running overlay's addons again when this server's game needs download groups that overlay was built without, else nothing.
+## A deferred group cannot be fetched into a mounted overlay, so the overlay is rebuilt at the same versions with the union (a restart, bounded like an update's).
+func _groups_top_up(running: Dictionary, target: String) -> Dictionary:
+	var held: Dictionary = running.get("addons", {})
+	# Only what this server runs: an addon the overlay raised that the server does not mention needs nothing from it.
+	var listed := {}
+
+	for raw: Variant in link.server_addons:
+		if raw is Dictionary and held.has(str((raw as Dictionary).get("dir", ""))):
+			listed[str((raw as Dictionary)["dir"])] = true
+
+	if listed.is_empty():
+		return {}
+
+	var needed := TmcAddonGroups.needed_groups(link.server_addons, listed)
+	var have := TmcAddonGroups.plan_groups(running)
+
+	if TmcAddonGroups.covers(have, needed):
+		return {}
+
+	DotLog.info(CHANNEL, "this server's game needs download groups the overlay lacks; rebuilding it", {
+		"server": target, "have": have, "needed": needed,
+	})
+	return held.duplicate(true)
 
 
 func _update_addons(addons: DotCloudAddonSet, wanted: Dictionary, target: String, attempt: String) -> void:
