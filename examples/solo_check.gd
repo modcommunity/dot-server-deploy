@@ -4,7 +4,7 @@ extends Node
 ## `game.yml` reader against the host's, the shell's map list against the stock server one, and the
 ## session a game reads its map packs from. godot --headless --path .
 
-const CHECKS := 48
+const CHECKS := 52
 
 ## Every game repository, beside this project or in games/: the repositories of cfg/content/games.yml (shipped content-lists/games.yml).
 
@@ -39,6 +39,7 @@ func _ready() -> void:
 	_test_first_party()
 	await _test_session()
 	_test_skip_maps()
+	_test_requires_reader()
 
 	print("")
 	print("%d sections, %d completed" % [_entered, _completed])
@@ -323,6 +324,24 @@ func _names(repo: String) -> PackedStringArray:
 				if not out.has(n):
 					out.append(n)
 	return out
+
+
+## A solo game's addons are read from both requires files before its pack is fetched: a hard
+## requirement only in requires.json (Prop Hunt's zee_weapons) refuses the pack while missing.
+func _test_requires_reader() -> void:
+	_section("the addons a solo game's requires files name")
+	var shell := load("res://client/shell.gd") as GDScript
+	_check(shell.SOLO_REQUIRE_FILES.has("requires.json") and shell.SOLO_REQUIRE_FILES.has("requires.floor.json"),
+		"both requires.json and requires.floor.json are read")
+	var got: Dictionary = shell.solo_addons_in('{"addons": {"zee_weapons": 6, "dot_ui": 13}}')
+	_check(got.get("zee_weapons") == 6 and got.get("dot_ui") == 13, "a requires file's addons and levels are read", str(got))
+	_check((shell.solo_addons_in("not json") as Dictionary).is_empty()
+			and (shell.solo_addons_in('{"addons": []}') as Dictionary).is_empty(),
+		"a file that is not a requires map names nothing")
+	_check(not (shell.solo_addons_in('{"addons": {"../x": 1, "a/b": 1, "ok": 1}}') as Dictionary).has("../x")
+			and not (shell.solo_addons_in('{"addons": {"a/b": 1}}') as Dictionary).has("a/b"),
+		"a name that is a path is dropped")
+	_done()
 
 
 func _section(title: String) -> void:
