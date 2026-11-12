@@ -11,7 +11,7 @@ const RoundsWithoutMatch := preload("res://examples/fixtures/rounds_without_matc
 
 const Host := preload("res://host/tmc_host.gd")
 
-const CHECKS := 510
+const CHECKS := 512
 
 var _passed := 0
 var _failed := 0
@@ -789,6 +789,9 @@ func _test_addon_announce() -> void:
 	var lock := "arena-weapons\tv1.4.10\ndot-core\tv0.1.30\n"
 	var out := Host.addon_set_from(lock, PackedStringArray(["arena_weapons", "dot_core"]))
 	_check(out.size() == 2 and out[0]["id"] == "gamemann/fc-weapons" and out[0]["repo"] == "fc-weapons" and out[0]["version"] == "1.4.10", "a game addon's pack is announced under its author and published name, at the lock's version")
+	var renamed := Host.addon_set_from("fc-weapons\tv1.4.11\n", PackedStringArray(["arena_weapons"]))
+	_check(renamed.size() == 1 and renamed[0]["id"] == "gamemann/fc-weapons" and renamed[0]["version"] == "1.4.11", "a lock under the renamed repository's name announces the same pack")
+	_check(TmcAddonNamespaces.lock_repo("arena_weapons") == "fc-weapons" and TmcAddonNamespaces.dir_for("arena-weapons") == "arena_weapons", "arena_weapons is locked as fc-weapons, and its old name still finds the dir")
 	_check(out[1]["id"] == "modcommunity/dot-core" and out[1]["version"] == "0.1.30", "a dot-* addon keeps the organisation's id and version")
 	_check(Host.addon_set_from(lock, PackedStringArray(["natural_disasters"])).is_empty(), "an addon the lock does not name is not announced")
 

@@ -1,7 +1,7 @@
 # The addon repositories a server installs, with the commit tag each is pinned to.
 # Shipped default; an operator replaces it with cfg/content/addons.yml (see docs/content-lists.md).
 entries:
-  - repo: arena-weapons
+  - repo: fc-weapons
     pin: v1.4.34
   - repo: dot-2d
     pin: v0.1.7

@@ -961,11 +961,13 @@ ADDONS_LOCK="$ROOT/addons.lock"
 
 lock_ref() {
     [ "${TMC_ADDONS_LOCK:-on}" != "off" ] || return 1
-    local pin
-    pin="$(content_list addons "$ROOT/cfg" 2>/dev/null | awk -F'\t' -v r="$1" '$2 == r && $3 != "" { print $3; exit }')"
+    local pin a
+    # Either name of a renamed repository finds its pin (arena-weapons is fc-weapons).
+    a="$(repo_alias "$1")" || a="$1"
+    pin="$(content_list addons "$ROOT/cfg" 2>/dev/null | awk -F'\t' -v r="$1" -v a="$a" '($2 == r || $2 == a) && $3 != "" { print $3; exit }')"
     if [ -n "$pin" ]; then printf '%s\n' "$pin"; return 0; fi
     [ -f "$ADDONS_LOCK" ] || return 1
-    awk -v r="$1" '$1 == r && $2 != "" { print $2; found = 1; exit } END { exit !found }' \
+    awk -v r="$1" -v a="$a" '($1 == r || $1 == a) && $2 != "" { print $2; found = 1; exit } END { exit !found }' \
         "$ADDONS_LOCK"
 }
 
@@ -1470,6 +1472,7 @@ while IFS= read -r _repo; do
     case "$_repo" in
         zee-dot-weapons) ADDONS_ALL+=(zee_weapons) ;;
         zed-dot-weapons) ADDONS_ALL+=(zed_weapons) ;;
+        fc-weapons|arena-weapons) ADDONS_ALL+=(arena_weapons) ;;
         *)               ADDONS_ALL+=("${_repo//-/_}") ;;
     esac
 done < <(content_addon_repos "$ROOT/cfg") || die "cfg/content/addons.yml: could not be read" 5
@@ -1634,7 +1637,18 @@ addon_repo() {
     case "$1" in
         zee_weapons) printf 'zee-dot-weapons\n' ;;
         zed_weapons) printf 'zed-dot-weapons\n' ;;
+        arena_weapons) printf 'fc-weapons\n' ;;
         *)           printf '%s\n' "${1//_/-}" ;;
+    esac
+}
+
+## A renamed repository's other name, or nothing: an operator's lock or list, and a
+## server's existing clone under addons/.repos/, may still use the old one.
+repo_alias() {
+    case "$1" in
+        fc-weapons)    printf 'arena-weapons\n' ;;
+        arena-weapons) printf 'fc-weapons\n' ;;
+        *) return 1 ;;
     esac
 }
 
@@ -1658,6 +1672,13 @@ addon_source() {
         # definition -- there is no relative path to it that survives the project being
         # moved, and an absolute one at least SAYS where it went when it dangles.
         if [ -n "$SRC" ]; then SRC_LINK="$SRC"; SRC_KIND="dir"; return 0; fi
+    fi
+
+    # A clone made before the repository was renamed keeps serving.
+    local alias
+    if [ ! -d "$ADDONS_REPOS/$repo/addons/$name" ] && alias="$(repo_alias "$repo")" \
+        && [ -d "$ADDONS_REPOS/$alias/addons/$name" ]; then
+        repo="$alias"
     fi
 
     if [ -d "$ADDONS_REPOS/$repo/addons/$name" ]; then
