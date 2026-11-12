@@ -7,7 +7,7 @@ extends Node
 const WORK := "user://tmc_workshop_solo"
 const SHELL := "res://client/shell.tscn"
 const GAME := "gamemann/ws-game"
-const CHECKS := 66
+const CHECKS := 71
 const ACCEPTS := {"kinds": ["map", "script"], "map_kinds": ["sandbox"]}
 const HttpServer := preload("res://examples/fixtures/ws_http_server.gd")
 const Backbone := preload("res://examples/fixtures/ws_backbone.gd")
@@ -318,17 +318,18 @@ func _test_the_panel() -> void:
 	add_child(sp)
 	await get_tree().process_frame
 	var pick: OptionButton = sp.find_child("SuggestedMode", true, false)
-	_check(pick != null and pick.selected == 0, "a game with suggested packs shows the switch, on auto by default, even for a guest")
-	pick.item_selected.emit(2)
-	_check(_ws.device.suggested_mode() == "none", "Off is the device mode none")
+	_check(pick != null and pick.item_count == 2 and pick.selected == 0,
+		"a game with suggested packs shows the switch, one map at a time by default, even for a guest")
+	pick.item_selected.emit(1)
+	_check(_ws.device.suggested_mode() == "all", "Download all in the background is the device mode all")
 	await get_tree().process_frame
 	pick = sp.find_child("SuggestedMode", true, false)
-	_check(pick != null and pick.selected == 2, "and the page shows it after redrawing")
-	pick.item_selected.emit(1)
-	var ask_ok: bool = _ws.device.suggested_mode() == "ask"
-	pick = sp.find_child("SuggestedMode", true, false)
+	_check(pick != null and pick.selected == 1, "and the page shows it after redrawing")
 	pick.item_selected.emit(0)
-	_check(ask_ok and _ws.device.suggested_mode() == "", "Ask is ask, Auto follows the config again")
+	_check(_ws.device.suggested_mode() == "", "When a map is picked clears the device mode again")
+	_check(not TmcWorkshopPanel.suggested_in_background("") and not TmcWorkshopPanel.suggested_in_background("none")
+		and not TmcWorkshopPanel.suggested_in_background("ask") and TmcWorkshopPanel.suggested_in_background("maps"),
+		"an old off or ask reads as one map at a time, a group list as background")
 	sp.queue_free()
 	_ws.suggested = kept_suggested
 
@@ -358,13 +359,14 @@ func _test_the_panel() -> void:
 
 
 func _test_suggested_after_start() -> void:
-	_section("a solo start does not wait for the game's suggested packs")
+	_section("a solo start never bulk-fetches or asks about the game's suggested packs")
 
 	const GAME2 := "gamemann/ws-game2"
 	_make_game(GAME2, "suggested:\n  - gamemann/ws-nope\n")
 	_token = "tok-alice"
 	_items = [_item("ws_map")]
 	_ws.suggested = []
+	_ws.device.set_suggested_mode("")
 	var at_ready: Array[int] = [-1]
 	Engine.set_meta(&"ws_ready_probe", func() -> void:
 		at_ready[0] = _ws.suggested.size())
@@ -372,13 +374,43 @@ func _test_suggested_after_start() -> void:
 	Engine.remove_meta(&"ws_ready_probe")
 
 	_check(_session() != null and _game_node() != null, "the game started")
-	_check(at_ready[0] == 0, "the game's scene came up before any suggested pack was declared to the sync", str(at_ready[0]))
-	var waited := 0
-	while bool(_shell.get("_late_sync")) and waited < 600:
+	_check(at_ready[0] == 0, "the game's scene came up before any suggested pack was declared", str(at_ready[0]))
+	var asked := _requests()
+	var late_seen := false
+	for i in 30:
+		late_seen = late_seen or bool(_shell.get("_late_sync"))
 		await get_tree().process_frame
-		waited += 1
-	_check(_ws.suggested.size() == 1, "the suggested sync then ran with the game's declaration", str(_ws.suggested.size()))
-	_check(not bool(_shell.get("_late_sync")), "and finished")
+	_check(_ws.suggested.size() == 1, "the game's suggested packs are declared for the Subscriptions page", str(_ws.suggested.size()))
+	_check(not late_seen and _requests() == asked and _shell.find_children("*", "ConfirmationDialog", true, false).is_empty(),
+		"and by default nothing is fetched in bulk and nothing is asked: the game fetches each map when picked",
+		str(_requests() - asked))
+
+	const NONE := DotCloudSuggested.MODE_NONE
+	var shell_script: GDScript = _shell.get_script()
+	var groups := PackedStringArray(["maps"])
+	_check(shell_script.late_suggested_mode("", PackedStringArray(), groups) == NONE
+		and shell_script.late_suggested_mode("ask", PackedStringArray(), groups) == NONE
+		and shell_script.late_suggested_mode("", PackedStringArray(["--suggested=ask"]), groups) == NONE,
+		"no device choice, or ask, is one map at a time once a game runs")
+	_check(shell_script.late_suggested_mode("all", PackedStringArray(), groups) == "all"
+		and shell_script.late_suggested_mode("", PackedStringArray(["--suggested=all"]), groups) == "all"
+		and shell_script.late_suggested_mode("all", PackedStringArray(["--no-suggested"]), groups) == NONE,
+		"a device or command line all fetches in the background, --no-suggested still wins")
+
+	# A device that chose "all": the background sync runs, never with a dialog, and leaves the config as it was.
+	var kept_config: String = _ws.config.workshop_suggested
+	_ws.device.set_suggested_mode("all")
+	asked = _requests()
+	await _shell.call("_sync_suggested_later", GAME2, PackedStringArray(["gamemann/ws-nope"]))
+	_check(_requests() == asked + 1 and not bool(_shell.get("_late_sync")) and _ws.config.workshop_suggested == kept_config,
+		"a device that chose all syncs in the background once and restores the config", str(_requests() - asked))
+	_shell.set("_late_sync", true)
+	var yes: bool = await _shell.call("_ask_download", {"bytes": 1 << 30, "metered": false})
+	var no: bool = await _shell.call("_ask_download", {"bytes": 1 << 30, "metered": true})
+	_shell.set("_late_sync", false)
+	_check(yes and not no and _shell.find_children("*", "ConfirmationDialog", true, false).is_empty(),
+		"a late sync opens no dialog over the game: it goes on, except on a metered link")
+	_ws.device.set_suggested_mode("")
 
 	_ws.suggested = []
 	_done()

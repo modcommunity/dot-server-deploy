@@ -11,9 +11,8 @@
 	"none_why": "Subscribe to maps and packs on the site and they show up here.",
 	"suggested": {
 		"title": "Suggested content (the game's map packs)",
-		"auto": "Download automatically",
-		"ask": "Ask before downloading",
-		"off": "Off"
+		"on_demand": "When a map is picked",
+		"all": "Download all in the background"
 	},
 	"title": "Subscriptions",
 	"manage_site": "Manage subscriptions on the site",

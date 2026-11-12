@@ -5,7 +5,7 @@ extends Node
 
 const SHELL := "res://client/shell.tscn"
 const LOCALES := "res://client/locales"
-const CHECKS := 35 + 1 + 2 * 38
+const CHECKS := 35 + 1 + 2 * 37
 const KEYS := ["job.line", "job.unpacking", "job.unpacking_title", "job.downloading_title", "progress.file_of", "size", "rate", "eta.few", "eta.seconds", "eta.minutes", "solo.fetching", "solo.have", "solo.fetching_size"]
 
 var _passed := 0
@@ -62,7 +62,7 @@ func _test_workshop_keys() -> void:
 	var wanted := {}
 	for m in re.search_all(src):
 		wanted[m.get_string(1)] = true
-	_check(wanted.size() == 38, "the panel asks for 38 distinct workshop keys (%d)" % wanted.size())
+	_check(wanted.size() == 37, "the panel asks for 37 distinct workshop keys (%d)" % wanted.size())
 	for lang in ["en", "de"]:
 		var f := FileAccess.open("%s/%s/workshop.json" % [LOCALES, lang], FileAccess.READ)
 		var parsed: Variant = JSON.parse_string(f.get_as_text()) if f != null else null
