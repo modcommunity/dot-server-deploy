@@ -100,6 +100,23 @@ static func lock_repo(dir: String) -> String:
 	return dir.replace("_", "-")
 
 
+## The addon directory a pack repository (as published or as the lock names it) installs to: the inverse of [method lock_repo] and
+## [constant PUBLISHED_AS], so `fc-weapons` is `arena_weapons` and `zee-dot-weapons` is `zee_weapons`.
+static func dir_for(repo: String) -> String:
+	var lock := repo
+
+	for name: String in PUBLISHED_AS:
+		if PUBLISHED_AS[name] == repo:
+			lock = name
+
+	if lock == "zee-dot-weapons":
+		return "zee_weapons"
+	if lock == "zed-dot-weapons":
+		return "zed_weapons"
+
+	return lock.replace("-", "_")
+
+
 ## The pack [param dir]'s code is published as: `{repo, id}`, where `repo` is the id's name ([DotCloudAddonSet] refuses any other).
 ## `dot-*` packs are the organisation's, the game addons their author's.
 static func pack_for(dir: String) -> Dictionary:

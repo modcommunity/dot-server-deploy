@@ -361,7 +361,8 @@ func _read_namespaces(value: Variant) -> DotResult:
 
 
 ## `{dir, repo, id, version}` for each `overlays:` entry, in the shape `addon_set_from` returns.
-## The directory is the repository with underscores for dashes, the inverse of `TmcHost.addon_repo`.
+## The directory is [method TmcAddonNamespaces.dir_for] (the inverse of `TmcHost.addon_repo`): an overlay of `gamemann/zee-dot-weapons` replaces
+## the lock's `zee_weapons`, not a `zee_dot_weapons` no pack carries (the shell refused that as "not an addon pack" and joined on its own copy).
 func overlay_set() -> Array:
 	var out: Array = []
 
@@ -369,7 +370,7 @@ func overlay_set() -> Array:
 		var ref := TmcGameRef.parse(entry)
 		var id := str(ref["id"])
 		var repo := id.get_slice("/", 1)
-		out.append({"dir": repo.replace("-", "_"), "repo": repo, "id": id, "version": str(ref["version"]).trim_prefix("v")})
+		out.append({"dir": TmcAddonNamespaces.dir_for(repo), "repo": repo, "id": id, "version": str(ref["version"]).trim_prefix("v")})
 
 	return out
 

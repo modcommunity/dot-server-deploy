@@ -11,7 +11,7 @@ const RoundsWithoutMatch := preload("res://examples/fixtures/rounds_without_matc
 
 const Host := preload("res://host/tmc_host.gd")
 
-const CHECKS := 503
+const CHECKS := 510
 
 var _passed := 0
 var _failed := 0
@@ -799,6 +799,12 @@ func _test_addon_announce() -> void:
 	_check(cfg.read({"namespaces": ["alice/"], "overlays": ["alice/dot-x@v1.0.0"]}).ok, "a trusted owner's overlay is read")
 	var mixed := Host.merge_overlays(out, cfg.overlay_set())
 	_check(mixed.size() == 3 and mixed[2]["dir"] == "dot_x" and mixed[2]["id"] == "alice/dot-x" and mixed[2]["version"] == "1.0.0", "the overlay is announced beside the lock's set")
+	cfg = TmcAddonsConfig.new()
+	_check(cfg.read({"overlays": ["gamemann/zee-dot-weapons@0.1.63", "gamemann/fc-weapons@1.4.40"]}).ok, "a default owner's game-addon overlay is read")
+	var games := cfg.overlay_set()
+	_check(games[0]["dir"] == "zee_weapons" and games[1]["dir"] == "arena_weapons" and games[1]["repo"] == "fc-weapons", "a game-addon overlay names the dir its pack carries, not its repository's")
+	var swapped := Host.merge_overlays(out, games)
+	_check(swapped.size() == 3 and swapped[1]["dir"] == "zee_weapons" and swapped[2]["version"] == "1.4.40", "a game-addon overlay replaces the lock's entry for its dir")
 	_check(not TmcAddonsConfig.new().read({"namespaces": ["*"]}).ok and not TmcAddonsConfig.new().read({"namespaces": ["alice"]}).ok, "a wildcard or a bare name is not a namespace")
 
 	var spaces := TmcAddonNamespaces.resolve(PackedStringArray(["alice/", "bad entry", "modcommunity/"]))
@@ -808,6 +814,7 @@ func _test_addon_announce() -> void:
 	for dir: String in ["arena_weapons", "zee_weapons", "zed_weapons", "natural_disasters"]:
 		var id := str(TmcAddonNamespaces.pack_for(dir)["id"])
 		_check(str(TmcAddonNamespaces.pack_for(dir)["repo"]) == id.get_file(), "%s's pack repo is its id's name, as the addon set requires" % dir)
+		_check(TmcAddonNamespaces.dir_for(id.get_file()) == dir and TmcAddonNamespaces.dir_for(TmcAddonNamespaces.lock_repo(dir)) == dir, "%s round-trips through its pack and lock names" % dir)
 		_check(TmcAddonNamespaces.covers(TmcAddonNamespaces.DEFAULTS, id), "the shell takes %s's overlay (%s), since it does not carry it" % [dir, id])
 
 	var pins: Variant = JSON.parse_string(Host.pack_pins_json(out, {"modcommunity/dot-core": "9.9.9", "ow/map_a": "1.0.0"}))
