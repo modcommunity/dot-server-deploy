@@ -1979,18 +1979,39 @@ func _sync_workshop(content_id: String, suggested: PackedStringArray = PackedStr
 	return res.value as Dictionary if res.value is Dictionary else {}
 
 
-## Fetches the game's suggested packs once its scene is running, so a solo start never waits on
-## them. On the web the default "all" becomes "ask": ~1 GB of packs is never fetched unasked.
+## Declares the game's suggested packs for the Subscriptions page and fetches them in the
+## background only when this device or the command line chose "all" (or groups). By default the
+## game fetches each map when it is picked: a bulk sync of every map pack (~1 GB) never starts unasked.
 func _sync_suggested_later(content_id: String, suggested: PackedStringArray) -> void:
 	if suggested.is_empty():
 		return
 	var workshop := _ensure_workshop()
-	if DotPlatform.is_web() and (workshop.device == null or workshop.device.suggested_mode() == "") \
-			and workshop.config.workshop_suggested == DotCloudSuggested.MODE_ALL:
-		workshop.config.workshop_suggested = DotCloudSuggested.MODE_ASK
+	var declared := DotCloudSuggested.from_entries(suggested)
+	workshop.suggested = declared
+	var args := PackedStringArray()
+	args.append_array(OS.get_cmdline_args())
+	args.append_array(OS.get_cmdline_user_args())
+	var device_mode := workshop.device.suggested_mode() if workshop.device != null else ""
+	var mode := late_suggested_mode(device_mode, args, DotCloudSuggested.groups_of(declared))
+	if mode == DotCloudSuggested.MODE_NONE:
+		DotLog.debug(CHANNEL, "suggested packs are fetched one map at a time", {"content": content_id, "declared": suggested.size()})
+		return
+	var kept_config := workshop.config.workshop_suggested
+	workshop.config.workshop_suggested = mode
 	_late_sync = true
 	await _sync_workshop(content_id, suggested)
 	_late_sync = false
+	workshop.config.workshop_suggested = kept_config
+
+
+## The suggested-pack mode once a solo game is on screen: none unless the device or the command
+## line asked for all (or groups). "ask" is none too: a question there lands on top of play.
+static func late_suggested_mode(device_mode: String, args: PackedStringArray, groups: PackedStringArray) -> String:
+	var base := device_mode if device_mode != "" else DotCloudSuggested.MODE_NONE
+	var mode := DotCloudSuggested.mode_from_args(args, groups, base)
+	if mode == "" or DotCloudSuggested.asks(mode):
+		return DotCloudSuggested.MODE_NONE
+	return mode
 
 
 ## Whether a download that starts now may put the blocking loading cover over the game.
@@ -2014,10 +2035,13 @@ func _on_workshop_progress(done: int, total: int, bytes_done: int, bytes_total: 
 		"Subscribed content %d/%d, %s" % [mini(done + 1, total), total, current]))
 
 
-## "Download 120 MB of subscribed content?", awaited by the sync before it fetches.
+## "Download 120 MB of subscribed content?", awaited by the sync before it fetches. A late sync
+## never opens it over a running game: the player chose "all", so it goes on unless metered.
 func _ask_download(summary: Dictionary) -> bool:
 	if workshop_ask_override.is_valid():
 		return bool(await workshop_ask_override.call(summary))
+	if _late_sync:
+		return not bool(summary.get("metered", false))
 
 	var dialog := ConfirmationDialog.new()
 	dialog.title = _text("workshop.ask.title", {}, "Subscribed content")

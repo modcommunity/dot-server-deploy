@@ -11,9 +11,8 @@
 	"none_why": "Abonniere Karten und Pakete auf der Seite, dann erscheinen sie hier.",
 	"suggested": {
 		"title": "Vorgeschlagene Inhalte (die Kartenpakete des Spiels)",
-		"auto": "Automatisch herunterladen",
-		"ask": "Vor dem Herunterladen fragen",
-		"off": "Aus"
+		"on_demand": "Wenn eine Karte gewählt wird",
+		"all": "Alle im Hintergrund herunterladen"
 	},
 	"title": "Abonnements",
 	"manage_site": "Abonnements auf der Seite verwalten",

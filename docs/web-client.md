@@ -13,7 +13,7 @@
 
 ## Which site the server browsers list
 
-`TmcSiteDefault` (`client/tmc_site_default.gd`) publishes `client/auth.json`'s `backbone_url` as `DOT_BROWSER_BACKBONE_URL` when the shell starts, unless argv, the environment or `?backbone=` already names a site. That is the default for a hand-started shell and for the web, where a game's own fallback of "the page's origin" is wrong: the published game origin is a static bucket that answers `/api/...` with 403 (checked 2026-10-19 against `dotgames.org`), while the site answers the anonymous listing with CORS `*`. tmc-app still passes `--browser-backbone-url` itself. A change reaches players only with a new shell build upload. Test: `examples/solo_check`.
+`TmcSiteDefault` (`client/tmc_site_default.gd`) publishes `client/auth.json`'s `backbone_url` as `DOT_BROWSER_BACKBONE_URL` when the shell starts, unless argv, the environment or `?backbone=` already names a site. That is the default for a hand-started shell and for the web, where a game's own fallback of "the page's origin" is wrong: the published game origin is a static bucket that answers `/api/...` with 403 (checked 2026-10-19 against `dotgames.org`), while the site answers the anonymous listing with CORS `*`. tmc-app still passes `--browser-backbone-url` itself. A change reaches players only with a new shell build upload. Tests: `examples/solo_check`, `examples/workshop_solo`.
 
 ## Solo play
 
@@ -83,7 +83,7 @@ The shell's menu, the loading screen and the standalone page each carry a small 
 
 The shell fills the resource cache with `DotCloudSliceLoader` (dot-cloud) before it `load()`s a game's client scene in the browser, so compiling a pack's scripts is spread over frames and the loading cover's bar moves instead of freezing for one long frame. Native builds skip it. It needs a dot-cloud that has the loader: `addons.lock` must be bumped to the tag that carries it.
 
-- **Suggested packs.** A game's `game.yml` may list `suggested:` entries (`group=owner/pack`, one separate map pack each). The Workshop mounts them on a solo start by default and the player opts out with `--no-suggested`, `--suggested=none`, `--no-suggested-<group>`, the device setting or `--cloud-workshop-suggested`; see dot-cloud `docs/workshop.md`. A server lists the same packs under `maps: add:` in its `cfg/game/<game>/server.yml` and drops them with `maps: remove:`. Test: `examples/solo_check`.
+- **Suggested packs.** A game's `game.yml` may list `suggested:` entries (`group=owner/pack`, one separate map pack each). On a solo start the shell only declares them (the Subscriptions page lists them) and the game fetches each map pack when that map is picked or entered: no bulk download and no "Download 1 GB?" question over a running game. Only a device set to "Download all in the background" or `--suggested=all` (or groups) fetches them all, in the background and without a dialog; `--no-suggested` and `--no-suggested-<group>` still win. See dot-cloud `docs/workshop.md`. A server lists the same packs under `maps: add:` in its `cfg/game/<game>/server.yml` and drops them with `maps: remove:`. Test: `examples/solo_check`.
 
 ## The CSP-safe page script
 
