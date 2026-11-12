@@ -104,7 +104,7 @@ Every preset (Web and desktop) excludes every addon that is not a dot-* addon: `
 
 `TmcPackRoots` is gone with them. It listed a mounted pack's `addons/arena_weapons/assets` on the build's own arena_weapons. Now that arena_weapons arrives as an overlay at `res://addons/`, its assets resolve at their own paths.
 
-**Until a game addon is published as an addon-shaped overlay pack, a browser player has no copy of it.** The shell no longer has a build copy to fall back on. arena-weapons is still published as a Workshop data pack (`DATA_PACK_REPOS` in `host/tmc_host.gd`), so this needs an addon-shaped arena-weapons pack before a shell without it is published.
+**A browser player has a game addon only from its overlay pack.** The shell has no build copy to fall back on. The arena-weapons (v1.4.29+), zee-dot-weapons (v0.1.62+) and zed-dot-weapons (v0.1.13+) packs carry `addons/<dir>/` and dot-cloud v0.1.46+ overlays a pack whose plugin.cfg sits there, so `addon_set_from` announces all of them (the `DATA_PACK_REPOS` exception for arena-weapons is gone).
 
 ## Surface textures ride in a pack, not the shell
 

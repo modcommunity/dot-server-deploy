@@ -788,9 +788,9 @@ func _test_addon_announce() -> void:
 	_section("the addon set a server announces")
 	var lock := "arena-weapons\tv1.4.10\ndot-core\tv0.1.30\n"
 	var out := Host.addon_set_from(lock, PackedStringArray(["arena_weapons", "dot_core"]))
-	_check(out.size() == 1 and out[0]["repo"] == "dot-core", "a repository whose site id is a data pack is not announced as an addon")
-	_check(out[0]["id"] == "modcommunity/dot-core" and out[0]["version"] == "0.1.30", "the others keep id and version")
-	_check(Host.addon_set_from(lock, PackedStringArray(["arena_weapons"])).is_empty(), "nothing left to announce is an empty set")
+	_check(out.size() == 2 and out[0]["id"] == "gamemann/arena-weapons" and out[0]["version"] == "1.4.10", "a game addon's pack is announced under its author, at the lock's version")
+	_check(out[1]["id"] == "modcommunity/dot-core" and out[1]["version"] == "0.1.30", "a dot-* addon keeps the organisation's id and version")
+	_check(Host.addon_set_from(lock, PackedStringArray(["natural_disasters"])).is_empty(), "an addon the lock does not name is not announced")
 
 	var cfg := TmcAddonsConfig.new()
 	var bad := cfg.read({"overlays": ["alice/dot-x@1.0.0"]})

@@ -905,11 +905,8 @@ static func merge_overlays(base: Array, extra: Array) -> Array:
 	return out
 
 
-## Addon repositories whose id on the site is a Workshop data pack (provides.json, weapons/), not the addon directory; a shell cannot overlay it as an addon.
-const DATA_PACK_REPOS := ["arena-weapons"]
-
-
-## One `{dir, repo, id, version}` per installed addon the lock names, bar those in [constant DATA_PACK_REPOS].
+## One `{dir, repo, id, version}` per installed addon the lock names. A game addon's pack (arena-weapons, the zee/zed weapons) carries its code at
+## `addons/<dir>/`, which [DotCloudAddonSet] (dot-cloud 0.1.46+) overlays like a dot-* pack, so every one is announced.
 static func addon_set_from(lock_text: String, dirs: PackedStringArray) -> Array:
 	var versions := {}
 
@@ -932,7 +929,7 @@ static func addon_set_from(lock_text: String, dirs: PackedStringArray) -> Array:
 
 		var repo := addon_repo(dir)
 
-		if not versions.has(repo) or DATA_PACK_REPOS.has(repo):
+		if not versions.has(repo):
 			continue
 
 		out.append({
