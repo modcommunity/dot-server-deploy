@@ -258,6 +258,11 @@ func _ready() -> void:
 		solo = {"id": "", "version": ""}
 		_show_connect_form(true)
 
+	# A restart into a solo game's addons (see [method _solo_overlay]) goes back into that game,
+	# which a launch from the menu left in no address.
+	if str(solo["id"]) == "" and str(resumed.get("solo", "")) != "":
+		solo = {"id": str(resumed["solo"]), "version": str(resumed.get("solo_version", ""))}
+
 	if solo.has("refused"):
 		_say("'%s' is not a game this client can start." % str(solo["refused"]))
 
@@ -1781,6 +1786,12 @@ func _load_solo_inner(content_id: String, version: String) -> DotResult:
 			return DotResult.fail(dep.error.code,
 				"This game needs %s, which could not be downloaded." % key, str(dep.error))
 
+	# The game addons its scripts name (arena_weapons for Fatal Contact) are not in this shell:
+	# fetched as the overlay a server would announce, then a restart into it, before any of
+	# the game's scripts is parsed. Returns only when nothing is missing or it cannot be had.
+	if await _solo_overlay(content_id, mount):
+		return DotResult.success(null)
+
 	var session := TmcSoloSession.new()
 	session.name = "Solo"
 	session.content_id = content_id
@@ -1871,6 +1882,91 @@ func _load_solo_inner(content_id: String, version: String) -> DotResult:
 	})
 	return DotResult.success(instance)
 
+
+
+## The addons a game's pack says it needs (`addons` in its `requires.floor.json`) that this
+## shell neither carries nor has mounted, fetched as the overlay a server would announce and
+## restarted into, as [method _update_addons] does for a join. True when a restart is under way
+## (the caller stops there); false to play on what is here, which is also the answer after a
+## failed start on the same overlay or [constant MAX_UPDATE_RESTARTS] restarts for it.
+func _solo_overlay(content_id: String, mount: String) -> bool:
+	var path := mount.path_join(SOLO_FLOOR_FILE)
+	if not FileAccess.file_exists(path):
+		return false
+
+	var floors: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
+	var needs: Variant = (floors as Dictionary).get("addons", {}) if floors is Dictionary else {}
+	if not (needs is Dictionary):
+		return false
+
+	var announce: Array = []
+	for dir: String in (needs as Dictionary):
+		if DirAccess.dir_exists_absolute("res://addons/%s" % dir):
+			continue
+		var pack := TmcAddonNamespaces.pack_for(dir)
+		var latest: DotResult = await TmcSolo.resolve_latest(self, str(pack["id"]), _cloud.http_base_urls)
+		if not latest.ok:
+			DotLog.warn(CHANNEL, "a game addon this solo game needs is not published", {
+				"content": content_id, "dir": dir, "id": pack["id"], "why": str(latest.error),
+			})
+			continue
+		# A retired id resolves to the one it moved to, whose name is the repo [DotCloudAddonSet] checks.
+		var id := str(latest.value["id"])
+		announce.append({"dir": dir, "repo": id.get_file(), "id": id, "version": str(latest.value["version"])})
+
+	if announce.is_empty():
+		return false
+
+	var addons := DotCloudAddonSet.new(_cloud)
+	addons.namespaces = TmcAddonNamespaces.load_shell()
+	var decided := addons.plan_for(announce)
+	var wanted: Dictionary = decided["wanted"]
+
+	if not (decided["refused"] as Dictionary).is_empty():
+		DotLog.warn(CHANNEL, "solo game addons not taken", {"content": content_id, "refused": decided["refused"]})
+
+	if wanted.is_empty():
+		return false
+
+	var target := "solo:%s" % content_id
+	var attempt := _attempt_key(target, wanted)
+	if DotCloudAddonSet.failed_before(wanted) or _update_attempts(attempt) >= MAX_UPDATE_RESTARTS:
+		DotLog.warn(CHANNEL, "this solo game's addons did not start here before; playing on this build's", {
+			"content": content_id, "addons": wanted.keys(),
+		})
+		return false
+
+	DotLog.info(CHANNEL, "this solo game needs addons the shell does not carry; fetching them", {
+		"content": content_id, "addons": wanted.keys(),
+	})
+	_say(_text("shell.addons.updating_solo", {}, "Adding this game's addons…"))
+	loading.set_progress(-1.0, _text("shell.addons.updating_solo", {}, "Adding this game's addons…"))
+
+	# Where to come back to: the page's `?solo=` names the game too, but a menu launch has no address.
+	var resume := {"solo": content_id, "solo_version": _solo_version}
+	if _auth != null and _auth.is_signed_in() and _auth.identity() != null:
+		resume["member"] = _auth.identity().uid
+
+	var built: DotResult = await addons.build(wanted, resume)
+	if not built.ok:
+		DotLog.error(CHANNEL, "could not fetch this solo game's addons", {"content": content_id, "why": str(built.error)})
+		return false
+
+	_note_update_attempt(attempt)
+
+	var keep := PackedStringArray([DotCloudAddonSet.PLAN, str((built.value as Dictionary)["pack"])])
+	if resume.has("member"):
+		var tokens := _auth.config.token_store_path
+		for token in [tokens, tokens + ".salt"]:
+			if FileAccess.file_exists(token):
+				keep.append(token)
+
+	_say(_text("shell.addons.restarting", {}, "Restarting to finish the update…"))
+	return await _restart(keep)
+
+
+## Where a game's pack names the addons (and their API floors) it was built against.
+const SOLO_FLOOR_FILE := "requires.floor.json"
 
 
 ## This process is playing alone: packs mounted from here on are `solo`, and the index offers
