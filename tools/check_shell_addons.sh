@@ -19,6 +19,7 @@ dir_of() {
     case "$1" in
         zee-dot-weapons) echo zee_weapons ;;
         zed-dot-weapons) echo zed_weapons ;;
+        fc-weapons|arena-weapons) echo arena_weapons ;;
         *) echo "${1//-/_}" ;;
     esac
 }

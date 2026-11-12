@@ -33,7 +33,7 @@ good() { printf '  %sok%s   %s\n' "$GRN" "$OFF" "$1"; }
 
 . tools/content_lists.sh
 # The addon names setup.sh derives (ADDONS_ALL): repository names with underscores, in list order.
-mapfile -t SH_LIST < <(content_addon_repos "$PWD/cfg" | sed 's/^zee-dot-weapons$/zee_weapons/; s/^zed-dot-weapons$/zed_weapons/; s/-/_/g')
+mapfile -t SH_LIST < <(content_addon_repos "$PWD/cfg" | sed 's/^zee-dot-weapons$/zee_weapons/; s/^zed-dot-weapons$/zed_weapons/; s/^fc-weapons$/arena_weapons/; s/-/_/g')
 # Every quoted name between `$addons = @(` and `)`.
 mapfile -t PS_LIST < <(tr -d '\r' < setup.ps1 | sed -n '/^\$addons = @(/,/)/p' | grep -oE "'[^']+'" | tr -d "'")
 

@@ -230,6 +230,7 @@ function Get-AddonRepo([string]$name) {
     switch ($name) {
         'zee_weapons' { return 'zee-dot-weapons' }
         'zed_weapons' { return 'zed-dot-weapons' }
+        'arena_weapons' { return 'fc-weapons' }
         default       { return ($name -replace '_', '-') }
     }
 }

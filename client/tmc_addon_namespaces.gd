@@ -14,8 +14,7 @@ extends RefCounted
 ## `gamemann/arena-weapons` stays for servers that still announce the old id.
 const DEFAULTS: PackedStringArray = ["modcommunity/", "gamemann/zee-dot-weapons", "gamemann/zed-dot-weapons", "gamemann/fc-weapons", "gamemann/arena-weapons", "gamemann/natural-disasters"]
 
-## Repositories published under another name. arena-weapons became fc-weapons and the site keeps `gamemann/arena-weapons` reserved
-## (a publish under it is refused as retired), so its code is published as `gamemann/fc-weapons` while setup.sh and addons.lock still say arena-weapons.
+## Old repository names a lock or content list may still use, to the current one (`arena_weapons` lives in fc-weapons).
 const PUBLISHED_AS := {"arena-weapons": "fc-weapons"}
 
 ## Where an operator's additions live in the shell build.
@@ -96,6 +95,8 @@ static func lock_repo(dir: String) -> String:
 		return "zee-dot-weapons"
 	if dir == "zed_weapons":
 		return "zed-dot-weapons"
+	if dir == "arena_weapons":
+		return "fc-weapons"
 
 	return dir.replace("_", "-")
 
@@ -113,6 +114,8 @@ static func dir_for(repo: String) -> String:
 		return "zee_weapons"
 	if lock == "zed-dot-weapons":
 		return "zed_weapons"
+	if lock == "fc-weapons":
+		return "arena_weapons"
 
 	return lock.replace("-", "_")
 

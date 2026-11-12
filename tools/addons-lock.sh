@@ -126,6 +126,7 @@ cmd_check() {
         name="${repo//-/_}"
         [ "$repo" = "zee-dot-weapons" ] && name="zee_weapons"
         [ "$repo" = "zed-dot-weapons" ] && name="zed_weapons"
+        [ "$repo" = "fc-weapons" ] && name="arena_weapons"
         dir="$ROOT/addons/$name"
 
         if [ -z "$ref" ]; then
