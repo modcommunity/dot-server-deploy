@@ -80,7 +80,7 @@ entries:
   - repo: dot-peer-to-peer
     pin: v0.1.5
   - repo: dot-physics
-    pin: v0.1.9
+    pin: v0.1.10
   - repo: dot-platform
     pin: v0.1.10
   - repo: dot-player
