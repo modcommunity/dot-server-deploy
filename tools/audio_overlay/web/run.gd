@@ -50,7 +50,7 @@ func _run() -> void:
 	print("AO BUILD ok=", built.ok, " ", "" if built.ok else str(built.error))
 	if not built.ok:
 		return
-	var kept := await DotCloudAddonSet.persisted(PackedStringArray([DotCloudAddonSet.PLAN, str((built.value as Dictionary)["pack"])]), 60.0)
+	var kept := await DotCloudAddonSet.persisted(DotCloudAddonSet.plan_files(built.value), 60.0)
 	print("AO PERSISTED ok=", kept.ok)
 	if kept.ok:
 		DotWeb.get_global("location").reload()
