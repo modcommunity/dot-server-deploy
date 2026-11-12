@@ -1210,6 +1210,114 @@ check_lock_exported() {
     export_presets.cfg, so if this fired the file has a filter that does not match." 3
 }
 
+## [b]A shell carries the dot-* addons and nothing else.[/b] A game's own addons (the
+## weapons packs, natural_disasters) and their models reach a player as dot-cloud overlay
+## packs when they join. Baked in, arena-weapons v1.4.28's embedded textures took the web
+## pck from 44 MB to 147 MB, past the upload limit. These are the folders every export
+## leaves out: everything under addons/ that is not dot_*.
+shell_left_out_addons() {
+    local d
+
+    for d in "$PROJECT"/addons/*/; do
+        [ -d "$d" ] || continue
+        d="$(basename "$d")"
+
+        case "$d" in
+            dot_*|.*) ;;
+            *) printf '%s\n' "$d" ;;
+        esac
+    done
+}
+
+## Adds `addons/<dir>/*` for each of them to every preset's exclude_filter, in place, as
+## ensure_lock_exported does for the lock: a box's export_presets.cfg is its own copy, and
+## a game addon added to the lock after it was written is excluded all the same.
+ensure_shell_excludes() {
+    local cfg="$PROJECT/export_presets.cfg" tmp dirs rc
+
+    [ -f "$cfg" ] || return 0
+    dirs="$(shell_left_out_addons | tr '\n' ' ')"
+    [ -n "$dirs" ] || return 0
+
+    tmp="$(mktemp "$PROJECT/.export_presets.XXXXXX")" || die "could not write a temporary file" 5
+    awk -v dirs="$dirs" '
+        /^exclude_filter=/ {
+            value = substr($0, length("exclude_filter=\"") + 1)
+            sub(/"$/, "", value)
+            n = split(dirs, d, " ")
+            for (i = 1; i <= n; i++) {
+                pat = "addons/" d[i] "/*"
+                if (index(value, pat) == 0) {
+                    value = (value == "" ? pat : value ", " pat)
+                    changed = 1
+                }
+            }
+            print "exclude_filter=\"" value "\""
+            next
+        }
+        { print }
+        END { exit changed ? 10 : 0 }
+    ' "$cfg" > "$tmp"
+    rc=$?
+
+    case "$rc" in
+        0)  rm -f "$tmp" ;;
+        10) mv "$tmp" "$cfg" || { rm -f "$tmp"; die "could not update $cfg" 5; }
+            printf '  export_presets.cfg now excludes the non-dot addons (%s)\n' "${dirs% }" ;;
+        *)  rm -f "$tmp"; die "could not update $cfg" 5 ;;
+    esac
+}
+
+## [b]The lock an export carries names only the addons it carries.[/b] The client reads it
+## as "what I already have" (DotCloudAddonSet.plan_for), so a line for an addon the export
+## left out would stop it from ever fetching that addon's overlay. addons.lock is swapped
+## for a dot-* only copy for the export and put back after it, and at exit if the export
+## dies; a copy left by a run that was killed is put back first.
+SHELL_LOCK_FULL=""
+shell_lock_begin() {
+    local lock="$PROJECT/addons.lock"
+
+    SHELL_LOCK_FULL="$PROJECT/.godot/addons.lock.full"
+    mkdir -p "$PROJECT/.godot"
+    [ -f "$SHELL_LOCK_FULL" ] && mv -f "$SHELL_LOCK_FULL" "$lock"
+    cp "$lock" "$SHELL_LOCK_FULL" || die "could not keep a copy of addons.lock" 5
+    trap shell_lock_end EXIT
+    awk -F'\t' '/^[[:space:]]*(#|$)/ || $1 ~ /^dot-/' "$SHELL_LOCK_FULL" > "$lock" \
+        || { shell_lock_end; die "could not write the export's addons.lock" 5; }
+}
+
+shell_lock_end() {
+    [ -n "$SHELL_LOCK_FULL" ] && [ -f "$SHELL_LOCK_FULL" ] && mv -f "$SHELL_LOCK_FULL" "$PROJECT/addons.lock"
+    SHELL_LOCK_FULL=""
+}
+
+## The artifact carries no addon outside dot-*. Read from the pck itself, so a filter that
+## stopped matching is caught before an upload rather than by the upload's size limit.
+check_shell_dot_only() {
+    local found
+
+    found="$(grep -aoE 'addons/[a-z0-9_]+/' "$1" | sort -u | grep -vE '^addons/dot_' \
+        | sed 's#^addons/##; s#/$##' | tr '\n' ' ')"
+    [ -z "$found" ] || die "the export carries addons that are not dot-* addons: ${found% }.
+
+    A shell carries the dot-* addons only; a game's own addons reach players as overlay
+    packs. ensure_shell_excludes adds them to export_presets.cfg's exclude_filter, so if
+    this fired a filter there does not match (export_presets.example.cfg has them)." 3
+}
+
+## The most the web pck may weigh after web_shrink. The shell was 44 MB with the weapons in
+## it; dot-* code and the shell's own assets are well under this, so a pck above it means an
+## asset folder has come back. SHELL_WEB_MAX_MB raises it on purpose.
+SHELL_WEB_MAX_MB="${SHELL_WEB_MAX_MB:-40}"
+check_shell_web_size() {
+    local bytes
+    bytes="$(stat -c %s "$1")" || die "no $1" 3
+    [ "$bytes" -le $((SHELL_WEB_MAX_MB * 1000000)) ] || die "the web pck is $((bytes / 1000000)) MB, over SHELL_WEB_MAX_MB=$SHELL_WEB_MAX_MB.
+
+    Something heavy is in the shell again: list it with
+      unzip -l of a --export-pack Web x.zip, or tools/shell_pck_check.sh." 3
+}
+
 check_excluded_maps() {
     local pack="$1" carried=0 unpublished=0 bin rel id
 
@@ -1367,13 +1475,18 @@ do_export_native() {
 
         ensure_export_templates
         ensure_lock_exported
+        ensure_shell_excludes
         stamp_shell_version
 
         printf '\n  %sexporting %s%s\n' "$BLD" "$preset" "$OFF"
 
         rm -f "$PROJECT/$outdir/$binary"
+        # After stamp_shell_version, which reads the tree's state: the swapped lock
+        # would make every export look like a dirty one.
+        shell_lock_begin
         "$GODOT" --headless --path "$PROJECT" \
             --export-release "$preset" "$PROJECT/$outdir/$binary" || exit $?
+        shell_lock_end
 
         # [b]Checked rather than trusted.[/b] `./server pack` named a scene that was
         # never written, Godot said "Cannot open file", and the launcher exited 0 --
@@ -1390,6 +1503,7 @@ do_export_native() {
         check_excluded_maps "$PROJECT/$outdir/$binary"
         # The macOS artifact is a zip Godot wrote; the pack inside it is compressed.
         [ "$target" = "macos" ] || check_lock_exported "$PROJECT/$outdir/$binary"
+        [ "$target" = "macos" ] || check_shell_dot_only "$PROJECT/$outdir/$binary"
 
         if [ "$target" = "macos" ]; then
             cp "$PROJECT/$outdir/$binary" "$PROJECT/$archive"
@@ -1451,6 +1565,7 @@ case "$COMMAND" in
     export-web)
         ensure_export_templates
         ensure_lock_exported
+        ensure_shell_excludes
         stamp_shell_version
         mkdir -p "$PROJECT/web/build"
 
@@ -1471,8 +1586,11 @@ case "$COMMAND" in
         # exporting -- so the cheap fix is to not reuse it.
         rm -rf "$PROJECT/.godot/exported"
 
+        # The lock it carries names the dot-* addons only (shell_lock_begin says why).
+        shell_lock_begin
         "$GODOT" --headless --path "$PROJECT" \
             --export-release "Web" "$PROJECT/web/build/index.html" || exit $?
+        shell_lock_end
 
         # The two things that then have to be true about a map the preset excluded.
         # Shared with `export-native`, which excludes the same directory for the same
@@ -1485,6 +1603,7 @@ case "$COMMAND" in
             die "the Web export carries a .gdextension (the unpacked native library); add *.gdextension and addons/*/bin/* to the Web preset's exclude_filter (export_presets.example.cfg has it)." 3
         fi
         check_lock_exported "$PROJECT/web/build/index.pck"
+        check_shell_dot_only "$PROJECT/web/build/index.pck"
 
         # 3D textures to lossy WebP for the browser only; desktop keeps the addons' lossless
         # imports. The page's progress bar needs the new pck size, so it is re-stamped.
@@ -1492,6 +1611,7 @@ case "$COMMAND" in
             -- "$PROJECT/web/build/index.pck" || exit $?
         sed -i "s#\"index.pck\":[0-9]*#\"index.pck\":$(stat -c %s "$PROJECT/web/build/index.pck")#" \
             "$PROJECT/web/build/index.html"
+        check_shell_web_size "$PROJECT/web/build/index.pck"
 
         # The standalone page, which takes ?server= from the URL.
         [ -f "$PROJECT/web/embed.html" ] && cp "$PROJECT/web/embed.html" "$PROJECT/web/build/embed.html"

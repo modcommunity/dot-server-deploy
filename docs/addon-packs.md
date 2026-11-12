@@ -18,7 +18,7 @@
 - **The server box shows where the start is going before sign-in is awaited**, from the page's `?server=` or the plan, so it no longer shows the placeholder for the length of a refused redeem and a restore.
 - **No downgrades**: an addon whose version is not newer than the build's is never taken. A server whose lock is older than a player's build leaves them on the newer one, which envelope negotiation handles.
 - **An addon pack carries only its own `addons/<dir>/`.** Anything outside it (the weapons pack's art in `res://assets/`) still needs a shell.
-- **An addon whose pack is not on the origin is the same as one with no release**: clients keep the build's copy.
+- **An addon whose pack is not on the origin is the same as one with no release**: clients keep the build's copy. A game addon (not dot-*) has no build copy, because the shell carries only dot-* addons, so its pack has to be on the origin.
 - **Mobile cannot restart itself**: the overlay is written and applies at the next launch.
 - **A client exported before this feature has no boot scene** and takes nothing; the first shell carrying it had to be exported the old way.
 
@@ -26,7 +26,7 @@
 
 ## Whose packs may replace the build's addons
 
-`TmcAddonNamespaces` (`client/tmc_addon_namespaces.gd`) is the `namespaces` list `DotCloudAddonSet.plan_for` takes an overlay from: the first-party defaults (`modcommunity/` and two first-party packs) plus what an operator who exports their own shell writes in `cfg/addons/namespaces.txt` (one `owner/` or `owner/repo` per line; the presets already include `cfg/addons/*`). It decides only whose pack may **replace** the shell's own `addons/<dir>`, which then runs for every game the shell plays, from the boot scene, before sign-in. So it is read from the shell build and **never from a server**: a server that could extend it could replace the player's code.
+`TmcAddonNamespaces` (`client/tmc_addon_namespaces.gd`) is the `namespaces` list `DotCloudAddonSet.plan_for` takes an overlay from: the first-party defaults (`modcommunity/` plus the game addons published under their author: `gamemann/arena-weapons`, `zee-dot-weapons`, `zed-dot-weapons`, `natural-disasters`; a shell carries none of these, see [web-client.md](web-client.md#the-shell-carries-the-dot--addons-only)) plus what an operator who exports their own shell writes in `cfg/addons/namespaces.txt` (one `owner/` or `owner/repo` per line; the presets already include `cfg/addons/*`). It decides only whose pack may **replace** the shell's own `addons/<dir>`, which then runs for every game the shell plays, from the boot scene, before sign-in. So it is read from the shell build and **never from a server**: a server that could extend it could replace the player's code.
 
 The server side is `cfg/content/addons.yml`: `namespaces:` (the owners the operator trusts; it must match the shell build's file) and `overlays: [owner/repo@version]`, addon packs announced in `addon_set` beside `addons.lock`'s. An overlay whose owner is not under `namespaces:` fails the boot. A player on a stock shell refuses it (`refused` in the debug log) and joins on the build's own copy.
 

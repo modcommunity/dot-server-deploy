@@ -948,8 +948,11 @@ static func addon_set_from(lock_text: String, dirs: PackedStringArray) -> Array:
 ## The repository an addon directory comes from. setup.sh's `addon_repo`, and the two
 ## must agree: one exception, and otherwise underscores become dashes.
 static func addon_repo(dir: String) -> String:
+	# setup.sh's addon_repo() exceptions: the two weapons packs are not named after their folders.
 	if dir == "zee_weapons":
 		return "zee-dot-weapons"
+	if dir == "zed_weapons":
+		return "zed-dot-weapons"
 
 	return dir.replace("_", "-")
 

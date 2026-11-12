@@ -9,8 +9,9 @@ extends RefCounted
 ## `cfg/addons/namespaces.txt` (one per line, `#` comments), which the export presets already include.
 ## It is read from the shell build and never from a server: a server that could extend it could replace the player's code.
 
-## The organisation's, and the one addon that is not theirs (the weapons pack, published under its author).
-const DEFAULTS: PackedStringArray = ["modcommunity/", "gamemann/zee-dot-weapons", "gamemann/arena-weapons"]
+## The organisation's, and the game addons published under their author (the weapons packs, natural-disasters).
+## A shell carries none of those (it is dot-* addons only), so these are what it fetches them under when a server announces them.
+const DEFAULTS: PackedStringArray = ["modcommunity/", "gamemann/zee-dot-weapons", "gamemann/zed-dot-weapons", "gamemann/arena-weapons", "gamemann/natural-disasters"]
 
 ## Where an operator's additions live in the shell build.
 const FILE := "res://cfg/addons/namespaces.txt"
