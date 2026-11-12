@@ -1534,8 +1534,8 @@ func _update_addons(addons: DotCloudAddonSet, wanted: Dictionary, target: String
 	_note_update_attempt(attempt)
 
 	# What the next start reads: the plan (where to come back to, who was signed in), the
-	# overlay it mounts, and the stored session that keeps the player signed in.
-	var keep := PackedStringArray([DotCloudAddonSet.PLAN, str((built.value as Dictionary)["pack"])])
+	# overlay's files it mounts, and the stored session that keeps the player signed in.
+	var keep := DotCloudAddonSet.plan_files(built.value)
 	if resume.has("member"):
 		var tokens := _auth.config.token_store_path
 		for path in [tokens, tokens + ".salt"]:
@@ -1968,7 +1968,7 @@ func _solo_overlay(content_id: String, mount: String) -> bool:
 
 	_note_update_attempt(attempt)
 
-	var keep := PackedStringArray([DotCloudAddonSet.PLAN, str((built.value as Dictionary)["pack"])])
+	var keep := DotCloudAddonSet.plan_files(built.value)
 	if resume.has("member"):
 		var tokens := _auth.config.token_store_path
 		for token in [tokens, tokens + ".salt"]:
@@ -1979,7 +1979,7 @@ func _solo_overlay(content_id: String, mount: String) -> bool:
 	if await _restart(keep):
 		return true
 	# Without its addons the game's scripts do not parse: say so rather than start a grey screen.
-	# A browser that never stores the overlay (Chrome keeps no IndexedDB value over 128 MB) stops here every time.
+	# A browser that cannot store the overlay (a full quota; before dot-cloud 0.1.47 any overlay over 127 MiB) stops here.
 	loading.set_progress(-1.0, _text("shell.addons.unsaved_solo", {}, "This browser could not keep the addons this game needs, so it cannot start here yet."))
 	return true
 
