@@ -11,7 +11,7 @@ const RoundsWithoutMatch := preload("res://examples/fixtures/rounds_without_matc
 
 const Host := preload("res://host/tmc_host.gd")
 
-const CHECKS := 512
+const CHECKS := 515
 
 var _passed := 0
 var _failed := 0
@@ -219,7 +219,9 @@ func _test_yaml_refusals() -> void:
 		["an alias", "a: *anchor", "anchor"],
 		["a tag", "a: !!str 1", "anchor"],
 		["a block scalar", "a: |", "anchor"],
-		["an inline mapping", "a: {b: 1}", "inline mapping"],
+		["an unclosed flow mapping", "a: {b: 1", "same line"],
+		["a flow mapping entry with no colon", "a: {b}", "flow mapping"],
+		["a duplicate key in a flow mapping", "a: {b: 1, b: 2}", "duplicate"],
 		["a document marker", "---\na: 1", "document marker"],
 		["an unclosed flow sequence", "a: [1, 2", "same line"],
 		["a key with no colon", "just a line", "expected 'key: value'"],
@@ -232,6 +234,14 @@ func _test_yaml_refusals() -> void:
 			"%s is refused" % entry[0],
 			"got: %s" % (message if message != "" else "accepted")
 		)
+
+	# dot-core v0.1.46 reads one-line flow mappings, so an inline mapping is a value, not a refusal.
+	var flow := TmcYaml.parse("a: {map: x, mode: ctf}", "<test>")
+	_check(
+		flow.ok and TmcYaml.at(flow.value, "a.map") == "x" and TmcYaml.at(flow.value, "a.mode") == "ctf",
+		"an inline mapping is read as a mapping",
+		str(flow.error) if not flow.ok else ""
+	)
 
 	var located := TmcYaml.parse("a: 1\nb: 2\n\tc: 3", "cfg/server.yml")
 	_check(
