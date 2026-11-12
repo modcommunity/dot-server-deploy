@@ -932,10 +932,13 @@ static func addon_set_from(lock_text: String, dirs: PackedStringArray) -> Array:
 		if not versions.has(repo):
 			continue
 
+		# Under the name it is published as, which the lock may not use (arena-weapons is published as fc-weapons).
+		var pack := TmcAddonNamespaces.pack_for(dir)
+
 		out.append({
 			"dir": dir,
-			"repo": repo,
-			"id": "%s/%s" % [content_owner(repo), repo],
+			"repo": pack["repo"],
+			"id": pack["id"],
 			"version": versions[repo],
 		})
 
@@ -945,13 +948,7 @@ static func addon_set_from(lock_text: String, dirs: PackedStringArray) -> Array:
 ## The repository an addon directory comes from. setup.sh's `addon_repo`, and the two
 ## must agree: one exception, and otherwise underscores become dashes.
 static func addon_repo(dir: String) -> String:
-	# setup.sh's addon_repo() exceptions: the two weapons packs are not named after their folders.
-	if dir == "zee_weapons":
-		return "zee-dot-weapons"
-	if dir == "zed_weapons":
-		return "zed-dot-weapons"
-
-	return dir.replace("_", "-")
+	return TmcAddonNamespaces.lock_repo(dir)
 
 
 ## Whose namespace a repository's packs are published under. setup.sh's `repo_url`: the

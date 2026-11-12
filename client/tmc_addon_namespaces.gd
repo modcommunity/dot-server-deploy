@@ -11,7 +11,12 @@ extends RefCounted
 
 ## The organisation's, and the game addons published under their author (the weapons packs, natural-disasters).
 ## A shell carries none of those (it is dot-* addons only), so these are what it fetches them under when a server announces them.
-const DEFAULTS: PackedStringArray = ["modcommunity/", "gamemann/zee-dot-weapons", "gamemann/zed-dot-weapons", "gamemann/arena-weapons", "gamemann/natural-disasters"]
+## `gamemann/arena-weapons` stays for servers that still announce the old id.
+const DEFAULTS: PackedStringArray = ["modcommunity/", "gamemann/zee-dot-weapons", "gamemann/zed-dot-weapons", "gamemann/fc-weapons", "gamemann/arena-weapons", "gamemann/natural-disasters"]
+
+## Repositories published under another name. arena-weapons became fc-weapons and the site keeps `gamemann/arena-weapons` reserved
+## (a publish under it is refused as retired), so its code is published as `gamemann/fc-weapons` while setup.sh and addons.lock still say arena-weapons.
+const PUBLISHED_AS := {"arena-weapons": "fc-weapons"}
 
 ## Where an operator's additions live in the shell build.
 const FILE := "res://cfg/addons/namespaces.txt"
@@ -83,6 +88,25 @@ static func load_shell() -> PackedStringArray:
 		DotLog.warn("tmc.shell", "addon namespaces ignored (not owner/ or owner/repo)", {"entries": rejected})
 
 	return out
+
+
+## The repository an addon directory comes from, as setup.sh and addons.lock name it: underscores become dashes, bar the two weapons packs.
+static func lock_repo(dir: String) -> String:
+	if dir == "zee_weapons":
+		return "zee-dot-weapons"
+	if dir == "zed_weapons":
+		return "zed-dot-weapons"
+
+	return dir.replace("_", "-")
+
+
+## The pack [param dir]'s code is published as: `{repo, id}`, where `repo` is the id's name ([DotCloudAddonSet] refuses any other).
+## `dot-*` packs are the organisation's, the game addons their author's.
+static func pack_for(dir: String) -> Dictionary:
+	var lock := lock_repo(dir)
+	var repo := str(PUBLISHED_AS.get(lock, lock))
+	var owner := "modcommunity" if repo.begins_with("dot-") else "gamemann"
+	return {"repo": repo, "id": "%s/%s" % [owner, repo]}
 
 
 ## Whether [param id] (`owner/repo`) falls under [param namespaces], as [DotCloudAddonSet] decides.
