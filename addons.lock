@@ -9,7 +9,7 @@ dot-bot	v0.1.25
 dot-bot-record	v0.1.3
 dot-browser	v0.1.6
 dot-chat	v0.1.7
-dot-cloud	v0.1.45
+dot-cloud	v0.1.46
 dot-combat	v0.1.22
 dot-console	v0.1.10
 dot-core	v0.1.43
@@ -72,5 +72,5 @@ dot-weapon	v0.1.45
 dot-weather	v0.1.3
 dot-workbench	v0.3.2
 natural-disasters	v0.1.3
-zed-dot-weapons	v0.1.12
-zee-dot-weapons	v0.1.61
+zed-dot-weapons	v0.1.13
+zee-dot-weapons	v0.1.62

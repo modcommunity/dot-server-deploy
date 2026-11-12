@@ -20,7 +20,7 @@ entries:
   - repo: dot-chat
     pin: v0.1.7
   - repo: dot-cloud
-    pin: v0.1.45
+    pin: v0.1.46
   - repo: dot-combat
     pin: v0.1.22
   - repo: dot-console
@@ -146,6 +146,6 @@ entries:
   - repo: natural-disasters
     pin: v0.1.3
   - repo: zed-dot-weapons
-    pin: v0.1.12
+    pin: v0.1.13
   - repo: zee-dot-weapons
-    pin: v0.1.61
+    pin: v0.1.62
