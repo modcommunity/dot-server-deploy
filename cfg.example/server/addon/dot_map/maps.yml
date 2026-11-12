@@ -35,6 +35,29 @@
 #         testing:             new imports: installed, not played until you switch to this
 #           maps: [surf_new_1, surf_new_2]
 #
+# Per-map profiles. Any map can play in any mode the game supports, per rotation: an entry, a
+# rotation or a section names one with `mode:` or `cfg:` (aliases; entry wins over rotation over
+# section). Write entries in block form, the reader refuses `{...}`:
+#
+#   games:
+#     game-arena:
+#       rotations:
+#         main:
+#           mode: cycle            the ORDER (cycle/random); the profile is `cfg:` here
+#           cfg: tdm               every entry below that names none plays tdm
+#           maps:
+#             - dm_arena           plays tdm (the rotation's)
+#             - map: ctf_2fort     entry form
+#               mode: ctf
+#             - cp_well:           single-key form
+#                 cfg: koth
+#             - map: ctf_night
+#               cfg: night/fast    a path: cfg/night/fast.yml beside this file (its `mode:` key)
+#
+# A bare word is a mode id; cfg/<mode>.yml beside this file, when present, adds its cvars
+# (`timelimit: 20` lines, or under `cvars:`). The cvars hold for that map only and are put back
+# on the next. A profile that is not found logs one WARN and the map still plays.
+#
 # Every entry in a list takes content.yml's spellings, plus globs:
 #
 #   owner/map                 exactly that map
