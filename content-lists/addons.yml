@@ -61,6 +61,8 @@ entries:
     pin: v0.1.8
   - repo: dot-menu
     pin: v0.1.28
+  - repo: dot-mobile
+    pin: v0.1.0
   - repo: dot-moderation
     pin: v0.1.6
   - repo: dot-net
