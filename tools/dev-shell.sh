@@ -1,23 +1,24 @@
 #!/usr/bin/env bash
-# Exports the DEV web shell from this checkout and installs it on dev01:/srv/tmc-game (tmcdevgames.net).
+# Exports the DEV web shell from this checkout and publishes it to the dev site (tools/dev-shell-publish.sh).
 #
-#   heavy -- tools/dev-shell.sh [--backbone URL] [--no-install] [--no-publish]
+#   heavy -- tools/dev-shell.sh [--backbone URL] [--no-publish]
 #
-# Dev only: never publishes, pins or touches the production bucket. The shell differs from a published one
-# in two files that stay out of git: client/auth.json (backbone_url, default https://tmcdev.net, the dev
-# site; https://games.tmcdev.net for the dev_games stack) and client/content.json, which also trusts the
-# tmc-dev pack key so dev-signed packs load. Both are restored when the script ends. The previous
-# /srv/tmc-game is copied to dev01 ~/backups/tmc-game-<timestamp> first. Then tools/dev-shell-publish.sh puts the
-# same shell in the dev bucket and registers it, so games.tmcdev.net frames it too (--no-publish skips that).
+# Dev only: never publishes, pins or touches production. The shell differs from a published one in two files that
+# stay out of git: client/auth.json (backbone_url, default https://tmcdev.net, the dev site; https://games.tmcdev.net
+# for the dev_games stack) and client/content.json, which also trusts the tmc-dev pack key so dev-signed packs load.
+# Both are restored when the script ends. Then tools/dev-shell-publish.sh uploads the same shell through the dev site's
+# web build API (storez) and registers it, so tmcdev.net and games.tmcdev.net frame it (--no-publish skips that and
+# leaves the export in web/build). The old dev01:/srv/tmc-game install is gone (nginx no longer serves it);
+# --no-install is still accepted and does nothing.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-backbone=https://tmcdev.net install=1 publish=1 key=${DEV_PACK_KEY:-$HOME/.config/dot/pack-dev.pub} host=${DEV_SHELL_HOST:-dev01}
+backbone=https://tmcdev.net publish=1 key=${DEV_PACK_KEY:-$HOME/.config/dot/pack-dev.pub}
 while [ $# -gt 0 ]; do
     case $1 in
         --backbone) backbone=${2:?--backbone needs a URL}; shift 2 ;;
-        --no-install) install=0; shift ;;
+        --no-install) shift ;;
         --no-publish) publish=0; shift ;;
-        *) echo "usage: dev-shell.sh [--backbone URL] [--no-install] [--no-publish]" >&2; exit 2 ;;
+        *) echo "usage: dev-shell.sh [--backbone URL] [--no-publish]" >&2; exit 2 ;;
     esac
 done
 [ -f "$key" ] || { echo "error: dev pack key $key missing" >&2; exit 1; }
@@ -43,16 +44,10 @@ PY
 tools/shell-auth-json.sh "$backbone" > client/auth.json
 # ./server is generated once by setup.sh; a stale one exports without shell-api.json, and the site then cannot match the shell to a game.
 if [ ! -x server ] || [ tools/server.in -nt server ]; then
-    godot_bin=$(sed -n 's/^GODOT="\${TMC_GODOT:-\(.*\)}"$/\1/p' server 2>/dev/null)
+    godot_bin=$(sed -n 's/^GODOT="\${TMC_GODOT:-\(.*\)}"$/\1/p' server 2>/dev/null || true)  # a fresh worktree has no ./server: sed exits 2, and set -e would end the script silently
     sed "s|@GODOT@|${godot_bin:-$(command -v godot)}|g" tools/server.in > server && chmod +x server
 fi
 ./server export-web
 echo "dev shell exported with backbone $backbone"
-ts=$(date +%Y%m%d-%H%M%S)
-if [ "$install" = 1 ]; then
-    ssh "$host" "mkdir -p ~/backups && cp -a /srv/tmc-game ~/backups/tmc-game-$ts"
-    rsync -a --delete web/build/ "$host:/srv/tmc-game/"
-    echo "installed on $host:/srv/tmc-game (backup ~/backups/tmc-game-$ts)"
-fi
 # The export is still in web/build here, and the trap restores the key files only after this line.
 if [ "$publish" = 1 ]; then tools/dev-shell-publish.sh; fi
