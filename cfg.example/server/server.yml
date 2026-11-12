@@ -228,3 +228,8 @@ net_max_update_rate: 0
 # override.cfg before the engine starts. Default off: no measured gain on a headless server, and a
 # space query is then safe only inside the physics step. See docs/operator-config.md. TMC_PHYSICS_THREAD=1 does the same.
 # sv_physics_thread: 0
+
+# Physics engine: godot (default) or jolt. Read by ./server, which writes override.cfg before the engine
+# starts (the engine reads physics/3d/physics_engine once). Jolt passed the dot-player-controller, dot-physics,
+# dot-combat, game-arena and game-zombie-zone suites; see docs/operator-config.md. TMC_PHYSICS_ENGINE=jolt does the same.
+# sv_physics_engine: godot

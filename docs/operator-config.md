@@ -72,6 +72,7 @@ sv_worker_threads: -1      # -1 cores less one (at most 8), 0 everything on the 
 sv_threads_net: 1          # build each player's snapshot on the workers (not on the web)
 sv_threads_npc: 0          # NPC decisions and path searches, for brains that support it
 sv_physics_thread: 0       # physics/3d/run_on_separate_thread, read at startup (see below)
+sv_physics_engine: godot   # godot (default) or jolt: physics/3d/physics_engine, read at startup (see below)
 map_load_threads: 0       # worker threads for the CPU-only stages of a map load (0 inline, -1 automatic, never on the web; needs dot-map)
 net_native: 1              # build snapshots in dot-net's native library (same bytes; GDScript where it cannot load)
 net_native_interest: 1     # with net_native, also pick each player's relevant entities natively (GDScript for a strategy it cannot port)
@@ -82,7 +83,8 @@ net_far_every: 4           # anything farther than net_far_distance is sent in o
 net_far_distance: 60       # metres; 0 is never far
 ```
 
-`sv_physics_thread` (off) is read by `./server`, not the game: before the engine starts it writes `override.cfg` beside `project.godot` with `physics/3d/run_on_separate_thread=true` (the engine reads that setting once, so a cvar could not carry it), and `TMC_PHYSICS_THREAD=1` does the same when no cfg file sets the key. A measured server gains nothing from it (the tick that queries the space waits for the step), and with it on a ray or shape query is safe only inside the physics step (dot-physics `docs/threading.md`); leave it off unless a game's notes say otherwise. Only an `override.cfg` that `./server` wrote (its first line names `TMC_PHYSICS_THREAD`) is rewritten or removed; one you wrote yourself is left alone and the setting warns and is ignored. `DotServer.describe` reports the engine and thread read-only.
+`sv_physics_thread` (off) is read by `./server`, not the game: before the engine starts it writes `override.cfg` beside `project.godot` with `physics/3d/run_on_separate_thread=true` (the engine reads that setting once, so a cvar could not carry it), and `TMC_PHYSICS_THREAD=1` does the same when no cfg file sets the key. A measured server gains nothing from it (the tick that queries the space waits for the step), and with it on a ray or shape query is safe only inside the physics step (dot-physics `docs/threading.md`); leave it off unless a game's notes say otherwise. Only an `override.cfg` that `./server` wrote (its first line names `TMC_PHYSICS_THREAD`) is rewritten or removed; one you wrote yourself is left alone and the setting warns and is ignored. 
+`sv_physics_engine` (godot) works the same way: `jolt` writes `physics/3d/physics_engine="JoltPhysics3D"` into the same `override.cfg` (`TMC_PHYSICS_ENGINE=jolt` also works). Jolt is opt-in: the shared motor, physics, combat, arena and zombie-zone suites pass under it, but TMC's own servers stay on the default until a measured run on the target game says otherwise. Both lines can be on together.
 
 `net_interest_radius` is a ceiling on the game's own radius (the smaller wins; 0 means no limit from you). `net_far_every` and `net_far_distance` replace the game's values when written. `sv_threads_npc` (off) is read by Zombie Zone, which runs its horde's path searches on worker threads; it stays off on the web, without threads and on one CPU. Zombie Zone's `zz_net_far_every` and `zz_net_far_distance` are the same two settings under the game's own names and keep working; where a game sets its own, the game's wins.
 

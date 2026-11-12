@@ -1552,18 +1552,25 @@ do_export_native() {
 # off unless a game's own notes ask for it. Only a file this block wrote (first line TMC_PHYSICS_THREAD)
 # is rewritten or removed; an operator's own override.cfg is never touched, and the setting is then ignored with a warning.
 apply_physics_thread() {
-    local want="" f="$PROJECT/override.cfg" mark="; TMC_PHYSICS_THREAD (written by ./server from sv_physics_thread; edit server.yml, not this file)"
+    local want="" eng="" f="$PROJECT/override.cfg" mark="; TMC_PHYSICS_THREAD (written by ./server from sv_physics_thread and sv_physics_engine; edit server.yml, not this file)"
     [ -n "$want" ] || want="$(cfg_value "$(abs "$CONFIG_DIR")/server/server.yml" sv_physics_thread)"
     [ -n "$want" ] || want="$(cfg_value "$(abs "$CONFIG_DIR")/server.yml" sv_physics_thread)"
     [ -n "$want" ] || want="${TMC_PHYSICS_THREAD:-0}"
     case "$want" in 1|true|yes|on) want=1 ;; *) want=0 ;; esac
+    eng="$(cfg_value "$(abs "$CONFIG_DIR")/server/server.yml" sv_physics_engine)"
+    [ -n "$eng" ] || eng="$(cfg_value "$(abs "$CONFIG_DIR")/server.yml" sv_physics_engine)"
+    [ -n "$eng" ] || eng="${TMC_PHYSICS_ENGINE:-godot}"
+    case "$eng" in jolt|Jolt|JoltPhysics3D) eng=JoltPhysics3D ;; godot|default|GodotPhysics3D|"") eng="" ;; *) warn "sv_physics_engine '$eng' unknown (godot or jolt); using godot"; eng="" ;; esac
     if [ -e "$f" ] && ! head -1 "$f" | grep -q "TMC_PHYSICS_THREAD"; then
-        [ "$want" = 1 ] && warn "sv_physics_thread is on but $f is not ours; edit it by hand to set physics/3d/run_on_separate_thread"
+        { [ "$want" = 1 ] || [ -n "$eng" ]; } && warn "sv_physics_thread/sv_physics_engine are set but $f is not ours; edit it by hand (physics/3d/run_on_separate_thread, physics/3d/physics_engine)"
         return 0
     fi
-    if [ "$want" = 1 ]; then
-        printf '%s\n[physics]\n\n3d/run_on_separate_thread=true\n' "$mark" > "$f" || warn "could not write $f"
-        info "sv_physics_thread: physics runs on its own thread (override.cfg)"
+    if [ "$want" = 1 ] || [ -n "$eng" ]; then
+        { printf '%s\n[physics]\n\n' "$mark"
+          [ "$want" = 1 ] && printf '3d/run_on_separate_thread=true\n'
+          [ -n "$eng" ] && printf '3d/physics_engine="%s"\n' "$eng"; } > "$f" || warn "could not write $f"
+        [ "$want" = 1 ] && info "sv_physics_thread: physics runs on its own thread (override.cfg)"
+        [ -n "$eng" ] && info "sv_physics_engine: $eng (override.cfg)"
     else
         rm -f "$f"
     fi
