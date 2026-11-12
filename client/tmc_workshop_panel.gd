@@ -145,8 +145,10 @@ func refresh() -> void:
 	_add_site_button()
 
 
-## Off / Ask / Auto for the packs the game suggests (its map packs). Shown whenever the game
-## declares some, signed in or not, because it is this device's choice and not a subscription.
+## How the packs the game suggests (its map packs) arrive: one map at a time when it is picked
+## (the default), or all in the background. Shown whenever the game declares some, signed in or
+## not, because it is this device's choice and not a subscription. There is no "ask": a question
+## about a bulk download would land on top of a running game.
 func _add_suggested_row() -> void:
 	if workshop.suggested.is_empty():
 		return
@@ -154,18 +156,23 @@ func _add_suggested_row() -> void:
 	var pick := OptionButton.new()
 	pick.name = "SuggestedMode"
 	pick.custom_minimum_size = Vector2(0, TOUCH_HEIGHT)
-	var choices := ["auto", "ask", "off"]
-	pick.add_item(_t("workshop.suggested.auto", "Download automatically"))
-	pick.add_item(_t("workshop.suggested.ask", "Ask before downloading"))
-	pick.add_item(_t("workshop.suggested.off", "Off"))
+	pick.add_item(_t("workshop.suggested.on_demand", "When a map is picked"))
+	pick.add_item(_t("workshop.suggested.all", "Download all in the background"))
 	var mode: String = workshop.device.suggested_mode() if workshop.device != null else ""
-	pick.select(choices.find(DotCloudSuggested.device_choice(mode)))
-	pick.item_selected.connect(func(i: int) -> void: _set_suggested(choices[i]))
+	pick.select(1 if suggested_in_background(mode) else 0)
+	pick.item_selected.connect(func(i: int) -> void: _set_suggested(i == 1))
 	add_child(pick)
 
 
-func _set_suggested(choice: String) -> void:
-	var res := workshop.set_device_suggested_mode(DotCloudSuggested.mode_for_choice(choice))
+## Whether a device mode fetches suggested packs in the background: "all" or a group list.
+## "", "none" and "ask" all read as one map at a time.
+static func suggested_in_background(mode: String) -> bool:
+	var m := mode.strip_edges().to_lower()
+	return m != "" and m != DotCloudSuggested.MODE_NONE and not DotCloudSuggested.asks(m)
+
+
+func _set_suggested(background: bool) -> void:
+	var res := workshop.set_device_suggested_mode(DotCloudSuggested.MODE_ALL if background else "")
 	_after("suggested", res, func() -> void: pass)
 
 
