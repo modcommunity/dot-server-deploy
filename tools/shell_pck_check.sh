@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Proves the client shell's pck does not carry dot-map's surface textures or dot-audio's ambience beds and mood set (they ride in a dot-cloud pack and resolve through
 # DotMapSurfaces.fallback_roots / DotAudioStock.fallback_roots; dot-map's examples/surfaces_pack_selftest and dot-audio's
-# examples/stock_pack_selftest prove that half). Also checks the preset text: only the Web preset excludes them, desktop presets ship them. Prints the pck size.
+# examples/stock_pack_selftest prove that half), nor any addon that is not a dot-* addon. Also checks the preset text: only the Web preset excludes them, desktop presets ship them. Prints the pck size.
 #   heavy -- tools/shell_pck_check.sh
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
@@ -22,6 +22,9 @@ if grep -Eq 'addons/dot_audio/stock/(ambience|moods)/' <<<"$paths"; then
 fi
 grep -q 'addons/dot_audio/core/dot_audio_stock.gd' <<<"$paths" || { echo "FAIL: DotAudioStock script missing"; exit 1; }
 grep -q 'addons/dot_audio/stock/footsteps/' <<<"$paths" || { echo "FAIL: footsteps should stay in the shell"; exit 1; }
+# A shell carries the dot-* addons only (tools/check_shell_addons.sh has the why); the game addons are overlay packs.
+others="$(grep -oE 'addons/[a-z0-9_]+/' <<<"$paths" | sort -u | grep -v '^addons/dot_' || true)"
+[ -z "$others" ] || { echo "FAIL: the shell pck carries addons that are not dot-*: $(echo $others)"; exit 1; }
 # The exclusions are the Web preset's alone: every desktop preset must still ship the textures, beds and moods.
 python3 - export_presets.example.cfg <<'PY' || exit 1
 import re, sys
@@ -48,4 +51,4 @@ if not seen["Web"] or not seen["desktop"]:
 if bad:
     print("FAIL: " + "; ".join(bad)); sys.exit(1)
 PY
-echo "OK: surface textures and ambience are out of the Web shell pck only (desktop presets keep them), DotMapSurfaces and DotAudioStock are in"
+echo "OK: surface textures and ambience are out of the Web shell pck only (desktop presets keep them), DotMapSurfaces and DotAudioStock are in, no non-dot addon is"

@@ -11,7 +11,7 @@ const RoundsWithoutMatch := preload("res://examples/fixtures/rounds_without_matc
 
 const Host := preload("res://host/tmc_host.gd")
 
-const CHECKS := 495
+const CHECKS := 492
 
 var _passed := 0
 var _failed := 0
@@ -58,7 +58,6 @@ func _run() -> void:
 	await _test_friends()
 	_test_radio()
 	_test_addon_announce()
-	_test_pack_roots()
 
 	print("")
 	_check(
@@ -803,38 +802,16 @@ func _test_addon_announce() -> void:
 	_check(not TmcAddonsConfig.new().read({"namespaces": ["*"]}).ok and not TmcAddonsConfig.new().read({"namespaces": ["alice"]}).ok, "a wildcard or a bare name is not a namespace")
 
 	var spaces := TmcAddonNamespaces.resolve(PackedStringArray(["alice/", "bad entry", "modcommunity/"]))
-	_check(spaces.size() == 4 and TmcAddonNamespaces.covers(spaces, "alice/dot-x") and not TmcAddonNamespaces.covers(spaces, "alicia/dot-x"), "operator namespaces extend the defaults; owner prefix needs the slash")
+	_check(spaces.size() == TmcAddonNamespaces.DEFAULTS.size() + 1 and TmcAddonNamespaces.covers(spaces, "alice/dot-x") and not TmcAddonNamespaces.covers(spaces, "alicia/dot-x"), "operator namespaces extend the defaults; owner prefix needs the slash")
 	_check(TmcAddonNamespaces.parse_lines("# c\nalice/ # me\n\n") == PackedStringArray(["alice/"]), "the namespaces file is one entry per line with comments")
 	_check(TmcAddonNamespaces.covers(TmcAddonNamespaces.DEFAULTS, "gamemann/arena-weapons") and not TmcAddonNamespaces.covers(TmcAddonNamespaces.DEFAULTS, "gamemann/arena-weapons-evil"), "the defaults keep their exact-id entries exact")
+	for dir: String in ["arena_weapons", "zee_weapons", "zed_weapons", "natural_disasters"]:
+		var id := Host.content_owner(Host.addon_repo(dir)) + "/" + Host.addon_repo(dir)
+		_check(TmcAddonNamespaces.covers(TmcAddonNamespaces.DEFAULTS, id), "the shell takes %s's overlay (%s), since it does not carry it" % [dir, id])
 
 	var pins: Variant = JSON.parse_string(Host.pack_pins_json(out, {"modcommunity/dot-core": "9.9.9", "ow/map_a": "1.0.0"}))
 	_check(pins is Dictionary and pins.get("ow/map_a") == "1.0.0" and pins.get("modcommunity/dot-core") == "9.9.9", "sv_pack_pins lists mounted packs, and what is mounted wins over the lock")
 	_check(Host.pack_pins_json([], {}) == "", "nothing pinned reports nothing")
-	_done()
-
-
-func _test_pack_roots() -> void:
-	_section("a mounted pack's assets are listed on the addon that lacks them")
-	var stand_in := "res://examples/fixtures/pack_roots_target.gd"
-	var cache := load(stand_in) as Script
-	var mount := "user://pack_roots_mount/x/1.0.0"
-	var assets := mount.path_join("addons/arena_weapons/assets")
-	DirAccess.make_dir_recursive_absolute(assets)
-	var roots := TmcPackRoots.new()
-	roots.targets = [{"script": stand_in, "add": "add_fallback_root", "remove": "remove_fallback_root", "subdir": "addons/arena_weapons/assets"}]
-	_check(roots.list_mount("x/y@1.0.0", "user://pack_roots_mount/none") == 0, "a pack without the folder lists nothing")
-	_check(roots.list_mount("x/y@1.0.0", mount) == 1, "a pack with the folder lists one root")
-	_check(assets in (cache.get("roots") as PackedStringArray), "the root is on the addon's list")
-	roots.list_mount("x/y@1.0.0", mount)
-	_check((cache.get("roots") as PackedStringArray).size() == 1, "listing twice keeps one entry")
-	roots.unlist_mount("x/y@1.0.0")
-	_check((cache.get("roots") as PackedStringArray).is_empty(), "releasing the pack takes the root off")
-	roots.unlist_mount("x/y@1.0.0")
-	_check(true, "releasing a pack twice is harmless")
-	var absent := TmcPackRoots.new()
-	absent.targets = [{"script": "res://nothing_here.gd", "add": "a", "remove": "r", "subdir": "addons/arena_weapons/assets"}]
-	_check(absent.list_mount("x/y@1.0.0", mount) == 0, "an addon the build lacks is skipped without an error")
-	DirAccess.remove_absolute(assets)
 	_done()
 
 

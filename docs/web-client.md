@@ -89,6 +89,23 @@ The shell fills the resource cache with `DotCloudSliceLoader` (dot-cloud) before
 
 The game origin's CSP is `script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' blob:`, with no `unsafe-eval`, so `JavaScriptBridge.eval` throws `EvalError`. dot-core's `addons/dot_core/web/dot_web.js` defines `window.dotWeb` (keyboard lock, postMessage to the parent, storage estimate, downloads, `publish`) and the tab guard; `DotWeb` reaches it with `get_interface`, never eval. `embed.html` names it in its source and `install_dot_web` in `tools/server.in` copies it beside the build and patches `index.html`. A dot-core older than the file makes `export-web` warn and build without it. dot-ci's `check-no-js-eval.py` fails any repository that evaluates a string.
 
+## The shell carries the dot-* addons only
+
+Every preset (Web and desktop) excludes every addon that is not a dot-* addon: `addons/arena_weapons/*`, `addons/zee_weapons/*`, `addons/zed_weapons/*`, `addons/natural_disasters/*`. A game's own addons reach a player as dot-cloud overlay packs when a server announces them (see [addon-packs.md](addon-packs.md)). Servers and `setup.sh` still install all of them from `addons.lock`. The reason is arena-weapons v1.4.28 (commit b175e59). It switched its models to `gltf/embedded_image_handling=2`, which puts BasisU textures inside each `.scn` (about 5 MB per weapon). `tools/web_shrink.gd` only converts `.ctex` files and cannot see them, so the Web pck grew from 44 MB to 147 MB and the upload was refused (413).
+
+`./server export-web` and `export-native` enforce this rule in four steps:
+
+- `ensure_shell_excludes` adds the exclude for every non-dot folder under `addons/` to a box's own `export_presets.cfg`.
+- `shell_lock_begin`/`shell_lock_end` swap `addons.lock` for a dot-* only copy for the export. A lock that named an addon the export left out would tell `DotCloudAddonSet.plan_for` the client already has it, so the client would never fetch it.
+- `check_shell_dot_only` refuses an artifact that carries any `addons/<non-dot>/`.
+- `check_shell_web_size` refuses a Web pck over `SHELL_WEB_MAX_MB` (40) after `web_shrink`.
+
+`tools/check_shell_addons.sh`, run by `tools/check.sh`, checks the preset text, the namespaces and these calls. `tools/shell_pck_check.sh` checks an exported pck. On a local export (2026-11-11) the Web `index.pck` was 23,993,501 bytes. A Web pck zip of the same tree with arena-weapons v1.4.27 was 118.9 MB before shrink, 97.1 MB of it `addons/arena_weapons/assets`.
+
+`TmcPackRoots` is gone with them. It listed a mounted pack's `addons/arena_weapons/assets` on the build's own arena_weapons. Now that arena_weapons arrives as an overlay at `res://addons/`, its assets resolve at their own paths.
+
+**Until a game addon is published as an addon-shaped overlay pack, a browser player has no copy of it.** The shell no longer has a build copy to fall back on. arena-weapons is still published as a Workshop data pack (`DATA_PACK_REPOS` in `host/tmc_host.gd`), so this needs an addon-shaped arena-weapons pack before a shell without it is published.
+
 ## Surface textures ride in a pack, not the shell
 
 The preset's `exclude_filter` leaves out `addons/dot_map/surfaces/*/*` (the PBR textures; `dot_map_surfaces.gd` and the shaders stay). On a local export with the full addon set the Web pck went from 147,819,264 to 133,345,060 bytes (14.5 MB). A host that mounts a pack carrying `surfaces/<kind>/*` adds its folder to `DotMapSurfaces.fallback_roots`; a texture missing from the build is then read from there (dot-map's `examples/surfaces_pack_selftest`). `tools/shell_pck_check.sh` exports the pck and fails if a texture is back in it. Not done yet: publishing the surfaces pack and mounting it in the shell boot. Games vendor their own kinds ([dot-map surfaces](../../dot-map/docs/surfaces.md)) and are unaffected.
