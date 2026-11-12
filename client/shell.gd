@@ -1560,6 +1560,10 @@ const MAX_UPDATE_RESTARTS := 2
 ## this the update is left for the next start rather than reloading into nothing.
 const PERSIST_TIMEOUT_SEC := 60.0
 
+## Bytes a second IndexedDB is counted on to take on top of [constant PERSIST_TIMEOUT_SEC]:
+## a solo game's weapon overlay is over 200 MB, which no browser stores within a minute.
+const PERSIST_BYTES_PER_SEC := 2 * 1024 * 1024
+
 ## Seconds a game that declared `ready_to_show` has, after it is on screen, to say so before
 ## the loading screen lifts anyway. See [method _watch_game_ready].
 const WARM_WAIT_SEC := 20.0
@@ -1619,6 +1623,16 @@ func _take_resume() -> Dictionary:
 	return resume as Dictionary
 
 
+## Seconds [method _restart] waits for [param keep] to reach IndexedDB: the base, plus the time their size takes.
+static func _persist_timeout(keep: PackedStringArray) -> float:
+	var total := 0
+	for path in keep:
+		var file := FileAccess.open(path, FileAccess.READ)
+		if file != null:
+			total += file.get_length()
+	return PERSIST_TIMEOUT_SEC + float(total) / float(PERSIST_BYTES_PER_SEC)
+
+
 ## Restarts this client, by its platform's means; false when it cannot. [member restart_fn] stands in under test.
 ## [param keep] is what the next start has to find: a browser reloads only once each file is in IndexedDB.
 func _restart(keep: PackedStringArray = PackedStringArray()) -> bool:
@@ -1633,7 +1647,7 @@ func _restart(keep: PackedStringArray = PackedStringArray()) -> bool:
 		# Waits for IndexedDB to hold what the next load reads, by reading it back: one `FS.syncfs` walks every file in `user://` and takes seconds,
 		# a reload inside it loses the plan and addons, and a sync can fail outright, so no count of requests is right.
 		# See [method DotCloudAddonSet.persisted].
-		var kept: DotResult = await DotCloudAddonSet.persisted(keep, PERSIST_TIMEOUT_SEC)
+		var kept: DotResult = await DotCloudAddonSet.persisted(keep, _persist_timeout(keep))
 		if not kept.ok:
 			# A reload now would come back without them: no plan is no overlay and no
 			# sign-in, and the same update again. Play on, and the next start takes it if
@@ -1962,7 +1976,12 @@ func _solo_overlay(content_id: String, mount: String) -> bool:
 				keep.append(token)
 
 	_say(_text("shell.addons.restarting", {}, "Restarting to finish the update…"))
-	return await _restart(keep)
+	if await _restart(keep):
+		return true
+	# Without its addons the game's scripts do not parse: say so rather than start a grey screen.
+	# A browser that never stores the overlay (Chrome keeps no IndexedDB value over 128 MB) stops here every time.
+	loading.set_progress(-1.0, _text("shell.addons.unsaved_solo", {}, "This browser could not keep the addons this game needs, so it cannot start here yet."))
+	return true
 
 
 ## Where a game's pack names the addons (and their API floors) it was built against.
