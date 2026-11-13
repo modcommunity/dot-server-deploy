@@ -1,4 +1,4 @@
 # The fingerprint of the tree the shell in web/shell-build was exported from.
 # Written by tools/shell-inputs.sh when the build is pinned; do not edit.
-lock	f5edd370cc41fcad43166463076df104b309e7549445fc8e97cadf589880be97
-inputs	c995068f5397d05b1098278fbd11a1557ed084297f24d9a413a63b684d64eba0
+lock	ece6cec6db19fc20da10f01dd6ee7b0426af6e30a269d91426c11a514ba55f60
+inputs	9507a1caf9f8a0d97aa38c07b126585d0f32821f9f485949487c3fae9301c207
