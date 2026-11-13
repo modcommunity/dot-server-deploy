@@ -2,7 +2,7 @@
 # Shipped default; an operator replaces it with cfg/content/addons.yml (see docs/content-lists.md).
 entries:
   - repo: fc-weapons
-    pin: v1.4.38
+    pin: v1.4.40
   - repo: dot-2d
     pin: v0.1.7
   - repo: dot-achievements
@@ -86,7 +86,7 @@ entries:
   - repo: dot-player
     pin: v0.1.6
   - repo: dot-player-char
-    pin: v0.1.65
+    pin: v0.1.66
   - repo: dot-player-class
     pin: v0.1.9
   - repo: dot-player-controller
