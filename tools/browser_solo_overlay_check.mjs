@@ -126,8 +126,12 @@ if (serve) {
   url = `http://127.0.0.1:${port}${prefix}embed.html${given.search}`;
 }
 
+// GPU_CDP_URL (set by dot-bootstrap's `gpu.sh cdp-run -- node tools/browser_solo_overlay_check.mjs ...`) drives a real
+// GPU's Chrome on a staging box. Without it, Chrome here renders WebGL in software, and the shot can come out black
+// while the game runs.
 const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'solo-overlay-profile-'));
-const ctx = await chromium.launchPersistentContext(profile, {
+const cdp = process.env.GPU_CDP_URL ? await chromium.connectOverCDP(process.env.GPU_CDP_URL) : null;
+const ctx = cdp ? await cdp.newContext({ viewport: { width: 1280, height: 720 } }) : await chromium.launchPersistentContext(profile, {
   executablePath: process.env.CHROME || (fs.existsSync('/usr/bin/google-chrome') ? '/usr/bin/google-chrome' : undefined),
   headless: true,
   args: ['--use-angle=gl', '--enable-gpu', '--ignore-gpu-blocklist'],
@@ -198,6 +202,7 @@ while (Date.now() < deadline) {
 }
 await page.screenshot({ path: shot }).catch(() => {});
 await ctx.close();
+if (cdp) await cdp.close();
 if (srv) srv.close();
 fs.rmSync(profile, { recursive: true, force: true });
 
