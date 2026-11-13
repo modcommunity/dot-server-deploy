@@ -4,7 +4,7 @@ extends Node
 ## `game.yml` reader against the host's, the shell's map list against the stock server one, and the
 ## session a game reads its map packs from. godot --headless --path .
 
-const CHECKS := 79
+const CHECKS := 81
 
 ## Every game repository, beside this project or in games/: the repositories of cfg/content/games.yml (shipped content-lists/games.yml).
 
@@ -73,6 +73,9 @@ func _test_ids() -> void:
 	_check(not TmcSolo.follow_pointer("a/new", {"moved_to": "a/x"}, 1).ok
 			and not TmcSolo.follow_pointer("a/old", {"moved_to": "a/old"}, 0).ok,
 		"a second hop and a loop are refused")
+	var both := TmcSolo.tried_summary(PackedStringArray(["https://cdn.example/content/a/b/latest.json: 404", "/content/a/b/latest.json: bad URL"]))
+	_check(both.contains("cdn.example") and both.contains("/content/a/b"), "a failed pointer names every address it tried, not only the last")
+	_check(TmcSolo.tried_summary(PackedStringArray()) == "no content address is configured", "no addresses says so")
 	_check(not TmcSolo.valid_version("0.1/../..") and not TmcSolo.valid_version(".."), "a version that climbs is refused")
 
 	var split := TmcSolo.split_key("gamemann/surf_mesa@1.2.2")
