@@ -4,11 +4,11 @@
 //
 //   gpu.sh cdp-run -- node tools/browser_solo_rotate_check.mjs --url <embed.html?solo=owner/repo> \
 //       [--maps welcometomexicov6,dm-industrial-gamma,surf_xiv_v2a,welcometomexicov6] [--secs 240] [--per-map 150] \
-//       [--loaded 'map loaded map={map}'] [--cmd solo_map] [--max-growth-mb 400]
+//       [--loaded 'map change map:{map} to playable'] [--cmd solo_map] [--max-growth-mb 400]
 //
 // Every map is typed into the game's local console as `solo_map <id>` once the match is live (backtick opens it; FC's
 // command that runs the M menu's change, as the in-process match has no server console for dot-map's `map`). A map is loaded when the game logs --loaded (default
-// "map loaded map={map}") after the command. After each load: the wasm heap (every WebAssembly.Memory the page made; it only grows),
+// "map change map:{map} to playable") after the command. After each load: the wasm heap (every WebAssembly.Memory the page made; it only grows),
 // the JS heap (CDP Performance.getMetrics) and the browser's own tally when it gives one.
 // Fails (exit 1) on an abort, an OOM, a RangeError, a wasm trap, a map that never loads, or a final wasm heap more than
 // --max-growth-mb over the first one (0, the default, turns that off). Exit 2 on usage.
@@ -25,7 +25,7 @@ const startSecs = +opt('secs', '240');
 const perMap = +opt('per-map', '150');
 const maxGrowth = +opt('max-growth-mb', '0');
 const cmd = opt('cmd', 'solo_map');  // the game's local console command that changes the map (FC's; a solo console has no server `map`)
-const loadedFmt = opt('loaded', 'map loaded map={map}');  // the game's line once a level is up; {map} is the id
+const loadedFmt = opt('loaded', 'map change map:{map} to playable');  // the game's line once a level is up; {map} is the id
 const shot = opt('shot', path.join(os.tmpdir(), 'browser_solo_rotate.png'));
 if (!url0 || maps.length < 2 || maps.some(m => !/^[A-Za-z0-9_.-]+$/.test(m))) {
   console.error('usage: --url <embed.html?solo=owner/repo> [--maps a,b,c,a] (at least two map ids)');
@@ -63,6 +63,15 @@ await ctx.addInitScript(() => {
   window.__wasmMems = [];
   WebAssembly.Memory = function (d) { const m = new Orig(d); window.__wasmMems.push(m); return m; };
   WebAssembly.Memory.prototype = Orig.prototype;
+  // A module that defines its own memory (or a build that hands it over as an import/export) never calls the constructor: take it from the instance too.
+  const grab = (imports, inst) => {
+    for (const ns of Object.values(imports || {})) if (ns && typeof ns === 'object') for (const v of Object.values(ns)) if (v instanceof Orig) window.__wasmMems.push(v);
+    if (inst) for (const v of Object.values(inst.exports || {})) if (v instanceof Orig) window.__wasmMems.push(v);
+  };
+  const oi = WebAssembly.instantiate;
+  WebAssembly.instantiate = async function (src, imports) { const r = await oi.call(WebAssembly, src, imports); grab(imports, r.instance || r); return r; };
+  const ois = WebAssembly.instantiateStreaming;
+  if (ois) WebAssembly.instantiateStreaming = async function (src, imports) { const r = await ois.call(WebAssembly, src, imports); grab(imports, r.instance); return r; };
 });
 const cdpSession = await ctx.newCDPSession(page).catch(() => null);
 if (cdpSession) await cdpSession.send('Performance.enable').catch(() => {});
