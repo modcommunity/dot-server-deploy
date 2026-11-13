@@ -1993,7 +1993,7 @@ func _load_solo_inner(content_id: String, version: String) -> DotResult:
 			slice_keys.append(DotCloudClient.content_key_for(StringName(parts["id"]), str(parts["version"])))
 
 	for key in (PackedStringArray() if skip_maps else await _solo_map_packs(content_id)):
-		var maps := await _ensure_solo_pack(key, true)
+		var maps := await _ensure_solo_pack(key, true, TmcSolo.map_groups(DotPlatform.is_web(), _solo_map))
 		if not maps.ok:
 			DotLog.warn(CHANNEL, "a solo map pack could not be fetched", {
 				"pack": key, "why": str(maps.error),
@@ -2520,6 +2520,7 @@ func _prefetch_solo(content_id: String, version: String) -> void:
 		await _cloud.job_register_manifest(manifest)
 
 	var keys := PackedStringArray()
+	var map_keys := PackedStringArray()
 	var accepts := {}
 	var yml: DotResult = await _cloud.read_pack_file(manifest, "game.yml")
 	if yml.ok:
@@ -2527,11 +2528,35 @@ func _prefetch_solo(content_id: String, version: String) -> void:
 		keys.append_array(desc["dependencies"] as PackedStringArray)
 		keys.append_array(desc["server_dependencies"] as PackedStringArray)
 		if not TmcSolo.skip_maps(content_id):
-			keys.append_array(await _solo_map_packs(content_id))
+			map_keys = await _solo_map_packs(content_id)
 	var provides: DotResult = await _cloud.read_pack_file(manifest, "provides.json")
 	if provides.ok:
 		accepts = _accepts_from_text((provides.value as PackedByteArray).get_string_from_utf8())
 
+	# Map packs take the groups the mount pass will ask for (TmcSolo.map_groups), so the total is what moves.
+	var passes: Array = [[await _solo_refs(keys), all_groups],
+		[await _solo_refs(map_keys), TmcSolo.map_groups(DotPlatform.is_web(), _solo_map)]]
+	for pass_refs: Array in passes:
+		var refs: Array = pass_refs[0]
+		if refs.is_empty():
+			continue
+		if takes_groups:
+			await _cloud.job_register(refs, pass_refs[1] as PackedStringArray)
+		else:
+			await _cloud.job_register(refs)
+
+	if not accepts.is_empty():
+		var workshop := _ensure_workshop()
+		workshop.defer_mount = true
+		await _sync_workshop(content_id)
+		workshop.defer_mount = false
+		_deferred_workshop = true
+
+	await _cloud.job_download()
+
+
+## `{id, version}` for each valid key of [param keys], a missing version resolved to the newest; a key that will not resolve is left out.
+func _solo_refs(keys: PackedStringArray) -> Array:
 	var refs: Array = []
 	for key in keys:
 		var parts := TmcSolo.split_key(key)
@@ -2546,25 +2571,13 @@ func _prefetch_solo(content_id: String, version: String) -> void:
 			id = str(latest.value["id"])
 			ver = str(latest.value["version"])
 		refs.append({"id": id, "version": ver})
-	if not refs.is_empty():
-		if takes_groups:
-			await _cloud.job_register(refs, all_groups)
-		else:
-			await _cloud.job_register(refs)
-
-	if not accepts.is_empty():
-		var workshop := _ensure_workshop()
-		workshop.defer_mount = true
-		await _sync_workshop(content_id)
-		workshop.defer_mount = false
-		_deferred_workshop = true
-
-	await _cloud.job_download()
+	return refs
 
 
 ## Fetches and mounts one pack by `<id>[@<version>]`, resolving a missing version to the newest; returns the `<id>@<version>` mounted.
 ## [param announce] names what is fetched and its size in the status line, so a download the player did not ask for is named.
-func _ensure_solo_pack(key: String, announce: bool = false) -> DotResult:
+## [param groups] are the download groups asked: every one by default, a map pack's from [method TmcSolo.map_groups].
+func _ensure_solo_pack(key: String, announce: bool = false, groups: PackedStringArray = PackedStringArray(["*"])) -> DotResult:
 	var parts := TmcSolo.split_key(key)
 	var id := str(parts["id"])
 	var version := str(parts["version"])
@@ -2580,10 +2593,10 @@ func _ensure_solo_pack(key: String, announce: bool = false) -> DotResult:
 		version = str(latest.value["version"])
 
 	if announce and not _launch_job:
-		_solo_pack_label = await _describe_solo_pack(id, version)
+		_solo_pack_label = await _describe_solo_pack(id, version, groups)
 		_say(_solo_pack_label)
 
-	var got: DotResult = await _cloud.ensure(StringName(id), version, PackedStringArray(["*"]))  # every group, as above
+	var got: DotResult = await _cloud.ensure(StringName(id), version, groups)
 	if not got.ok:
 		_solo_pack_label = ""
 		return got
@@ -2594,7 +2607,7 @@ func _ensure_solo_pack(key: String, announce: bool = false) -> DotResult:
 ## "Fetching maps: <name> (<size>)…". The size is what is still to download (a pack already
 ## on the disk is "already downloaded"), from the manifest alone. A manifest that will not
 ## resolve here only costs the size: [method DotCloudClient.ensure] reports the real failure.
-func _describe_solo_pack(id: String, version: String) -> String:
+func _describe_solo_pack(id: String, version: String, groups: PackedStringArray = PackedStringArray(["*"])) -> String:
 	var pack_name := id.get_slice("/", 1)
 	var resolved: DotResult = await _cloud.resolve_manifest(StringName(id), version)
 	if not resolved.ok:
@@ -2604,7 +2617,7 @@ func _describe_solo_pack(id: String, version: String) -> String:
 	if manifest.display_name != "":
 		pack_name = manifest.display_name
 
-	var plan := _cloud.plan_for(manifest)
+	var plan := _cloud.plan_for(manifest, groups)
 	if int(plan.get("missing_bytes", 0)) <= 0:
 		return _text("shell.solo.have", {"name": pack_name}, "Maps: %s (already downloaded)" % pack_name)
 	var size := _size_text(int(plan["missing_bytes"]))

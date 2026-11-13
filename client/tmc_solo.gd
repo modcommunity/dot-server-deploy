@@ -363,6 +363,17 @@ static func per_map_key(bulk_key: String, map: String) -> String:
 	return id if valid_id(id) else ""
 
 
+## The download groups a solo launch asks of a map pack. Natively every group ("*"): a solo host serves any
+## map and a disk holds them. On the web only the files no group holds plus [param map]'s group (none when no
+## start map is named): a tab holds what it fetched in memory, and a game whose maps pack is grouped fetches
+## a course's group when it is played (mg-wipeout's `WoWorld.fetch`), as it does on an online join. A pack
+## without groups is fetched whole either way.
+static func map_groups(web: bool, map: String) -> PackedStringArray:
+	if not web:
+		return PackedStringArray(["*"])
+	return PackedStringArray([map]) if valid_map(map) else PackedStringArray()
+
+
 ## `<id>@<version>` split, version "" when there is none.
 static func split_key(key: String) -> Dictionary:
 	var at := key.rfind("@")
