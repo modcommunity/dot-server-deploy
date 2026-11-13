@@ -140,7 +140,7 @@ entries:
   - repo: dot-vote
     pin: v0.1.17
   - repo: dot-weapon
-    pin: v0.1.50
+    pin: v0.1.51
   - repo: dot-weather
     pin: v0.1.3
   - repo: dot-workbench
