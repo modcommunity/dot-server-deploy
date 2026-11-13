@@ -2,7 +2,7 @@
 # Written by tools/addons-lock.sh write; read by setup.sh. repo<TAB>ref.
 dot-2d	v0.1.7
 dot-achievements	v0.1.9
-dot-audio	v0.1.18
+dot-audio	v0.1.19
 dot-auth	v0.1.15
 dot-bot	v0.1.29
 dot-bot-record	v0.1.3
