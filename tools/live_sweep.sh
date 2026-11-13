@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Regression sweep of the LIVE web shell, game by game.
 #
-#   tools/live_sweep.sh [--shell BUILD] [--only repo,repo] [--audit-only] [--no-map] [--local] [--secs N] [--out DIR]
+#   tools/live_sweep.sh [--shell BUILD] [--only repo,repo] [--audit-only] [--quiet] [--no-map] [--local] [--secs N] [--out DIR]
 #
 # For every game (list below):
 #   1. PACK AUDIT (read-only, from the content origin): the newest version's signed manifest must carry a `bundle`
@@ -15,6 +15,11 @@
 #      Through dot-bootstrap's gpu.sh cdp-run (a real GPU: dev02's software WebGL gives a black frame), or --local for
 #      a plain headless chromium. gpu.sh exit 75 (no box free) is retried with a back-off, three times.
 #
+# --audit-only --quiet is the cron/CI form: reads the content origin only (no browser, no playwright, no token), prints nothing
+# when every pack is sound and one line per game with a problem otherwise, and exits 1 so the scheduler flags it. It catches the
+# site's GitHub-release sync (X.Y.Z+rN) re-publishing a pack without bundle/runs_code/requires, which the site does not scan.
+#   */30 * * * * sudo -u gamedev /home/gamedev/godot/dot-server-deploy/tools/live_sweep.sh --audit-only --quiet
+#
 # Writes OUT/table.md (a markdown table, one row per game, ready for the board) and exits 1 on any FAIL.
 # Env: CONTENT_ORIGIN, CONTENT_OWNER, GPU_SH, MAP_LOADED (regex of the console line that says a map is up).
 # Needs playwright-core (PLAYWRIGHT_CORE, ~/pw or the mcp copy; the check says), python3. Run as the work user:
@@ -27,13 +32,14 @@ ORIGIN=${CONTENT_ORIGIN:-https://dotgames.org}
 OWNER=${CONTENT_OWNER:-gamemann}
 # What a game logs once its map is up: the check's own default plus the wording the map games use (zz "world drawn", "map began"; dd "the mountain is ready").
 MAPRE=${MAP_LOADED:-'world built|world drawn|map changed|map loaded|map began|round began|round begun|mountain is ready'}
-SHELL_BUILD=""; ONLY=""; AUDIT_ONLY=""; NO_MAP=""; LOCAL=""; SECS=240
+SHELL_BUILD=""; ONLY=""; AUDIT_ONLY=""; QUIET=""; NO_MAP=""; LOCAL=""; SECS=240
 OUT=${TMPDIR:-/tmp}/live_sweep.$$
 while [ $# -gt 0 ]; do
     case $1 in
         --shell) SHELL_BUILD=${2:?}; shift 2 ;;
         --only) ONLY=${2:?}; shift 2 ;;
         --audit-only) AUDIT_ONLY=1; shift ;;
+        --quiet) QUIET=1; shift ;;
         --no-map) NO_MAP=1; shift ;;
         --local) LOCAL=1; shift ;;
         --secs) SECS=${2:?}; shift 2 ;;
@@ -131,9 +137,14 @@ while read -r repo maps; do
     problems=${problems#-; }
     case "$solo$mapres$problems" in *FAIL*|*unreadable*|*"no bundle"*|*"no runs_code"*|*"no map entry"*) fails=$((fails + 1)) ;; esac
     echo "| $repo | $ver | $bundle | $rc | $req | $solo | $mapres | $problems |" >> "$OUT/table.md"
-    tail -1 "$OUT/table.md"
+    [ -n "$QUIET" ] || tail -1 "$OUT/table.md"
+    [ -z "$QUIET" ] || [ "${problems:--}" = "-" ] || echo "live_sweep: $repo $ver: $problems"
 done <<< "$GAMES"
 
+if [ -n "$QUIET" ]; then
+    [ "$fails" = 0 ] || echo "live_sweep: $fails game(s) with a FAIL or a pack problem"
+    [ "$fails" = 0 ]; exit
+fi
 echo
 cat "$OUT/table.md"
 echo "logs and screenshots: $OUT"
