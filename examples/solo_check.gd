@@ -360,6 +360,10 @@ func _source(repo: String) -> String:
 func _names(repo: String) -> PackedStringArray:
 	var out := PackedStringArray([repo])
 	var tsv := ProjectSettings.globalize_path("res://").path_join("../dot-bootstrap/projects.tsv").simplify_path()
+	# A worktree under ~/wt has no sibling dot-bootstrap; tools/check.sh exports where it is.
+	var boot := OS.get_environment("DOT_BOOTSTRAP")
+	if not FileAccess.file_exists(tsv) and boot != "":
+		tsv = boot.path_join("projects.tsv")
 	if not FileAccess.file_exists(tsv):
 		return out
 	for line in FileAccess.get_file_as_string(tsv).split("\n"):
