@@ -170,6 +170,11 @@ func _ready() -> void:
 	_game_root.name = GAME_ROOT
 	add_child(_game_root)
 
+	# A solo game's own server process: no menu, no sign-in, nothing on screen.
+	if TmcSolo.is_sim_child():
+		await _start_sim_child()
+		return
+
 	_build_locale()
 	_build_menu()
 
@@ -1007,46 +1012,7 @@ func _ensure_cloud() -> void:
 	if _cloud != null and is_instance_valid(_cloud):
 		return
 
-	_cloud = DotCloudClient.new()
-	_cloud.name = "Cloud"
-	# Who a pack's requires.json refusal names: "...; this CLIENT has level 2" -- the
-	# player's cue that this shell, not the server, is the one to update.
-	_cloud.host_role = "client"
-	_cloud.config = DotCloudConfig.new()
-	# The shell is a player's client even headless, where dot-cloud's `auto` would read "server" and leave client-only files (API 8) behind.
-	# A solo game runs its server here too, so [method _start_solo] widens this to both.
-	_cloud.config.side = "client"
-
-	# A player may keep nothing: `--content-cache off` points the store at a session folder emptied now and on quit.
-	# An explicit `--cloud-cache-dir` wins; DotCloudConfig already reads the cache dir and size off the command line.
-	if content_cache_off():
-		_cloud.config.cache_dir = SESSION_CACHE
-		DotPaths.remove_tree(SESSION_CACHE)
-		DotLog.info(CHANNEL, "downloads are kept for this session only", {"dir": SESSION_CACHE})
-
-	if ResourceLoader.exists(CONTENT_CONFIG) or FileAccess.file_exists(CONTENT_CONFIG):
-		_cloud.config_file = CONTENT_CONFIG
-	else:
-		DotLog.info(
-			CHANNEL,
-			"no content configuration; this build can only play games it already has",
-			{"looked_for": CONTENT_CONFIG}
-		)
-		_cloud.config_file = ""
-
-	# Maps download from `/content` by default: the page's own origin, with no CORS headers to get right. `DotCloudClient` prepends the origin
-	# because [HTTPRequest] parses the URL in C++ and a root-relative string is not a URL.
-	# Content elsewhere is set in `content.json` (`"content_urls": [...]`) and then needs `Access-Control-Allow-Origin`.
-	var configured := _configured_content_urls()
-	_cloud.http_base_urls = (
-		configured if not configured.is_empty() else PackedStringArray(["/content"])
-	)
-
-	# No version segment, because the published layout has none: the version is INSIDE the manifest and the mount namespaces by it; the default template 404ed on a CDN serving the map fine.
-	# This is the path EVERYTHING takes (games resolve through it as maps do).
-	# Versioned first, flat as fallback, the same pair the SERVER uses, so both ends resolve the same shape.
-	_cloud.manifest_url_template = "{base}/{id}/{version}/manifest.json"
-	_cloud.manifest_url_fallbacks = PackedStringArray(["{base}/{id}/manifest.json"])
+	_cloud = _new_cloud()
 
 	# Straight off the content client, not the link: the link forwards a fraction and a sentence, but dot-cloud's payload carries file, rate and estimate.
 	_cloud.phase_changed.connect(_on_cloud_phase)
@@ -1055,6 +1021,51 @@ func _ensure_cloud() -> void:
 	_cloud.job_progress_changed.connect(_on_cloud_job)
 
 	add_child(_cloud)
+
+
+## A content client configured as this shell's, not yet in the tree and with nothing listening: a solo game's server process ([method _start_sim_child]) has no screen to report to.
+func _new_cloud() -> DotCloudClient:
+	var cloud := DotCloudClient.new()
+	cloud.name = "Cloud"
+	# Who a pack's requires.json refusal names: "...; this CLIENT has level 2" -- the
+	# player's cue that this shell, not the server, is the one to update.
+	cloud.host_role = "client"
+	cloud.config = DotCloudConfig.new()
+	# The shell is a player's client even headless, where dot-cloud's `auto` would read "server" and leave client-only files (API 8) behind.
+	# A solo game runs its server here too, so [method _start_solo] widens this to both.
+	cloud.config.side = "client"
+
+	# A player may keep nothing: `--content-cache off` points the store at a session folder emptied now and on quit.
+	# An explicit `--cloud-cache-dir` wins; DotCloudConfig already reads the cache dir and size off the command line.
+	if content_cache_off():
+		cloud.config.cache_dir = SESSION_CACHE
+		DotPaths.remove_tree(SESSION_CACHE)
+		DotLog.info(CHANNEL, "downloads are kept for this session only", {"dir": SESSION_CACHE})
+
+	if ResourceLoader.exists(CONTENT_CONFIG) or FileAccess.file_exists(CONTENT_CONFIG):
+		cloud.config_file = CONTENT_CONFIG
+	else:
+		DotLog.info(
+			CHANNEL,
+			"no content configuration; this build can only play games it already has",
+			{"looked_for": CONTENT_CONFIG}
+		)
+		cloud.config_file = ""
+
+	# Maps download from `/content` by default: the page's own origin, with no CORS headers to get right. `DotCloudClient` prepends the origin
+	# because [HTTPRequest] parses the URL in C++ and a root-relative string is not a URL.
+	# Content elsewhere is set in `content.json` (`"content_urls": [...]`) and then needs `Access-Control-Allow-Origin`.
+	var configured := _configured_content_urls()
+	cloud.http_base_urls = (
+		configured if not configured.is_empty() else PackedStringArray(["/content"])
+	)
+
+	# No version segment, because the published layout has none: the version is INSIDE the manifest and the mount namespaces by it; the default template 404ed on a CDN serving the map fine.
+	# This is the path EVERYTHING takes (games resolve through it as maps do).
+	# Versioned first, flat as fallback, the same pair the SERVER uses, so both ends resolve the same shape.
+	cloud.manifest_url_template = "{base}/{id}/{version}/manifest.json"
+	cloud.manifest_url_fallbacks = PackedStringArray(["{base}/{id}/manifest.json"])
+	return cloud
 
 
 ## A pack this client is too old to run (CODE_VERSION), told plainly and passed to the page.
@@ -1948,11 +1959,13 @@ func _load_solo_inner(content_id: String, version: String) -> DotResult:
 	# The packs the game needs beside its own, by the rule a join fetches them: a key with
 	# no version is not one a server would send, and here it is resolved to the newest
 	# rather than refused, because nobody pinned it.
+	var dep_keys := PackedStringArray()
 	for key in (desc["dependencies"] as PackedStringArray) + (desc["server_dependencies"] as PackedStringArray):
 		var dep := await _ensure_solo_pack(key)
 		if not dep.ok:
 			return DotResult.fail(dep.error.code,
 				"This game needs %s, which could not be downloaded." % key, str(dep.error))
+		dep_keys.append(str(dep.value))
 
 	var session := TmcSoloSession.new()
 	session.name = "Solo"
@@ -1962,6 +1975,9 @@ func _load_solo_inner(content_id: String, version: String) -> DotResult:
 	session.display_name = str(desc.get("name", ""))
 	session.start_map = StringName(_solo_map)
 	session.leave_fn = _leave_solo
+	session.pack_keys = dep_keys
+	session.cache_dir = _cloud.config.cache_dir
+	session.content_url = _user_arg("--content-url").strip_edges()
 
 	# The map packs a server owner would name, from the stock list. One that will not
 	# fetch is a map nobody can change to, not a game that will not start.
@@ -2045,6 +2061,78 @@ func _load_solo_inner(content_id: String, version: String) -> DotResult:
 	})
 	return DotResult.success(instance)
 
+
+## The server process a solo game started for itself ([method TmcSoloSession.sim_child_args]):
+## the packs the shell that started it mounted, from the same cache, the session registered as
+## that shell registers it, and the game's client scene, which hands over to its server. A
+## failure quits with 1, and the game that started it plays in-process.
+func _start_sim_child() -> void:
+	# The overlay mounted at boot is the parent's: an unconfirmed boot would count against it.
+	DotCloudAddonSet.confirm_boot()
+	var started := await _load_sim_child()
+	if not started.ok:
+		DotLog.error(CHANNEL, "the solo server process could not start its game", {"why": str(started.error)})
+		get_tree().quit(1)
+
+
+func _load_sim_child() -> DotResult:
+	var asked := TmcSolo.requested()
+	var content_id := str(asked["id"])
+	var version := str(asked["version"])
+	if content_id == "" or version == "":
+		return DotResult.fail(DotError.CODE_INVALID, "A solo server process needs --solo and --solo-version.")
+
+	_cloud = _new_cloud()
+	_cloud.config.side = "both"
+	add_child(_cloud)
+	_adopt_content_url_arg()
+
+	var got: DotResult = await _cloud.ensure(StringName(content_id), version, PackedStringArray(["*"]))
+	if not got.ok:
+		return got
+
+	var session := TmcSoloSession.new()
+	session.name = "Solo"
+	session.content_id = content_id
+	session.version = version
+	session.mount_root = DotCloudClient.mount_prefix_for(StringName(content_id), version)
+	session.cache_dir = _cloud.config.cache_dir
+
+	for flag in [TmcSolo.PACKS_FLAG, TmcSolo.MAPS_FLAG]:
+		for key in TmcSolo.child_keys(str(flag)):
+			var parts := TmcSolo.split_key(key)
+			if str(parts["version"]) == "" or not TmcSolo.valid_id(str(parts["id"])) or not TmcSolo.valid_version(str(parts["version"])):
+				return DotResult.fail(DotError.CODE_INVALID, "Not a pinned pack key.", key)
+			var pack: DotResult = await _cloud.ensure(StringName(parts["id"]), str(parts["version"]), PackedStringArray(["*"]))
+			if not pack.ok:
+				return pack
+			if str(flag) == TmcSolo.MAPS_FLAG:
+				session.map_keys.append(key)
+				session.map_roots.append(DotCloudClient.mount_prefix_for(StringName(parts["id"]), str(parts["version"])))
+			else:
+				session.pack_keys.append(key)
+
+	var read := TmcSolo.read_descriptor(session.mount_root)
+	if not read.ok:
+		return read
+	var desc: Dictionary = read.value
+	session.display_name = str(desc.get("name", ""))
+	var safe := DotPaths.safe_relative(str(desc.get("client_scene", "")))
+	if not safe.ok:
+		return DotResult.fail(DotError.CODE_INVALID, "This game names no usable client scene.", session.mount_root)
+	var path := session.mount_root.path_join(safe.value)
+	var packed: Variant = load(path)
+	if not (packed is PackedScene):
+		return DotResult.fail(DotError.CODE_IO, "The game's client scene would not load.", path)
+
+	add_child(session)
+	_solo_session = session
+	DotRegistry.register(TmcSolo.MAPS_SERVICE, session)
+	_game_root.add_child((packed as PackedScene).instantiate())
+	DotLog.info(CHANNEL, "solo server process started its game", {
+		"content": "%s@%s" % [content_id, version], "packs": session.pack_keys.size(), "maps": session.map_keys.size(),
+	})
+	return DotResult.success(null)
 
 
 ## The addons a game's pack names (`addons` in its `requires.json` and `requires.floor.json`),
