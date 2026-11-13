@@ -4,7 +4,7 @@ extends Node
 ## `game.yml` reader against the host's, the shell's map list against the stock server one, and the
 ## session a game reads its map packs from. godot --headless --path .
 
-const CHECKS := 52
+const CHECKS := 66
 
 ## Every game repository, beside this project or in games/: the repositories of cfg/content/games.yml (shipped content-lists/games.yml).
 
@@ -40,6 +40,7 @@ func _ready() -> void:
 	await _test_session()
 	_test_skip_maps()
 	_test_requires_reader()
+	_test_overlay_blocked()
 
 	print("")
 	print("%d sections, %d completed" % [_entered, _completed])
@@ -341,6 +342,86 @@ func _test_requires_reader() -> void:
 	_check(not (shell.solo_addons_in('{"addons": {"../x": 1, "a/b": 1, "ok": 1}}') as Dictionary).has("../x")
 			and not (shell.solo_addons_in('{"addons": {"a/b": 1}}') as Dictionary).has("a/b"),
 		"a name that is a path is dropped")
+	_done()
+
+
+## `sessionStorage` for [method _test_overlay_blocked]: getItem, setItem and removeItem.
+class FakeStorage:
+	extends RefCounted
+	var items := {}
+
+	func getItem(key: String) -> Variant:
+		return items.get(key)
+
+	func setItem(key: String, value: String) -> void:
+		items[key] = value
+
+	func removeItem(key: String) -> void:
+		items.erase(key)
+
+
+## A solo game whose addons did not start must not be started without them (PLAYLOT's black screen of 2026-11-13: two restarts
+## that worked used up the tab's count, and the third visit played on without zee_weapons). It is blocked behind Retry, and the
+## count and the failed mark belong to one shell build.
+func _test_overlay_blocked() -> void:
+	_section("a solo game whose addons did not start is blocked behind Retry, per shell build")
+
+	var plan_before := FileAccess.get_file_as_string(DotCloudAddonSet.PLAN)
+	var shell: Node = (load("res://client/shell.gd") as GDScript).new()
+	var storage := FakeStorage.new()
+	shell.set("attempt_storage", storage)
+	shell.set("shell_build", "20261113-0522")
+
+	var wanted := {"zee_weapons": {"version": "0.1.62"}, "arena_weapons": {"version": "1.4.46"}}
+	var target := "solo:gamemann/game-playlot"
+	var attempt: String = shell.call("_attempt_key", target, wanted)
+	_check(attempt == "solo:gamemann/game-playlot|arena_weapons@1.4.46,zee_weapons@0.1.62", "the attempt key names the game and its addon set", attempt)
+
+	DotCloudAddonSet.forget()
+	_check(not shell.call("_overlay_blocked", attempt, wanted), "a fresh tab builds the overlay")
+	shell.call("_note_update_attempt", attempt)
+	_check(not shell.call("_overlay_blocked", attempt, wanted), "one restart leaves another")
+	shell.call("_note_update_attempt", attempt)
+	_check(shell.call("_overlay_blocked", attempt, wanted), "after two restarts the game is blocked, not started without its addons")
+
+	shell.set("_solo_retry", attempt)
+	shell.call("_forget_solo_retry")
+	_check(not shell.call("_overlay_blocked", attempt, wanted) and str(shell.get("_solo_retry")) == "", "Retry clears the count and builds the overlay again")
+
+	shell.call("_note_update_attempt", attempt)
+	shell.call("_note_update_attempt", attempt)
+	shell.set("shell_build", "20261114-0900")
+	_check(int(shell.call("_update_attempts", attempt)) == 0, "a new shell build starts the count again")
+
+	storage.items[shell.get("UPDATE_ATTEMPTS_KEY")] = JSON.stringify({attempt: 2})
+	_check(int(shell.call("_update_attempts", attempt)) == 0, "the flat count an older shell kept is not read as this build's")
+
+	shell.call("_note_update_attempt", attempt)
+	shell.call("_note_update_attempt", "solo:gamemann/other|x@1")
+	shell.call("_clear_update_attempts", target)
+	_check(int(shell.call("_update_attempts", attempt)) == 0 and int(shell.call("_update_attempts", "solo:gamemann/other|x@1")) == 1,
+		"once a game's addons are running its counts go, and only its own")
+
+	# A failed mark: the overlay's plan written for this build's addons.lock, then marked failed at boot.
+	DotCloudAddonSet.write_plan({"state": DotCloudAddonSet.STATE_FAILED, "build": DotCloudAddonSet.build_fingerprint(), "addons": wanted})
+	_check(DotCloudAddonSet.failed_before(wanted), "the seeded plan is a failed mark for this set")
+	_check(not shell.call("_overlay_blocked", attempt, wanted), "a failed mark no shell build stamped gets one more try")
+	shell.call("_stamp_plan")
+	_check(str(DotCloudAddonSet.read_plan().get("shell", "")) == "20261114-0900" and DotCloudAddonSet.failed_before(wanted),
+		"the plan is stamped with the shell build that built it, the rest kept")
+	_check(shell.call("_overlay_blocked", attempt, wanted), "a failed mark from this shell build blocks")
+	shell.set("shell_build", "20261115-0100")
+	_check(not shell.call("_overlay_blocked", attempt, wanted), "a failed mark from another shell build does not")
+	shell.set("shell_build", "20261114-0900")
+	shell.set("_solo_retry", attempt)
+	shell.call("_forget_solo_retry")
+	_check(DotCloudAddonSet.read_plan().is_empty() and not shell.call("_overlay_blocked", attempt, wanted), "Retry forgets the failed mark")
+
+	shell.free()
+	if plan_before != "":
+		DotPaths.write_text(DotCloudAddonSet.PLAN, plan_before)
+	else:
+		DotCloudAddonSet.forget()
 	_done()
 
 
