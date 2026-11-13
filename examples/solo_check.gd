@@ -15,7 +15,7 @@ const STOCK_CONTENT := "res://cfg.example/server/content/overrides.yml"
 ## one is a map list the shell deliberately does not copy, so the drift check skips it.
 ## Repos whose pack id was renamed while the directory kept its name (see setup.sh repo_url):
 ## solo.json is keyed by the pack id, overrides.yml by the game.
-const RENAMED_PACK := {"mg-deathrun": "game-deathrun", "mg-prop-hunt": "game-prop-hunt"}
+const RENAMED_PACK := {"mg-deathrun": "game-deathrun", "mg-prop-hunt": "game-prop-hunt", "game-playground": "game-playlot"}
 
 const NOT_PREFETCHED := {
 	# One pack per map, about 50 MB each: the game fetches the one it changes to itself
