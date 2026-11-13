@@ -114,7 +114,7 @@ entries:
   - repo: dot-settings
     pin: v0.1.7
   - repo: dot-sim
-    pin: v0.2.4
+    pin: v0.2.5
   - repo: dot-spawn
     pin: v0.2.2
   - repo: dot-spectate
