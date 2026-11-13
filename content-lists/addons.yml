@@ -16,7 +16,7 @@ entries:
   - repo: dot-bot-record
     pin: v0.1.3
   - repo: dot-browser
-    pin: v0.1.6
+    pin: v0.1.7
   - repo: dot-chat
     pin: v0.1.7
   - repo: dot-cloud
