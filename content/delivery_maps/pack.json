@@ -1,0 +1,6 @@
+{
+    "id": "tmc/delivery_maps",
+    "version": "0.1.0",
+    "name": "Dangerous Delivery community maps",
+    "exclude_dirs": ["tools", ".github", "docs"]
+}

@@ -23,6 +23,8 @@ entries:
     content: deathrun_maps
   - repo: game-deathrun
     content: deathrun
+  - repo: mg-dangerous-delivery-maps
+    content: delivery_maps
   - repo: mg-dangerous-delivery
     content: delivery
   - repo: mg-look-at-me

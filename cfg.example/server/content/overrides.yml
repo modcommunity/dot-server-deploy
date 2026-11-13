@@ -178,6 +178,11 @@ games:
       add:
         - gamemann/mg-wipeout-maps        # every course and final arena, one pack
 
+  mg-dangerous-delivery:
+    maps:
+      add:
+        - gamemann/mg-dangerous-delivery-maps   # the community delivery mountains, one pack
+
   mg-deathrun:
     maps:
       add:
