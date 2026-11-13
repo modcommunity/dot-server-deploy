@@ -90,7 +90,7 @@ entries:
   - repo: dot-player-class
     pin: v0.1.9
   - repo: dot-player-controller
-    pin: v0.4.10
+    pin: v0.4.12
   - repo: dot-procedural-generation
     pin: v0.1.5
   - repo: dot-profile
