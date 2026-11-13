@@ -196,35 +196,41 @@ static func _fetch_pointer(host: Node, id: String, bases: PackedStringArray, hop
 	http.name = "SoloLatest"
 	host.add_child(http)
 
-	var last := "no content address is configured"
+	var tried := PackedStringArray()
 
 	for base in bases:
 		var url := "%s/%s/%s" % [DotCloudClient.resolve_base_url(base).rstrip("/"), id, LATEST_FILE]
 		var res: DotResult = await http.get_json(url)
 
 		if not res.ok:
-			last = "%s: %s" % [url, str(res.error)]
+			tried.append("%s: %s" % [url, str(res.error)])
 			continue
 
 		var followed := follow_pointer(id, res.value, hop)
 
 		if followed.ok and str(followed.value["moved_to"]) == "" and not valid_version(str(followed.value["version"])):
-			last = "%s named no usable version" % url
+			tried.append("%s named no usable version" % url)
 			continue
 
 		if followed.ok or followed.error.code != DotError.CODE_IO:
 			http.queue_free()
 			return followed
 
-		last = "%s: %s" % [url, followed.error.message]
+		tried.append("%s: %s" % [url, followed.error.message])
 
 	http.queue_free()
 
 	return DotResult.fail(
 		DotError.CODE_IO,
 		"%s has no published version." % id,
-		last
+		tried_summary(tried)
 	)
+
+
+## Every address a pointer was asked of and why each said no, one per line. A failure used to name only the LAST base, which is always the
+## default `/content`, so a wrong id behind a good `--content-url` read as "the flag was ignored".
+static func tried_summary(tried: PackedStringArray) -> String:
+	return "no content address is configured" if tried.is_empty() else "\n".join(tried)
 
 
 ## The fields of a pack's `game.yml` that solo needs, read out of the mount. [b]A reader for the
