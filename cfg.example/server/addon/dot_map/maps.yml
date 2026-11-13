@@ -16,7 +16,7 @@
 #     cooldown: 5               maps back that random will not repeat (never more than half
 #                               the list)
 #     maps:                     the simplest form: one list, no names. It is a rotation
-#       - gamemann/g2gfast-maps/*   called main, with this level's mode and cooldown
+#       - gamemann/airdrift-maps/*  called main, with this level's mode and cooldown
 #   games:
 #     <game>:                  id (gamemann/game-g2gfast) or name half (game-g2gfast), as in
 #                              content.yml

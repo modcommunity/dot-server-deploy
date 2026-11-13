@@ -1720,20 +1720,20 @@ defaults:
 func _test_map_collections() -> void:
 	_section("owner/collection/* in maps")
 
-	var whole := TmcGameRef.qualify_map("gamemann/g2gfast-maps/*", "")
-	_check(bool(whole["ok"]) and bool(whole["wildcard"]) and whole["collection"] == "gamemann/g2gfast-maps",
+	var whole := TmcGameRef.qualify_map("gamemann/airdrift-maps/*", "")
+	_check(bool(whole["ok"]) and bool(whole["wildcard"]) and whole["collection"] == "gamemann/airdrift-maps",
 		"a whole collection parses (and needs no map_owner)", str(whole))
-	for bad in ["gamemann/g2gfast-maps/bhop_*", "gamemann/*/*", "*", "g2gfast-maps/*", "gamemann/g2gfast-maps/*/x",
-			"*/g2gfast-maps/*", "gamemann//*", "gamemann/g2gfast-maps/a"]:
+	for bad in ["gamemann/airdrift-maps/bhop_*", "gamemann/*/*", "*", "airdrift-maps/*", "gamemann/airdrift-maps/*/x",
+			"*/airdrift-maps/*", "gamemann//*", "gamemann/airdrift-maps/a"]:
 		_check(not bool(TmcGameRef.qualify_map(bad, "me")["ok"]), "'%s' is refused" % bad)
-	var pinned := TmcGameRef.qualify_map("gamemann/g2gfast-maps/*@1.4.0", "")
+	var pinned := TmcGameRef.qualify_map("gamemann/airdrift-maps/*@1.4.0", "")
 	_check(not bool(pinned["ok"]) and str(pinned["why"]).contains("@version"),
 		"a pin on a wildcard is refused with a clear reason", str(pinned))
-	_check(_game_config("games:\n  game-x:\n    maps:\n      - gamemann/g2gfast-maps/*@1.4.0\n") == null,
+	_check(_game_config("games:\n  game-x:\n    maps:\n      - gamemann/airdrift-maps/*@1.4.0\n") == null,
 		"and the file that holds one does not load")
-	_check(_game_config("games:\n  game-x:\n    maps:\n      add:\n        - gamemann/g2gfast-maps/*\n      remove:\n        - gamemann/g2gfast-maps/*\n") != null,
+	_check(_game_config("games:\n  game-x:\n    maps:\n      add:\n        - gamemann/airdrift-maps/*\n      remove:\n        - gamemann/airdrift-maps/*\n") != null,
 		"a wildcard is read in add and in remove")
-	_check(_game_config("games:\n  game-x:\n    maps:\n      - gamemann/g2gfast-maps/bhop_*\n") == null,
+	_check(_game_config("games:\n  game-x:\n    maps:\n      - gamemann/airdrift-maps/bhop_*\n") == null,
 		"a partial glob is refused when the file is read")
 
 	var doc := {"format": 1, "id": "o/c", "version": "1.0.0", "packs": ["o/m1", "o/m2", "o/m1"]}
