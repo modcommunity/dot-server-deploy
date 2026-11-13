@@ -117,7 +117,7 @@ fails=0
     echo "| --- | --- | --- | --- | --- | --- | --- | --- |"
 } > "$OUT/table.md"
 
-while read -r repo maps; do
+while read -r repo maps <&3; do
     [ -n "$repo" ] || continue
     if [ -n "$ONLY" ] && ! [[ ",$ONLY," == *",$repo,"* ]]; then continue; fi
     IFS=$'\t' read -r ver bundle rc req _ problems <<< "$(audit "$repo")"
@@ -139,7 +139,7 @@ while read -r repo maps; do
     echo "| $repo | $ver | $bundle | $rc | $req | $solo | $mapres | $problems |" >> "$OUT/table.md"
     [ -n "$QUIET" ] || tail -1 "$OUT/table.md"
     [ -z "$QUIET" ] || [ "${problems:--}" = "-" ] || echo "live_sweep: $repo $ver: $problems"
-done <<< "$GAMES"
+done 3<<< "$GAMES"
 
 if [ -n "$QUIET" ]; then
     [ "$fails" = 0 ] || echo "live_sweep: $fails game(s) with a FAIL or a pack problem"
