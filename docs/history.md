@@ -17,7 +17,7 @@ Bug stories worth keeping because the bug could come back. The live rule from ea
 - **dot-server: the audit log never opened.** A `DotNodeRef` created node runs `_ready()` before `DotServer` assigns its config; the audit log took the "no path" branch and nothing opened it later. It warned on every boot, which read like an unfilled setting.
 - **RPC routing: Godot addresses an RPC by the receiver's path relative to its `MultiplayerAPI` root.** Both ends now scope an API to their own subtree, so neither needs to know the other's scene names.
 - **A symlinked addon dangles when the directory moves**, and every `class_name` goes unresolved at once (the reason for `--vendor`, and later for links inside the tree).
-- **Godot headless still links `libfontconfig`**, so a minimal container died before running any GDScript.
+- **Godot headless still links `libfontconfig`**, so a minimal container died before running any GDScript. The egg bundles the library into `.runtime/lib`; the image has no `/etc/fonts` either, so `./server` writes `.runtime/fonts.conf` and points `FONTCONFIG_FILE` at it, or every start prints `Fontconfig error: Cannot load default config file`.
 - **A container running as an arbitrary uid has no passwd entry**: `$HOME` is `/`, `user://` cannot be created, and Godot crashes with signal 11 several errors later.
 - **A builtin game must name no client scene**: a client that never reports loaded is timed out for idling with no hint why. `TmcContent` refuses one.
 - **`./server` documented exit 6 for "port in use" and never returned it**, so a supervisor restarted it for ever against a port somebody else owned. Both launchers check now, including the RCON port (game port plus one), where two servers a port apart collide.

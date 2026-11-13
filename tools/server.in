@@ -51,6 +51,20 @@ if [ -d "$PROJECT/.runtime/lib" ]; then
     export LD_LIBRARY_PATH="$PROJECT/.runtime/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 fi
 
+# ...and fontconfig's config file, which such an image lacks too (no /etc/fonts): without one
+# every start prints "Fontconfig error: Cannot load default config file". A headless server
+# draws no text, so an empty config with a writable cache is all the library needs. Written
+# on every start, never kept: the install runs at /mnt/server and the server at /home/container.
+if [ -z "${FONTCONFIG_FILE:-}" ] && [ ! -e /etc/fonts/fonts.conf ]; then
+    _fc="$PROJECT/.runtime/fonts.conf"
+    if { mkdir -p "$PROJECT/.runtime" \
+            && printf '<?xml version="1.0"?>\n<fontconfig><cachedir>%s</cachedir></fontconfig>\n' \
+                "$PROJECT/.runtime/fontcache" > "$_fc"; } 2>/dev/null; then
+        export FONTCONFIG_FILE="$_fc"
+    fi
+    unset _fc
+fi
+
 # Where the exported engine will be served from. Baked into the loader by
 # `export-web`; see web/tmc-loader.js for why it cannot be discovered at runtime.
 ENGINE_BASE="${TMC_ENGINE_BASE:-}"
