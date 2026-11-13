@@ -73,8 +73,11 @@ func map_dirs(subdir: String) -> PackedStringArray:
 ## the same game, version and packs, from the same cache, with no menu (see
 ## [method TmcSolo.is_sim_child]). A game that hosts its solo session in a second process
 ## appends these to its own; one that does not never calls this. Subscribed Workshop packs
-## are not passed.
+## are not passed, so a start that mounted any returns NOTHING: the game then plays in process, with
+## the packs it has, rather than in a second process that lacks them.
 func sim_child_args() -> PackedStringArray:
+	if not (workshop_summary.get("mounted", []) as Array).is_empty():
+		return PackedStringArray()
 	var out := PackedStringArray([TmcSolo.CHILD_FLAG, "1", "--solo", content_id, "--solo-version", version])
 	if start_map != &"":
 		out.append_array(["--solo-map", String(start_map)])
