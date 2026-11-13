@@ -4,7 +4,7 @@ extends Node
 ## `game.yml` reader against the host's, the shell's map list against the stock server one, and the
 ## session a game reads its map packs from. godot --headless --path .
 
-const CHECKS := 81
+const CHECKS := 84
 
 ## Every game repository, beside this project or in games/: the repositories of cfg/content/games.yml (shipped content-lists/games.yml).
 
@@ -88,6 +88,12 @@ func _test_ids() -> void:
 		"a start map's own pack is <bulk owner>/<map>, newest version")
 	_check(TmcSolo.per_map_key("gamemann/x-maps", "") == "" and TmcSolo.per_map_key("gamemann/x-maps", "a/b") == "",
 		"no start map or a bad one gives no per-map pack")
+	_check(TmcSolo.map_groups(false, "wo_sweet_course") == PackedStringArray(["*"]) and TmcSolo.map_groups(false, "") == PackedStringArray(["*"]),
+		"a native solo launch takes every group of a map pack")
+	_check(TmcSolo.map_groups(true, "wo_sweet_course") == PackedStringArray(["wo_sweet_course"]),
+		"a web solo launch takes the start map's group of a map pack")
+	_check(TmcSolo.map_groups(true, "").is_empty() and TmcSolo.map_groups(true, "../x").is_empty(),
+		"a web solo launch with no start map (or a bad one) takes only the ungrouped files")
 
 	_done()
 
