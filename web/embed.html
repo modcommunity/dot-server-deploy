@@ -256,7 +256,10 @@
     var version = q.get("solo-version") || q.get("solo_version") || "";
     if (version && (!/^[0-9A-Za-z][0-9A-Za-z._+-]{0,63}$/.test(version) || version.indexOf("..") >= 0))
       version = "";
-    return { id: id, version: version };
+    // `&map=<id>`: the map to start on (a map page's Play), dropped when it is not a map id.
+    var map = (q.get("map") || "").toLowerCase();
+    if (!/^[a-z0-9][a-z0-9_-]{0,63}$/.test(map)) map = "";
+    return { id: id, version: version, map: map };
   }
 
   // A named server wins: a page that was given both meant to join somebody.
@@ -301,7 +304,8 @@
     // The launcher reads the query string first in a browser, so this pair is a
     // belt-and-braces for a host that serves the export without this page.
     args: solo
-      ? ["--", "--solo", solo.id].concat(solo.version ? ["--solo-version", solo.version] : [])
+      ? ["--", "--solo", solo.id].concat(solo.version ? ["--solo-version", solo.version] : [],
+          solo.map ? ["--solo-map", solo.map] : [])
       : ["--", "--connect", server],
     focusCanvas: true,
   });

@@ -18,6 +18,10 @@ var mount_root: String = ""
 var map_roots: PackedStringArray = PackedStringArray()
 var map_keys: PackedStringArray = PackedStringArray()
 
+## The map the player asked to start on (`?map=`, `--solo-map`), &"" for the game's own first map.
+## Only a request: the game checks it is a map it has or can fetch.
+var start_map: StringName = &""
+
 ## Whether the game's manifest has `provides.accepts`. A game without it takes no
 ## subscriptions, the sync is not run for it, and its page says so.
 var takes_subscriptions: bool = false
@@ -62,6 +66,7 @@ func describe() -> Dictionary:
 		"version": version,
 		"display_name": display_name,
 		"mount_root": mount_root,
+		"start_map": String(start_map),
 		"map_keys": Array(map_keys),
 		"takes_subscriptions": takes_subscriptions,
 		"subscribed": (workshop_summary.get("mounted", []) as Array).size(),
@@ -71,6 +76,8 @@ func describe() -> Dictionary:
 func describe_lines() -> PackedStringArray:
 	var lines := PackedStringArray()
 	lines.append("solo %s@%s (%s)" % [content_id, version, display_name])
+	if start_map != &"":
+		lines.append("  start map %s" % start_map)
 	for key in map_keys:
 		lines.append("  maps %s" % key)
 	return lines

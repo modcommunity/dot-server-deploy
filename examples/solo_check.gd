@@ -4,7 +4,7 @@ extends Node
 ## `game.yml` reader against the host's, the shell's map list against the stock server one, and the
 ## session a game reads its map packs from. godot --headless --path .
 
-const CHECKS := 66
+const CHECKS := 71
 
 ## Every game repository, beside this project or in games/: the repositories of cfg/content/games.yml (shipped content-lists/games.yml).
 
@@ -76,6 +76,14 @@ func _test_ids() -> void:
 
 	var split := TmcSolo.split_key("gamemann/surf_mesa@1.2.2")
 	_check(split["id"] == "gamemann/surf_mesa" and split["version"] == "1.2.2", "a key splits at its last '@'")
+
+	_check(TmcSolo.valid_map("ph_apartment") and TmcSolo.valid_map("bhop_g2g_intro"), "a map id (?map=) is a slug")
+	_check(not TmcSolo.valid_map("../x") and not TmcSolo.valid_map("a/b") and not TmcSolo.valid_map("Ph_x") and not TmcSolo.valid_map(""),
+		"a path, an owner/repo, upper case or nothing is not a map id")
+	_check(TmcSolo.per_map_key("gamemann/mg-prop-hunt-maps@1.0.3", "ph_apartment") == "gamemann/ph_apartment",
+		"a start map's own pack is <bulk owner>/<map>, newest version")
+	_check(TmcSolo.per_map_key("gamemann/x-maps", "") == "" and TmcSolo.per_map_key("gamemann/x-maps", "a/b") == "",
+		"no start map or a bad one gives no per-map pack")
 
 	_done()
 
@@ -250,6 +258,8 @@ func _test_session() -> void:
 	_check(host.call(&"map_dirs", "maps") == PackedStringArray([root.path_join("a/maps")]), "map_dirs names the packs that have the directory")
 	_check(host.call(&"map_dirs", "routes") == PackedStringArray(), "and none when no pack has it")
 	_check(DotRegistry.get_service(&"dot_client_link") == null, "no client link is published, so the game plays offline")
+	session.start_map = &"ph_apartment"
+	_check(&"start_map" in host and host.get(&"start_map") == &"ph_apartment", "a game reads the start map duck-typed as start_map")
 
 	_check(session.is_connected_to_server(), "dot-menu sees a link to leave")
 	session.disconnect_from_server("Left")

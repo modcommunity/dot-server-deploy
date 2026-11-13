@@ -50,6 +50,8 @@ var _mouse_before_prompt: Input.MouseMode = Input.MOUSE_MODE_VISIBLE
 ## version it resolved to, and the session object a game and its menu find in [DotRegistry].
 var _solo_id: String = ""
 var _solo_version: String = ""
+## The map the solo game was asked to start on (`?map=`), "" for its own first map.
+var _solo_map: String = ""
 var _solo_button: Button = null
 
 ## The restart count Retry forgets ([method _attempt_key]), set when [method _solo_overlay] would not start a game without its addons; "" otherwise.
@@ -64,6 +66,8 @@ var _solo_pack_label: String = ""
 ## True while a solo launch holds one outer job: the total line replaces every per-pack text and the bar never restarts.
 var _launch_job := false
 var _solo_key_cache: Dictionary = {}
+## This launch's map packs ([method _solo_map_packs]), worked out once: null until then.
+var _solo_map_packs_memo: Variant = null
 var _deferred_workshop := false
 var _late_sync := false
 var _solo_session: TmcSoloSession = null
@@ -261,19 +265,20 @@ func _ready() -> void:
 	# A restart that carries a join (see [method _restart_for_online]) goes to the server,
 	# not back into the solo game the page's address still names.
 	if str(resumed.get("server", "")) != "":
-		solo = {"id": "", "version": ""}
+		solo = {"id": "", "version": "", "map": ""}
 		_show_connect_form(true)
 
 	# A restart into a solo game's addons (see [method _solo_overlay]) goes back into that game,
 	# which a launch from the menu left in no address.
 	if str(solo["id"]) == "" and str(resumed.get("solo", "")) != "":
-		solo = {"id": str(resumed["solo"]), "version": str(resumed.get("solo_version", ""))}
+		solo = {"id": str(resumed["solo"]), "version": str(resumed.get("solo_version", "")),
+			"map": str(resumed.get("solo_map", ""))}
 
 	if solo.has("refused"):
 		_say("'%s' is not a game this client can start." % str(solo["refused"]))
 
 	if str(solo["id"]) != "":
-		_start_solo(str(solo["id"]), str(solo["version"]))
+		_start_solo(str(solo["id"]), str(solo["version"]), str(solo.get("map", "")))
 		return
 
 	var wanted := _requested_server()
@@ -1804,7 +1809,7 @@ const BUILTIN_CLIENTS := {}
 
 ## Runs [param content_id] here, with no server: fetch, verify and mount it as a join does,
 ## then start its client scene, which finds no link and plays offline. See [TmcSolo].
-func _start_solo(content_id: String, version: String = "") -> void:
+func _start_solo(content_id: String, version: String = "", map: String = "") -> void:
 	if content_id == "" or not TmcSolo.valid_id(content_id):
 		return
 
@@ -1815,6 +1820,7 @@ func _start_solo(content_id: String, version: String = "") -> void:
 
 	_solo_id = content_id
 	_solo_version = version
+	_solo_map = map if TmcSolo.valid_map(map) else ""
 	_solo_retry = ""
 	_refresh_solo_maps_check()
 	_set_busy(true)
@@ -1849,7 +1855,7 @@ func _start_solo(content_id: String, version: String = "") -> void:
 ## The solo button: Retry after [method _solo_overlay] was blocked, which forgets that set's restarts and a failed mark first, so the overlay is built again.
 func _on_solo_pressed() -> void:
 	_forget_solo_retry()
-	_start_solo(_solo_id, _solo_version)
+	_start_solo(_solo_id, _solo_version, _solo_map)
 
 
 ## What Retry clears: the blocked set's restarts and a failed mark, so [method _overlay_blocked] lets the overlay be built again.
@@ -1868,6 +1874,7 @@ func _load_solo(content_id: String, version: String) -> DotResult:
 	_cloud.begin_job("launch")
 	_launch_job = true
 	_solo_key_cache = {}
+	_solo_map_packs_memo = null
 	_deferred_workshop = false
 	var res: DotResult = await _load_solo_inner(content_id, version)
 	_launch_job = false
@@ -1953,6 +1960,7 @@ func _load_solo_inner(content_id: String, version: String) -> DotResult:
 	session.version = wanted
 	session.mount_root = mount
 	session.display_name = str(desc.get("name", ""))
+	session.start_map = StringName(_solo_map)
 	session.leave_fn = _leave_solo
 
 	# The map packs a server owner would name, from the stock list. One that will not
@@ -1967,7 +1975,7 @@ func _load_solo_inner(content_id: String, version: String) -> DotResult:
 		if str(parts["version"]) != "":
 			slice_keys.append(DotCloudClient.content_key_for(StringName(parts["id"]), str(parts["version"])))
 
-	for key in ([] if skip_maps else TmcSolo.map_packs(content_id)):
+	for key in (PackedStringArray() if skip_maps else await _solo_map_packs(content_id)):
 		var maps := await _ensure_solo_pack(key, true)
 		if not maps.ok:
 			DotLog.warn(CHANNEL, "a solo map pack could not be fetched", {
@@ -2123,7 +2131,7 @@ func _solo_overlay(content_id: String, needs: Dictionary) -> SoloOverlay:
 	loading.set_progress(-1.0, _text("shell.addons.updating_solo", {}, "Adding this game's addons…"))
 
 	# Where to come back to: the page's `?solo=` names the game too, but a menu launch has no address.
-	var resume := {"solo": content_id, "solo_version": _solo_version}
+	var resume := {"solo": content_id, "solo_version": _solo_version, "solo_map": _solo_map}
 	if _auth != null and _auth.is_signed_in() and _auth.identity() != null:
 		resume["member"] = _auth.identity().uid
 
@@ -2390,6 +2398,23 @@ func _resolve_solo_key(key: String) -> DotResult:
 	return latest
 
 
+## The map packs this launch fetches: `client/solo.json`'s, except that a start map with a one-map
+## pack of its own ([method TmcSolo.per_map_key]) fetches only that, not the whole set.
+func _solo_map_packs(content_id: String) -> PackedStringArray:
+	if _solo_map_packs_memo is PackedStringArray:
+		return _solo_map_packs_memo
+	var out := PackedStringArray()
+	for key in TmcSolo.map_packs(content_id):
+		var one := TmcSolo.per_map_key(key, _solo_map)
+		if one != "" and (await _resolve_solo_key(one)).ok:
+			DotLog.info(CHANNEL, "fetching only the start map's pack", {"map": _solo_map, "pack": one, "instead_of": key})
+			out.append(one)
+		else:
+			out.append(key)
+	_solo_map_packs_memo = out
+	return out
+
+
 ## Registers the game, its dependencies, map packs and subscribed packs with the launch job and downloads them all, mounting none.
 ## Nothing here is fatal: a pack that cannot be fetched now is reported by the mount pass that follows, as it was before.
 func _prefetch_solo(content_id: String, version: String) -> void:
@@ -2412,7 +2437,7 @@ func _prefetch_solo(content_id: String, version: String) -> void:
 		keys.append_array(desc["dependencies"] as PackedStringArray)
 		keys.append_array(desc["server_dependencies"] as PackedStringArray)
 		if not TmcSolo.skip_maps(content_id):
-			keys.append_array(TmcSolo.map_packs(content_id))
+			keys.append_array(await _solo_map_packs(content_id))
 	var provides: DotResult = await _cloud.read_pack_file(manifest, "provides.json")
 	if provides.ok:
 		accepts = _accepts_from_text((provides.value as PackedByteArray).get_string_from_utf8())

@@ -21,6 +21,9 @@ const LATEST_FILE := "latest.json"
 ## request is made for it.
 const ID_PATTERN := "^[a-z0-9][a-z0-9_-]{0,63}/[a-z0-9][a-z0-9_-]{0,63}$"
 
+## A map id: one slug, as a map pack names its maps and a page's `?map=` carries it.
+const MAP_PATTERN := "^[a-z0-9][a-z0-9_-]{0,63}$"
+
 ## A version is one path component in a mount path.
 const VERSION_PATTERN := "^[0-9A-Za-z][0-9A-Za-z._+-]{0,63}$"
 
@@ -30,6 +33,13 @@ static func valid_id(id: String) -> bool:
 	var re := RegEx.new()
 	re.compile(ID_PATTERN)
 	return re.search(id) != null
+
+
+## Whether [param map] is a map id a solo game may be started on.
+static func valid_map(map: String) -> bool:
+	var re := RegEx.new()
+	re.compile(MAP_PATTERN)
+	return re.search(map) != null
 
 
 ## Whether [param version] can be a pack version. Empty is allowed: it means the newest.
@@ -43,30 +53,38 @@ static func valid_version(version: String) -> bool:
 	return re.search(version) != null
 
 
-## The solo request, `{"id", "version"}`, or an empty id when none was made. The command line first
-## (a desktop launch, a suite), then the page's query string.
+## The solo request, `{"id", "version", "map"}`, or an empty id when none was made. The command line
+## first (a desktop launch, a suite), then the page's query string. `map` (`--solo-map`, `?map=`) is
+## the map to start on, "" for the game's own choice; a malformed one is dropped, not the game.
 static func requested() -> Dictionary:
 	var args := OS.get_cmdline_user_args()
 	var id := _arg(args, "--solo")
 	var version := _arg(args, "--solo-version")
+	var map := _arg(args, "--solo-map")
 
 	if id == "" and DotPlatform.is_web():
 		id = DotWeb.query_param("solo")
 		version = DotWeb.query_param("solo_version")
+		map = DotWeb.query_param("map")
 
 	id = id.strip_edges().to_lower()
 	version = version.strip_edges()
+	map = map.strip_edges().to_lower()
 
 	if id == "":
-		return {"id": "", "version": ""}
+		return {"id": "", "version": "", "map": ""}
 
 	if not valid_id(id) or not valid_version(version):
 		DotLog.warn(CHANNEL, "refusing a solo request that is not a pack id", {
 			"id": id, "version": version,
 		})
-		return {"id": "", "version": "", "refused": id}
+		return {"id": "", "version": "", "map": "", "refused": id}
 
-	return {"id": id, "version": version}
+	if map != "" and not valid_map(map):
+		DotLog.warn(CHANNEL, "ignoring a start map that is not a map id", {"map": map})
+		map = ""
+
+	return {"id": id, "version": version, "map": map}
 
 
 static func _arg(args: PackedStringArray, name: String) -> String:
@@ -295,6 +313,15 @@ static func map_packs(content_id: String) -> PackedStringArray:
 				out.append(key)
 
 	return out
+
+
+## The one-map pack that stands in for [param bulk_key] when a game starts on [param map]:
+## `<bulk owner>/<map>`, the name a map pack's per-map publish gives it. "" when that is no pack id.
+static func per_map_key(bulk_key: String, map: String) -> String:
+	if map == "" or not valid_map(map):
+		return ""
+	var id := "%s/%s" % [str(split_key(bulk_key)["id"]).get_slice("/", 0), map]
+	return id if valid_id(id) else ""
 
 
 ## `<id>@<version>` split, version "" when there is none.
