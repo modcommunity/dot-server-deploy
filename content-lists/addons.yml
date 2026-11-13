@@ -40,7 +40,7 @@ entries:
   - repo: dot-fx
     pin: v0.3.11
   - repo: dot-game
-    pin: v0.1.57
+    pin: v0.1.58
   - repo: dot-inventory
     pin: v0.1.6
   - repo: dot-leaderboard
@@ -86,11 +86,11 @@ entries:
   - repo: dot-player
     pin: v0.1.6
   - repo: dot-player-char
-    pin: v0.1.69
+    pin: v0.1.71
   - repo: dot-player-class
-    pin: v0.1.9
+    pin: v0.1.10
   - repo: dot-player-controller
-    pin: v0.4.10
+    pin: v0.4.14
   - repo: dot-procedural-generation
     pin: v0.1.5
   - repo: dot-profile
@@ -116,7 +116,7 @@ entries:
   - repo: dot-sim
     pin: v0.2.5
   - repo: dot-spawn
-    pin: v0.2.2
+    pin: v0.2.3
   - repo: dot-spectate
     pin: v0.1.10
   - repo: dot-sql
