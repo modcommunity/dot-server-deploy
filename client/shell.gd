@@ -2533,6 +2533,9 @@ func _pack_script_paths(keys: Array[String]) -> PackedStringArray:
 			continue
 
 		for file in manifest.files:
+			# Tooling scenes (tools/, examples/, tests/, ci/) are never played and their scripts preload paths a pack does not ship.
+			if _in_tooling_dir(file.path):
+				continue
 			var res_path := manifest.resource_path(file)
 			var ext := res_path.get_extension()
 			if ext == "gd":
@@ -2541,6 +2544,15 @@ func _pack_script_paths(keys: Array[String]) -> PackedStringArray:
 				others.append(res_path)
 
 	return scripts + others
+
+
+## True for a file under a directory the warm-up skips at any depth (the list dot-cloud's script warm uses).
+static func _in_tooling_dir(path: String) -> bool:
+	var parts := path.split("/")
+	for i in parts.size() - 1:
+		if DotCloudClient.WARM_SKIP_DIRS.has(parts[i]):
+			return true
+	return false
 
 
 ## Compiles a delivered pack's scripts a slice per frame with dot-cloud's warm_content, then
