@@ -3,6 +3,7 @@
 //   node tools/browser_solo_overlay_check.mjs --url <embed.html?solo=...> --state fresh|counter2|failed \
 //       [--serve <web export dir> --port 8098 --content https://dotgames.org] [--lock addons.lock | --fp HEX] \
 //       [--addons arena_weapons@1.4.46,zee_weapons@0.1.62] [--expect started,blocked] [--secs 240] [--shot out.png]
+//       [--map <slug>] [--linger <secs>] [--map-loaded <regex>]
 //
 // The bug it was written for (2026-11-13): a tab that had restarted twice for PLAYLOT's weapon addons gave up and started
 // the game without zee_weapons, so its scripts did not parse and the page stayed black. The shell now blocks such a game
@@ -25,6 +26,11 @@
 //   started   "solo game started" with no broken sign.
 //   blocked   "not starting it without them": the shell refused and offers Retry.
 //   none      none of these within --secs.
+// --map <slug> opens the page with &map=<slug> (the site's "Play map": a solo game on one map, fetching only that map's pack).
+// A started game is then watched for --linger seconds (default 8, or 120 with --map: a downloaded map takes longer to load
+// than the game takes to start) and the check ends early once the console matches --map-loaded (default
+// "world built|map changed|map loaded|round began", case-insensitive). With --map, a map-loaded line that never shows is reported as
+// `map: <slug> not seen` and fails the run (exit 1); --map-loaded '' turns that requirement off.
 // Exit 0 when the verdict is in --expect, 1 otherwise, 2 on usage.
 import http from 'node:http';
 import https from 'node:https';
@@ -50,6 +56,14 @@ const secs = +opt('secs', '240');
 const shot = opt('shot', path.join(os.tmpdir(), `browser_solo_overlay_${state}.png`));
 const userDir = opt('userdir', '/userfs/godot/app_userdata/TMC server');
 let url = opt('url', '');
+const mapSlug = opt('map', '');
+const lingerSecs = +opt('linger', mapSlug ? '120' : '8');
+const mapLoadedSrc = opt('map-loaded', 'world built|map changed|map loaded|round began');
+const mapLoaded = mapSlug && mapLoadedSrc ? new RegExp(mapLoadedSrc, 'i') : null;
+if (mapSlug) {
+  if (!/^[A-Za-z0-9_.-]+$/.test(mapSlug)) { console.error(`--map ${mapSlug}: not a map id`); process.exit(2); }
+  if (url) { const u = new URL(url); u.searchParams.set('map', mapSlug); url = u.toString(); }
+}
 
 if (!url || !['fresh', 'counter2', 'failed'].includes(state)) {
   console.error('usage: --url <embed.html?solo=owner/repo...> --state fresh|counter2|failed [--serve dir] [--lock file | --fp hex]');
@@ -196,9 +210,17 @@ const deadline = Date.now() + secs * 1000;
 while (Date.now() < deadline) {
   await page.waitForTimeout(2000);
   const v = verdict();
-  // A started game is given a few seconds more for the parse errors a game without its addons prints.
   if (v === 'broken' || v === 'blocked') break;
-  if (v === 'started') { await page.waitForTimeout(8000); break; }
+  if (v === 'started') {
+    // A started game is given a few seconds more for the parse errors a game without its addons prints,
+    // and with --map until its map has loaded.
+    const until = Date.now() + lingerSecs * 1000;
+    while (Date.now() < until && verdict() === 'started') {
+      if (mapLoaded && mapLoaded.test(lines.join('\n'))) { await page.waitForTimeout(3000); break; }
+      await page.waitForTimeout(1000);
+    }
+    break;
+  }
 }
 await page.screenshot({ path: shot }).catch(() => {});
 await ctx.close();
@@ -208,4 +230,9 @@ fs.rmSync(profile, { recursive: true, force: true });
 
 const v = verdict();
 console.log(`\nverdict: ${v} (state ${state}, shell ${buildId || '?'}, expect ${expect.join('|')}) screenshot ${shot}`);
-process.exit(expect.includes(v) ? 0 : 1);
+let mapOk = true;
+if (mapLoaded && v === 'started') {
+  mapOk = mapLoaded.test(lines.join('\n'));
+  console.log(`map: ${mapSlug} ${mapOk ? 'loaded' : 'not seen'} (/${mapLoadedSrc}/i within ${lingerSecs} s of the start)`);
+}
+process.exit(expect.includes(v) && mapOk ? 0 : 1);
