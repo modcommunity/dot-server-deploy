@@ -5,6 +5,7 @@
         "gamemann/mg-wipeout": ["gamemann/mg-wipeout-maps"],
         "gamemann/mg-dangerous-delivery": ["gamemann/mg-dangerous-delivery-maps"],
         "gamemann/game-deathrun": ["gamemann/mg-deathrun-maps"],
+        "gamemann/mg-dangerous-delivery": ["gamemann/mg-dangerous-delivery-maps"],
         "gamemann/game-prop-hunt": ["gamemann/mg-prop-hunt-maps"],
         "gamemann/game-hide-n-seek": ["gamemann/hide-n-seek-maps"],
         "gamemann/game-zombie-zone": ["gamemann/zombie-zone-maps"],
