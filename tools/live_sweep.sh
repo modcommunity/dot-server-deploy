@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Regression sweep of the LIVE web shell, game by game.
 #
-#   tools/live_sweep.sh [--shell BUILD] [--only repo,repo] [--audit-only] [--quiet] [--no-map] [--local] [--secs N] [--out DIR]
+#   tools/live_sweep.sh [--shell BUILD] [--only repo,repo] [--audit-only] [--quiet] [--no-map] [--local] [--rotate] [--secs N] [--out DIR]
 #
 # For every game (list below):
 #   1. PACK AUDIT (read-only, from the content origin): the newest version's signed manifest must carry a `bundle`
@@ -32,7 +32,7 @@ ORIGIN=${CONTENT_ORIGIN:-https://dotgames.org}
 OWNER=${CONTENT_OWNER:-gamemann}
 # What a game logs once its map is up: the check's own default plus the wording the map games use (zz "world drawn", "map began"; dd "the mountain is ready").
 MAPRE=${MAP_LOADED:-'world built|world drawn|map changed|map loaded|map began|round began|round begun|mountain is ready'}
-SHELL_BUILD=""; ONLY=""; AUDIT_ONLY=""; QUIET=""; NO_MAP=""; LOCAL=""; SECS=240
+SHELL_BUILD=""; ONLY=""; AUDIT_ONLY=""; QUIET=""; NO_MAP=""; LOCAL=""; ROTATE=""; SECS=240
 OUT=${TMPDIR:-/tmp}/live_sweep.$$
 while [ $# -gt 0 ]; do
     case $1 in
@@ -42,6 +42,7 @@ while [ $# -gt 0 ]; do
         --quiet) QUIET=1; shift ;;
         --no-map) NO_MAP=1; shift ;;
         --local) LOCAL=1; shift ;;
+        --rotate) ROTATE=1; shift ;;
         --secs) SECS=${2:?}; shift 2 ;;
         --out) OUT=${2:?}; shift 2 ;;
         *) echo "live_sweep: unknown argument $1" >&2; exit 2 ;;
@@ -109,6 +110,16 @@ browser() {
     if [ $rc = 0 ]; then echo ok; else echo "FAIL rc=$rc ($(grep -m1 -E '^verdict|map: .* not seen' "$log" | cut -c1-80))"; fi
 }
 
+# --rotate: one page changes maps through a rotation of the biggest ones (FC), the wasm-heap check a single-map load cannot make.
+rotate() {
+    local log=$OUT/rotate.log rc
+    local cmd=(node "$HERE/tools/browser_solo_rotate_check.mjs" --url "$ORIGIN/godot/$SHELL_BUILD/embed.html?solo=$OWNER/game-fatal-contact" --secs "$SECS" --shot "$OUT/rotate.png")
+    if [ -n "$LOCAL" ]; then timeout 1500 "${cmd[@]}" > "$log" 2>&1; rc=$?
+    else timeout 2400 "$GPU" cdp-run -- "${cmd[@]}" > "$log" 2>&1; rc=$?; fi
+    sed -n '/^| #/,$p' "$log" | sed 's/^/rotate: /'
+    return $rc
+}
+
 fails=0
 {
     echo "Live sweep, shell $SHELL_BUILD, $(date -u '+%F %H:%MZ')"
@@ -140,6 +151,10 @@ while read -r repo maps <&3; do
     [ -n "$QUIET" ] || tail -1 "$OUT/table.md"
     [ -z "$QUIET" ] || [ "${problems:--}" = "-" ] || echo "live_sweep: $repo $ver: $problems"
 done 3<<< "$GAMES"
+
+if [ -n "$ROTATE" ] && [ -z "$AUDIT_ONLY" ]; then
+    rotate || fails=$((fails + 1))
+fi
 
 if [ -n "$QUIET" ]; then
     [ "$fails" = 0 ] || echo "live_sweep: $fails game(s) with a FAIL or a pack problem"
