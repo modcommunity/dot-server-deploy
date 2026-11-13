@@ -39,6 +39,7 @@ func _ready() -> void:
 	_test_first_party()
 	await _test_session()
 	_test_skip_maps()
+	_test_sim_child_args()
 	_test_requires_reader()
 	_test_overlay_blocked()
 
@@ -269,6 +270,35 @@ func _test_session() -> void:
 	DotRegistry.unregister_instance(TmcSolo.MAPS_SERVICE, session)
 	session.queue_free()
 	DotPaths.remove_tree(root)
+	_done()
+
+
+func _test_sim_child_args() -> void:
+	_section("a solo game's server process is told the packs the shell mounted")
+
+	var session := TmcSoloSession.new()
+	session.content_id = "gamemann/game-arena"
+	session.version = "0.1.40"
+	session.pack_keys = PackedStringArray(["gamemann/dot-weapons@1.2", "gamemann/dot-bots@3"])
+	session.map_keys = PackedStringArray(["gamemann/fc-dm-maps@2.0"])
+	session.cache_dir = "/tmp/solo cache"
+	var args := session.sim_child_args()
+	_check(TmcSolo.is_sim_child_for(args) and not TmcSolo.is_sim_child_for(PackedStringArray(["--solo", "a/b"])),
+		"the args make a server process, and --solo alone does not", " ".join(args))
+	var asked_id := args[args.find("--solo") + 1]
+	var asked_version := args[args.find("--solo-version") + 1]
+	_check(asked_id == session.content_id and asked_version == session.version, "the game and its version are passed")
+	_check(TmcSolo.child_keys_in(args, TmcSolo.PACKS_FLAG) == session.pack_keys
+		and TmcSolo.child_keys_in(args, TmcSolo.MAPS_FLAG) == session.map_keys,
+		"the dependency and map pack keys come back as they went in", " ".join(args))
+	_check(args[args.find("--cloud-cache-dir") + 1] == session.cache_dir and not args.has("--content-url"),
+		"the cache folder is passed as one arg, and an unset content address is left out")
+	session.pack_keys = PackedStringArray()
+	session.map_keys = PackedStringArray()
+	var bare := session.sim_child_args()
+	_check(not bare.has(TmcSolo.PACKS_FLAG) and not bare.has(TmcSolo.MAPS_FLAG)
+		and TmcSolo.child_keys_in(bare, TmcSolo.PACKS_FLAG).is_empty(), "no packs, no pack flags")
+	session.free()
 	_done()
 
 

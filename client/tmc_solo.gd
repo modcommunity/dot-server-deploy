@@ -13,6 +13,12 @@ const MAPS_SERVICE := &"dot_solo"
 ## The shell's copy of the stock per-game map packs. See the class description.
 const SOLO_CONFIG := "res://client/solo.json"
 
+## The user args of a solo game's own server process ([method TmcSoloSession.sim_child_args]):
+## the flag that makes this shell that process, and the pack keys it mounts, comma-separated.
+const CHILD_FLAG := "--solo-child"
+const PACKS_FLAG := "--solo-packs"
+const MAPS_FLAG := "--solo-maps"
+
 ## The pointer a publish writes beside a pack's versions.
 const LATEST_FILE := "latest.json"
 
@@ -85,6 +91,33 @@ static func requested() -> Dictionary:
 		map = ""
 
 	return {"id": id, "version": version, "map": map}
+
+
+## Whether this process is a solo game's server, started by the shell that runs the game:
+## `--solo-child 1` beside a `--solo` request. A desktop build only; a browser has no second
+## process.
+static func is_sim_child() -> bool:
+	return is_sim_child_for(OS.get_cmdline_user_args())
+
+
+## [method is_sim_child] for the given user args.
+static func is_sim_child_for(args: PackedStringArray) -> bool:
+	return _arg(args, CHILD_FLAG) == "1" and _arg(args, "--solo") != ""
+
+
+## The comma-separated pack keys after [param flag] ([constant PACKS_FLAG], [constant MAPS_FLAG]);
+## empty when it is absent.
+static func child_keys(flag: String) -> PackedStringArray:
+	return child_keys_in(OS.get_cmdline_user_args(), flag)
+
+
+## [method child_keys] for the given user args.
+static func child_keys_in(args: PackedStringArray, flag: String) -> PackedStringArray:
+	var out := PackedStringArray()
+	for key in _arg(args, flag).split(",", false):
+		if key.strip_edges() != "":
+			out.append(key.strip_edges())
+	return out
 
 
 static func _arg(args: PackedStringArray, name: String) -> String:
