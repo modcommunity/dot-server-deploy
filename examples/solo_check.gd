@@ -353,10 +353,27 @@ func _games(checked_out := true) -> PackedStringArray:
 func _source(repo: String) -> String:
 	var here := ProjectSettings.globalize_path("res://")
 	for name in _names(repo):
-		for dir in [here.path_join("games").path_join(name), here.path_join("..").path_join(name).simplify_path()]:
+		var dirs := [here.path_join("games").path_join(name), here.path_join("..").path_join(name).simplify_path()]
+		var base := _checkout_parent()
+		if base != "":
+			dirs.append(base.path_join(name))
+		for dir in dirs:
 			if FileAccess.file_exists(str(dir).path_join("project.godot")):
 				return str(dir)
 	return ""
+
+
+## Where the sibling repos live when this is a git worktree outside that folder (~/wt/...): the
+## .git file of a worktree names the main checkout's .git/worktrees/<n>, whose parent holds the siblings.
+func _checkout_parent() -> String:
+	var gitfile := ProjectSettings.globalize_path("res://").path_join(".git")
+	if not FileAccess.file_exists(gitfile):
+		return ""
+	var line := FileAccess.get_file_as_string(gitfile).strip_edges()
+	var cut := line.find("/.git/worktrees/")
+	if not line.begins_with("gitdir:") or cut < 0:
+		return ""
+	return line.substr(7, cut - 7).strip_edges().get_base_dir()
 
 
 ## [param repo] and every other name projects.tsv gives it (column 1 is current, column 3 the old names).
@@ -367,6 +384,8 @@ func _names(repo: String) -> PackedStringArray:
 	var boot := OS.get_environment("DOT_BOOTSTRAP")
 	if not FileAccess.file_exists(tsv) and boot != "":
 		tsv = boot.path_join("projects.tsv")
+	if not FileAccess.file_exists(tsv) and _checkout_parent() != "":
+		tsv = _checkout_parent().path_join("dot-bootstrap/projects.tsv")
 	if not FileAccess.file_exists(tsv):
 		return out
 	for line in FileAccess.get_file_as_string(tsv).split("\n"):
