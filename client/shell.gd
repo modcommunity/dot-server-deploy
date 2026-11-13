@@ -1056,9 +1056,10 @@ func _new_cloud() -> DotCloudClient:
 	# because [HTTPRequest] parses the URL in C++ and a root-relative string is not a URL.
 	# Content elsewhere is set in `content.json` (`"content_urls": [...]`) and then needs `Access-Control-Allow-Origin`.
 	var configured := _configured_content_urls()
-	cloud.http_base_urls = (
-		configured if not configured.is_empty() else PackedStringArray(["/content"])
-	)
+	# Natively there is no page origin to resolve `/content` against: HTTPRequest rejects it ("Error parsing URL"), so a desktop shell
+	# has no default and takes its address from `content.json` or `--content-url`.
+	var default_bases := PackedStringArray(["/content"]) if DotPlatform.is_web() else PackedStringArray()
+	cloud.http_base_urls = configured if not configured.is_empty() else default_bases
 
 	# No version segment, because the published layout has none: the version is INSIDE the manifest and the mount namespaces by it; the default template 404ed on a CDN serving the map fine.
 	# This is the path EVERYTHING takes (games resolve through it as maps do).
