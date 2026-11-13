@@ -8,7 +8,7 @@ entries:
   - repo: dot-achievements
     pin: v0.1.9
   - repo: dot-audio
-    pin: v0.1.18
+    pin: v0.1.19
   - repo: dot-auth
     pin: v0.1.15
   - repo: dot-bot
