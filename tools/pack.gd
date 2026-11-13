@@ -365,7 +365,11 @@ static func derive_requires(source: String, out_path: String) -> DotResult:
 
 	var run := _run_requires(src, ["--out", out_abs])
 
-	if int(run["code"]) == 2 and str(run["output"]).contains("import the project first"):
+	# A source never imported has no class cache: dot_requires.gd then fails to PARSE (its DotAddonApi
+	# is unknown) before it can print its own "import the project first" and exit 2 -- the case on a
+	# GPU box, where a game sibling is staged from its files alone.
+	var unimported := int(run["code"]) != 0 and str(run["output"]).contains("Identifier \"DotAddonApi\" not declared")
+	if unimported or (int(run["code"]) == 2 and str(run["output"]).contains("import the project first")):
 		_godot(["--headless", "--path", src, "--import"])
 		run = _run_requires(src, ["--out", out_abs])
 

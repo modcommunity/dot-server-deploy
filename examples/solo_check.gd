@@ -4,7 +4,7 @@ extends Node
 ## `game.yml` reader against the host's, the shell's map list against the stock server one, and the
 ## session a game reads its map packs from. godot --headless --path .
 
-const CHECKS := 77
+const CHECKS := 79
 
 ## Every game repository, beside this project or in games/: the repositories of cfg/content/games.yml (shipped content-lists/games.yml).
 
@@ -303,6 +303,10 @@ func _test_sim_child_args() -> void:
 	var mapped := session.sim_child_args()
 	_check(mapped.has("--solo-map") and mapped[mapped.find("--solo-map") + 1] == "dm_box",
 		"the start map the player asked for goes to the server process", " ".join(mapped))
+	session.workshop_summary = {"mounted": [{"content_id": "gamemann/some-mod"}]}
+	_check(session.sim_child_args().is_empty(), "a start that mounted Workshop packs gets no server process (the child would lack them)")
+	session.workshop_summary = {"mounted": []}
+	_check(not session.sim_child_args().is_empty(), "a Workshop sync that mounted none leaves the server process on")
 	session.free()
 	_done()
 
