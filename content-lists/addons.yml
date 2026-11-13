@@ -38,7 +38,7 @@ entries:
   - repo: dot-flashlight
     pin: v0.1.4
   - repo: dot-fx
-    pin: v0.3.10
+    pin: v0.3.11
   - repo: dot-game
     pin: v0.1.57
   - repo: dot-inventory
