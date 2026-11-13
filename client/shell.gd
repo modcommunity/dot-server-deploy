@@ -51,6 +51,12 @@ var _mouse_before_prompt: Input.MouseMode = Input.MOUSE_MODE_VISIBLE
 var _solo_id: String = ""
 var _solo_version: String = ""
 var _solo_button: Button = null
+
+## The restart count Retry forgets ([method _attempt_key]), set when [method _solo_overlay] would not start a game without its addons; "" otherwise.
+var _solo_retry: String = ""
+
+## What [method _solo_overlay] did: nothing was missing, a restart into the addons is under way, or they are missing and cannot be had now.
+enum SoloOverlay { NONE, RESTARTING, BLOCKED }
 ## Whether to fetch this game's maps pack in solo; see [method TmcSolo.skip_maps].
 var _solo_maps_check: CheckBox = null
 ## What the pack being fetched is, said in the status line over every cloud phase text.
@@ -814,7 +820,7 @@ func _build_menu() -> void:
 	_solo_button.text = "Play solo"
 	_solo_button.custom_minimum_size = Vector2(0.0, 40.0)
 	_solo_button.visible = false
-	_solo_button.pressed.connect(func() -> void: _start_solo(_solo_id, _solo_version))
+	_solo_button.pressed.connect(_on_solo_pressed)
 	box.add_child(_solo_button)
 
 	# The player's say over the maps pack a solo game fetches before it starts. On by
@@ -1485,9 +1491,10 @@ func _on_server_info(_challenge: Dictionary, target: String) -> void:
 		wanted = _groups_top_up(running, target)
 
 	if wanted.is_empty():
+		_clear_update_attempts(target)
 		return
 
-	if DotCloudAddonSet.failed_before(wanted):
+	if _overlay_failed_here(wanted):
 		DotLog.warn(CHANNEL, "the server's addons failed to start here before; joining on this build's", {
 			"server": target,
 		})
@@ -1567,6 +1574,7 @@ func _update_addons(addons: DotCloudAddonSet, wanted: Dictionary, target: String
 		return
 
 	_say(_text("shell.addons.restarting", {}, "Restarting to finish the update…"))
+	_stamp_plan()
 	_note_update_attempt(attempt)
 
 	# What the next start reads: the plan (where to come back to, who was signed in), the
@@ -1619,30 +1627,100 @@ func _attempt_key(target: String, wanted: Dictionary) -> String:
 	return "%s|%s" % [target, ",".join(parts)]
 
 
-## How many times this tab has restarted for [param key]. Kept in `sessionStorage`, not `user://`: in a browser files reach IndexedDB only through an asynchronous sync,
+## Where restarts are counted, for a suite: an object with `getItem` and `setItem`, as `sessionStorage` has. Unset in a real client.
+var attempt_storage: Object = null
+
+## This shell's build id (`YYYYMMDD-HHMM`, "" off the web). A suite sets it to stand in for a redeploy.
+var shell_build: String = TmcShellVersion.build_id()
+
+
+## How many times this tab has restarted for [param key] in this shell build. Kept in `sessionStorage`, not `user://`: in a browser files reach IndexedDB only through an asynchronous sync,
 ## so a write that did not land is a reload with no plan that updates and reloads for ever (six reloads in seventy seconds measured).
 ## A desktop build writes files synchronously and has the plan's own guard; it counts nothing here.
+## The counts are kept under the shell build and its addons.lock, so a redeploy starts them again, and a set's counts go once its addons are running
+## ([method _clear_update_attempts]): a tab that had spent its two restarts on two updates that worked once refused the third and started PLAYLOT without its weapons.
 func _update_attempts(key: String) -> int:
 	var counts := _read_update_attempts()
 	return int(counts.get(key, 0))
 
 
 func _note_update_attempt(key: String) -> void:
-	var storage: Variant = DotWeb.get_global("sessionStorage") if DotPlatform.is_web() else null
-	if storage == null:
-		return
 	var counts := _read_update_attempts()
 	counts[key] = int(counts.get(key, 0)) + 1
-	storage.setItem(UPDATE_ATTEMPTS_KEY, JSON.stringify(counts))
+	_write_update_attempts(counts)
 
 
+## Forgets the restarts counted for [param target] (every addon set), once its addons are running: a restart that worked is not one that failed.
+## Without this every update that worked counted against the next, and two games with different sets in one tab used up each other's restarts.
+func _clear_update_attempts(target: String) -> void:
+	var counts := _read_update_attempts()
+	var kept := {}
+	for key: String in counts:
+		if not key.begins_with(target + "|"):
+			kept[key] = counts[key]
+	if kept.size() != counts.size():
+		_write_update_attempts(kept)
+
+
+## Forgets one count, for the player's Retry.
+func _forget_update_attempt(key: String) -> void:
+	var counts := _read_update_attempts()
+	if counts.erase(key):
+		_write_update_attempts(counts)
+
+
+## What the counts are kept under: this shell build and the addons it was exported with.
+func _attempts_build() -> String:
+	return "%s/%s" % [shell_build, DotCloudAddonSet.build_fingerprint()]
+
+
+func _attempts_storage() -> Variant:
+	if attempt_storage != null:
+		return attempt_storage
+	return DotWeb.get_global("sessionStorage") if DotPlatform.is_web() else null
+
+
+func _write_update_attempts(counts: Dictionary) -> void:
+	var storage: Variant = _attempts_storage()
+	if storage == null:
+		return
+	storage.setItem(UPDATE_ATTEMPTS_KEY, JSON.stringify({"build": _attempts_build(), "counts": counts}))
+
+
+## The counts for this build: empty for another build's, and for the flat map shells kept before these were keyed.
 func _read_update_attempts() -> Dictionary:
-	var storage: Variant = DotWeb.get_global("sessionStorage") if DotPlatform.is_web() else null
+	var storage: Variant = _attempts_storage()
 	if storage == null:
 		return {}
 	var raw: Variant = storage.getItem(UPDATE_ATTEMPTS_KEY)
 	var parsed: Variant = JSON.parse_string(str(raw)) if raw != null else null
-	return parsed if parsed is Dictionary else {}
+	if not (parsed is Dictionary) or not DotValue.same((parsed as Dictionary).get("build"), _attempts_build()):
+		return {}
+	var counts: Variant = (parsed as Dictionary).get("counts")
+	return (counts as Dictionary).duplicate() if counts is Dictionary else {}
+
+
+## Whether [param wanted] failed to start in THIS shell build. [method DotCloudAddonSet.failed_before] keys the mark by addons.lock alone,
+## so a redeploy that kept the lock kept the mark, and the tab never tried that set again. The plan is stamped with the shell build that
+## built it ([method _stamp_plan]); a mark from another build, or from a shell before the stamp, gets one more try.
+func _overlay_failed_here(wanted: Dictionary) -> bool:
+	return DotCloudAddonSet.failed_before(wanted) \
+		and DotValue.same(DotCloudAddonSet.read_plan().get("shell", ""), shell_build)
+
+
+## Whether the overlay [param attempt] names must not be built again in this tab: it failed to start in this shell build, or it has had
+## its [constant MAX_UPDATE_RESTARTS] restarts. [method _solo_overlay] then blocks the game instead of starting it without its addons.
+func _overlay_blocked(attempt: String, wanted: Dictionary) -> bool:
+	return _overlay_failed_here(wanted) or _update_attempts(attempt) >= MAX_UPDATE_RESTARTS
+
+
+## Stamps the plan just built with this shell build. See [method _overlay_failed_here].
+func _stamp_plan() -> void:
+	var plan := DotCloudAddonSet.read_plan()
+	if plan.is_empty():
+		return
+	plan["shell"] = shell_build
+	DotCloudAddonSet.write_plan(plan)
 
 
 ## Where the last restart onto newer addons was going and who was signed in, taken once:
@@ -1737,6 +1815,7 @@ func _start_solo(content_id: String, version: String = "") -> void:
 
 	_solo_id = content_id
 	_solo_version = version
+	_solo_retry = ""
 	_refresh_solo_maps_check()
 	_set_busy(true)
 	_join.text = "Connect"
@@ -1760,7 +1839,28 @@ func _start_solo(content_id: String, version: String = "") -> void:
 		_end_solo_session()
 		_fail(_text("shell.solo.failed", {"reason": _explain(started.error)},
 			"Could not start %s: %s" % [content_id, _explain(started.error)]))
+		if _solo_retry != "" and _solo_button != null:
+			_solo_button.text = _text("shell.solo.retry", {}, "Retry")
+			_solo_button.visible = true
+			_primary(_solo_button)
 		return
+
+
+## The solo button: Retry after [method _solo_overlay] was blocked, which forgets that set's restarts and a failed mark first, so the overlay is built again.
+func _on_solo_pressed() -> void:
+	_forget_solo_retry()
+	_start_solo(_solo_id, _solo_version)
+
+
+## What Retry clears: the blocked set's restarts and a failed mark, so [method _overlay_blocked] lets the overlay be built again.
+func _forget_solo_retry() -> void:
+	if _solo_retry == "":
+		return
+	DotLog.info(CHANNEL, "retrying this solo game's addons", {"attempt": _solo_retry})
+	_forget_update_attempt(_solo_retry)
+	if DotValue.same(DotCloudAddonSet.read_plan().get("state", ""), DotCloudAddonSet.STATE_FAILED):
+		DotCloudAddonSet.forget()
+	_solo_retry = ""
 
 
 ## Everything [method _start_solo] does that can fail, so it has one way out.
@@ -1805,8 +1905,12 @@ func _load_solo_inner(content_id: String, version: String) -> DotResult:
 	# are not in this shell: fetched as the overlay a server would announce, then a restart into it.
 	# Asked of the store before the pack is fetched, because the pack's own requirement check refuses
 	# it while one is missing. Returns only when nothing is missing or it cannot be had.
-	if await _solo_overlay(content_id, await _solo_needs(content_id, wanted)):
+	var overlay: int = await _solo_overlay(content_id, await _solo_needs(content_id, wanted))
+	if overlay == SoloOverlay.RESTARTING:
 		return DotResult.success(null)
+	if overlay == SoloOverlay.BLOCKED:
+		return DotResult.fail(DotError.CODE_STATE, _text("shell.solo.addons_blocked", {},
+			"this game's addons did not start in this tab, so it was not started without them. Retry fetches them again."))
 
 	# Everything is registered and fetched first, so the total is fixed before a byte moves; mounting follows.
 	await _prefetch_solo(content_id, wanted)
@@ -1965,10 +2069,12 @@ static func solo_addons_in(text: String) -> Dictionary:
 
 ## The addons in [param needs] (from [method _solo_needs]) that this shell neither carries nor
 ## has mounted, fetched as the overlay a server would announce and restarted into, as
-## [method _update_addons] does for a join. True when a restart is under way (the caller stops
-## there); false to play on what is here, which is also the answer after a failed start on the
-## same overlay or [constant MAX_UPDATE_RESTARTS] restarts for it.
-func _solo_overlay(content_id: String, needs: Dictionary) -> bool:
+## [method _update_addons] does for a join. [constant SoloOverlay.RESTARTING] when a restart is under way (the caller stops
+## there); [constant SoloOverlay.NONE] when nothing is missing; [constant SoloOverlay.BLOCKED] when the addons are missing and
+## cannot be had now: after a failed start on the same overlay in this shell build, after [constant MAX_UPDATE_RESTARTS] restarts for it,
+## or when building it failed. Blocked never plays on: the game's scripts do not parse without its addons, which is the black screen
+## PLAYLOT showed on 2026-11-13. The caller fails the start and the solo button becomes Retry ([member _solo_retry]).
+func _solo_overlay(content_id: String, needs: Dictionary) -> SoloOverlay:
 	var announce: Array = []
 	for dir: String in needs:
 		if DirAccess.dir_exists_absolute("res://addons/%s" % dir):
@@ -1985,7 +2091,7 @@ func _solo_overlay(content_id: String, needs: Dictionary) -> bool:
 		announce.append({"dir": dir, "repo": id.get_file(), "id": id, "version": str(latest.value["version"])})
 
 	if announce.is_empty():
-		return false
+		return SoloOverlay.NONE
 
 	var addons := DotCloudAddonSet.new(_cloud)
 	addons.namespaces = TmcAddonNamespaces.load_shell()
@@ -1995,16 +2101,20 @@ func _solo_overlay(content_id: String, needs: Dictionary) -> bool:
 	if not (decided["refused"] as Dictionary).is_empty():
 		DotLog.warn(CHANNEL, "solo game addons not taken", {"content": content_id, "refused": decided["refused"]})
 
-	if wanted.is_empty():
-		return false
-
 	var target := "solo:%s" % content_id
+
+	if wanted.is_empty():
+		_clear_update_attempts(target)
+		return SoloOverlay.NONE
+
 	var attempt := _attempt_key(target, wanted)
-	if DotCloudAddonSet.failed_before(wanted) or _update_attempts(attempt) >= MAX_UPDATE_RESTARTS:
-		DotLog.warn(CHANNEL, "this solo game's addons did not start here before; playing on this build's", {
-			"content": content_id, "addons": wanted.keys(),
+	if _overlay_blocked(attempt, wanted):
+		DotLog.warn(CHANNEL, "this solo game's addons did not start here; not starting it without them", {
+			"content": content_id, "addons": wanted.keys(), "failed": _overlay_failed_here(wanted),
+			"restarts": _update_attempts(attempt),
 		})
-		return false
+		_solo_retry = attempt
+		return SoloOverlay.BLOCKED
 
 	DotLog.info(CHANNEL, "this solo game needs addons the shell does not carry; fetching them", {
 		"content": content_id, "addons": wanted.keys(),
@@ -2020,8 +2130,10 @@ func _solo_overlay(content_id: String, needs: Dictionary) -> bool:
 	var built: DotResult = await addons.build(wanted, resume)
 	if not built.ok:
 		DotLog.error(CHANNEL, "could not fetch this solo game's addons", {"content": content_id, "why": str(built.error)})
-		return false
+		_solo_retry = attempt
+		return SoloOverlay.BLOCKED
 
+	_stamp_plan()
 	_note_update_attempt(attempt)
 
 	var keep := DotCloudAddonSet.plan_files(built.value)
@@ -2033,11 +2145,11 @@ func _solo_overlay(content_id: String, needs: Dictionary) -> bool:
 
 	_say(_text("shell.addons.restarting", {}, "Restarting to finish the update…"))
 	if await _restart(keep):
-		return true
+		return SoloOverlay.RESTARTING
 	# Without its addons the game's scripts do not parse: say so rather than start a grey screen.
 	# A browser that cannot store the overlay (a full quota; before dot-cloud 0.1.47 any overlay over 127 MiB) stops here.
 	loading.set_progress(-1.0, _text("shell.addons.unsaved_solo", {}, "This browser could not keep the addons this game needs, so it cannot start here yet."))
-	return true
+	return SoloOverlay.RESTARTING
 
 
 ## Where a game's pack names the addons it needs (and their API floors): the hard requirements
