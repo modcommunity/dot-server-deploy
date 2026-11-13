@@ -86,7 +86,7 @@ entries:
   - repo: dot-player
     pin: v0.1.6
   - repo: dot-player-char
-    pin: v0.1.66
+    pin: v0.1.68
   - repo: dot-player-class
     pin: v0.1.9
   - repo: dot-player-controller
