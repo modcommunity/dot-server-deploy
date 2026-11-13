@@ -76,6 +76,8 @@ func map_dirs(subdir: String) -> PackedStringArray:
 ## are not passed.
 func sim_child_args() -> PackedStringArray:
 	var out := PackedStringArray([TmcSolo.CHILD_FLAG, "1", "--solo", content_id, "--solo-version", version])
+	if start_map != &"":
+		out.append_array(["--solo-map", String(start_map)])
 	if not pack_keys.is_empty():
 		out.append_array([TmcSolo.PACKS_FLAG, ",".join(pack_keys)])
 	if not map_keys.is_empty():

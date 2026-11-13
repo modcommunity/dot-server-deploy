@@ -2097,6 +2097,7 @@ func _load_sim_child() -> DotResult:
 	session.version = version
 	session.mount_root = DotCloudClient.mount_prefix_for(StringName(content_id), version)
 	session.cache_dir = _cloud.config.cache_dir
+	session.start_map = StringName(str(asked.get("map", "")))
 
 	for flag in [TmcSolo.PACKS_FLAG, TmcSolo.MAPS_FLAG]:
 		for key in TmcSolo.child_keys(str(flag)):

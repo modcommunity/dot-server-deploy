@@ -4,7 +4,7 @@ extends Node
 ## `game.yml` reader against the host's, the shell's map list against the stock server one, and the
 ## session a game reads its map packs from. godot --headless --path .
 
-const CHECKS := 71
+const CHECKS := 77
 
 ## Every game repository, beside this project or in games/: the repositories of cfg/content/games.yml (shipped content-lists/games.yml).
 
@@ -297,7 +297,12 @@ func _test_sim_child_args() -> void:
 	session.map_keys = PackedStringArray()
 	var bare := session.sim_child_args()
 	_check(not bare.has(TmcSolo.PACKS_FLAG) and not bare.has(TmcSolo.MAPS_FLAG)
-		and TmcSolo.child_keys_in(bare, TmcSolo.PACKS_FLAG).is_empty(), "no packs, no pack flags")
+		and TmcSolo.child_keys_in(bare, TmcSolo.PACKS_FLAG).is_empty() and not bare.has("--solo-map"),
+		"no packs, no pack flags, no start map")
+	session.start_map = &"dm_box"
+	var mapped := session.sim_child_args()
+	_check(mapped.has("--solo-map") and mapped[mapped.find("--solo-map") + 1] == "dm_box",
+		"the start map the player asked for goes to the server process", " ".join(mapped))
 	session.free()
 	_done()
 
