@@ -4,6 +4,7 @@
 //
 //   gpu.sh cdp-run -- node tools/browser_solo_rotate_check.mjs --url <embed.html?solo=owner/repo> \
 //       [--maps welcometomexicov6,dm-industrial-gamma,surf_xiv_v2a,welcometomexicov6] [--secs 240] [--per-map 150] \
+//       [--serve <web export dir> --port 8099 --content https://dotgames.org]   (a local export, /content proxied to the live origin)
 //       [--loaded 'map change map:{map} to playable'] [--cmd solo_map] [--max-growth-mb 400]
 //
 // Every map is typed into the game's local console as `solo_map <id>` once the match is live (backtick opens it; FC's
@@ -13,6 +14,7 @@
 // Fails (exit 1) on an abort, an OOM, a RangeError, a wasm trap, a map that never loads, or a final wasm heap more than
 // --max-growth-mb over the first one (0, the default, turns that off). Exit 2 on usage.
 import fs from 'node:fs';
+import { serveShell } from './local_shell_server.mjs';
 import path from 'node:path';
 import os from 'node:os';
 import { createRequire } from 'node:module';
@@ -31,7 +33,14 @@ if (!url0 || maps.length < 2 || maps.some(m => !/^[A-Za-z0-9_.-]+$/.test(m))) {
   console.error('usage: --url <embed.html?solo=owner/repo> [--maps a,b,c,a] (at least two map ids)');
   process.exit(2);
 }
-const u = new URL(url0); u.searchParams.delete('map');
+const serve = opt('serve', '');  // a local web export (web/build) served as /godot/<build>/ with /content proxied to --content
+const serveBuild = (new URL(url0).pathname.match(/\/(\d{8}-\d{4})\//) || [])[1] || '';
+let srv = null, url1 = url0;
+if (serve) {
+  try { ({ srv, url: url1 } = await serveShell({ dir: serve, port: +opt('port', '8099'), buildId: serveBuild, upstream: opt('content', 'https://dotgames.org'), givenUrl: url0 })); }
+  catch (e) { console.error(String(e.message)); process.exit(2); }
+}
+const u = new URL(url1); u.searchParams.delete('map');
 
 const loadPlaywright = () => {
   const require = createRequire(import.meta.url);
@@ -141,4 +150,5 @@ if (!failure && maxGrowth > 0 && rows.length > 1 && rows[0].wasm) {
   if (g > maxGrowth) failure = `wasm heap grew ${g.toFixed(0)} MB over the rotation (limit ${maxGrowth})`;
 }
 console.log(failure ? `\nrotate: FAIL ${failure}` : `\nrotate: ok (${rows.length} maps, screenshot ${shot})`);
+if (srv) srv.close();
 process.exit(failure ? 1 : 0);

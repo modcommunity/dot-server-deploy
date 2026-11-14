@@ -32,8 +32,7 @@
 // "world built|map changed|map loaded|round began", case-insensitive). With --map, a map-loaded line that never shows is reported as
 // `map: <slug> not seen` and fails the run (exit 1); --map-loaded '' turns that requirement off.
 // Exit 0 when the verdict is in --expect, 1 otherwise, 2 on usage.
-import http from 'node:http';
-import https from 'node:https';
+import { serveShell } from './local_shell_server.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
@@ -111,33 +110,7 @@ const { chromium } = loadPlaywright();
 
 let srv = null;
 if (serve) {
-  if (!fs.existsSync(path.join(serve, 'embed.html'))) { console.error(`--serve ${serve} has no embed.html`); process.exit(2); }
-  const types = { '.html': 'text/html', '.js': 'text/javascript', '.wasm': 'application/wasm', '.json': 'application/json', '.png': 'image/png' };
-  const prefix = `/godot/${buildId || 'local'}/`;
-  srv = http.createServer((req, res) => {
-    const u = new URL(req.url, 'http://x');
-    if (u.pathname.startsWith('/content/')) {
-      const lib = upstream.startsWith('https:') ? https : http;
-      const up = lib.request(upstream + u.pathname + u.search, {
-        method: req.method,
-        headers: { 'user-agent': 'browser_solo_overlay_check/1', ...(req.headers.range ? { range: req.headers.range } : {}) },
-      }, r => { const h = { ...r.headers }; delete h['alt-svc']; res.writeHead(r.statusCode, h); r.pipe(res); });
-      up.on('error', e => { res.writeHead(502); res.end(String(e)); });
-      up.end();
-      return;
-    }
-    if (!u.pathname.startsWith(prefix)) { res.writeHead(404, { 'content-type': 'text/html' }); res.end('<!doctype html>'); return; }
-    const p = path.join(serve, decodeURIComponent(u.pathname.slice(prefix.length)));
-    if (!p.startsWith(path.resolve(serve))) { res.writeHead(403); res.end(); return; }
-    fs.readFile(p, (e, d) => {
-      if (e) { res.writeHead(404); res.end(); return; }
-      res.writeHead(200, { 'content-type': types[path.extname(p)] ?? 'application/octet-stream', 'cache-control': 'no-store' });
-      res.end(d);
-    });
-  });
-  await new Promise(r => srv.listen(port, '127.0.0.1', r));
-  const given = new URL(url);
-  url = `http://127.0.0.1:${port}${prefix}embed.html${given.search}`;
+  try { ({ srv, url } = await serveShell({ dir: serve, port, buildId, upstream, givenUrl: url })); } catch (e) { console.error(String(e.message)); process.exit(2); }
 }
 
 // GPU_CDP_URL (set by dot-bootstrap's `gpu.sh cdp-run -- node tools/browser_solo_overlay_check.mjs ...`) drives a real
