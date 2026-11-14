@@ -1,5 +1,3 @@
-# dot-server-deploy
-
 Everything a server owner needs to run a game under TMC's dot ecosystem with one command. It is a Godot project that boots a [dot-server](https://github.com/modcommunity/dot-server), reads its settings from `cfg/*.yml`, loads games from `content/` and serves a browser client. It ships no game of its own: games are fetched as signed packs.
 
 ## Install and run
