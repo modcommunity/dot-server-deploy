@@ -2,13 +2,16 @@ extends Node
 
 ## Subscribed packs in solo play, through the REAL client shell: a solo start mounts what the player
 ## subscribed to and the game's map catalogue sees it; an online start of the same game never asks
-## and sees none of it.
+## and sees none of it. A game whose accepts name `addon` takes a subscribed addon pack into its solo overlay,
+## and an online join drops that overlay.
 
 const WORK := "user://tmc_workshop_solo"
 const SHELL := "res://client/shell.tscn"
 const GAME := "gamemann/ws-game"
-const CHECKS := 71
+const CHECKS := 88
 const ACCEPTS := {"kinds": ["map", "script"], "map_kinds": ["sandbox"]}
+const ADDON_GAME := "gamemann/ws-addgame"
+const ADDON_ACCEPTS := {"kinds": ["map", "addon"], "map_kinds": ["sandbox"]}
 const HttpServer := preload("res://examples/fixtures/ws_http_server.gd")
 const Backbone := preload("res://examples/fixtures/ws_backbone.gd")
 
@@ -29,6 +32,8 @@ var _token := ""
 var _items: Array = []
 var _packs := {}
 var _restarts := [0]
+var _site_game := GAME
+var _accepts: Dictionary = ACCEPTS
 
 
 func _ready() -> void:
@@ -48,6 +53,9 @@ func _run() -> void:
 		await _test_suggested_after_start()
 		await _test_online_never_syncs()
 		await _test_code_pack_restarts_first()
+		await _test_subscribed_addon()
+		await _test_addon_refused_without_opt_in()
+		_test_subscription_marks()
 
 	await _teardown()
 	DotPaths.remove_tree(WORK)
@@ -90,9 +98,11 @@ func _boot() -> bool:
 	_bb.start()
 
 	_make_game()
+	_make_game(ADDON_GAME, "", ADDON_ACCEPTS)
 	_make_pack("ws_map", "map")
 	_make_pack("ws_prop", "prop")
 	_make_pack("ws_code", "script", true)
+	_make_pack("ws_quake", "addon", true)
 
 	_index = DotContentIndex.shared()
 
@@ -135,13 +145,13 @@ func _site(method: String, path: String, query: Dictionary, headers: Dictionary,
 	if method != "GET" or path != "/api/app/v1/workshop":
 		return {"status": 404, "json": {}}
 	return {"status": 200, "json": {
-		"game": {"contentId": GAME, "accepts": ACCEPTS}, "account": "acct-alice",
+		"game": {"contentId": _site_game, "accepts": _accepts}, "account": "acct-alice",
 		"revision": "w1:" + str(_items.size()), "unchanged": false, "full": true,
 		"items": _items, "removed": [],
 	}}
 
 
-func _make_game(id: String = GAME, extra: String = "") -> void:
+func _make_game(id: String = GAME, extra: String = "", accepts: Dictionary = ACCEPTS) -> void:
 	var dir := WORK.path_join("src_" + id.replace("/", "_"))
 	DotPaths.write_text(dir.path_join("game.yml"),
 		"name: Workshop Game\ncontent_id: %s\nversion: 1.0.0\nclient_scene: game.tscn\n%s" % [id, extra])
@@ -149,7 +159,7 @@ func _make_game(id: String = GAME, extra: String = "") -> void:
 		"[gd_scene load_steps=2 format=3]\n\n[ext_resource type=\"Script\" path=\"res://examples/workshop_solo_game.gd\" id=\"1\"]\n\n"
 		+ "[node name=\"Game\" type=\"Node3D\"]\nscript = ExtResource(\"1\")\n")
 	DotPaths.write_text(dir.path_join("provides.json"), JSON.stringify({
-		"schema": 1, "title": "Workshop Game", "kinds": [], "accepts": ACCEPTS, "entries": []}))
+		"schema": 1, "title": "Workshop Game", "kinds": [], "accepts": accepts, "entries": []}))
 	_publish(dir, id, "tmc")
 
 
@@ -163,6 +173,12 @@ func _make_pack(id: String, kind: String, code: bool = false) -> void:
 		"prop":
 			DotPaths.write_text(dir.path_join("props/p.tscn"), "[gd_scene format=3]\n\n[node name=\"P\" type=\"Node3D\"]\n")
 			entries.append({"kind": "prop", "id": "p", "name": id + " prop", "scene": "props/p.tscn"})
+		"addon":
+			# Laid out as a game addon released inside its project, as Zee's Natural Disasters is.
+			DotPaths.write_text(dir.path_join("addons/%s/plugin.cfg" % id),
+				"[plugin]\n\nname=\"%s\"\ndescription=\"\"\nauthor=\"test\"\nversion=\"1.0.0\"\nscript=\"\"\n" % id)
+			DotPaths.write_text(dir.path_join("addons/%s/quake.gd" % id), "extends Node\n")
+			entries.append({"kind": "addon", "id": id, "name": id, "dir": "addons/" + id})
 		"script":
 			DotPaths.write_text(dir.path_join("hooks/h.gd"), "extends Node\n")
 			entries.append({"kind": "script", "id": "h", "name": id + " hook", "script": "hooks/h.gd", "hook": "playground"})
@@ -487,6 +503,89 @@ func _test_code_pack_restarts_first() -> void:
 	var taken: Dictionary = _shell.call("_take_resume")
 	_check(str(taken.get("server", "")) == "10.9.8.7:6064", "the next start reads where to go")
 	_check((_shell.call("_take_resume") as Dictionary).is_empty(), "and only once")
+
+	_done()
+
+
+func _test_subscribed_addon() -> void:
+	_section("a game that accepts addon packs: a subscribed addon joins the solo overlay")
+
+	_token = "tok-alice"
+	_site_game = ADDON_GAME
+	_accepts = ADDON_ACCEPTS
+	_items = [_item("ws_quake")]
+	DotCloudAddonSet.forget()
+	_restarts[0] = 0
+	await _shell.call("_start_solo", ADDON_GAME, "1.0.0")
+
+	_check(_restarts[0] == 1, "the solo start restarted into an overlay with the addon", str(_restarts[0]))
+	var plan := DotCloudAddonSet.read_plan()
+	var held: Variant = (plan.get("addons", {}) as Dictionary).get("ws_quake")
+	_check(held is Dictionary and str((held as Dictionary).get("id", "")) == "ws_quake"
+		and str((held as Dictionary).get("source", "")) == "subscription",
+		"the plan holds the addon, marked as a subscription", str(plan.get("addons", {})))
+	var shell_script: Script = _shell.get_script()
+	_check(shell_script.call("plan_holds_subscription", plan), "so the plan holds a subscription")
+	var resume: Variant = plan.get("resume", {})
+	_check(resume is Dictionary and str((resume as Dictionary).get("solo", "")) == ADDON_GAME,
+		"and the restart comes back into the same game", str(resume))
+
+	# The next process booted on it; an online join from there drops the overlay instead of taking it along.
+	# Data and code packs are out of the picture here: only the plan asks for this restart.
+	_ws.set("_ran_code", false)
+	_check(not _ws.requires_restart_before_online(), "no code pack asks for a restart")
+	_restarts[0] = 0
+	_shell.call("_connect_to", "10.9.8.7:6064")
+	await get_tree().process_frame
+	await get_tree().process_frame
+	_check(_restarts[0] == 1 and _shell.get("link") == null, "the join restarted instead of joining", str(_restarts[0]))
+	plan = DotCloudAddonSet.read_plan()
+	_check(str(plan.get("state", "")) == "dropped" and not plan.has("addons") and not shell_script.call("plan_holds_subscription", plan),
+		"the plan is dropped: the next start boots on the build alone", str(plan))
+	resume = plan.get("resume", {})
+	_check(resume is Dictionary and str((resume as Dictionary).get("server", "")) == "10.9.8.7:6064",
+		"and still carries the join", str(resume))
+	_shell.call("_take_resume")
+
+	_site_game = GAME
+	_accepts = ACCEPTS
+	_done()
+
+
+func _test_addon_refused_without_opt_in() -> void:
+	_section("a game that does not accept addon packs refuses one and starts on its own")
+
+	_token = "tok-alice"
+	_items = [_item("ws_quake"), _item("ws_map")]
+	DotCloudAddonSet.forget()
+	_restarts[0] = 0
+	await _shell.call("_start_solo", GAME, "1.0.0")
+
+	_check(_restarts[0] == 0, "no restart", str(_restarts[0]))
+	var session := _session()
+	_check(session != null and _game_node() != null, "the game started")
+	var refused := false
+	if session != null:
+		for f: Dictionary in session.workshop_summary.get("failed", []):
+			refused = refused or (str(f.get("content_id", "")) == "ws_quake" and str(f.get("code", "")) == DotError.CODE_FORBIDDEN)
+	_check(refused, "the addon pack is refused as forbidden",
+		str(session.workshop_summary.get("failed", [])) if session != null else "")
+	var shell_script: Script = _shell.get_script()
+	_check(not shell_script.call("plan_holds_subscription", DotCloudAddonSet.read_plan()), "and no overlay holds it")
+
+	_done()
+
+
+func _test_subscription_marks() -> void:
+	_section("the plan's subscription mark")
+
+	var shell_script: Script = _shell.get_script()
+	var wanted := {"a": {"id": "x/a"}, "b": {"id": "y/b"}}
+	shell_script.call("mark_subscribed", wanted, {"a": "x/a", "b": "z/b"})
+	_check(str(wanted["a"].get("source", "")) == "subscription", "an entry the subscription named is marked")
+	_check(not (wanted["b"] as Dictionary).has("source"), "one whose id differs (the game's own requirement) is not")
+	_check(not shell_script.call("plan_holds_subscription", {}) and not shell_script.call("plan_holds_subscription", {"addons": wanted["b"]}),
+		"an empty or unmarked plan holds none")
 
 	_done()
 
