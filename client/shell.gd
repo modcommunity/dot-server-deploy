@@ -1413,7 +1413,8 @@ func _connect_to(address: String) -> void:
 
 	# Online never sees a subscription: the index's session filters every catalogue and the cloud client's tag stamps a mount, so both go to `online` before anything is fetched.
 	# A pack that runs code stays resident after its game is freed, so a process that mounted one restarts first.
-	if _workshop != null and _workshop.requires_restart_before_online():
+	# So does one whose overlay holds a subscribed addon: the restart drops that overlay.
+	if (_workshop != null and _workshop.requires_restart_before_online()) or plan_holds_subscription(DotCloudAddonSet.read_plan()):
 		_restart_for_online(target)
 		return
 
@@ -1951,7 +1952,10 @@ func _load_solo_inner(content_id: String, version: String) -> DotResult:
 	# are not in this shell: fetched as the overlay a server would announce, then a restart into it.
 	# Asked of the store before the pack is fetched, because the pack's own requirement check refuses
 	# it while one is missing. Returns only when nothing is missing or it cannot be had.
-	var overlay: int = await _solo_overlay(content_id, await _solo_needs(content_id, wanted))
+	# Subscriptions are asked first (their downloads only registered): a game that accepts addon packs gets the
+	# subscribed ones in the same overlay, so one restart covers both.
+	var subscribed: Array = await _solo_workshop_plan(content_id, wanted)
+	var overlay: int = await _solo_overlay(content_id, await _solo_needs(content_id, wanted), subscribed)
 	if overlay == SoloOverlay.RESTARTING:
 		return DotResult.success(null)
 	if overlay == SoloOverlay.BLOCKED:
@@ -2199,9 +2203,26 @@ static func solo_addons_in(text: String) -> Dictionary:
 ## cannot be had now: after a failed start on the same overlay in this shell build, after [constant MAX_UPDATE_RESTARTS] restarts for it,
 ## or when building it failed. Blocked never plays on: the game's scripts do not parse without its addons, which is the black screen
 ## PLAYLOT showed on 2026-11-13. The caller fails the start and the solo button becomes Retry ([member _solo_retry]).
-func _solo_overlay(content_id: String, needs: Dictionary) -> SoloOverlay:
+##
+## [param subscribed] are the Workshop's `summary.addons` (dot-cloud 28): approved addon packs of a game whose
+## `accepts.kinds` has `addon`, already checked against the build's own addons. They join the overlay under
+## their exact ids and are marked `source: "subscription"` in the plan, which [method _restart_for_online] drops.
+func _solo_overlay(content_id: String, needs: Dictionary, subscribed: Array = []) -> SoloOverlay:
 	var announce: Array = []
+	var from_subscription := {}
+	for entry: Variant in subscribed:
+		if not (entry is Dictionary):
+			continue
+		var dir := str(entry.get("dir", ""))
+		if dir == "" or bool(entry.get("running", false)) or DirAccess.dir_exists_absolute("res://addons/%s" % dir):
+			continue
+		from_subscription[dir] = str(entry.get("id", ""))
+		announce.append({"dir": dir, "repo": str(entry.get("repo", "")), "id": from_subscription[dir],
+			"version": str(entry.get("version", ""))})
 	for dir: String in needs:
+		if from_subscription.has(dir):
+			# The game needs what the player subscribed to; the subscription's checked version serves both.
+			continue
 		if DirAccess.dir_exists_absolute("res://addons/%s" % dir):
 			continue
 		var pack := TmcAddonNamespaces.pack_for(dir)
@@ -2220,8 +2241,12 @@ func _solo_overlay(content_id: String, needs: Dictionary) -> SoloOverlay:
 
 	var addons := DotCloudAddonSet.new(_cloud)
 	addons.namespaces = TmcAddonNamespaces.load_shell()
+	for dir: String in from_subscription:
+		# The site approved this exact pack for this player; that, not a namespace, is why it is taken.
+		addons.namespaces.append(str(from_subscription[dir]))
 	var decided := addons.plan_for(announce)
 	var wanted: Dictionary = decided["wanted"]
+	mark_subscribed(wanted, from_subscription)
 
 	if not (decided["refused"] as Dictionary).is_empty():
 		DotLog.warn(CHANNEL, "solo game addons not taken", {"content": content_id, "refused": decided["refused"]})
@@ -2275,6 +2300,29 @@ func _solo_overlay(content_id: String, needs: Dictionary) -> SoloOverlay:
 	# A browser that cannot store the overlay (a full quota; before dot-cloud 0.1.47 any overlay over 127 MiB) stops here.
 	loading.set_progress(-1.0, _text("shell.addons.unsaved_solo", {}, "This browser could not keep the addons this game needs, so it cannot start here yet."))
 	return SoloOverlay.RESTARTING
+
+
+## Marks each entry of a [method DotCloudAddonSet.plan_for] `wanted` that came from a subscription ([param from_subscription]:
+## dir -> id) with `source: "subscription"`, which [method DotCloudAddonSet.build] keeps in the plan.
+static func mark_subscribed(wanted: Dictionary, from_subscription: Dictionary) -> void:
+	for dir: Variant in wanted:
+		var entry: Variant = wanted[dir]
+		if entry is Dictionary and from_subscription.get(dir, "") == str((entry as Dictionary).get("id", "")) and str(from_subscription.get(dir, "")) != "":
+			(entry as Dictionary)["source"] = SUBSCRIPTION_SOURCE
+
+
+## Whether an overlay plan holds an addon a player's subscription put there: such a plan never boots into an online session.
+static func plan_holds_subscription(plan: Dictionary) -> bool:
+	var addons: Variant = plan.get("addons", {})
+	if addons is Dictionary:
+		for dir: Variant in addons:
+			var entry: Variant = (addons as Dictionary)[dir]
+			if entry is Dictionary and str((entry as Dictionary).get("source", "")) == SUBSCRIPTION_SOURCE:
+				return true
+	return false
+
+
+const SUBSCRIPTION_SOURCE := "subscription"
 
 
 ## Where a game's pack names the addons it needs (and their API floors): the hard requirements
@@ -2485,6 +2533,10 @@ func _restart_for_online(target: String) -> void:
 		resume["member"] = _auth.identity().uid
 
 	var plan := DotCloudAddonSet.read_plan()
+	if plan_holds_subscription(plan):
+		# A state the boot does not mount: the next start comes up on the build alone and resumes the join,
+		# whose own addon update builds the server's overlay if it announces one.
+		plan = {"format": int(plan.get("format", 1)), "build": plan.get("build", ""), "state": "dropped"}
 	plan["resume"] = resume
 	var keep := PackedStringArray([DotCloudAddonSet.PLAN])
 	if resume.has("member"):
@@ -2532,7 +2584,28 @@ func _solo_map_packs(content_id: String) -> PackedStringArray:
 	return out
 
 
-## Registers the game, its dependencies, map packs and subscribed packs with the launch job and downloads them all, mounting none.
+## The Workshop sync for a solo launch, before its overlay is decided: a game whose `provides.json` states `accepts`
+## has its subscribed packs planned and registered with the launch job (mounted after [method _prefetch_solo]
+## downloads them, by [method DotCloudWorkshop.mount_pending]). The value is the summary's `addons` (dot-cloud 28),
+## the subscribed addon packs for [method _solo_overlay]; empty for any other game.
+func _solo_workshop_plan(content_id: String, version: String) -> Array:
+	var game: DotResult = await _cloud.resolve_manifest(StringName(content_id), version)
+	if not game.ok:
+		return []
+	var provides: DotResult = await _cloud.read_pack_file(game.value as DotCloudManifest, "provides.json")
+	if not provides.ok or _accepts_from_text((provides.value as PackedByteArray).get_string_from_utf8()).is_empty():
+		return []
+	var workshop := _ensure_workshop()
+	workshop.defer_mount = true
+	var summary := await _sync_workshop(content_id)
+	workshop.defer_mount = false
+	_deferred_workshop = true
+	var addons: Variant = summary.get("addons", [])
+	return addons if addons is Array else []
+
+
+## Registers the game, its dependencies and map packs with the launch job (subscribed packs were registered by
+## [method _solo_workshop_plan]) and downloads them all, mounting none.
 ## Nothing here is fatal: a pack that cannot be fetched now is reported by the mount pass that follows, as it was before.
 func _prefetch_solo(content_id: String, version: String) -> void:
 	var game: DotResult = await _cloud.resolve_manifest(StringName(content_id), version)
@@ -2548,7 +2621,6 @@ func _prefetch_solo(content_id: String, version: String) -> void:
 
 	var keys := PackedStringArray()
 	var map_keys := PackedStringArray()
-	var accepts := {}
 	var yml: DotResult = await _cloud.read_pack_file(manifest, "game.yml")
 	if yml.ok:
 		var desc := TmcSolo.parse_descriptor((yml.value as PackedByteArray).get_string_from_utf8())
@@ -2556,9 +2628,6 @@ func _prefetch_solo(content_id: String, version: String) -> void:
 		keys.append_array(desc["server_dependencies"] as PackedStringArray)
 		if not TmcSolo.skip_maps(content_id):
 			map_keys = await _solo_map_packs(content_id)
-	var provides: DotResult = await _cloud.read_pack_file(manifest, "provides.json")
-	if provides.ok:
-		accepts = _accepts_from_text((provides.value as PackedByteArray).get_string_from_utf8())
 
 	# Map packs take the groups the mount pass will ask for (TmcSolo.map_groups), so the total is what moves.
 	var passes: Array = [[await _solo_refs(keys), all_groups],
@@ -2571,13 +2640,6 @@ func _prefetch_solo(content_id: String, version: String) -> void:
 			await _cloud.job_register(refs, pass_refs[1] as PackedStringArray)
 		else:
 			await _cloud.job_register(refs)
-
-	if not accepts.is_empty():
-		var workshop := _ensure_workshop()
-		workshop.defer_mount = true
-		await _sync_workshop(content_id)
-		workshop.defer_mount = false
-		_deferred_workshop = true
 
 	await _cloud.job_download()
 
