@@ -1,26 +1,31 @@
-This repository stores useful configurations and layouts for deploying a server under TMC's [Dot](https://moddingcommunity.com/co/4-dot-assets) ecosystem.
+# dot-server-deploy
 
-The **Dot** collection is a set of open source Godot 4 assets that provide modular building blocks for games and applications in the TMC ecosystem, covering core functionality, networking, authentication, cloud integration, and more. This tool is what puts them together into something you run.
+Everything a server owner needs to run a game under TMC's dot ecosystem with one command. It is a Godot project that boots a [dot-server](https://github.com/modcommunity/dot-server), reads its settings from `cfg/*.yml`, loads games from `content/` and serves a browser client. It ships no game of its own: games are fetched as signed packs.
 
-**This tool and the assets under it are COMPLETELY OPEN SOURCE**. You are free to use, modify, and distribute them under the terms of the MIT license. The only thing not open source is the back-end web infrastructure. So if you opt into using your own authentication backend instead of integrating with TMC, you will need to build and integrate your own back-end infrastructure.
-
-## From Maintainer & WARNING
-This tool, along with every asset it is built on, was built initially with **Claude Code** and will continue to be maintained and extended using it. This is because I (`gamemann`) cannot build the entire TMC platform alone (I wish I could lol).
-
-**Please treat this as partially tested.** It has its own headless test suite and that suite passes, but very little of this has been in front of real players yet. Expect rough edges, and please report anything you run into.
-
-I intend on reviewing code, testing, and editing documentation regularly. If you're interested in helping out, please let me know!
-
-## Start here
-
-**For a server operator**: you run a game server for players and want it to stay up through upgrades. **For a developer**: you want to see your game running in a server and browser. The rest of this file is the reference; this block is all most people need.
+## Install and run
 
 ```bash
 git clone https://github.com/modcommunity/dot-server-deploy && cd dot-server-deploy
-./setup.sh              # fetches a Godot runtime, links the addons, writes ./server
-./server --games fatalcontact  # installs the game if needed, then starts the server
-./server --help         # every command and option
+./setup.sh                      # fetches a Godot runtime, links the addons, writes ./server
+./server --games fatalcontact   # installs the game if needed, then starts the server
+./server --help                 # every command and option
 ```
+
+On a machine with no Godot, `./setup.sh` downloads a pinned, checksum-verified one (`--no-download` refuses, `--godot PATH` uses yours). On Windows run `setup.bat`, then `.\server.ps1`; it takes the same options. In a container, use `docker compose up -d`.
+
+For a full public server on a fresh Linux box, `./setup.sh --full` asks about ten questions (name, game, slots, port, hostname, nginx with a certificate, a systemd service), prints the plan and does nothing until you confirm. `--yes` takes every default.
+
+## Try a game on your own machine
+
+```bash
+./play.sh              # a server and the browser client on the loopback; prints a link
+./play.sh playlot      # start on a particular game
+./play.sh games        # what else is in content/
+./play.sh status
+./play.sh down
+```
+
+## What to edit
 
 | Edit | Never edit |
 | --- | --- |
@@ -28,831 +33,67 @@ git clone https://github.com/modcommunity/dot-server-deploy && cd dot-server-dep
 | `cfg/content/addons.yml` and `games.yml` (what gets downloaded) | `cfg.example/`, `content-lists/` (the shipped defaults) |
 | `cfg/server/content/overrides.yml` (per-game cvars and maps), `cfg/packs.yml` (extra packs) | `./server` (generated: re-run `./setup.sh` after changing `tools/server.in`) |
 
-Next: [docs/setup.md](docs/setup.md) (install), [docs/operator-config.md](docs/operator-config.md) (change a setting), [docs/content-lists.md](docs/content-lists.md) (choose games and addons), [Upgrading](#upgrading-a-server-that-is-already-running). To try a game on your own machine without a server install, use `./play.sh` below.
+`setup.sh` copies `cfg.example/` into `cfg/` only for files you do not have, and never overwrites one. `data/from_yaml.cfg` is written on every boot and shows what your YAML became, so read it when a setting seems ignored. Unknown keys are reported, never fatal.
 
-## Releasing
+## Commands
 
-Releasing an addon, a game or a new web shell has an order, and CI refuses a skipped step: see [docs/releases.md](docs/releases.md). The short version: tag the addons, bump `addons.lock` (`tools/addons-lock.sh write`) and push; the web-shell workflow then builds, uploads, pins and tags the shell with nobody exporting anything by hand; tag the game last.
-
-## Playing it locally, in one command
-
-```bash
-./play.sh                  # a server and the browser client, on the loopback
-./play.sh playlot          # start on a particular game
-./play.sh games            # what else is in content/
-./play.sh status
-./play.sh down
-```
-
-It prints a link. Open it.
-
-**This is not `demo.sh`, and the difference is deployment.** `demo.sh` is five servers, nginx terminating TLS, a public host, a separate registrable domain for the game and a `sudo` step to install a listener — right for showing the platform to somebody and wrong for a developer who changed a line and wants to look at it. `play.sh` is the two commands the browser check has always needed, with the three things that are easy to get wrong done for you: it rebuilds the export when the game is newer, copies `embed.html` over Godot's generated `index.html` (the one that takes `?server=` from the query string), and **tells you when the vendored `game/` is older than the repositories it was copied from** — `setup.sh` copies that directory while the addons beside it stay symlinked, so it is the one part that goes stale, and a stale copy exports cleanly, runs, and is last week's game.
-
-**It has nothing to do with `dev.sh`.** That script is the website — website-city and friends on `:3002` — and starts no game at all. The two are independent and run side by side: `play.sh` serves the game from its own origin on `:8099`, and nothing about `embed.html?server=` involves the site. Framing a game *inside* the site is a different thing again and needs its own registrable domain; see `web/README.md`.
-
-**Loopback HTTP only.** An HTTPS page may not open a `ws://` socket, so this shape works here and nowhere else.
-
-## A Server You Start With One Command
-TMC's server tool, as a thing you can run.
-
-This repository is where the [dot-*](https://github.com/modcommunity) family comes together into something a server owner starts with one command. It is a Godot project that boots a [dot-server](https://github.com/modcommunity/dot-server), reads its configuration from `cfg/*.yml`, loads games out of `content/`, and serves a browser client. It ships **no game of its own**. The games are copied in from their own repositories by `setup.sh`: [game-hungario](https://github.com/zees-games/game-hungario) and [game-airdrift](https://github.com/zees-games/game-airdrift).
-
-```bash
-./setup.sh              # get a runtime, wire the addons into addons/, write ./server
-./server                # start it
-
-./setup.sh --full       # or: the guided install, from a vanilla box to a public server
-
-docker compose up -d    # or the same thing in a container
-```
-
-**On a machine with no Godot on it, `./setup.sh` downloads one.** Pinned to a single version, verified against a sha512 that is checked into `tools/fetch-godot.sh` rather than fetched from beside the binary, cached in `~/.cache/tmc/godot/` so one download serves every checkout, and deleted on a mismatch. `--no-download` refuses to fetch and fails instead; `--godot PATH` uses yours and never downloads.
-
-Windows: `setup.bat` (a shim for `setup.ps1`), then `.\server.ps1`. It takes the same commands and the same options as `./server` — `--port`, `--bind`, `--name`, `--max-players`, `--game`, `--map`, `--config`, `--content`, `--data`, `--godot`, `--verbose`, `--dry-run`, a `--` passthrough to the console — and accepts `-Port` as readily as `--port`, so a line copied out of this README works unchanged. `server.cmd` is still there and forwards to it.
-
-## The guided install
-
-`./setup.sh --full` is the whole of a deployment as about ten questions, each with the answer already in the brackets. It is meant for the case it names: a vanilla Linux box, a `git clone`, and one command.
-
-```
-  A server on this machine, in about ten questions.
-  Return takes the answer in the brackets. Nothing happens until the end.
-
-    Server name [TMC Test Server]
-    games here now: airdrift fatalcontact hungry_classic playlot
-    Game to boot [fatalcontact]
-    Player slots [64]
-    Tickrate [60]
-    Port the server listens on [6064]
-
-    Put nginx in front of it, so browsers can connect over wss://? [Y/n]
-    Public hostname clients will connect to [demo.example.com]
-    Email for the certificate (expiry warnings) []
-    Certificate method (webroot, nginx, standalone, dns, manual) [webroot]
-    Public TLS port [443]
-
-    Install a systemd service, so it starts on boot? [Y/n]
-
-  This is the whole of it:
-
-    - set up the project: runtime, addons, games, cfg/, ./server
-    - cfg/server/server.yml: TMC Test Server, game fatalcontact, 64 slots, 60 tick
-    - cfg/net.yml: port 6064, bound to 127.0.0.1 (nginx is the way in)
-    - install nginx and certbot if they are missing
-    - open 80 and 443 in ufw
-    - get a certificate for demo.example.com over webroot
-    - nginx: wss://demo.example.com:443 -> 127.0.0.1:6064
-    - install and start the dot-server.service unit, running as games
-
-  Go ahead? [Y/n]
-```
-
-**Nothing is done until every question is answered.** The answers are collected, the plan is printed, and one confirmation covers the lot — an installer that acts on answer three while asking answer four cannot be stopped at answer five, and half an install is worse than none. `--yes` takes every default and asks nothing, so the same install runs from a provisioning script; without it, `--full` refuses to start when stdin is not a terminal, because a prompt with nobody attached is a hang rather than a question.
-
-**Every default is what is already true.** The server name, game, slots, tickrate and port come from `cfg/` when this box has one, so pressing return through the whole thing is a supported way to re-run it, and the second run reports *cfg/ already said all of that*. A key the templates have gained since your `cfg/` was written is appended rather than refused — the installer asking a question and then silently doing nothing with the answer is worse than either doing it or not asking.
-
-**nginx is the optional half, and it is one question because it is one decision.** A page served over HTTPS may not open a plain `ws://` socket, so a browser client needs `wss://`, which needs a certificate, which needs something in front of the server to terminate it. Answer yes and it installs nginx and certbot if they are missing, opens the ports in `ufw` or `firewalld` when one is running, gets a real certificate with [`deploy/issue-letsencrypt.sh`](deploy/issue-letsencrypt.sh), installs the reverse proxy with [`deploy/install-server-tls.sh`](deploy/install-server-tls.sh), and **binds the game to `127.0.0.1`** — left on `0.0.0.0` the game port stays open beside the TLS one and every client that finds it connects in plaintext past everything nginx is there to do. Answer no and none of that happens.
-
-**An nginx that is already here is somebody else's nginx.** The installer joins it rather than assuming it: it counts the server blocks already configured and says so, starts nginx only if it is not running, enables it only if it is not enabled, and reports those apart — "nginx was already here, serving 13 server block(s)" and "already running; not restarting it" are the sentences an operator reads to find out whether this run touched their website. The public TLS port is checked against what actually holds it before anything is written: nginx holding it is fine and normal, since a second server block on one port with a different name is what SNI is for, but anything else holding it is fatal *here* rather than at the next nginx restart, which could be weeks later and somebody else's problem. A name nginx already serves gets a warning, because two server blocks with one `server_name` on one port is a vhost that installs, tests, reloads and is then silently never used.
-
-**The service is the other optional half.** [`deploy/install-systemd.sh`](deploy/install-systemd.sh) writes the unit, enables it, starts it, waits, and then checks it is *still* running — `systemctl enable --now` exits 0 for a service that died a second later, and an installer that reports success there has told you the opposite of what happened. It defaults to running as the user that owns the project directory rather than the one typing, because under `sudo` those are not the same and one of them is root.
-
-Anything it does can be done on its own afterwards: the three scripts above take the same arguments the installer passes them, and `./setup.sh --letsencrypt --domain <host> --email <you>` is the certificate step without the questions.
-
-## What it gives a server owner
-
-- **One command to start.** `./setup.sh` finds a Godot runtime — or downloads the pinned one, verified — wires in the addons, writes a commented `cfg/` from `cfg.example/`, and writes `./server`. It never overwrites a config file that already exists, and it names any setting the templates have gained that your files do not mention, so an upgrade that adds one is visible rather than skipped. `cfg/` is not in this repository: it is what one deployment decided, and a tracked copy is one `git pull` on a running server stops on. RCON reaches loopback only until you widen `rcon_allowed`; `cfg/addon/dot_console/rcon.yml` says how.
-- **Configuration in YAML**, in files split by subject: `server.yml` (which also holds the `net_*` keys), plus one folder per addon under `cfg/addon/` (`dot_console/rcon.yml`, `dot_auth/auth.yml`, `dot_server/groups.yml` and the rest; `cfg/server/addon/` overrides them). `./server cfg-migrate` (and `.\server.ps1 cfg-migrate`) moves the flat files, `net.yml` and `content.yml`'s `games:` of an older install; they are still read, with a WARN, until 2026-12-31. Anything dot-server exposes as a console variable can go in them under its own name.
-- **Roles, not flags.** dot-server's permission model is flags, deliberately; `groups.yml` is the translation, so an operator writes `admin: [kick, ban, mute]` and a player gets the flags.
-- **Moderation.** Bans, kicks, mutes, votes and an audit log, all dot-server's, all reachable from the console or over RCON.
-- **An admin menu.** `/admin` in chat opens a menu on the admin's screen: kick, ban, warn, mute, gag, player info with their record, the fun commands and powers the loaded game can actually do (slay, slap, set on fire, freeze, blind, beacon, rename, noclip, god, health, speed, gravity, give, strip), teleports, change game, change map, announce. Games add their own entries. Pick with 1–7 or the mouse; 8 is back, 9 is more, 0 closes. Each admin sees exactly the part they have the flags for, and every item ends as the console command they could have typed, so immunity, the audit log and the replies are the console's own. What is on it, in what order, with which reasons and durations, plus items of your own, is `cfg/addon/dot_menu/admin_menu.yml`. See [The admin menu](#the-admin-menu).
-- **Loading screens.** While the server changes game or map under its players, they see your picture and hear your music instead of a frozen frame: images, music, tips and a title, per game and per map, as URLs in `cfg/addon/dot_core/loading.yml`. See [Loading screens](#loading-screens).
-- **Games loaded at runtime, and delivered at runtime.** A directory under `content/` with a `game.yml` in it is a game; `changelevel` switches between them with players still connected. **This build ships no game code at all** — every one of them is a signed dot-cloud pack that the server and each client download and mount, so adding a game to your server is publishing a pack and writing a YAML file. No new client build, no upload, nothing in an admin panel, and every player already connected to something else gets it on the way in.
-- **The game, and the map it starts on.** `sv_game` and `sv_map` in `cfg/server/server.yml`, `--game` and `--map` on the command line, `TMC_GAME` and `TMC_MAP` in a unit file, and `-- +map <id>` for the fingers of anybody who has run a dedicated server before. A game decides whether it has maps at all, so a game with none, and an id its catalogue has never heard of, are both a line in the log rather than a refusal to boot.
-- **The players choose the next game.** `!game_nominate`, `!game_rtv`, `!game_vote`, `!game_timeleft` and `!game_next`, which is the shape every server in this genre has had since 2005, over the games in `content/` rather than over maps. They are prefixed because a game may run a vote of its own over its own maps, and those own the bare `!rtv` and `!nominate` that players' fingers already know. Each game gets its own time limit, in its own `game.yml`. All of it is `cfg/addon/dot_vote/vote.yml`, and `enabled: false` turns it off. The ballot is drawn on every player's screen as well as listed in chat: pick with a number key or a click (`ballot_input`), with each voter's avatar on what they chose, and a game's own map vote is drawn the same way. With fewer than two games on offer there is no game vote at all.
-- **Parties, and a booking that holds.** A party on the TMC website can book a server for an evening; a **private** booking admits that party and nobody else (plus anybody with the `reservation` flag), and a **public** one holds a seat for every member still loading in. It chains onto the ban list rather than replacing it, it survives a `changelevel`, and an owner books their own server from the console with `party_reserve <partyId> <minutes> [private]`. With an integration token the server also reports who from which party is here, so the website records their play. Each game's chat gains a `party` channel — `/party_say hello` reaches your party and nobody else — and a signed-in player's client says which party it is in on its own. All of it is `cfg/addon/dot_party/party.yml`; `party_status` shows what is in force.
-- **"Save that", and evidence with every ban.** Every server keeps the last minute of what happened in memory — who connected, who said what (a line a filter blocked included), which commands ran, who was kicked — capped at 32 MiB and in practice a few kilobytes. `replay save [seconds] [why]` at the console, over RCON or as `!replay save` in chat writes it to `data/replays/clips/` as a replay dot-replay's own reader verifies. A kick or a ban issued on the server saves a clip by itself and files its final hash with the punishment — on the ban record, in the audit log, and in a game's moderation record — so a disputed ban has something to be checked against that nobody can quietly edit. Writing every match to a file is one switch away and off. All of it is `cfg/addon/dot_replay/replay.yml`; `replay` shows what is held.
-- **Friends, in the client.** A player signed in through the website sees which friends are online and where, and a Join beside the ones that can be followed — into their party, or to a server this client has been on. Their own presence follows them: in a match, on the menu, gone when they quit. It is the website's friends list, so it switches itself off quietly on a site that does not serve the routes yet.
-- **A shared radio, when you want one.** Off by default. Add `- repo: dot-radio` (a `pin:` is optional) to `cfg/content/addons.yml`, run setup, set `radio_enabled: true` in `cfg/addon/dot_radio/radio.yml` (or `cfg/server/addon/dot_radio/radio.yml`) with a `radio_token_file`, and restart: you upload MP3 or OGG tracks on the admin page at `radio_bind:radio_port`, and every player hears the same track at the same moment after pressing F8 (the `radio_toggle` action). Players learn where the station is from `radio_public_url`, which should be your TLS address in front of `radio_port`; the player half needs a client shell built with dot-radio in it. You provide the tracks and are responsible for having the rights to broadcast them; the addon ships no audio. Keys: `radio_enabled`, `radio_port` (8791), `radio_bind` (127.0.0.1), `radio_public_url`, `radio_token_file`, `radio_dir` (default `data/radio`), `radio_max_track_mb` (20), `radio_upload_timeout_sec` (120), `radio_autostart`, `radio_base`.
-- **A matchmaking queue, when you want one.** Off by default. `cfg/addon/dot_matchmaking/matchmaking.yml` turns it on with playlists: ratings per queue, parties kept together, balanced sides and an accept step, through `/mm_queue <playlist>`, `/mm_accept`, `/mm_leave` and `mm_status`.
-- **A browser client.** `./server export-web` builds it; one export serves every server, because the address comes from `?server=`, and `?solo=<owner>/<repo>` runs a published game in the tab with no server at all (the site's "Play solo"; [docs/web-client.md](docs/web-client.md#solo-play)). **It publishes nothing** — `web/build/` is the output, and what makes a browser see it depends on which of the three deployment shapes you are on. A site-published build is `--zip` plus an upload, every time. [web/README.md](web/README.md#shipping-a-client-change) says how to tell which you are on in ten seconds, and why a stale build looks exactly like a change that did not work. It fetches Godot's export templates first if the machine has none — pinned to the engine's version, sha512 checked against a digest in git, and never as part of `./setup.sh`, because the archive is about a gigabyte and a server that only ever runs games should not pay for one. `tools/fetch-export-templates.sh` on its own does the same thing; `TMC_NO_DOWNLOAD` refuses both it and the runtime. It fetches Godot's export templates first if the machine has none — pinned to the engine's version, sha512 checked against a digest in git, and never as part of `./setup.sh`, because the archive is about a gigabyte and a server that only ever runs games should not pay for one. `tools/fetch-export-templates.sh` on its own does the same thing; `TMC_NO_DOWNLOAD` refuses both it and the runtime.
-- **A native client, for the machines a browser tab is not.** `./server export-native` builds the same shell for Linux, Windows and macOS — one file per platform, the pack inside the executable — and prints the command that publishes each one for the desktop app to install. It is the client and not the server: the presets exclude `host/*`, `client/shell.tscn` is what a player who double-clicks gets, and the server address arrives as `-- --connect <host>:<port>`.
-- **Content you publish yourself.** `./server pack <id>` turns any directory under `content/` into a signed dot-cloud pack in `dist/` — an avatar set, a prop pack, a texture set, a whole game. `content/<id>/pack.json` says what goes in it and where each file lands, so a pack is assembled from wherever the files actually live rather than from whatever happens to sit in one folder:
-
-```json
-{
-    "version": "1.0.0",
-    "name": "Stock avatars",
-    "include": [
-        "avatars/kenney",
-        { "from": "avatars/head_stock.tscn", "to": "heads/stock.tscn" }
-    ],
-    "exclude": ["*.import", "*.uid"]
-}
-```
-
-  `pack.json` also carries `exclude_dirs`, which is what a whole GAME needs: `addons`, `examples`, `tools` and the like are a tree rather than a name pattern, and shipping a second copy of every addon the client already has took arena's pack from 140 files to 768. `--source <dir>` publishes a tree that is not under `content/` — which for a game is every time, since a game lives in its own repository.
-
-  `./server pack --all` does every one, `./server verify <id>` checks the signature. Packs are always signed: `client/content.json` ships `require_signed_manifests: true` because a pack can contain scripts, so an unsigned pack is one no client will mount — publishing without a key is refused rather than quietly producing something that works nowhere. `setup.sh` generates a key on a fresh box so that refusal never becomes the thing that stops an install.
-
-## The layout
-
-```
-cfg.example/         the defaults, tracked. Copied into cfg/ by setup.sh, never read by a running server
-
-cfg/                 what an operator edits. Written on first run, and not in this repository
-  server.yml           name, slots, tickrate, the game to boot, bind address, port, bandwidth
-  game/<game>/server.yml  your settings for one game over its author's: cvars, maps, votes, slots
-  server/content/overrides.yml  the same for every game (`defaults:`) and the stock map lists
-  packs.yml            extra packs you add to a game, delivered to its players
-  game_rotation.yml    which games play, and in what order
-  addons/<addon>/      one folder per addon, the file named after what it sets:
-    dot_console/rcon.yml   remote console. Generated once, printed once
-    dot_auth/auth.yml      the identity backend, or nothing and everybody is a guest
-    dot_server/groups.yml, permissions.yml   groups as sets of permissions, and who is in which
-    dot_vote/vote.yml      voting for the next game: rtv, nominations, time limits
-    dot_party/party.yml, dot_matchmaking/matchmaking.yml, dot_replay/replay.yml
-    dot_menu/admin_menu.yml   what /admin offers, and to whom
-    dot_core/loading.yml   the picture, music and tips over a game or map change
-    dot_radio/radio.yml    the shared radio (needs the dot-radio addon; off until enabled)
-    dot_log/log.yml, dot_server_security/security.yml, dot_map/maps.yml
-  server/addon/<addon>/    the same files again: your overrides, the strongest layer
-  content/<id>/        per-game configuration
-
-content/             what the server serves
-  global/              loaded by every game
-  avatars/             cosmetic parts, published as a pack of their own
-  fatalcontact/        the default game (formerly arena; `arena` still reaches it)
-    game.yml             what it is, where its scene is inside the pack
-    pack.json            what its pack leaves out
-
-dist/                the published packs. Written by `./server pack`, not tracked.
-  arena/manifest.json    signed; the objects it names are beside it
-  arena/objects/
-
-data/                what the server writes
-  from_yaml.cfg        what your YAML became. Read this when a setting seems ignored
-  admins.json  bans.json  audit.jsonl
-
-deploy/              the root-owned half: TLS certificates, nginx in front, the S3 publish
-  issue-letsencrypt.sh   a real certificate, by whichever method the box allows
-  install-server-tls.sh  wss:// on a public port -> the server on the loopback
-  install-game-origin.sh the game's own origin, which is a security boundary
-  install-systemd.sh     the unit file, and the check that it is still running
-  issue-local-cert.sh    a development certificate from a local CA
-
-host/                the boot: YAML -> DotServer
-client/              the client shell. Knows nothing about any game
-web/                 the browser build, and the page that takes ?server= from the URL
-```
-
-Three directories, and the split is the point: `cfg/` and `content/` are read, `data/` is written. A container mounts the first two read-only and the third read-write, and a systemd unit points `ReadWritePaths` at exactly one directory.
-
-**`cfg/` is written, never pulled.** `setup.sh` copies each file out of `cfg.example/` if and only if `cfg/` has not got it, generating the RCON password on the way past, and every later run leaves what it finds alone. So upgrading a running server is `git pull && ./setup.sh --no-import`: the pull cannot touch your configuration because your configuration is not tracked, and the setup run tells you which new settings the templates have grown. This is the second design — `cfg/*.yml` was committed once, which meant `git pull` on a box stopped with *your local changes to cfg/server/server.yml would be overwritten by merge* on the one file that was nobody's but that server's, and meant a generated RCON password reached a public repository the first time anybody ran setup where git was watching.
-
-## Configuration
-
-Changing a setting, replacing a list, or tuning one game: [docs/operator-config.md](docs/operator-config.md) (edit `cfg/` only; the layers and worked examples). Which addons and games get downloaded is `cfg/content/addons.yml` and `games.yml`: [docs/content-lists.md](docs/content-lists.md).
-
-`cfg/*.yml` is a **surface over dot-server's own vocabulary**, not a second one.
-
-Where a key names something the console already knows, it is compiled into a `.cfg` and handed to the console, which is the parser, the validator, the range clamp and the audit trail. Where it names something fixed before the console exists (the port, the bind address) it goes to the boot config. Everything else, such as groups, per-user permissions and the auth backend, is handed to whatever owns it.
-
-`data/from_yaml.cfg` is written on every boot and is exactly what your YAML became. It is written out rather than kept in memory because "what did my configuration actually become" is the question an operator has when a setting appears not to work.
-
-An unknown key is **reported, never fatal**. Refusing to boot because a config mentions a setting from a newer version is worse than ignoring it.
-
-The YAML reader is a deliberately small subset and refuses everything else with a file and a line number: tabs, duplicate keys, anchors, aliases, tags, block scalars, document markers (one-line flow sequences and mappings, `[a, b]` and `{a: 1}`, are accepted). See `host/tmc_yaml.gd` for why.
-
-`vote.yml` is the one file that is not a console surface: it is dot-vote's `DotVoteRules`, applied straight onto the resource, so every setting in it is documented on the property of the same name. **Enums are written by name**, so `method: instant_runoff` rather than `method: 2`, because a config file full of enum indices is one nobody can read or diff, and renumbering an enum would silently change how a server counts votes.
-
-`party.yml` and `matchmaking.yml` work the same way one step along: every setting of dot-party's `DotPartyConfig` is accepted with a `party_` prefix, your terms for a party booking are `party_reserve_*`, and every setting of dot-matchmaking's `DotMatchmakingConfig` is `mm_*`. The names are the addons' own, so a setting the addon gains needs no change here. `DOT_PARTY_*` / `--party-*` and `DOT_MM_*` / `--mm-*` override them, like every config in the family.
-
-`admin_menu.yml` and `loading.yml` are this deployment's own and are described in [The admin menu](#the-admin-menu) and [Loading screens](#loading-screens). Their unknown keys and bad URLs are reported at boot, like everything else's.
-
-`replay.yml` is the same again over dot-replay's `DotReplayConfig` (`replay_ring_seconds`, `replay_keyframe_seconds`, `replay_compression`, …), plus seven switches of this deployment's own: `replay_enabled`, `replay_record` (every match to a file), `replay_clip_on_punish`, `replay_clip_seconds`, `replay_evidence_cooldown_sec`, and `replay_keep_files` / `replay_keep_mib`, which cap each of `data/replays/matches`, `clips` and `evidence` separately so a moderator's manual saves never push evidence off the disk. `DOT_REPLAY_*` / `--replay-*` override them, so `./server -- --replay-ring-seconds 300` keeps five minutes for one tournament.
-
-## ./server
-
-```
-./server                      start it
-./server check                boot, load the game, shut down. Exit 0 if it worked
-./server config               the resolved configuration
-./server games                what is in content/
-./server install-games        fetch the games in --games from the content origin
-./server index                publish the catalogue a server installs FROM
-./server import-defs --game-dir DIR [--dry-run]
-                              post the game's deployment/*.json (stat, achievement, leaderboard defs, game listing) to the site
-./server export-web           build the browser client
-./server export-native        build the native client, for every platform
-./server --help               every option
-
-./server --port 27015 --name "My server"
-./server -- +sv_cheats 1 +changelevel fatalcontact
-```
-
-Exit codes are meaningful, so a supervisor can tell a misconfiguration from a crash: `2` usage, `3` no runtime, `4` no project, `5` bad config, `6` port in use, `7` bad content.
-
-`import-defs` reads the integration token from `data/listing.json` (or `--token-file`) and hands it to curl on stdin, never argv. `--dry-run` asks the site to validate and report its plan without writing. The achievement, leaderboard and listing routes need a credential scoped to the game; the server-scoped enrollment token only covers stats.
-
-`tools/game_listing.py GAME_DIR...` writes a game's `deployment/game-listing.json` from its `game.yml` (pack id = `content_id`) and README; it keeps an existing file, `--check` verifies, `--force` rewrites. `tools/check_game_listing.sh` tests it.
-
-**Secrets are not options.** `--rcon-password` is refused outright: argv is readable by every other process on the machine and ends up in pasted bug reports, which is why `DotConfig` refuses secrets from argv and the environment too.
-
-## Installing games, instead of carrying all of them
-
-A server holds the games it is for, and fetches them:
-
-```bash
-./server --games g2gfast,fatalcontact       # install them if needed, then start
-TMC_GAMES=g2gfast,fatalcontact ./server     # the same thing, for a panel with no shell
-./server install-games --games fatalcontact # just the install, no server
-```
-
-A game is two halves, the signed pack and its `game.yml` descriptor; `./server index` publishes the descriptors beside the packs (run it after `./server pack --all`), and the packs are fetched at startup, not at first join, so nobody waits on a download mid-game. Details, ids and the installer's rules: [docs/installing-games.md](docs/installing-games.md).
-
-**It never refuses to boot.** An origin that cannot be reached is a warning at the top of the log and a server that comes up with what it has. It also survives the origin being down entirely: `install-games` keeps each verified manifest under `data/manifests/`, because dot-cloud resolves a manifest before it looks at what it already has — without that, a box holding all 212 files of a game still exited 7 with `Could not download the content manifest` while somebody else's web server was down.
-
-**A `game.yml` already on the disk is never overwritten.** It is the file an operator edits, so a startup that re-downloaded it would undo their work on the *next* restart, which is the worst kind of bug to own. `--refresh` is the explicit way to take the origin's copy.
-
-**The list is also a filter.** Installing two games does not stop a content directory that already has ten from offering all of them, so `--games` narrows what the server scans — the `games` listing, `changelevel`, the vote menu and the boot game all read that one set. `--games-mode` says what happens to a game that is installed and no longer listed: `hide` (default — kept, not offered), `remove` (deleted, and **only** games `install-games` installed itself, recorded in `data/installed-games.json`), or `keep` (kept and still offered).
-
-### Your settings for each game, and its maps
-
-A game's `game.yml` travels inside its pack: it is the game author's defaults, and the installer replaces your copy with each new version's. `cfg/server/content/overrides.yml` is yours. Nothing else writes it, every game update leaves it alone, and what you set there wins:
-
-```yaml
-defaults:                         # every game on this server
-  cvars:
-    sv_alltalk: "1"
-games:
-  game-g2gfast:                   # the game's id, or its name half
-    name: "Surf & Bhop"
-    max_players: 24
-    cvars:
-      sv_airaccelerate: "150"
-    metadata:                     # merged key by key into the game's own
-      map_vote:
-        duration_sec: 1800        # the map vote and rotation
-      vote:
-        time_limit_sec: 2400      # this game's time in the server's game vote
-    maps:
-      add:
-        - gamemann/surf_mesa      # the newest on the origin, checked every start
-        - gamemann/bhop_grove@1.2.0
-      remove:
-        - gamemann/bhop_pit       # a map the game itself lists that you do not want
-  mg-prop-hunt:
-    cvars:
-      mp_teammate_passthrough: "2"  # shots pass through team-mates (0 hit and blocked, 1 only at the muzzle)
-      sv_map_menu_flag: "changemap" # only admins change the map at once from M (default generic: moderators up; "" anybody)
-```
-
-**M, the map menu**, is in every game: a player with the admin flag `sv_map_menu_flag` names changes the map at once, and anybody else's choice becomes a vote (a nomination and rock the vote). The default is `generic`, which every staff group holds from moderator up; `changemap` narrows it to admins, and `""` lets anybody (a private server among friends). It is a game's cvar, read on every request, so it goes under `defaults: cvars:` for the whole server or a game's own `cvars:`, or is typed at the console. The server's game vote has no map menu of its own.
-
-The order is the game's `game.yml`, then `defaults:`, then the game's own section. Cvars and metadata merge key by key, so changing one `map_vote` setting keeps the rest of the game's. What makes a game the game it is (`scene`, `client_scene`, `module`, `kind`, `content_id`, `version`, its dependencies) cannot be set here, and the server refuses to start if you try. A misspelt key is refused too, with its name, rather than ignored.
-
-**Maps** are published one pack each (`gamemann/surf_mesa`), so they come and go without a new release of the game. `game_maps: false` drops the ones the game itself lists. Every start, `install-games` asks the origin which version of each unpinned map is newest and keeps the answers in `data/content-maps.json`, so a new upload reaches the server on its next restart, and an origin that is down keeps the versions it had. Nothing is downloaded at boot: a map is fetched the first time the server changes to it. Only a game that reads its descriptor's maps uses the list (game-airdrift does); a game that ships all its maps as one pack names that pack under `server_dependencies` in its own `game.yml`. `owner/collection/*` in `maps.add` offers every map pack a map repository publishes (read from its `collection.json` each start, last good list kept through an outage); an explicit `owner/map@version` beside it keeps its pin and `remove` takes one out.
-
-**When a map is downloaded is the game's choice**, written as `metadata: maps_delivery:` in its own `game.yml`: `lazy` (the default) fetches a map when the server changes to it, for games whose maps are large scenes (game-airdrift, game-fatal-contact); `server` fetches them all before the game loads, for games whose maps are small documents the server sends players itself (the minigames); `client` does the same and also sends each pack to every player, for a game whose client builds a map from its pack (game-playlot).
-
-A box without the file gets the template's on its next start. The template lists the stock maps for every game (game-airdrift's 26 courses, and the maps pack of mg-wipeout, mg-deathrun, mg-prop-hunt and game-playlot), so a server offers them until its owner takes them out. A file that already exists is never rewritten, so a box that got an older template keeps it: compare it with `cfg.example/server/content/overrides.yml` after an update, or delete it to take the new one.
-
-### Extra packs for a game: `cfg/packs.yml`
-
-A pack you add to a game is delivered to its players with it, for your server only. The game's identity does not change: the pack is appended after the game's own dependencies, mounted by the server before the game loads and by every client in the same content sync.
-
-```yaml
-defaults:                        # every game on this server
-  add: [someone/extra-sounds]
-games:
-  game-g2gfast:                  # a game id, or its name half
-    add: [someone/speedrun-hud@1.0.0]
-    remove: [someone/extra-sounds]   # drop a default for this game only
-```
-
-A pack is `owner/pack`, optionally `@version`. A version left off is pinned to the newest the origin has every start (`install-games`, into `data/content-addons.json`), and the pack is downloaded then; one this build's addons cannot run (its `requires.json`) is refused with a message and left out. A pack can start something: its `pack.json` may carry `"addon": {"entry": "x.tscn", "side": "server"}` (`side` is `server`, `client` or `both`), and the server and each client then instantiate that scene after the game loads; without one the pack is only mounted. A bad file exits 5. A game change needs every dependency, so a pack the origin cannot give stops that change: take it out of the file.
-
-**The client half needs a shell exported after this change** (`client/shell.gd` starts the entry); an older shell mounts the packs and never starts them. The template (`cfg.example/addons.yml`) lists nothing, and a box without the file gets it on its next start.
-
-### Installing somebody else's game
-
-```bash
-./server --games gamemann/game-g2gfast01@1.2.0     # that version
-./server --games gamemann/game-g2gfast01@latest    # or the newest
-./server --games g2gfast,alice/her-game            # mix freely
-```
-
-A published pack is addressed `<owner>/<name>`, and `tmc` is only the owner reserved for first-party content — any member's game installs the same way. The descriptor comes **out of the pack**: a game's repository has its own `game.yml`, so the file that says which scene the server runs is already inside the signed manifest, and it is hash-checked before it is written. It lands in `content/<name>/`, which is the id you type at the console — `changelevel gamemann/game-g2gfast01` is not something anybody should have to type.
-
-`@latest` resolves through `content/<id>/latest.json`, which a publish writes beside the versions. An origin is a bucket behind a CDN: it has no query interface and listing is not public, so the newest version has to be written down rather than asked for.
-
-Empty `--games` offers everything in `content/`, which is what a development checkout and a hand-run server want, and is what this repository does by default.
-
-### A box that installs its games builds none of them
-
-Use `./setup.sh --no-games` (the Pterodactyl egg does): no game is cloned, packed or signed, and every game, map included, comes from the origin. Never `--only-games` on such a box. Why: [docs/installing-games.md](docs/installing-games.md#a-server-that-installs-its-games-must-build-none-of-them).
-
-## Delivering a game as a pack
-
-A game can be **in the build** or **delivered**. Built in is the default and is what every game in `content/` is today: the code is compiled into this project, the server names an absolute `res://` scene, and the client shell has a matching entry in `BUILTIN_CLIENTS`. Delivered means the game is a signed dot-cloud pack that the server and every client download and mount at `res://dot_cloud/<id>/<version>/` — so a server owner adds a game by editing one YAML file, and a player who has never heard of it gets it on connect.
-
-**One pack per game, and the pack is the game's own repository.** `setup.sh` used to vendor all five into one `game/` and one `scenes/`, so no directory here *was* any single game — the files were separable only by their name prefix. It publishes out of `games/<repo>` instead, which is that repository itself: cloned there, or linked there from beside this project in a developer checkout.
-
-**A pack's scripts may not use `class_name`.** A mounted pack's globals are not registered in the host, so every cross-file type reference inside it fails to compile: the pack mounts, the scene loads, and every script in it is dead. `preload("relative/path.gd")` and `extends "relative/path.gd"` both work, and `<Game>Paths.rebase("res://…")` moves a path string onto wherever the game landed. All five games are already written this way; `tools/check.sh` refuses a new `class_name` so they stay that way.
-
-### The steps
-
-1. **Publish it.** `--source` names the tree; `game.yml` still supplies the id, the version and the entry scene, so nothing is said twice.
-
-   ```bash
-   ./server pack arena --source games/game-arena
-   ```
-
-   `content/<id>/pack.json` says what not to ship:
-
-   ```json
-   {
-       "exclude_dirs": ["addons", "examples", "tools", "screenshots"]
-   }
-   ```
-
-   Excluding `addons/` is not optional. Without it the pack carries a second copy of every dot-\* addon the host build already has — measured at 768 files and 11.2 MiB for arena, against 140 files and 3.1 MiB with them dropped. It is also what keeps the rewrite honest: the publisher moves a `res://` reference onto the mount **only when the file it names is in the pack**, so with `addons/` out, `res://addons/dot_core/…` still means the host's copy and `res://game/arena_client.gd` becomes `res://dot_cloud/arena/0.1.0/game/arena_client.gd`.
-
-   The pack lands in **`dist/<content id>/`**, which is not always `dist/<directory>`: hungario is three game ids over one `content_id: hungry`, because its modes are three presets of one world. Everything that looks a pack up builds `{base}/{content id}/manifest.json`, and `dist/` is one of those bases, so `dist/hungry_classic/` would be a pack nothing — not even the server that wrote it — could find. `./server verify` takes the content id for the same reason.
-
-   Each of those three directories needs its own `pack.json`, identical: `--all` walks directories, so whichever ran without one would republish the pack without its excludes.
-
-2. **Point `content/<id>/game.yml` at it.** Every path becomes relative — they are resolved against the mount prefix, which is not knowable when the file is written:
-
-   ```yaml
-   kind: pack
-   version: 0.1.0
-
-   scene: scenes/arena_server.tscn
-   client_scene: game/arena.tscn
-   module: game/arena_module.gd
-   ```
-
-   **No address**, and that is deliberate: a pack is found by its content id, against `content/` and `dist/` on this box first and then every `content_urls` entry in order. `manifest_url:` is still accepted and overrides all of that, for content that lives somewhere this server has no base for — but writing one by default put a per-deployment fact into a per-game file, and made every version bump an edit in two places.
-
-   A descriptor can also name other packs, each `<owner>/<name>`: `dependencies:` are mounted on the server and sent to every client with the game, `server_dependencies:` are mounted on the server only and never sent to a client (bot data, rulesets), and `maps:` are the game's delivered maps, one pack per map, fetched when the server changes to one rather than at load. `install-games` pins all three lists to concrete versions and prefetches the first two but never the maps; the server refuses an unpinned entry.
-
-   `client_scene` is what a built-in game must **not** have and a delivered game must: `DotClientLink._resolve_scene` refuses every absolute path outside the mount, so it is the only way a client can be told what to show. `module:` is resolved against the mount too, so it is relative for the same reason.
-
-3. **Serve `dist/`, or do not.** `content/` and `dist/` on this box are searched before the network, so a server that published a pack already has it — a LAN deployment needs no web server at all. Clients are told where to fetch from by `content_urls` in `cfg/server/server.yml`, which the server passes down the connection.
-
-4. **Check it.** `./server check` boots, mounts and loads:
-
-   ```
-   cloud.mount  mounted content=arena@0.1.0 files=140 prefix=res://dot_cloud/arena/0.1.0
-   tmc.host     content ready at=res://dot_cloud/arena/0.1.0
-   games        game loaded scene=res://dot_cloud/arena/0.1.0/scenes/arena_server.tscn
-   ```
-
-5. **Take it out of the build**, once it is delivered: drop its entry from `BUILTIN_CLIENTS` in `client/shell.gd` and its entry from `content-lists/games.yml`.
-
-### The five, as published
-
-Every one of these was published and booted as a pack — mounted, module loaded from the mount, scene loaded from the mount, `./server check` exit 0 — with warnings identical to the same game booted from the build.
-
-| game.yml | `--source` | pack | `scene:` | `client_scene:` | `module:` |
-| --- | --- | --- | --- | --- | --- |
-| `arena` | `games/game-arena` | `dist/arena` — 140 files, 3.1 MiB | `scenes/arena_server.tscn` | `game/arena.tscn` | `game/arena_module.gd` |
-| `airdrift` | `games/game-g2gfast` | `dist/g2gfast` — 171 files, 3.1 MiB | `scenes/g2g_server.tscn` | `game/g2g.tscn` | `game/g2g_module.gd` |
-| `playlot` | `games/game-playground` | `dist/playground` — 76 files, 755 KiB | `scenes/pg_server.tscn` | `game/playground.tscn` | `game/playground_module.gd` |
-| `hungry_classic` `hungry_frenzy` `hungry_gauntlet` | `games/game-hungario` | `dist/hungry` — 65 files, 644 KiB | `game/modes/<mode>.tscn` | `game/client/hungry_client.tscn` | `game/hungry_module.gd` |
-
-`exclude_dirs` is `addons`, `examples`, `tools`, `screenshots` everywhere, plus `imported` for g2gfast — `maps/imported/` is 66 MB of converted geometry that is published as its own packs, and a game pack carrying it would deliver every map to every player on connect — and `web` for hungario, which has a browser build of its own in the repository.
-
-### Signing
-
-`data/content.json` (generated by `setup.sh`) and `client/content.json` both carry `require_signed_manifests: true`, and `./server pack` refuses to publish without a key rather than producing a directory that looks finished and mounts nowhere. **A pack contains scripts, so signing it is the whole security boundary** — see "Who may sign a pack" below.
-
-## Who may sign a pack
-
-**A pack contains scripts, and mounting one runs them.** That is the whole reason signing exists here, and it is why `require_signed_manifests` defaults to on and `./server pack` refuses to publish without a key rather than writing a directory that looks finished and mounts nowhere.
-
-### What signing does and does not bound
-
-Signing answers exactly one question — *did the party holding this private key produce these bytes* — and the rest is bounded by the mount, not by the signature:
-
-- The signature is checked over the manifest **as received**, never a re-serialisation, so a manifest cannot be reformatted into something that verifies and means something else.
-- Every path in a manifest goes through `DotPaths.safe_relative` before it is used, so no entry can escape the mount prefix.
-- The `.pck` is assembled **by the client**, from content-addressed objects it hashed itself. A publisher never hands over a pack file.
-- `allow_replace_files` is off, so a pack cannot shadow a file the build already has. A pack runs inside `res://dot_cloud/<id>/<version>/` and nowhere else.
-- `trusted_keys` is in `DotCloudConfig.sensitive_keys`, so it is refused from the environment and from argv. Anything that could set a variable in the game's process would otherwise become a publisher.
-
-So the worst a trusted-but-hostile publisher can do is **be the game you joined**. That is already bad — it is code in the player's process — but it is not the host build, and it is not the player's machine outside the sandbox the engine gives it.
-
-### The rule today
-
-One key. `data/content.json` and `client/content.json` each carry a single `trusted_keys` entry, the public half of `keys/content.key`, and the private half lives on the publishing machine and is gitignored *before* it is generated so it cannot arrive in a commit by being written first — `setup.sh` generates one on a fresh box, `chmod 600`, because a server with no key publishes nothing at all rather than publishing something that mounts nowhere. **A pack signed by anything else mounts nowhere**, which means a server owner can point a server at any content they like and still cannot deliver code nobody vouched for. That is the right default and it should stay the default.
-
-The cost is equally plain: a server owner who writes their *own* game cannot deliver it to the stock client. They have three ways round it, in increasing order of how much they are taking on —
-
-1. **Have it signed**, and it works in every client everywhere.
-2. **Run their own client build.** `client/content.json` is baked into the export, so adding a key there and running `./server export-web` produces a client that trusts them. Their players use their page; nobody else is affected.
-3. **`require_signed_manifests: false`.** LAN and development only. It logs a warning every time, and it should: it turns a content system into a remote-code-execution system with extra steps.
-
-### A key says what it is trusted FOR
-
-**A trusted key used to be trusted for every content id there is.** `verify_any` tried each configured key, returned whichever matched, and the caller threw the id away — nothing checked that *this* publisher was entitled to *this* content. With one key that is a distinction without a difference; with two it is the hole that lets the second publisher sign a manifest claiming `content_id: arena` and have any client that has not already mounted it take the pack.
-
-An entry can now name its namespace:
-
-```json
-"trusted_keys": {
-    "first-party": "-----BEGIN PUBLIC KEY-----\n…",
-    "community-alice": {
-        "key": "-----BEGIN PUBLIC KEY-----\n…",
-        "content_ids": ["alice_*"]
-    }
-}
-```
-
-A bare PEM still means every id, because that is what every config written before this said and silently narrowing them would break deployments that are correct. The patterns are globs, because a publisher's namespace is a prefix in every deployment that has ever had one.
-
-`verify_for` does both halves and the failure says which: a bad signature is `The manifest is not signed by any trusted key`; a good signature from the wrong key is
-
-```
-'community-alice' is not trusted to publish 'arena'.
-  the signature is valid; the key is scoped to alice_*
-```
-
-**Verification first, entitlement second**, and that order is not cosmetic: a scope check on an unverified manifest is a check on a claim the attacker wrote.
-
-`DotCloudConfig.validate()` warns about the one arrangement that is actually a hole — several keys with at least one of them unscoped — and says nothing about a single unscoped key, which is every deployment today. It warns rather than refuses: a client that will not start is worse than one that says so, and the content still has to be signed by a key in the set either way.
-
-### The key your own box publishes with
-
-`setup.sh` generates one on a machine that has none, because `./server pack` refuses to publish unsigned and that refusal would otherwise stop an install on a step nobody was told about. It then adds the **public** half to `data/content.json` under the id `local`, beside the one this repository ships — and it does that on every run, not only the first, because an upgrade keeps the `data/content.json` it already has. (Older installs kept it in `cfg/`; `setup.sh` moves it.)
-
-**Without that merge a fresh install can verify nothing it just published.** The packs are signed by the new key; the trusted set holds only ours. The server finds its own manifest on disk, fails the signature, falls through to the network, and dies on
-
-```
-[forbidden] Could not get arena's content. … <Code>AccessDenied</Code>
-```
-
-an S3 error, on a box holding every byte it needs in `dist/`. Nothing in that message points at a key, and the packs verify perfectly against the key that made them.
-
-**A browser client needs it too, and setup cannot do that half for you.** `client/content.json` is tracked and is baked into the export, so an operator publishing their own content adds `keys/content.pub` to it under `trusted_keys` before `./server export-web`. Until they do, their players can mount our packs and not theirs. `setup.sh` says so when it generates a key.
-
-Two unscoped keys — ours and yours — is a coherent configuration and is what a self-hosted server looks like: every publisher in the set is trusted for everything, which is what you mean by adding your own key beside ours on your own box. `DotCloudConfig` says so once at info. It *warns* only about the inconsistent set — some entries scoped and some not — where somebody restricted a publisher and left another key that can still sign the ids they just restricted.
-
-### How to add a publisher
-
-1. They generate a key pair and keep the private half: `godot --headless --path . --script addons/dot_cloud/publish/dot_cloud_cli.gd -- keygen --private theirs.key --public theirs.pub`.
-2. Agree a namespace — a prefix on their content ids, `alice_` — and have them publish under it.
-3. Add the public half to `client/content.json` **with `content_ids`**, and re-export the client. Add the same entry to `data/content.json` on any server that will serve their packs.
-
-Step 3 is the one that cannot be skipped or widened. An entry without `content_ids` is a publisher who can be any game on the platform.
-
-## The website chat box, and running a command from it
-
-`DotChatRelay` joins this server's chat to its room on the website: what players type reaches the page, what members type reaches the game, and a line beginning with `/` or `!` can run as a console command. It needs three things, in this order, and the third one is the only one that is fiddly.
-
-**1. A credential.** `data/listing.json` with a server-scoped integration token from the site. With none there is no backbone client, and the relay refuses to start rather than polling a URL it cannot authenticate to. This is the same file the server listing already uses.
-
-**2. The relay turned on.** `DotChatRelayConfig` is a `DotConfig`, so it layers like everything else here: exported defaults, then `user://chat_relay.json`, then the environment, then argv:
-
-```bash
-DOT_CHAT_RELAY_ENABLED=1          # carry chat both ways
-DOT_CHAT_RELAY_ALLOW_COMMANDS=1   # let `/something` run as a console command
-DOT_CHAT_RELAY_COMMAND_SOURCE=2   # 2 is RCON; 3, the default, is CHAT
-```
-
-`demo.sh` exports all three. **The source is the decision.** At CHAT a relayed command reaches only what a connected player could type, and several games here deliberately withhold that from their map change, because a map change destroys every run in progress, and a records server does not let a player do that by typing. At RCON it reaches what an operator at a remote console reaches, which is what "my site admins are administrators of this server" actually means. It is not a promotion either way: the uid is still resolved from the site author and the permission answer is still this server's own files.
-
-**3. One uid in `cfg/addon/dot_server/permissions.yml`.** And this is the fiddly part, because a site member's uid is `backbone:` plus a database id that appears on no page. So use it once and read the log: type `/map` into the server's chat box on the website, and the refusal names the exact key:
-
-```
-inf chat.relay  a relayed command was refused  uid=backbone:clx8f2k0kd command=map
-                fix=add 'backbone:clx8f2k0kd' to the server's admin file with the 'rcon' flag
-```
-
-Paste that into `cfg/addon/dot_server/permissions.yml` under `users:` with a group, restart, and the same command works. The file ships with no `users:` key at all — a name written into a public template is a name anybody can register, and every server that never edited the file would hand that person its owner group — so the first entry adds the key as well as the person. There is deliberately **no** way to grant it by the name shown beside the message: a display name is a string the person can change on their own profile page, and a permission keyed on one is a permission anybody can take by renaming themselves.
-
-Once the relay is up, the server also posts its command table to `POST /api/integration/v1/chat/commands`, and the site's chat box offers those commands when a member types `/`. The list is built at the relay's own source, so what the menu shows is what that person could actually run. Offering a command that will always be refused teaches people the site is broken.
-
-## The admin menu
-
-Type `/admin` in chat. The menu opens on the left of your screen:
-
-```
-Player commands                     Kick
-  1. Player info                      Choose a player
-  2. Kick                ->           1. Bob (#12)          ->   1. Spamming  ...  7. Custom…
-  3. Ban                              2. Alice (#14)
-  ...                                 8. Back   0. Close
-```
-
-**1–7** choose, **8** goes back (or to the previous screen of a long list), **9** shows more, **0** or Esc closes. The mouse works too; it is freed while the menu is open and given back when it closes. A "Custom…" row opens a text box for a reason of your own.
-
-**What you see is what you may do.** An item appears only when the command it runs exists on this server right now, can be run from chat, and you hold its flag. A game without live tools has no Slay; a moderator without `ban` has no Ban; a game that refuses map changes from chat has no Change map. The player list only shows people you outrank. Nothing in `admin_menu.yml` grants a permission, because `groups.yml` and `permissions.yml` do that.
-
-**Every item is a console line**, run as you. "Ban → Bob → 1 day → Spamming → Yes" runs `ban #12 1d Spamming` exactly as if you had typed it, so the reply, the audit log entry and the immunity check are the same ones. Ban, change game and change map ask "Yes, do it" first. **Player info** shows the ids, the address (to anyone with `kick`, as `whois` does), time on the server, ping, whether they are silenced, and their record of warnings, kicks and bans. It also links straight to every action you could take on them.
-
-**Fun commands and powers depend on the game.** Each game says which of these it can do, and only those are shown. In Fatal Contact, Slap shoves and hurts by the amount you pick ("Just a shove", 5, 10, 25, 50); a game without the ability simply has no Slap row. Most of these can target "Everyone" or "Everyone else", and anybody you cannot outrank is skipped and counted. Give lists what the game itself can hand out.
-
-**`warn <player> <reason>`** is added when the server has no `warn` of its own. The player sees it on screen and in chat (never with your name), and it goes on their record when the game keeps one.
-
-`cfg/addon/dot_menu/admin_menu.yml` sets the rest: which items are in which category, labels, your own items (`command: "say Read the rules"`), the reason and duration lists, which flag opens the menu at all, and whether it closes or returns to the player list after a command. The file shipped in `cfg.example/` is commented throughout. A client built before this ignores the menu; `/admin` then does nothing visible for that player.
-
-### Adding to the menu from a game
-
-A game can add entries two ways, and both go when the game changes. The server owner's `cfg/addon/dot_menu/admin_menu.yml` is applied last, so an owner can rename or remove anything a game adds, or turn all of it off with `admin_menu_game_items: false`.
-
-**In `game.yml`**, as data. This is how Fatal Contact adds its two:
-
-```yaml
-metadata:
-  admin_menu:
-    title: "Fatal Contact"         # the category its items go under
-    items:
-      arena_restart:
-        label: "Restart the match"
-        command: "arena_restart"
-        confirm: true
-      arena_vote:
-        label: "Start a map vote now"
-        command: "arena_vote"
-```
-
-The shape is exactly `admin_menu.yml`'s: `items`, `lists`, `categories`, and per item `steps`, `category`, `ability`, `groups`, `confirm`, `flag`. As always, an entry is shown only to an admin who could type its command.
-
-**In code**, from the game's module, for anything computed while it runs (the teams there are, the rounds a mode has). The menu is in `DotRegistry` as `admin_menu`, and is found by duck type, so a game on a host without it carries on:
-
-```gdscript
-var menu := DotRegistry.get_service(&"admin_menu")
-if menu != null and menu.has_method("set_layer"):
-    # Gone by itself when `self` leaves the tree, which a module unload does.
-    menu.set_layer("mygame", {
-        "title": "My Game",
-        "items": {"swap": {"label": "Move to a team", "command": "mg_team {player} {team}", "steps": ["player", "team"]}},
-    }, self)
-    menu.add_list("mygame", "team", func() -> Array:
-        return [["red", "Red team"], ["blue", "Blue team"]], "Which team")
-```
-
-A computed list's values must be single words (no spaces, quotes or semicolons), and a chosen value is checked against what the list offers at the moment it is chosen.
-
-## Loading screens
-
-From pressing Connect, and again when the server changes game or a map has to be downloaded, players see a full-screen loading screen with your picture, music and tips, and the download's own progress on top. On a first join, before the server's document has arrived, it shows the server's address and the stage (connecting, downloading, loading).
-
-```yaml
-loading_images: ["https://example.com/loading/one.jpg", "https://example.com/loading/two.jpg"]
-loading_music: "https://example.com/loading/theme.ogg"
-loading_music_volume: 0.6
-loading_tips: ["Type /admin for the admin menu.", "Say !game_rtv to vote for a different game."]
-loading_games:
-  g2gfast:
-    image: "https://example.com/loading/surf.jpg"
-loading_maps:
-  surf_mesa:
-    image: "https://example.com/maps/surf_mesa.jpg"
-```
-
-- **Everything is a URL**, fetched by each player's client in the background while they are still playing, so it is ready before the change starts. Images are PNG, JPEG or WebP (up to 4 MB); music is OGG Vorbis, MP3 or WAV (up to 12 MB), looped, faded in and out, one picked at random. Only `http://` and `https://` URLs are fetched.
-- **A browser player needs your host to allow the game's page** (`Access-Control-Allow-Origin`). An image host or a CDN usually does; a home server usually does not, and then browser players get a plain screen while desktop players get yours.
-- **Per game and per map, field by field.** A map's picture over its game's music over the default tips. Per-map screens work for games with a map list (the surf timer, the deathmatch, the sandbox).
-- **Players can mute the music** with M on the loading screen, and it stays muted for them.
-- `loading_screen` at the console shows what is configured; `loading_screen_reload` re-reads the file and sends it to everybody playing without a restart.
-
-Players need a client built after this feature; an older one keeps its plain screen.
-
-## Upgrading a server that is already running
-
-```bash
-./upgrade.sh            # pull everything, rebuild, and say what moved
-./upgrade.sh --check    # ...and boot the server once before you restart it
-./upgrade.sh --dry-run  # what would be pulled, changing nothing
-```
-
-**It is a script because the one-line version was wrong in three ways and none of them errored.** That line was `git pull && ./setup.sh --no-import`, beside a loop that pulled `../dot-*`. Once the games became delivered packs: the loop never pulled `../game-*`, so an upgrade republished stale game sources; `--no-import` left the class cache stale, so the pack would not parse while the host did; and a `git pull` that stopped left one repository behind with nothing saying so. Each produced a server that booted, looked healthy, and did not work. `upgrade.sh` refuses to rebuild from a partial pull, names the repositories that would not fast-forward, and re-execs itself after pulling this one — because bash reads a script as it runs, and pulling one mid-run resumes at a byte offset that now means something else.
-
-It does **not** restart the server: this repository cannot know whether that is systemd, `demo.sh`, a container or a terminal, and stopping the wrong thing is worse than stopping nothing.
-
-The pull cannot touch `cfg/`, because `cfg/` is not tracked; the setup run adds any file you have not got and names any setting the templates have grown.
-
-**That pulls this repository and nothing else, and two things live outside it.**
-
-**`--no-import` is overridden when the class cache is stale, and you want it to be.** `.godot/global_script_class_cache.cfg` registers every `class_name` in the project, and a DELIVERED game's scripts are parsed against it at runtime — so an addon linked or pulled after that cache was built is a class the pack cannot see. The host's own scripts are already cached, so the server boots, loads the game and looks healthy; only the pack fails, as `Could not find type "DotTimerRun"` inside a mounted script, surfacing three layers up as `No G2GGame is registered`, a game with no `map` command, and a grey screen. `setup.sh` compares the cache against the newest `.gd` under `addons/` and imports anyway when it loses, saying so.
-
-**The games are separate clones too, and the loop above says `games/game-*` for that reason.** It said `../dot-*` when the games were compiled in, and that was right then: the deploy repo's own pull brought the code. It is not right now. `setup.sh` republishes every pack on an upgrade, from those clones, and `--update` is off by default — so a loop that skips them publishes **stale sources**, silently, on the command an operator runs most. A stale game still declares `class_name`, and a pack whose scripts do that mounts and is dead: the scene loads, the script does not attach, and what surfaces is `No G2GGame is registered` against a module that is fine. `./server pack` refuses such a source now, which is the backstop; pulling them is the fix.
-
-**The addons are separate clones, and by default they are inside this one.** `setup.sh` clones each one it does not have into `addons/.repos/<repo>` and points `addons/<name>` at it with a relative link, so a finished checkout is one directory with nothing outside it — which is what a `cp -r`, a tarball and a container's final stage each need, and it means a box running several servers cannot end up with one server's `git pull` changing another's. `git pull` here updates the host and the launcher and nothing else: a host newer than the addon it configures is a real failure mode — a setting this file reads and hands to a `DotServerConfig` that has no property for it, reported rather than fatal (`UNKNOWN : server.yml: … this dot-server has no …`) and doing nothing. `./setup.sh --update` pulls the addons and the games as well, wherever they turned out to be, and `./upgrade.sh` is that with the guardrails.
-
-**`--addons-dir DIR` shares one set between servers instead**, which is the shape a developer machine and every box set up before this default already have. It takes either layout — a directory of addons (`DIR/dot_core`) or a directory of the repositories (`DIR/dot-core/addons/dot_core`) — links what it finds and clones what it does not *into that directory*, so one pull there fixes every server on the box, and changes every server on the box:
-
-```bash
-./setup.sh --addons-dir ..                              # what a developer checkout is
-for d in ../dot-* ../game-*; do git -C "$d" pull --ff-only; done && ./setup.sh --no-import
-```
-
-**A checkout that is already wired is never rewired.** An `addons/<name>` that is a link and still resolves is left exactly as it is, so an upgrade on a box whose addons are beside it does not silently start a second copy of all fifty — two copies of `dot-cloud` on one machine is the bug where the fix is pulled, installed and still not running. Only `--addons-dir` repoints them.
-
-**The games live in `games/`, for the reason the addons live in `addons/.repos/`.** Each one is its own repository too, and they used to go in the parent directory — which this project does not own, so on a box running several servers it is one checkout shared by all of them with nothing saying so, and `./setup.sh` in one server's directory republishes packs from a tree another server's operator is halfway through editing. `setup.sh` clones a missing game into `games/<repo>` and, in a developer checkout where the games are already beside this one, links `games/<repo> -> ../../<repo>` rather than making a second copy of each. A `.gdignore` goes in beside them: a game walked as part of this project declares its `class_name` globals a second time, and a *delivered* game's scripts then resolve those names to this build's copy instead of their own. The parent directory stays the last place looked, so a tree wired by an older `setup.sh` keeps working.
-
-**`--games-dir DIR` shares one set of games between servers**, the same way `--addons-dir` shares the addons, and it is a separate flag because they are not the same directory — one box keeping a library of addons does not imply it keeps a library of games, and `--addons-dir ..` quietly meaning "and publish packs from the games up there too" is how somebody ends up publishing from a tree they did not expect. `TMC_GAMES_DIR` is the same switch for a unit file or a CI job.
-
-```bash
-./setup.sh --games-dir /srv/tmc/games       # one set of checkouts, several servers
-```
-
-**`--only-games` and `--skip-games` choose which of them this build carries at all.** A box that hands out one game spends five clones, five imports and five publishes on games it will never serve, and a developer changing one of them waits for the other five on every run. A name may be the repository (`game-airdrift`), the repository without its prefix (`g2gfast`) or the content directory (`hungry_classic`); both flags are repeatable and take a comma- or space-separated list, and `TMC_ONLY_GAMES` / `TMC_SKIP_GAMES` are the same switches for a unit file or a compose file. Given both, `--only-games` decides the set and `--skip-games` narrows it. A name matching no game is refused with the list of the ones this build has, rather than quietly narrowing the build — and so is a filter that leaves nothing to publish.
-
-```bash
-./setup.sh --only-games g2gfast             # a timer server, and nothing else
-./setup.sh --skip-games hungry_classic      # everything but the one you are not serving
-```
-
-A game left out is left out *everywhere except `dist/`*: **a pack an earlier run already published stays there and this server keeps serving it**, because deleting published content on the strength of a command-line flag is not a thing a setup script should do. Delete it by hand when that is what you meant. The repositories it did not build are recorded in `dist/.skipped-games`, which is how `tools/check.sh` knows not to report them as unpublished and how `play.sh` knows not to call them stale; any run that filters nothing deletes that file, so it can never excuse a pack that was supposed to be there.
-
-**The addons follow automatically, because each game declares its own.** Every project in the family lists the addons it needs as `/addons/<name>` lines in its own `.gitignore` — the same declaration `dot-bootstrap` reads to wire a developer checkout — so a filtered build asks the games that are left and wires in exactly what they name, plus the eleven this project's own scripts name. Addons already linked that the build no longer needs are unlinked: leaving them means the import registers their `class_name` globals, and a pack that quietly depends on one then parses on the box that built it and fails on the fresh box that only ever had the smaller set.
-
-| build | addons wired in |
+| Command | Does |
 | --- | --- |
-| `--only-games buses-from-hell` | 27 |
-| `--only-games hungario` | 42 |
-| `--only-games fatalcontact` | 45 |
-| `--only-games g2gfast` | 46 |
-| `--only-games playground` | 48 |
-| all six (the default) | 53 |
+| `./server` | Start the server. |
+| `./server check` | Boot, load the game, shut down. Exit 0 if it worked. |
+| `./server config` | Show the resolved configuration. |
+| `./server games` | List what is in `content/`. |
+| `./server install-games` | Fetch the games named in `--games`. |
+| `./server pack <id>` | Turn a directory in `content/` into a signed pack in `dist/`. `--all` does every one and `./server verify <id>` checks the signature. |
+| `./server export-web` | Build the browser client. One export serves every server (the address comes from `?server=`). |
+| `./server export-native` | Build the native client for Linux, Windows and macOS. |
 
-**The derivation is reachable only on a run that filtered something**, and for an unfiltered build it reproduces the hand-kept `ADDONS_ALL` list exactly, name for name — so the default path cannot change, and the derivation can never be the reason an ordinary build breaks. A build with no game repositories at all — a release tarball serving the packs already in `dist/` — falls back to the full list, because a published pack does not say which classes it parses against.
+Options include `--port`, `--bind`, `--name`, `--max-players`, `--game`, `--map`, `--config`, `--content`, `--data`, `--verbose` and `--dry-run`. Pass console commands after `--`, for example `./server -- +sv_cheats 1`. Secrets such as `--rcon-password` are refused on the command line.
 
-**A filtered build also stops the server OFFERING what it did not publish.** The catalogue is `content/<id>/game.yml`, which is checked in — all nine of them — so without this a vote can land on a game whose pack this build never made: the server fetches it from the configured content origin, mounts it, and fails to parse it against addons this build deliberately does not have, while the boot check still exits 0. `setup.sh` writes `vote_exclude` into `cfg/addon/dot_vote/vote.yml` when it is the run that creates that file, and names the exact line to add when the file is already yours. It excludes every content directory sharing the dropped pack, so leaving out hungario excludes all four `hungry_*` ids rather than only the one the `GAMES` entry names.
-
-`./setup.sh --vendor` copies the addons in rather than linking them, and deletes `addons/.repos/` and `games/` afterwards: vendoring says this tree is to carry content rather than checkouts — the packs in `dist/` are what a game is once it is published — and it is what the container build and a release tarball use.
-
-**Every game is republished by that run, and a pull that changed one is not live until it is.** The games are packs: `setup.sh` imports each game repository and publishes it into `dist/`, so the upgrade command above is also the command that rebuilds the content this server serves. `--no-import` does not skip it — that flag is about re-importing *this* project, and a game repository that gained an asset since the last run has to be imported or its pack ships bytes nothing can open. `tools/check.sh` fails when a pack is older than its source, which is the backstop.
-
-**The content a BROWSER client downloads is published separately, and from one place.** A server prefers `dist/` on its own box over the network, so a box publishing its own packs and a content origin publishing different ones is a server and its players running different builds of the same version — silently, since the version string is the same. Publish both from the same commit.
-
-**The browser client is not upgraded by any of this.** The web shell is built, uploaded, pinned and tagged by CI (`.github/workflows/web-shell.yml`) whenever a push to `main` changes a shell input; a server on `TMC_AUTO_UPDATE=when-needed` moves to it on its next start ([docs/releases.md](docs/releases.md#publishing-the-web-build)). It also moves on any new commit of the server itself, and `TMC_CHANNEL=stable` (`--channel stable`) follows the newest `v*` release instead of the branch head; the default is `latest` ([docs/releases.md](docs/releases.md#a-game-that-needs-newer-addons)). A box installed before 2026-10-25 needs one reinstall for either. Only a box that publishes its own shell by hand still runs `./server export-web` and uploads the result; [web/README.md](web/README.md#shipping-a-client-change) has the table and the ten-second check for which shape you are on.
-
-**Once, on a box that ran an older `setup.sh`**, the pull stops on a uid instead:
-
-```
-error: Your local changes to the following files would be overwritten by merge:
-        content/avatars/part.gd.uid
-```
-
-Discard it and pull. `setup.sh` used to delete every `.uid` under the directories it vendors into — right for a file copied from a sibling, whose uid belongs to that project, and wrong for `content/avatars/part.gd`, which is this repository's own tracked file sitting in a directory that also receives vendored content. So `--import` minted a fresh random one and left a tracked file modified after a command whose whole job is to be safe to re-run.
-
-```bash
-git checkout -- content/avatars/part.gd.uid && git pull
-```
-
-Nothing is lost: every scene that uses that script references it **by path**, so the uid is not named anywhere. The fix is in the commit you are pulling — `setup.sh` asks git which files are its own now and leaves those alone — so this is needed once per box and never again.
-
-**Once, on a box checked out before this changed**, the pull stops on the configuration it is about to stop tracking:
-
-```
-error: Your local changes to the following files would be overwritten by merge:
-        cfg/server/server.yml
-```
-
-Git is refusing to delete a file you edited, which is right of it. Put the configuration somewhere it is not looking, take the pull, and put it back:
-
-```bash
-cp -a cfg ../cfg.mine          # your configuration, including the RCON password
-git checkout -- cfg            # let git have its copy back, so the pull can delete it
-git pull
-cp -a ../cfg.mine/. cfg/       # and it is yours again, now untracked
-./setup.sh --no-import
-```
-
-**Then change the RCON password.** Any server set up before this shared one password with everybody who ever cloned the repository, because the first run generated it into a tracked file and it was committed. `rcon_allowed` kept it to loopback, so it is a password to rotate rather than an incident, but rotate it: a long random line in `cfg/addon/dot_console/rcon.yml`, and a restart.
-
-## Docker
-
-`./setup.sh --mode compose --out DIR` writes a ready compose deployment (and `--mode pterodactyl` the panel's egg); worked examples in [docs/deploy-modes.md](docs/deploy-modes.md).
-
-```bash
-docker compose up -d
-docker compose logs -f
-```
-
-The build context is the **parent** directory: every dot-* addon is its own repository and there is no way to clone the tree at once, so they are siblings rather than subdirectories.
-
-`cfg/` and `data/` are bind mounts, so the first run writes a configuration you can edit and an RCON password that survives a rebuild. `content/` is mounted read-write, and used to be read-only: `install-games` writes each game's `game.yml` descriptor there, so a container started with `TMC_GAMES` and a read-only content mount fails to install a single game — at startup, on a box that looks correctly configured. Put `:ro` back on a deployment that carries its own content and sets no `TMC_GAMES`. The container runs as your own uid (`UID=$(id -u) GID=$(id -g) docker compose up -d`), not as root, and drops every capability.
-
-RCON is published on **loopback only**. It is a remote console and the password is the only thing between it and whoever finds the port; reach it through an SSH tunnel, or put an address allow-list in `cfg/addon/dot_console/rcon.yml` and widen the mapping deliberately.
-
-### Ports, and the three that are guessed for you
-
-A server opens four listeners and only one of them is a number you gave it:
-
-| | derives as | protocol |
-| --- | --- | --- |
-| the game | `--port` | TCP (WebSocket) |
-| RCON | the game port **+ 1** | TCP |
-| A2S | the game port **itself** | UDP |
-| DQP | the A2S port | UDP |
-
-A2S landing on the game port is not a collision: the game is a WebSocket listener and therefore TCP, so the same number is free on UDP — and it is the only port a tracker will try. DQP sharing the A2S port is not one either; the two are told apart by their first four bytes, which is what lets a tracker that found the server over A2S be pointed at the better protocol without being given a second address.
-
-Those defaults are right on a box where you choose the numbers and are **guesses on a panel**, which hands out whatever was free on the node. `--rcon-port`, `--a2s-port` and `--query-port` (and `TMC_RCON_PORT`, `TMC_A2S_PORT`, `TMC_QUERY_PORT`) move them; each has a variable in the Pterodactyl egg.
-
-`--query-bind` is the one a reverse-proxied server cannot do without. With nginx terminating TLS in front of the game you bind the game to loopback — and nginx forwards a WebSocket but **cannot forward UDP**, so a query listener that followed that setting would listen where nothing can ask it, and a tracker cannot tell that apart from a server that is down. `*` puts the query ports, and only the query ports, on every interface:
-
-```
-a2s   *:27015        query  *:27016
-game  127.0.0.1:6190  rcon   127.0.0.1:27020
-```
-
-RCON deliberately does not follow it.
-
-### A container that installs its games instead of carrying them
-
-```bash
-docker compose -f docker-compose.yml -f docker-compose.games.yml up -d --build
-```
-
-The same deployment the Pterodactyl egg makes, and for the same reasons. The overlay changes three things: the image is built with `--build-arg TMC_BUILD_GAMES=none`, so `setup.sh --no-games` clones nothing, packs nothing and **generates no signing key** — a box that only ever consumes signed content should not hold a key that can sign it — and `TMC_GAMES` and `TMC_CONTENT_URL` say which games this server is for and where they come from. It is also a far shorter build than seven games.
-
-An overlay rather than a second compose file, because the two deployments differ in exactly three settings and a copy would drift the moment one of them gained a volume.
-
-`TMC_BUILD_GAMES` defaults to `all`, so an existing `docker compose up` keeps producing the image it produced yesterday. Whether a box carries its games or fetches them is a decision about a deployment, not something a rebuild should make quietly.
-
-## TLS, and the one question that picks the method
-
-A page served over HTTPS may not open a plain `ws://` socket, so a browser client needs a certificate in front of this server — and the method that gets you one is decided by a single question: what can reach this box, and on which port?
-
-```bash
-# :80 is reachable and nginx already serves something there
-sudo ./deploy/issue-letsencrypt.sh --domain demo.example.com --email ops@example.com
-
-# :80 is closed, or you want *.example.com — DNS-01 is the only method that does either
-sudo ./deploy/issue-letsencrypt.sh --method dns --dns-plugin cloudflare      --dns-credentials /root/.secrets/cloudflare.ini      --domain example.com --wildcard --email ops@example.com
-
-# or as the last step of setting the project up
-./setup.sh --letsencrypt --domain demo.example.com --email ops@example.com
-```
-
-`--method` is `webroot` (the default: HTTP-01 out of a directory nginx already serves, nothing restarts), `nginx` (certbot drives nginx for the length of the challenge and puts it back), `standalone` (certbot binds :80 itself, and the stop/start hooks are installed so **renewals** work too), `dns` (DNS-01 through a certbot plugin — the only method that issues a wildcard) or `manual` (it prints a TXT record and waits; fine once, and it cannot renew unattended).
-
-**When nothing is listening on :80, it puts something there.** An HTTP-01 challenge is answered over plain HTTP, and plenty of boxes have nothing on that port: nginx freshly installed with its stock site removed, a host that serves only TLS, a vhost that answers every name but this one. The probe is what notices — and rather than reporting it, the script writes an nginx server block for the challenge path, tests the configuration before reloading, takes it straight back out if nginx refuses it, and then **leaves it there**, because the renewal in sixty days needs the same port. `--no-nginx-vhost` never touches nginx; a box whose :80 belongs to something that is not nginx is told so and pointed at `--method standalone` or `--method dns` instead.
-
-**A certificate that is already there and not due is not requested again.** Three questions, and all three have to say yes: is there one, does it cover every name asked for, and has it more than thirty days left. A re-run on a configured box then skips the preflight entirely — it does not have to prove its webroot, its `:80` and its DNS all over again to be told nothing needs doing — and does not need certbot installed to say so. `--force-renewal` replaces it anyway.
-
-**Use `--staging` on a name nobody has proved out yet.** The rate limits count *failed* validations — five per hostname per hour — so a webroot that is not the one nginx serves locks the name out for an hour. That is also why this script probes the challenge path with a token and a `curl` before Let's Encrypt is asked to: a wrong `--webroot` costs a second here instead of an hour there.
-
-**The renewal hook is the part that is otherwise always missing.** A packaged certbot renews on a timer and reloads nothing: the files under `/etc/letsencrypt` change, nginx goes on serving the certificate it opened at startup, and sixty days later a browser reports an expired certificate on a box where `certbot renew` has been succeeding all along. This writes `/etc/letsencrypt/renewal-hooks/deploy/tmc-<name>.sh`, which reloads nginx and — with `--install-to` — re-copies the pair somewhere a non-root process can read, because everything under `/etc/letsencrypt/archive` is `0700 root` and a server reading `privkey.pem` straight out of it gets a permission error no config change fixes.
-
-Then put it in front of a server:
-
-```bash
-sudo ./deploy/install-server-tls.sh --domain demo.example.com --port 6065      --backend 127.0.0.1:6071      --cert /etc/letsencrypt/live/demo.example.com/fullchain.pem      --key  /etc/letsencrypt/live/demo.example.com/privkey.pem
-```
-
-`./deploy/issue-letsencrypt.sh --help` lists every method and every option, and `--dry-run` prints the `certbot` invocation it would run and changes nothing — no probe file, no hook, no account.
-
-## Validating
-
-```bash
-tools/check.sh          # parse, shell syntax, every suite, then a real boot
-tools/package_check.sh  # vendor the addons, move the tree away from its siblings, boot it
-```
-
-| | |
+| Exit code | Meaning |
 | --- | --- |
-| `examples/selftest.tscn` | the YAML reader, the config translation, the permission translation, the content index, the replay ring (a saved clip read back as complete, a ban carrying its hash) and the friends client (off on a 404, presence following a connect) |
-| `examples/multigame.tscn` | changing games on a running server, and the module swap that goes with it |
-| `examples/install_descriptor.tscn` | a game installed from a pack its own repository published: the pack's `game.yml` is stamped with the id and version the installer verified, and each game repository's descriptor agrees with the one under `content/` |
-| `examples/live_switch.tscn` | **the same, with a real client on a real socket** |
-| `examples/reconnect.tscn` | **the real shell, connected twice**, across a server that went down and came back |
-| `examples/party_live.tscn` | parties on a real server: the booking on the ban seam, before and after a game change; party chat in the game's own chat; a claim checked against a roster |
-| `./server check` | a real `DotServer` booting, loading its default game, and shutting down — and `party_status` answering on its console, and the replay ring recording |
+| 2 | Usage error |
+| 3 | No runtime |
+| 4 | No project |
+| 5 | Bad config |
+| 6 | Port in use |
+| 7 | Bad content |
 
-The third one earns its place. Switching games under a live client segfaulted the server, twice over, once going in and once coming out, and `multigame` passes the same switch with an occupant seated in the world. An occupant is not a socket.
+## What a server owner gets
 
-The fourth earns its place for the same reason one layer along: every other suite connects at most once. A shell that reconnected added a second link beside the dropped one, Godot renamed it, and the server's RPCs went on resolving to the dead node while the delivered game was handed the live one — so signon completed, the pack was already mounted and nothing downloaded, the scene instantiated, and the world was empty. No error, on either end. A refresh cleared it, which is what made it look like a browser problem.
-
-The second one matters because a release tarball and the container have no sibling repositories to link to, and a symlink out of `addons/` dangles the moment the directory moves, leaving every `dot-*` class unresolved at once, which reads as a broken project rather than a broken link.
-
-The browser target has its own check, because it is the one thing a headless Godot run cannot see: the WASM loading, the WebSocket handshake a browser performs, and whether anything is actually drawn:
-
-```bash
-./play.sh                  # the server and the client, both on the loopback
-node tools/browser_check.mjs \
-    'http://127.0.0.1:8099/embed.html?server=ws://127.0.0.1:6074' shot.png
-```
-
-**`failures` and `otherSocketErrors` are different things and the check keeps them apart.** A server *browser* queries servers that may be down, and a refused query is the correct outcome of asking — game-playlot seeds `127.0.0.1:27015` on a first run because that is where a launcher puts a server, and nothing is listening there on a developer's machine. Counting that as a failure made this check report one every time, and a check that always fails is a check whose failures stop being read. Only the socket the page was told to open can fail the run.
+| Feature | Where to set it |
+| --- | --- |
+| Roles such as `admin: [kick, ban, mute]` | `cfg/addon/dot_server/groups.yml` |
+| Bans, kicks, mutes, votes and an audit log | Console or RCON. RCON listens on loopback until you widen `rcon_allowed` in `cfg/addon/dot_console/rcon.yml`. |
+| `/admin` menu for kicks, bans, warnings and game-specific powers | `cfg/addon/dot_menu/admin_menu.yml` |
+| Loading screens (picture, music, tips) during game or map changes | `cfg/addon/dot_core/loading.yml` |
+| Players voting for the next game (`!game_nominate`, `!game_rtv`, `!game_vote`) | `cfg/addon/dot_vote/vote.yml` |
+| Party bookings | `cfg/addon/dot_party/party.yml` |
+| "Save that" clips and evidence with every ban | `cfg/addon/dot_replay/replay.yml` |
+| Shared radio (off by default; add `- repo: dot-radio` to `cfg/content/addons.yml`) | `cfg/addon/dot_radio/radio.yml` |
+| Matchmaking queue (off by default) | `cfg/addon/dot_matchmaking/matchmaking.yml` |
+| Games swapped at runtime with players connected | `sv_game` and `sv_map` in `cfg/server/server.yml`, or `--game` and `--map` |
 
 ## Known limits
 
-- **nginx does not carry UDP.** Since 2026-10-07 a server listens on both (`net_transport: dual`, the default): browsers over WebSocket on TCP, the desktop client over ENet on UDP, in one match. Behind nginx only the WebSocket half goes through the proxy; the ENet port (`net_enet_port`, by default the game port's number on UDP) is reached directly and has to be open on the firewall. If it is not, a desktop client falls back to WebSocket after 2.5 s and plays over TCP -- it works, it just is not UDP. See `cfg.example/net.yml`.
-- **`cfg/addon/dot_server/permissions.yml` does nothing until `cfg/addon/dot_auth/auth.yml` is turned on.** `DotAdminManager` refuses permissions to any unauthenticated session, because a guest uid is a random per-device string, so granting anything to one grants it to anyone. Correct, and it looks exactly like the file being ignored — `auth.yml` says so on boot rather than leaving you to work it out.
-- **A connecting player is a guest until this server can PROVE otherwise.** Signing in on the website fills in the display name and nothing more: that name travels as a label, exactly like the one a player types, and no server should trust a name a client chose. `cfg/addon/dot_auth/auth.yml` is what turns a label into an identity, and it ships in `strategy: ticket` with nothing to fill in: the client asks the site for a short-lived ticket for the address it dialled, and this server verifies it offline against the site's public key, so the player's account token never reaches the operator. The server learns its site id and fetches that key itself, from the site it enrolled with, over HTTPS, and keeps both in `data/ticket_trust.json`; until it has them a signed-in player is asked to try again in a moment. `server_id` and `issuer_public_key_file` pin either by hand and win over the site's. Override anything in `cfg/server/addon/dot_auth/auth.yml`. **Upgrading:** an old `auth.yml` that says `strategy: introspect` with no `server_id` (the previous default, also as a flat `cfg/auth.yml`) is read as `ticket` with one WARN naming the file; set `strategy: ticket` there to silence it, or `first_party: true` to keep `introspect` on one of the game's own servers. Each server needs one restart after the site starts issuing tickets. The site matches the address a player dialled against the server's hostname or IP and game port as listed on the site, so those must be right. Both need this server's own site credential in `data/listing.json`, and a server gets one by itself: on a start with no token it proves to the site that it answers at the address the site has for it (a challenge published in its A2S rules) and is issued one. That needs the server added and claimed on the site; `TMC_ENROLL=off` turns it off.
-- **No TLS in the server itself.** A page on HTTPS cannot open `ws://`, and the certificate and the reverse proxy in front of it are deployment rather than code — `deploy/issue-letsencrypt.sh` and `deploy/install-server-tls.sh` are how you get both.
+- nginx does not carry UDP. A server listens on both WebSocket (TCP, for browsers) and ENet (UDP, for the desktop client). Behind nginx only WebSocket goes through the proxy, so open the ENet port (`net_enet_port`) on the firewall, or desktop clients fall back to TCP after 2.5 seconds.
+- `cfg/addon/dot_server/permissions.yml` does nothing until `cfg/addon/dot_auth/auth.yml` is turned on, because guests never receive permissions.
+- A connecting player is a guest until the server can prove who they are. Details of the ticket sign-in are in [docs/reference.md](docs/reference.md#known-limits).
+- The server itself has no TLS. `deploy/issue-letsencrypt.sh` and `deploy/install-server-tls.sh` set up a certificate and an nginx proxy for `wss://`.
 
-## Licence
+## More
 
-MIT. See [LICENSE](LICENSE).
+| Document | Covers |
+| --- | --- |
+| [docs/setup.md](docs/setup.md) | Install in detail. |
+| [docs/operator-config.md](docs/operator-config.md) | Changing a setting, and the config layers. |
+| [docs/content-lists.md](docs/content-lists.md) | Choosing games and addons. |
+| [docs/releases.md](docs/releases.md) | Releasing addons, games and the web shell. |
+| [docs/reference.md](docs/reference.md) | Guided install, layout, packs and signing, upgrading, Docker, TLS. |
+| [docs/README.md](docs/README.md) | Every other document. |
 
-**Trusting extra publishers in a container.** The entrypoint runs `tools/content_trust.sh`, which creates `data/content.json` from `client/content.json` when it is missing and adds every PUBLIC key in `keys/trusted/*.pub` or at `$TMC_TRUSTED_KEYS_FILE` (a file, or a directory of `.pub` files; the path is an environment value, the key never is). A private key is refused. `tools/check_content_trust.sh` covers it.
+## Status and licence
+
+Part of the TMC **dot-\*** family of Godot addons. Written with Claude Code and maintained by `gamemann`. Every addon has headless tests, but little of this has been played by real users yet, so expect rough edges and please [open an issue](https://github.com/modcommunity/dot-server-deploy/issues) when you hit one.
+
+MIT licence, see [LICENSE](LICENSE). The only closed part of the TMC platform is the web back end; you can use your own instead of TMC's.
