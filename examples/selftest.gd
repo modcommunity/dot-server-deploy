@@ -11,7 +11,7 @@ const RoundsWithoutMatch := preload("res://examples/fixtures/rounds_without_matc
 
 const Host := preload("res://host/tmc_host.gd")
 
-const CHECKS := 515
+const CHECKS := 520
 
 var _passed := 0
 var _failed := 0
@@ -1319,8 +1319,22 @@ func _test_game_refs() -> void:
 		"@v0.1.2 asks for the pack version 0.1.2, not a v0.1.2/ directory")
 	_check(TmcGameRef.parse("gamemann/mg-buses@0.1.2")["version"] == "0.1.2",
 		"@0.1.2 is unchanged")
-	_check(TmcGameRef.parse("gamemann/game-g2gfast@latest")["version"] == "",
+	_check(TmcGameRef.parse("gamemann/mg-buses@latest")["version"] == "",
 		"@latest is the newest version")
+
+	# Retired ids: a panel still configured with the old name installs and offers the current one.
+	var retired := TmcGameRef.parse("gamemann/game-final-contact@1.0.0")
+	_check(retired["id"] == "gamemann/game-fatal-contact" and retired["dir"] == "gamemann/game-fatal-contact",
+		"game-final-contact is installed as game-fatal-contact")
+	_check(retired["version"] == "" and retired["retired"] == "gamemann/game-final-contact",
+		"a pin on a retired id is dropped (the old id published no versions) and the old id is kept to log")
+	_check(TmcGameRef.parse("gamemann/game-fatal-contact")["retired"] == "",
+		"a current id is not marked retired")
+	_check(TmcGameRef.dirs_in("gamemann/game-arena, gamemann/game-g2gfast01@1.2.0, game-arena")
+			== PackedStringArray(["gamemann/game-fatal-contact", "gamemann/game-airdrift", "game-arena"]),
+		"the host's filter aliases the same ids the installer does; a bare local name is left alone")
+	_check(TmcGameRef.qualify_map("gamemann/arena-dm-maps/*", "")["collection"] == "gamemann/fc-dm-maps",
+		"a retired collection wildcard reads the current collection")
 	_check(TmcGameRef.parse("alice/demo@vnext")["version"] == "vnext",
 		"a v that is not followed by a digit is part of the version")
 	_check(TmcGameRef.parse("asher/game-testing@v1.0.0")["dir"] == "asher/game-testing",
@@ -1697,7 +1711,7 @@ defaults:
 		var g2g_adds: PackedStringArray = (parsed.games.get("game-g2gfast", {}) as Dictionary).get("maps", {}).get("add", PackedStringArray())
 		var every := parsed.all_map_entries()
 		_check(g2g_adds.size() == 26 and g2g_adds.has("gamemann/surf_mesa")
-			and every.has("gamemann/mg-wipeout-maps") and every.has("gamemann/game-playground-maps"),
+			and every.has("gamemann/mg-wipeout-maps") and every.has("gamemann/playlot-maps"),
 			"the template offers g2gfast's 26 courses (%d) and every other game's maps pack" % g2g_adds.size())
 
 	var moved_dir := "res://examples/fixtures/cfg_move"

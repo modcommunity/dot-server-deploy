@@ -698,6 +698,16 @@ func _boot() -> bool:
 		})
 		return true
 
+	# The same alias the installer applied to TMC_GAMES (TmcGameRef.RETIRED_IDS): a panel whose
+	# TMC_GAME still says game-final-contact boots the game installed as game-fatal-contact.
+	var current := TmcGameRef.current_id(wanted)
+
+	if current != wanted.strip_edges() and content.find(wanted) == null:
+		DotLog.warn(CHANNEL, "TMC_GAME names a retired game id; loading the current one, change it", {
+			"retired": wanted, "loading": current,
+		})
+		wanted = current
+
 	if content.find(wanted) == null:
 		_die(
 			EXIT_CONTENT,
