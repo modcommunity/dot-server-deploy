@@ -25,6 +25,8 @@ dot-cloud's default template is `{base}/{id}/{version}/manifest.json`, which is 
 
 **`@latest` is a FILE**, `content/<id>/latest.json`, because a bucket behind a CDN cannot answer a question and listing is not public. Not derived by sorting (that is how `0.10.0` ends up older than `0.9.0`). It is written last, after every object and the manifest, because it is the only mutable document in an otherwise immutable tree. A renamed repository leaves `{"moved_to": "<new id>"}` in the old id's `latest.json`: the installer follows it exactly one hop (a second hop or a loop is an error), logs a WARN naming the id to change to, and installs under the new id and directory.
 
+**A rename that never published under the old id has no `latest.json` to carry `moved_to`** (`gamemann/game-final-contact` was a panel spelling of Fatal Contact, never a pack). Those live in `TmcGameRef.RETIRED_IDS`, which maps an exact `<owner>/<name>` to its current id. The installer, the host's `TMC_GAMES` filter, `TMC_GAME` and `<owner>/<collection>/*` map wildcards all read it, so the game is installed and offered under one directory. A pin on a retired id is dropped, because the old id has no versions, and a WARN names the id to change to. Bare names are local directories and are never aliased. When you rename a published id, add a row here as well as letting the site write `moved_to`.
+
 ## Three lists of packs beside the game's own
 
 `game.yml` (inside a pack, or under `content/<id>/`) may name:

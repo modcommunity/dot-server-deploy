@@ -5,7 +5,31 @@ extends RefCounted
 ## `tools/install_games.gd` decides what to FETCH and `TmcHost` decides what to OFFER, and both are
 ## handed the same `TMC_GAMES` string.
 
-## One entry of the games list, taken apart.
+## Ids a game or pack was configured under before it was renamed, and the id it is published as now.
+## [b]Here, not only on the origin[/b]: a renamed id that was never published (game-final-contact) has
+## no `latest.json` to carry `moved_to`, and the host's filter must agree with the installer's
+## directory, or the game is installed and then hidden. Exact `<owner>/<name>` ids only: a bare name
+## is a local directory on a developer's box and is left alone.
+const RETIRED_IDS := {
+	"gamemann/game-final-contact": "gamemann/game-fatal-contact",
+	"gamemann/game-arena": "gamemann/game-fatal-contact",
+	"gamemann/arena-weapons": "gamemann/fc-weapons",
+	"gamemann/arena-dm-maps": "gamemann/fc-dm-maps",
+	"gamemann/arena-surf-dm-maps": "gamemann/fc-surf-dm-maps",
+	"gamemann/game-g2gfast": "gamemann/game-airdrift",
+	"gamemann/game-g2gfast01": "gamemann/game-airdrift",
+	"gamemann/game-playground": "gamemann/game-playlot",
+	"gamemann/playground-maps": "gamemann/playlot-maps",
+}
+
+
+## The id [param id] is published as now: itself, or what [constant RETIRED_IDS] maps it to.
+static func current_id(id: String) -> String:
+	return str(RETIRED_IDS.get(id.strip_edges(), id.strip_edges()))
+
+
+## One entry of the games list, taken apart. A retired id comes back as its current one, with
+## `retired` naming what was asked for (empty otherwise) so a caller can say so once.
 static func parse(raw: String) -> Dictionary:
 	var name := raw.strip_edges()
 	var version := ""
@@ -29,10 +53,19 @@ static func parse(raw: String) -> Dictionary:
 		version = version.substr(1)
 
 	var is_pack := name.contains("/")
+	var retired := ""
+
+	if RETIRED_IDS.has(name):
+		retired = name
+		name = current_id(name)
+		# A pin on a retired id names a version of a pack that is not published under it (the old
+		# id 404s, and the new id's versions are its own), so it can only fail: the newest is taken.
+		version = ""
 
 	return {
 		"raw": raw.strip_edges(),
 		"id": name,
+		"retired": retired,
 		# The game's id, and where its descriptor lands: `content/<owner>/<name>/`. The WHOLE content id,
 		# owner included, so a fork and its original -- or two people's games that share a name -- are two
 		# games on one server rather than one overwriting the other.
@@ -84,8 +117,10 @@ static func qualify_map(raw: String, owner: String) -> Dictionary:
 			return {"ok": false, "id": "", "version": "", "wildcard": false,
 				"why": "is not a map or exactly <owner>/<collection>/*"}
 
-		return {"ok": true, "id": trimmed, "version": "", "wildcard": true, "why": "",
-			"collection": "%s/%s" % [parts[0], parts[1]]}
+		var collection := current_id("%s/%s" % [parts[0], parts[1]])
+
+		return {"ok": true, "id": collection + "/*", "version": "", "wildcard": true, "why": "",
+			"collection": collection}
 
 	var ref := parse(raw)
 	var id := str(ref["id"])
