@@ -25,6 +25,8 @@ grep -q 'no web side module beside it' tools/server.in && grep -q 'no index.side
 t "export-web refuses a dlink pck whose side module is missing" $?
 grep -q 'GDEXTENSION_LIBS' web/embed.html && grep -q 'GDEXTENSION_LIBS' tools/server.in && grep -q 'natives") === "0"' web/embed.html
 t "embed.html loads the stamped side modules, ?natives=0 runs GDScript" $?
+grep -q 'addEventListener("unhandledrejection"' web/embed.html && grep -q 'nativeFailure' web/embed.html
+t "a side module that 404s or does not compile falls back to ?natives=0 (not only a rejected start)" $?
 grep -q 'ENGINE_FILES+=(index.side.wasm)' tools/publish-web-shell.sh
 t "publish-web-shell ships index.side.wasm beside the shared engine" $?
 grep -q 'web_dlink_nothreads_release.zip' tools/fetch-export-templates.sh

@@ -311,8 +311,9 @@
    * this page; the engine's own side module (index.side.wasm) comes from `executable`.
    * `?natives=0` starts without them: dot_sim.gdextension then fails to open, dot-sim
    * stays unloaded, and every module runs its GDScript twin (same bytes, slower). A start
-   * that fails while they are on is retried once that way, so a side module that does not
-   * load costs speed, not the game. window.__TMC_NATIVES__ says which one is running.
+   * that fails while they are on (a rejected start, or a side module that 404s or does not
+   * compile; see nativeFailure below) is retried once that way, so a side module that does
+   * not load costs speed, not the game. window.__TMC_NATIVES__ says which one is running.
    */
   var NATIVE_LIBS = /*GDEXTENSION_LIBS*/[];
   var nativesOff = new URLSearchParams(location.search).get("natives") === "0";
@@ -384,22 +385,41 @@
       }
     },
   }).then(function () {
+    started = true;
     status.classList.add("hidden");
     canvas.focus();
   }).catch(function (error) {
-    if (nativeLibs.length) {
-      // Once, and only from a start that had native modules: ?natives=0 is the fallback.
-      console.error("start failed with native modules (" + nativeLibs.join(", ") + "); retrying without them: " + error);
-      var url = new URL(location.href);
-      url.searchParams.set("natives", "0");
-      location.replace(url.href);
-      return;
-    }
+    if (fallBack(error)) return;
     message.textContent = "This did not load.";
     detail.className = "error";
     detail.textContent = String(error);
   });
   }
+
+  // Once, and only from a start that had native modules: ?natives=0 is the fallback.
+  var started = false, retrying = false;
+  function fallBack(error) {
+    if (!nativeLibs.length || retrying) return false;
+    retrying = true;
+    console.error("start failed with native modules (" + nativeLibs.join(", ") + "); retrying without them: " + error);
+    var url = new URL(location.href);
+    url.searchParams.set("natives", "0");
+    location.replace(url.href);
+    return true;
+  }
+  // A side module that 404s or does not compile never reaches startGame's promise: the
+  // engine loads it from a preRun step, the rejection goes unhandled, and the start just
+  // stops with the overlay up. So the page also watches for that failure until the start
+  // resolves: an error naming a native module, or a WebAssembly compile/link error.
+  function nativeFailure(reason) {
+    if (started || !nativeLibs.length || !reason) return;
+    var text = String(reason.message || reason);
+    var wasm = typeof WebAssembly !== "undefined" &&
+        (reason instanceof WebAssembly.CompileError || reason instanceof WebAssembly.LinkError);
+    if (wasm || nativeLibs.some(function (lib) { return text.indexOf(lib) >= 0; })) fallBack(text);
+  }
+  window.addEventListener("unhandledrejection", function (e) { nativeFailure(e.reason); });
+  window.addEventListener("error", function (e) { nativeFailure(e.error || e.message); });
 })();
 </script>
 </body>
