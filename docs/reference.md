@@ -142,7 +142,7 @@ Anything it does can be done on its own afterwards: the three scripts above take
 }
 ```
 
-  `pack.json` also carries `exclude_dirs`, which is what a whole GAME needs: `addons`, `examples`, `tools` and the like are a tree rather than a name pattern, and shipping a second copy of every addon the client already has took arena's pack from 140 files to 768. `--source <dir>` publishes a tree that is not under `content/` — which for a game is every time, since a game lives in its own repository.
+  `pack.json` also carries `exclude_dirs`, which is what a whole GAME needs: `addons`, `examples`, `tools` and the like are a tree rather than a name pattern, and shipping a second copy of every addon the client already has took Fatal Contact's pack from 140 files to 768. `--source <dir>` publishes a tree that is not under `content/` — which for a game is every time, since a game lives in its own repository.
 
   `./server pack --all` does every one, `./server verify <id>` checks the signature. Packs are always signed: `client/content.json` ships `require_signed_manifests: true` because a pack can contain scripts, so an unsigned pack is one no client will mount — publishing without a key is refused rather than quietly producing something that works nowhere. `setup.sh` generates a key on a fresh box so that refusal never becomes the thing that stops an install.
 
@@ -173,7 +173,7 @@ cfg/                 what an operator edits. Written on first run, and not in th
 content/             what the server serves
   global/              loaded by every game
   avatars/             cosmetic parts, published as a pack of their own
-  fatalcontact/        the default game (formerly arena; `arena` still reaches it)
+  fatalcontact/        the default game, Fatal Contact (its id is still `arena`)
     game.yml             what it is, where its scene is inside the pack
     pack.json            what its pack leaves out
 
@@ -368,7 +368,7 @@ A game can be **in the build** or **delivered**. Built in is the default and is 
    }
    ```
 
-   Excluding `addons/` is not optional. Without it the pack carries a second copy of every dot-\* addon the host build already has — measured at 768 files and 11.2 MiB for arena, against 140 files and 3.1 MiB with them dropped. It is also what keeps the rewrite honest: the publisher moves a `res://` reference onto the mount **only when the file it names is in the pack**, so with `addons/` out, `res://addons/dot_core/…` still means the host's copy and `res://game/arena_client.gd` becomes `res://dot_cloud/arena/0.1.0/game/arena_client.gd`.
+   Excluding `addons/` is not optional. Without it the pack carries a second copy of every dot-\* addon the host build already has — measured at 768 files and 11.2 MiB for Fatal Contact, against 140 files and 3.1 MiB with them dropped. It is also what keeps the rewrite honest: the publisher moves a `res://` reference onto the mount **only when the file it names is in the pack**, so with `addons/` out, `res://addons/dot_core/…` still means the host's copy and `res://game/arena_client.gd` becomes `res://dot_cloud/arena/0.1.0/game/arena_client.gd`.
 
    The pack lands in **`dist/<content id>/`**, which is not always `dist/<directory>`: hungario is three game ids over one `content_id: hungry`, because its modes are three presets of one world. Everything that looks a pack up builds `{base}/{content id}/manifest.json`, and `dist/` is one of those bases, so `dist/hungry_classic/` would be a pack nothing — not even the server that wrote it — could find. `./server verify` takes the content id for the same reason.
 
