@@ -47,7 +47,7 @@ Every one of these is encoded somewhere in dot-core already; they are collected 
 | --- | --- |
 | **No UDP.** `ENetMultiplayerPeer` is not in the web template at all | The server listens on **WebSocket**, and then *all* its clients do — `DotTransportAuto.require_web_clients` defaults to true for this reason |
 | **A tab cannot listen** | The web build is a client. The server is somewhere else, always, and the shell offers no Host button rather than one that fails |
-| **No threads** unless the template was built for them | `DotScheduler` slices on the main thread inside a frame budget. The preset has thread support **off**: turning it on requires cross-origin isolation on every response and breaks every third-party embed on the page |
+| **No threads** unless the page is cross-origin isolated | `DotScheduler` slices on the main thread inside a frame budget. The preset stays single-threaded; `export-web` adds a threaded engine beside it that `embed.html` uses only where the headers allow it ([Threads](#threads)) |
 | **`user://` is an IndexedDB mirror** needing explicit flushes | Every write path calls `DotWeb.sync_filesystem()` |
 | **Storage quota the user can refuse** | A downloaded game pack is cached, and `DotCloudStore` awaits `navigator.storage.estimate()` rather than assuming |
 | **CORS, with `fetch()` refusing to say why it failed** | Serve the export and its assets from one origin, or set the headers below exactly |
@@ -82,6 +82,35 @@ Content-Encoding: br                    # precompress: index.wasm 39.5 MB -> 6.9
 **The presets themselves are tracked now**, in `export_presets.example.cfg`; `setup.sh` copies it to `export_presets.cfg` when there is none. The editor rewrites that file, which is why it is not the tracked one — and while there was no template at all, both export commands needed a preset that existed only on a machine where somebody had made one by hand.
 
 With **Extensions Support on**, and only then, every response also needs `Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy: require-corp`. Missing either one is a blank page, not a warning. The preset here has it off.
+
+## Threads
+
+The export is two engines and one pck. `./server export-web` exports the single-threaded build as always (`index.js`, `index.wasm`) and copies the **threaded** template's engine beside it as `index-mt.js`, `index-mt.wasm` and `index-mt.audio*.worklet.js` (`install_threaded_engine` in `tools/server.in`; about 39 MB more, 6.9 MB brotli). `embed.html` then picks one when the page loads:
+
+- **`index-mt`** when `self.crossOriginIsolated` is true and `SharedArrayBuffer` exists. The engine has `OS.has_feature("threads")`, so `DotPlatform.has_threads()` is true and a game's worker threads run (FC's `bot_threads`, for one).
+- **`index`** otherwise, and with `?threads=0`. Same game, single-threaded, exactly as before. A host without the headers loses nothing.
+
+`window.__TMC_ENGINE__` says which (`"threads"` or `"single"`). `TMC_WEB_THREADS=0 ./server export-web` leaves the twin out; so does a preset with Extensions Support (a dlink build needs its side modules built for threads too) or a custom template.
+
+**What a browser needs before it isolates a page.** Both on the document's response:
+
+```
+Cross-Origin-Opener-Policy: same-origin
+Cross-Origin-Embedder-Policy: require-corp      # or credentialless (Chrome, Firefox; Safari then stays single-threaded)
+```
+
+Then every subresource from another origin must answer with CORS (`Access-Control-Allow-Origin`) or `Cross-Origin-Resource-Policy: cross-origin`, or it stops loading. WebSockets are exempt. Over `http://` only localhost counts; anywhere else it has to be HTTPS.
+
+**Opened on the game origin** (`embed.html` as the top-level page), those two headers on the game origin are enough. `./deploy/install-game-origin.sh --isolation` adds them to the nginx vhost; a storez origin takes them in its header profile (`coop`, `coep` beside the existing `corp` and `csp`).
+
+**Framed in the site** (the normal path, through `tmc-loader.js`), a frame is only isolated when the page around it is. So all of these:
+
+1. **The site's player page**: `Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy: credentialless` (or `require-corp`). Everything that page loads cross-origin then needs CORS or CORP, and `same-origin` cuts `window.opener` to popups, so a sign-in popup that reports back through it must be checked. This is the site's configuration, not this repository's.
+2. **The game origin**, on `embed.html` and the engine files: COEP as above, and `Cross-Origin-Resource-Policy: cross-origin` (already sent) so the isolated site may frame it.
+3. **The iframe**: `allow="cross-origin-isolated"`, which `tmc-loader.js` already sets.
+4. **Every other origin the game fetches from** (content packs, a CDN): CORS, which they already need for `fetch()`, or CORP.
+
+Missing any one of them is not an error: the frame is simply not isolated and gets the single-threaded engine.
 
 ## TLS
 
@@ -155,7 +184,7 @@ Four things the bucket does not do for you, in the order they bite:
 - **The headers.** The vhost above sends a CSP — including `frame-ancestors`, the only thing stopping another site embedding your player as its own — plus `Cross-Origin-Resource-Policy` and `nosniff`. A bucket cannot send any of them; they move to the CDN's response-headers policy. Skip this and the bucket is a *less* safe origin than the nginx one it replaced. The script prints the set to copy.
 - **Compression.** S3 does not compress on the fly and a Godot `.wasm` is tens of megabytes uncompressed. Either `--gzip` (pre-compressed, `Content-Encoding` set) or let the CDN do it — one or the other, not both.
 
-**COOP/COEP are not on that list**, and that is a fact about this export rather than about buckets: they are needed only with `variant/thread_support`, which the preset here has off. Turn threads on and a bare bucket stops being enough.
+**COOP/COEP are not on that list** because the game works without them: they only decide whether `embed.html` may use the threaded engine ([Threads](#threads)). To get threads from a bucket, they go in the CDN's response-headers policy with the rest.
 
 The origin is still a separate registrable domain, for every reason in the section above. A bucket does not change that — `games.example.net` in front of the bucket, never a path on the site's domain.
 

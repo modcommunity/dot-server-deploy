@@ -81,6 +81,16 @@ server {
         add_header X-Content-Type-Options "nosniff" always;
         add_header Cross-Origin-Resource-Policy "cross-origin" always;
 
+        # CROSS-ORIGIN ISOLATION, which is what lets the page start the threaded engine
+        # (index-mt, beside index; embed.html picks it when `crossOriginIsolated` is
+        # true). Off unless install-game-origin.sh --isolation: COEP require-corp makes
+        # every subresource the page loads from another origin answer with CORS or a
+        # Cross-Origin-Resource-Policy, and a content host that does not stops loading.
+        # Framed in the site, the SITE's page needs the same pair for the frame to be
+        # isolated; without it the game runs single-threaded, as before. web/README.md,
+        # "Threads".
+        @ISOLATION_HEADERS@
+
         # no-cache by default: the browser keeps the 70 MB pck and the wasm but revalidates by
         # ETag on every load, so a new export arrives and an unchanged one costs a 304. (no-store
         # refetched all of it on every refresh.) A development build changes on every export; caching it is how you spend
