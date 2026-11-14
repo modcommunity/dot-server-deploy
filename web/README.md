@@ -112,6 +112,14 @@ Then every subresource from another origin must answer with CORS (`Access-Contro
 
 Missing any one of them is not an error: the frame is simply not isolated and gets the single-threaded engine.
 
+## Native modules (dot-sim in the browser)
+
+`./server export-web` builds on Godot's **dlink** web template when dot-sim's web side module is installed (`fetch-natives.sh --platform web-wasm32`, from the dot-sim release's `dot_sim-<v>-web-wasm32.zip`): the preset gets Extensions Support, the build carries `index.side.wasm` (the engine's side half, 44 MB, fetched as `<executable>.side.wasm`) and `dot_sim.wasm` beside `index.wasm`, and `embed.html` is stamped with `gdextensionLibs: ["dot_sim.wasm"]`. The shell then logs `dot-sim native: bots=yes motor=yes snapshot=yes`. godot-sqlite and any other extension without a web build stay out of the pck; export-web refuses a pck `.gdextension` with no side module beside it.
+
+- **`?natives=0`** starts the same build without the side module: dot-sim's GDScript paths run, as on the plain template. A start with native modules that fails retries once with `?natives=0` on its own. `window.__TMC_NATIVES__` says which (`"native"` or `"script"`).
+- **`TMC_WEB_NATIVE=0 ./server export-web`** builds the plain script-only client (the threaded twin comes back with it). The dlink build has no threaded engine: its side modules would need building for threads too.
+- **Serving**: `index.side.wasm` and `dot_sim.wasm` must go out as `application/wasm` like `index.wasm`, or the browser refuses to compile them. `publish-web-shell.sh` uploads `index.side.wasm` with the engine files.
+
 ## TLS
 
 A page on HTTPS cannot open `ws://`. Browsers report that as a generic connection failure with no mention of mixed content, which is why `embed.html` checks for it and says so itself.
