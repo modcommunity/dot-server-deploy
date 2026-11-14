@@ -15,6 +15,10 @@
 #
 # --self-signed makes a certificate for the domain first, which is what a
 # development box wants and what a real one must not have.
+#
+# --isolation (TMC_GAME_ISOLATION=1) sends COOP same-origin and COEP require-corp
+# with the player, so a browser lets it run the threaded engine (web/README.md,
+# "Threads"). Every other origin the game loads from then has to send CORS or CORP.
 
 set -uo pipefail
 
@@ -35,6 +39,7 @@ CONTENT_ROOT="${TMC_GAME_CONTENT_ROOT:-/srv/tmc-content}"
 SSL_CERT="${TMC_GAME_SSL_CERT:-}"
 SSL_KEY="${TMC_GAME_SSL_KEY:-}"
 CACHE_CONTROL="${TMC_GAME_CACHE_CONTROL:-no-cache}"
+ISOLATION="${TMC_GAME_ISOLATION:-}"
 SELF_SIGNED=""
 LOCAL_CA=""
 CA_CERT="${TMC_LOCAL_CA_CERT:-/opt/tmc-local-ca.crt}"
@@ -53,11 +58,12 @@ while [ $# -gt 0 ]; do
         --key)          SSL_KEY="${2:?--key needs a value}"; shift 2 ;;
         --cache)        CACHE_CONTROL="${2:?--cache needs a value}"; shift 2 ;;
         --self-signed)  SELF_SIGNED=1; shift ;;
+        --isolation)    ISOLATION=1; shift ;;
         --local-ca)     LOCAL_CA=1; shift ;;
         --ca-cert)      CA_CERT="${2:?--ca-cert needs a value}"; shift 2 ;;
         --ca-key)       CA_KEY="${2:?--ca-key needs a value}"; shift 2 ;;
         --dry-run)      DRY_RUN=1; shift ;;
-        -h|--help)      sed -n '2,20p' "$0"; exit 0 ;;
+        -h|--help)      sed -n '2,22p' "$0"; exit 0 ;;
         *)              die "unknown argument: $1" 2 ;;
     esac
 done
@@ -169,6 +175,12 @@ TEMPLATE="$ROOT/deploy/game-origin.nginx.template"
 rendered="$(mktemp)"
 trap 'rm -f "$rendered"' EXIT
 
+if [ "$ISOLATION" = 1 ]; then
+    ISOLATION_HEADERS='add_header Cross-Origin-Opener-Policy "same-origin" always; add_header Cross-Origin-Embedder-Policy "require-corp" always;'
+else
+    ISOLATION_HEADERS='# (not isolated: install with --isolation for the threaded engine)'
+fi
+
 sed -e "s|@GAME_DOMAIN@|$DOMAIN|g" \
     -e "s|@SITE_ORIGINS@|$SITE_ORIGINS|g" \
     -e "s|@WEB_ROOT@|$WEB_ROOT|g" \
@@ -176,6 +188,7 @@ sed -e "s|@GAME_DOMAIN@|$DOMAIN|g" \
     -e "s|@SSL_CERT@|$SSL_CERT|g" \
     -e "s|@SSL_KEY@|$SSL_KEY|g" \
     -e "s|@CACHE_CONTROL@|$CACHE_CONTROL|g" \
+    -e "s|@ISOLATION_HEADERS@|$ISOLATION_HEADERS|g" \
     "$TEMPLATE" > "$rendered"
 
 if grep -q '@[A-Z_]*@' "$rendered"; then

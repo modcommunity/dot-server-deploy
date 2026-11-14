@@ -133,7 +133,8 @@
      effects), so this puts one in front of the speakers. dot-audio docs/loudness.md. -->
 <script src="dot_web.js"></script>
 <script src="dot_audio_ceiling.js"></script>
-<script src="index.js"></script>
+<!-- index.js or index-mt.js is loaded by the script below: which one depends on the page's
+     headers (THREADS, below). -->
 <script>
 (function () {
   "use strict";
@@ -286,7 +287,23 @@
   window.addEventListener("resize", resize);
   resize();
 
-  var engine = new Engine({
+  /*
+   * THREADS. `export-web` puts a threaded engine (index-mt.js/.wasm) beside the
+   * single-threaded one and writes its name over the null below; a page served
+   * without that step has none. The threaded engine needs SharedArrayBuffer, which
+   * a browser only gives a cross-origin isolated page (COOP same-origin and COEP
+   * require-corp or credentialless on this page, and on every page framing it), so
+   * a host without those headers gets the single-threaded engine and the same game.
+   * `?threads=0` forces the single-threaded one. web/README.md, "Threads".
+   */
+  var ENGINE_MT = /*ENGINE_MT*/null;
+  var threaded = !!ENGINE_MT && self.crossOriginIsolated === true &&
+    typeof SharedArrayBuffer === "function" &&
+    new URLSearchParams(location.search).get("threads") !== "0";
+  // Read by the browser checks (tools/browser_check.mjs) and by anybody asking "which one?".
+  window.__TMC_ENGINE__ = threaded ? "threads" : "single";
+
+  var config = {
     canvas: canvas,
     // The base name of the export, and NOT optional. Everything the engine fetches
     // after index.js is derived from it -- index.wasm, index.pck, the worklets -- so
@@ -308,8 +325,30 @@
           solo.map ? ["--solo-map", solo.map] : [])
       : ["--", "--connect", server],
     focusCanvas: true,
-  });
+  };
+  if (threaded) {
+    // Its own wasm and worklets, the one pck: a pck does not care about threads.
+    // (publish-web-shell.sh may already have set mainPack, pointing executable at the
+    // shared engine folder.)
+    config.executable = ENGINE_MT;
+    config.mainPack = config.mainPack || "index.pck";
+  }
 
+  // The engine's loader script, then the engine. Loaded from here rather than by a tag
+  // because which one depends on the check above. A script element inserted this way
+  // still sets document.currentScript, which is how the threaded engine finds the
+  // script its worker threads start from.
+  var loader = document.createElement("script");
+  loader.src = (threaded ? "index-mt" : "index") + ".js";
+  loader.onerror = function () {
+    message.textContent = "This did not load.";
+    detail.className = "error";
+    detail.textContent = "Could not load " + loader.src;
+  };
+  loader.onload = function () { start(new Engine(config)); };
+  document.body.appendChild(loader);
+
+  function start(engine) {
   engine.startGame({
     onProgress: function (loaded, total) {
       if (total > 0) {
@@ -335,6 +374,7 @@
     detail.className = "error";
     detail.textContent = String(error);
   });
+  }
 })();
 </script>
 </body>

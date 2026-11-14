@@ -1171,7 +1171,61 @@ stamp_file_sizes() {
     [ -f "$build/index.html" ] && [ -f "$build/embed.html" ] || return 0
     sizes=$(grep -o '"fileSizes":{[^}]*}' "$build/index.html" | head -1 | sed 's/^"fileSizes"://')
     [ -n "$sizes" ] || return 0
+    # The threaded twin's wasm, which index.html does not know about (install_threaded_engine).
+    if [ -f "$build/index-mt.wasm" ]; then
+        sizes="${sizes%\}},\"index-mt.wasm\":$(stat -c %s "$build/index-mt.wasm")}"
+    fi
     sed -i "s#/\*FILE_SIZES\*/{}#$sizes#" "$build/embed.html"
+}
+
+## [b]The threaded engine, beside the single-threaded one[/b], as index-mt.{js,wasm,...}.
+##
+## A browser only gives a page SharedArrayBuffer when the page is cross-origin isolated
+## (COOP same-origin + COEP require-corp or credentialless), and the threaded engine does
+## not start without it. So the export stays single-threaded (the preset's
+## thread_support=false), and this adds the threads template's engine files next to it,
+## sharing the one index.pck: a pck does not depend on the engine's thread support.
+## embed.html picks index-mt when `crossOriginIsolated` is true and index otherwise, so a
+## host without the headers still gets a working game. What the headers have to be, and
+## where: web/README.md, "Threads".
+##
+## Skipped (and any old twin removed) when the preset is not the stock nothreads one: a
+## dlink build (extensions_support) needs side modules built for pthreads, and a custom
+## template has no threaded twin this can find. TMC_WEB_THREADS=0 turns it off.
+install_threaded_engine() {
+    local build="$1" cfg="$PROJECT/export_presets.cfg" version dir zip f
+    rm -f "$build"/index-mt.js "$build"/index-mt.wasm "$build"/index-mt.audio.worklet.js \
+        "$build"/index-mt.audio.position.worklet.js
+    [ "${TMC_WEB_THREADS:-1}" = "0" ] && return 0
+    [ -f "$cfg" ] || return 0
+    # The Web preset's options only: from its [preset.N] to the next preset's.
+    if awk '/^\[preset\.[0-9]+\]$/ { web = 0 } /^name="Web"$/ { web = 1 }
+            web && (/^variant\/extensions_support=true/ || /^variant\/thread_support=true/ || /^custom_template\/release="[^"]/) { found = 1 }
+            END { exit !found }' "$cfg"; then
+        warn "no threaded engine beside this web build: the Web preset is not the stock single-threaded one (dlink, threads or a custom template)"
+        return 0
+    fi
+    version="$("$PROJECT/tools/fetch-godot.sh" --version 2>/dev/null)" || version=""
+    [ -n "$version" ] || { warn "no threaded engine beside this web build: the engine version is unknown"; return 0; }
+    dir="${TMC_TEMPLATES_DIR:-${XDG_DATA_HOME:-${HOME:-/nonexistent}/.local/share}/godot/export_templates}/${version%-*}.${version##*-}"
+    zip="$dir/web_release.zip"
+    [ -f "$zip" ] || { warn "no threaded engine beside this web build: $zip is missing"; return 0; }
+    for f in js wasm audio.worklet.js audio.position.worklet.js; do
+        if command -v unzip >/dev/null 2>&1; then
+            unzip -p "$zip" "godot.$f" > "$build/index-mt.$f"
+        else
+            python3 -c 'import sys, zipfile; sys.stdout.buffer.write(zipfile.ZipFile(sys.argv[1]).read(sys.argv[2]))' \
+                "$zip" "godot.$f" > "$build/index-mt.$f"
+        fi && [ -s "$build/index-mt.$f" ] || {
+            rm -f "$build"/index-mt.js "$build"/index-mt.wasm "$build"/index-mt.audio.worklet.js \
+                "$build"/index-mt.audio.position.worklet.js
+            warn "no threaded engine beside this web build: could not read godot.$f from $zip"
+            return 0
+        }
+    done
+    # embed.html only tries a threaded engine it has been told is there.
+    [ -f "$build/embed.html" ] && sed -i 's#/\*ENGINE_MT\*/null#"index-mt"#' "$build/embed.html"
+    printf '  threaded engine beside it (index-mt.*), used where the page is cross-origin isolated\n'
 }
 
 ## dot-core's page script: every browser call DotWeb makes (the keyboard lock, the leave prompt,
@@ -1670,6 +1724,7 @@ case "$COMMAND" in
         # are each box's own copy.
         install_ceiling "$PROJECT/web/build"
         install_dot_web "$PROJECT/web/build"
+        install_threaded_engine "$PROJECT/web/build"
 
         # The byte counts of the engine files, from the index.html Godot just wrote, into
         # embed.html: the engine's progress callback only has a total when it is given one.

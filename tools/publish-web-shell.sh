@@ -307,6 +307,15 @@ PY
 # template, so they go once under a content hash and the page points `executable` there.
 # A returning player then re-downloads only the pck when a new shell is published.
 ENGINE_FILES=(index.wasm index.audio.worklet.js index.audio.position.worklet.js)
+# The threaded twin export-web puts beside it (index-mt.*, used where the page is cross-origin
+# isolated), when it is there. Its index-mt.js stays in the build, like index.js: the page
+# loads it by a relative name, and its worker threads start from that same script.
+ENGINE_MT_FILES=(index-mt.wasm index-mt.audio.worklet.js index-mt.audio.position.worklet.js)
+engine_mt=0
+if [ -f "$work/build/index-mt.wasm" ] && grep -q '"index-mt";' "$work/build/embed.html" 2>/dev/null; then
+    engine_mt=1
+    ENGINE_FILES+=("${ENGINE_MT_FILES[@]}")
+fi
 engine_hash=
 if [ "$ENTRY" = embed.html ] && [ "${SHELL_SHARED_ENGINE:-1}" = 1 ] && [ "${SHELL_NO_BROTLI:-0}" != 1 ] \
     && grep -q '^ *executable: "index",' "$work/build/embed.html"; then
@@ -317,6 +326,9 @@ if [ -n "$engine_hash" ]; then
     eng="../engine/$engine_hash/index"
     sed -i -e "s#^\( *\)executable: \"index\",#\1executable: \"$eng\", mainPack: \"index.pck\",#" \
         -e "s#\"index.wasm\":#\"$eng.wasm\":#" "$work/build/embed.html"
+    if [ "$engine_mt" = 1 ]; then
+        sed -i -e "s#\"index-mt\";#\"$eng-mt\";#" -e "s#\"index-mt.wasm\":#\"$eng-mt.wasm\":#" "$work/build/embed.html"
+    fi
     echo "engine  game/$APP/engine/$engine_hash/ (shared by every build with this template)"
     if [ "$DRY" = 0 ] && [ -n "$API" ]; then
         for e in "${ENGINE_FILES[@]}"; do

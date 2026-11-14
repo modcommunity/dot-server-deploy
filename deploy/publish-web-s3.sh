@@ -41,9 +41,9 @@
 # that looks like a broken export: the publish says ok and the browser gets 403
 # for `index.wasm`.
 #
-# COOP/COEP are NOT in that list, deliberately: they are only needed by an export
-# built with thread support, and this project's preset has it off. Turn threads on
-# and you need them, and then a bare bucket is no longer enough on its own.
+# COOP/COEP are NOT in that list, deliberately: the game works without them. They
+# only let embed.html use the threaded engine export-web puts beside the single-
+# threaded one (web/README.md, "Threads"); add them to the same policy for that.
 #
 # CREDENTIALS come from the environment, never from an argument -- an argument is
 # in the shell history and in `ps`:
