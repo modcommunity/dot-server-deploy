@@ -822,8 +822,10 @@ switch ($Command) {
         # with export-native, which excludes the same directory for the same reason.
         Test-ExcludedMaps (Join-Path $Project 'web\build\index.pck')
 
-        # A .gdextension in a web build stops every script. The preset excludes it; a box
-        # whose export_presets.cfg is an older copy would ship the unpacked natives.
+        # A .gdextension in a plain-template web build stops every script. The Linux
+        # ./server export-web ships dot-sim natively (dlink template, web-wasm32 side
+        # module, see server.in check_web_natives); this one builds the script-only web
+        # client, so its Web preset must exclude *.gdextension with extensions_support=false.
         # Searched in chunks (a pck is large); ISO-8859-1 keeps one byte to one char.
         $needle = '.gdextension'
         $latin = [System.Text.Encoding]::GetEncoding(28591)
@@ -839,7 +841,7 @@ switch ($Command) {
         } finally { $fs.Dispose() }
         if ($hit) {
             Remove-Item -Force $webPck
-            Die "the Web export carries a .gdextension (the unpacked native library); add *.gdextension and addons/*/bin/* to the Web preset's exclude_filter (export_presets.example.cfg has it)." 3
+            Die "the Web export carries a .gdextension (the unpacked native library); the Windows export-web builds the script-only web client: add *.gdextension and addons/*/bin/* to the Web preset's exclude_filter and set variant/extensions_support=false, or export with the Linux ./server export-web, which ships dot-sim natively." 3
         }
 
         $embed = Join-Path $Project 'web\embed.html'

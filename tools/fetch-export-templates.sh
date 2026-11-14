@@ -95,11 +95,14 @@ DEST="$DEST_ROOT/$VERSION_DIR"
 # The web presets here are the NOTHREADS ones -- the browser build ships without
 # thread support, which is `DotScheduler`'s whole reason for slicing on the main
 # thread -- and those are separate files from the threaded ones. Checking for the
-# wrong one is an install that passes its own check and fails the export.
+# wrong one is an install that passes its own check and fails the export. The Web
+# preset exports with Extensions Support (the dlink template, so dot-sim's side module
+# loads); TMC_WEB_NATIVE=0 exports with the plain one. Both are checked.
 templates_present() {
     [ -d "$DEST" ] || return 1
     local f
     for f in web_nothreads_debug.zip web_nothreads_release.zip \
+             web_dlink_nothreads_debug.zip web_dlink_nothreads_release.zip \
              linux_debug.x86_64 linux_release.x86_64; do
         [ -f "$DEST/$f" ] || return 1
     done

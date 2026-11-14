@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # The dot-sim platform zip is unpacked by setup.sh and export-native (tools/fetch-natives.sh,
-# which reuses dot-bootstrap's fetcher) and never reaches export-web. Offline.
+# which reuses dot-bootstrap's fetcher); export-web fetches the web-wasm32 side module and
+# ships it with the dlink template. Offline.
 set -uo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 GRN=$'\033[32m'; RED=$'\033[31m'; YLW=$'\033[33m'; OFF=$'\033[0m'
@@ -9,13 +10,25 @@ t() { if [ "$2" = 0 ]; then printf '  %sok%s   %s\n' "$GRN" "$OFF" "$1"; else pr
 
 grep -q 'tools/fetch-natives.sh' setup.sh;               t "setup.sh runs tools/fetch-natives.sh" $?
 grep -q 'tools/fetch-natives.sh' tools/server.in;        t "export-native runs tools/fetch-natives.sh" $?
-# the call sits in do_export_native, not in the export-web branch
-awk '/^do_export_native\(\)/{in_n=1} in_n&&/fetch-natives.sh/{f=1} /^    export-web\)/{in_n=0; w=1} w&&/fetch-natives.sh/{bad=1} END{exit !(f&&!bad)}' tools/server.in
-t "fetch-natives.sh is called from do_export_native and not from export-web" $?
+# export-native fetches its platforms; export-web fetches web-wasm32 only (dot-sim's side module)
+awk '/^do_export_native\(\)/{in_n=1} in_n&&/fetch-natives.sh/{f=1} /^    export-web\)/{in_n=0; w=1} w&&/^        ;;/{w=0} w&&/fetch-natives.sh/{wc=1} w&&/fetch-natives.sh/&&!/--platform web-wasm32/{bad=1} END{exit !(f&&wc&&!bad)}' tools/server.in
+t "fetch-natives.sh: do_export_native, and export-web for web-wasm32 only" $?
 web="$(awk '/^\[preset\.[0-9]+\]$/{p=0} /^name="Web"/{p=1} p&&/^exclude_filter=/' export_presets.example.cfg)"
-{ grep -qF '*.gdextension' <<<"$web" && grep -qF 'addons/*/bin/*' <<<"$web"; }
-t "the Web preset excludes *.gdextension and addons/*/bin/*" $?
-grep -q 'carries a .gdextension' tools/server.in;        t "export-web refuses a pck that carries a .gdextension" $?
+{ ! grep -qF '*.gdextension' <<<"$web" && grep -qF 'addons/*/bin/*' <<<"$web"; }
+t "the Web preset keeps *.gdextension (dlink) and excludes addons/*/bin/*" $?
+webopts="$(awk '/^\[preset\.[0-9]+\]$/{p=0} /^name="Web"/{w=1} /^\[preset\.[0-9]+\.options\]$/{p=w; w=0} p' export_presets.example.cfg)"
+grep -qx 'variant/extensions_support=true' <<<"$webopts" && grep -qx 'variant/thread_support=false' <<<"$webopts"
+t "the Web preset exports with the dlink nothreads template" $?
+grep -q 'carries a .gdextension (the unpacked native library) with the plain template' tools/server.in
+t "export-web refuses a .gdextension in a plain-template pck" $?
+grep -q 'no web side module beside it' tools/server.in && grep -q 'no index.side.wasm' tools/server.in
+t "export-web refuses a dlink pck whose side module is missing" $?
+grep -q 'GDEXTENSION_LIBS' web/embed.html && grep -q 'GDEXTENSION_LIBS' tools/server.in && grep -q 'natives") === "0"' web/embed.html
+t "embed.html loads the stamped side modules, ?natives=0 runs GDScript" $?
+grep -q 'ENGINE_FILES+=(index.side.wasm)' tools/publish-web-shell.sh
+t "publish-web-shell ships index.side.wasm beside the shared engine" $?
+grep -q 'web_dlink_nothreads_release.zip' tools/fetch-export-templates.sh
+t "fetch-export-templates installs the dlink template" $?
 grep -qP '^dot-sim\tv' addons.lock;                      t "addons.lock pins dot-sim" $?
 
 # The Windows twins: setup.ps1 and server.ps1.in run tools/fetch-natives.ps1 (export-native for

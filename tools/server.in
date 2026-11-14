@@ -1176,6 +1176,101 @@ stamp_file_sizes() {
         sizes="${sizes%\}},\"index-mt.wasm\":$(stat -c %s "$build/index-mt.wasm")}"
     fi
     sed -i "s#/\*FILE_SIZES\*/{}#$sizes#" "$build/embed.html"
+    # The side modules a dlink export loads (dot_sim.wasm), the same way: embed.html
+    # starts the engine without them when this is left empty.
+    libs=$(grep -o '"gdextensionLibs":\[[^]]*\]' "$build/index.html" | head -1 | sed 's/^"gdextensionLibs"://')
+    [ -n "$libs" ] && sed -i "s#/\*GDEXTENSION_LIBS\*/\[\]#$libs#g" "$build/embed.html"
+    return 0
+}
+
+## [b]The web build runs dot-sim natively[/b] (TMC_WEB_NATIVE, on by default): the Web preset
+## exports with the dlink nothreads template (variant/extensions_support=true), which loads
+## GDExtension side modules, and the pck carries addons/dot_sim/dot_sim.gdextension with a
+## web.wasm32 line naming bin/web-wasm32/dot_sim.wasm -- dot-sim's web-wasm32 release zip,
+## which tools/fetch-natives.sh installs. Godot copies it beside index.html and lists it in
+## the page's gdextensionLibs. dot-sim docs/web.md has the measurements (native paths 3 to
+## 7 times faster than the script twins in the browser, same bytes).
+##
+## The plain template refuses to start ANY script when the pck carries a .gdextension, so
+## the mode decides the preset, and the preset decides the template: native is
+## extensions_support=true with *.gdextension left in, script (TMC_WEB_NATIVE=0, or no
+## side module to ship) is extensions_support=false with *.gdextension excluded. A box's
+## export_presets.cfg is its own copy, so this puts its Web preset in the mode, in place,
+## as ensure_shell_excludes does for the addons. Non-dot addons (godot-sqlite, whose
+## .gdextension has web entries) stay excluded by ensure_shell_excludes in both modes.
+web_native_mode() {
+    [ "${TMC_WEB_NATIVE:-1}" = 0 ] && { echo script; return; }
+    if [ -f "$PROJECT/addons/dot_sim/bin/web-wasm32/dot_sim.wasm" ] \
+            && grep -q '^web\.wasm32 *=' "$PROJECT/addons/dot_sim/dot_sim.gdextension" 2>/dev/null; then
+        echo native
+    else
+        echo script
+    fi
+}
+
+ensure_web_preset() {
+    local mode="$1" cfg="$PROJECT/export_presets.cfg" tmp rc
+    [ -f "$cfg" ] || return 0
+    tmp="$(mktemp "$PROJECT/.export_presets.XXXXXX")" || die "could not write a temporary file" 5
+    awk -v mode="$mode" '
+        /^\[preset\.[0-9]+\]$/ { sec = $0; gsub(/[^0-9]/, "", sec); main = 1; opts = 0 }
+        /^\[preset\.[0-9]+\.options\]$/ { o = $0; gsub(/[^0-9]/, "", o); opts = (o == web); main = 0 }
+        main && /^name="Web"$/ { web = sec }
+        main && web == sec && /^exclude_filter=/ {
+            value = substr($0, length("exclude_filter=\"") + 1); sub(/"$/, "", value)
+            n = split(value, part, /, */); out = ""; has = 0
+            for (i = 1; i <= n; i++) {
+                if (part[i] == "*.gdextension") { has = 1; if (mode == "native") { changed = 1; continue } }
+                if (part[i] != "") out = (out == "" ? part[i] : out ", " part[i])
+            }
+            if (mode != "native" && !has) { out = (out == "" ? "*.gdextension" : out ", *.gdextension"); changed = 1 }
+            print "exclude_filter=\"" out "\""; next
+        }
+        opts && /^variant\/extensions_support=/ {
+            want = (mode == "native") ? "true" : "false"
+            if ($0 != "variant/extensions_support=" want) changed = 1
+            print "variant/extensions_support=" want; next
+        }
+        opts && mode == "native" && /^variant\/thread_support=true/ { print "variant/thread_support=false"; changed = 1; next }
+        { print }
+        END { exit changed ? 10 : 0 }
+    ' "$cfg" > "$tmp"
+    rc=$?
+    case "$rc" in
+        0)  rm -f "$tmp" ;;
+        10) mv "$tmp" "$cfg" || { rm -f "$tmp"; die "could not update $cfg" 5; }
+            printf '  export_presets.cfg: the Web preset now exports %s\n' \
+                "$([ "$mode" = native ] && echo 'with the dlink template and dot-sim'\''s side module' || echo 'without native modules (plain template, *.gdextension excluded)')" ;;
+        *)  rm -f "$tmp"; die "could not update $cfg" 5 ;;
+    esac
+}
+
+## What a web pck may carry. Script mode: no .gdextension at all (one stops every script on
+## the plain template). Native mode: the dlink engine (index.side.wasm beside it), and only
+## .gdextension files whose web.wasm32 library was copied beside index.html -- a dlink page
+## that lists a side module it cannot fetch does not start, and one the pck names with no
+## web entry is an error in every player's console.
+check_web_natives() {
+    local build="$1" mode="$2" pck="$1/index.pck" exts ext lib bad=""
+    if [ "$mode" != native ]; then
+        grep -qaF '.gdextension' "$pck" || return 0
+        rm -f "$pck"
+        die "the Web export carries a .gdextension (the unpacked native library) with the plain template; add *.gdextension and addons/*/bin/* to the Web preset's exclude_filter (export_presets.example.cfg has it) or export with TMC_WEB_NATIVE=1." 3
+    fi
+    if [ ! -f "$build/index.side.wasm" ]; then
+        rm -f "$pck"
+        die "the Web export carries dot-sim's .gdextension but was not built with the dlink template (no index.side.wasm); set variant/extensions_support=true in the Web preset." 3
+    fi
+    exts="$(grep -aoE 'addons/[A-Za-z0-9_.-]+/[A-Za-z0-9_./-]*\.gdextension' "$pck" | sort -u)"
+    for ext in $exts; do
+        lib="$(sed -n 's#^web\.wasm32 *= *"res://\(.*\)".*#\1#p' "$PROJECT/$ext" 2>/dev/null | head -1)"
+        if [ -z "$lib" ] || [ ! -f "$build/$(basename "$lib")" ]; then bad="$bad $ext"; fi
+    done
+    if [ -n "$bad" ]; then
+        rm -f "$pck"
+        die "the Web export carries a .gdextension with no web side module beside it:$bad. Exclude it in the Web preset, or ship its web-wasm32 library (tools/fetch-natives.sh --platform web-wasm32)." 3
+    fi
+    printf '  native modules: %s\n' "$(cd "$build" && ls ./*.wasm | grep -v '/index\.' | sed 's#^\./##' | tr '\n' ' ')"
 }
 
 ## [b]The threaded engine, beside the single-threaded one[/b], as index-mt.{js,wasm,...}.
@@ -1199,6 +1294,10 @@ install_threaded_engine() {
     [ "${TMC_WEB_THREADS:-1}" = "0" ] && return 0
     [ -f "$cfg" ] || return 0
     # The Web preset's options only: from its [preset.N] to the next preset's.
+    if [ "${WEB_MODE:-}" = native ]; then
+        printf '  no threaded engine: dot-sim runs natively on the dlink single-threaded one\n'
+        return 0
+    fi
     if awk '/^\[preset\.[0-9]+\]$/ { web = 0 } /^name="Web"$/ { web = 1 }
             web && (/^variant\/extensions_support=true/ || /^variant\/thread_support=true/ || /^custom_template\/release="[^"]/) { found = 1 }
             END { exit !found }' "$cfg"; then
@@ -1666,8 +1765,18 @@ case "$COMMAND" in
         ensure_export_templates
         ensure_lock_exported
         ensure_shell_excludes
+        # dot-sim's web side module (its web-wasm32 release zip), then the preset to match
+        # what is there: web_native_mode says why.
+        if [ "${TMC_WEB_NATIVE:-1}" != 0 ]; then
+            "$PROJECT/tools/fetch-natives.sh" --platform web-wasm32 \
+                || warn "dot-sim's web module: see above (the web build runs GDScript)"
+        fi
+        WEB_MODE="$(web_native_mode)"
+        ensure_web_preset "$WEB_MODE"
         stamp_shell_version
         mkdir -p "$PROJECT/web/build"
+        # Side modules of an earlier export: a script-mode build must not carry one.
+        rm -f "$PROJECT/web/build/index.side.wasm" "$PROJECT/web/build/dot_sim.wasm"
 
         # Godot caches its text->binary scene conversions in .godot/exported/, and
         # --import does NOT invalidate them. setup.sh copies each game's .gd files out
@@ -1696,12 +1805,9 @@ case "$COMMAND" in
         # Shared with `export-native`, which excludes the same directory for the same
         # reason -- the story that put the check here is on the function.
         check_excluded_maps "$PROJECT/web/build/index.pck"
-        # A .gdextension in a web build stops every script. The preset excludes it; a box
-        # whose export_presets.cfg is an older copy would ship the unpacked natives.
-        if grep -qaF '.gdextension' "$PROJECT/web/build/index.pck"; then
-            rm -f "$PROJECT/web/build/index.pck"
-            die "the Web export carries a .gdextension (the unpacked native library); add *.gdextension and addons/*/bin/* to the Web preset's exclude_filter (export_presets.example.cfg has it)." 3
-        fi
+        # A .gdextension in a plain-template web build stops every script; a dlink one
+        # needs its side module beside it. check_web_natives.
+        check_web_natives "$PROJECT/web/build" "$WEB_MODE"
         check_lock_exported "$PROJECT/web/build/index.pck"
         check_shell_dot_only "$PROJECT/web/build/index.pck"
 

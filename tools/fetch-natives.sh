@@ -15,8 +15,10 @@
 # $DOT_BOOTSTRAP, beside this checkout, and in addons/.repos/; a server box that has none
 # clones it shallow into addons/.repos/ (unless --no-clone).
 #
-# [b]Never run for export-web.[/b] A .gdextension in a web build stops every script. The Web
-# preset excludes `*.gdextension` and `addons/*/bin/*`, and tools/check.sh checks both.
+# [b]export-web runs it for web-wasm32 only[/b]: dot-sim's side module, which the Web
+# preset's dlink template loads (server.in web_native_mode). A .gdextension in a web build
+# exported with the plain template stops every script, so export-web picks the template
+# from what this installed, and refuses a pck whose .gdextension has no side module.
 # DOT_NATIVES=none skips everything; a platform with no zip warns and the GDScript twins run.
 set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
