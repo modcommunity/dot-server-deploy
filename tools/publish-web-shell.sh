@@ -316,6 +316,10 @@ if [ -f "$work/build/index-mt.wasm" ] && grep -q '"index-mt";' "$work/build/embe
     engine_mt=1
     ENGINE_FILES+=("${ENGINE_MT_FILES[@]}")
 fi
+# A dlink build (dot-sim native on the web) adds the engine's side module: Godot fetches it
+# at <executable>.side.wasm, so it must sit beside the shared index.wasm. Its own natives
+# (dot_sim.wasm) are fetched beside the page and go with the build below.
+[ -f "$work/build/index.side.wasm" ] && ENGINE_FILES+=(index.side.wasm)
 engine_hash=
 if [ "$ENTRY" = embed.html ] && [ "${SHELL_SHARED_ENGINE:-1}" = 1 ] && [ "${SHELL_NO_BROTLI:-0}" != 1 ] \
     && grep -q '^ *executable: "index",' "$work/build/embed.html"; then

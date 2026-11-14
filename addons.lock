@@ -31,7 +31,7 @@ dot-matchmaking	v0.1.8
 dot-menu	v0.1.28
 dot-mobile	v0.1.0
 dot-moderation	v0.1.6
-dot-net	v0.1.31
+dot-net	v0.1.34
 dot-npc	v0.1.22
 dot-npc-ai	v0.1.13
 dot-npc-ai-director	v0.1.10
@@ -54,7 +54,7 @@ dot-server	v0.1.32
 dot-server-query	v0.1.8
 dot-server-security	v0.1.6
 dot-settings	v0.1.7
-dot-sim	v0.2.5
+dot-sim	v0.2.6
 dot-spawn	v0.2.3
 dot-spectate	v0.1.10
 dot-sql	v0.1.6

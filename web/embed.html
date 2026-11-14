@@ -297,14 +297,31 @@
    * `?threads=0` forces the single-threaded one. web/README.md, "Threads".
    */
   var ENGINE_MT = /*ENGINE_MT*/null;
-  var threaded = !!ENGINE_MT && self.crossOriginIsolated === true &&
+  // A dlink build (NATIVE MODULES below) has no threaded twin: its pck needs the dlink engine.
+  var threaded = !!ENGINE_MT && !/*GDEXTENSION_LIBS*/[].length && self.crossOriginIsolated === true &&
     typeof SharedArrayBuffer === "function" &&
     new URLSearchParams(location.search).get("threads") !== "0";
   // Read by the browser checks (tools/browser_check.mjs) and by anybody asking "which one?".
   window.__TMC_ENGINE__ = threaded ? "threads" : "single";
 
+  /*
+   * NATIVE MODULES. A dlink export (the Web preset's Extensions Support) lists the
+   * GDExtension side modules it ships -- dot-sim's dot_sim.wasm -- in index.html, and
+   * `export-web` writes that list over the empty one below. They are fetched beside
+   * this page; the engine's own side module (index.side.wasm) comes from `executable`.
+   * `?natives=0` starts without them: dot_sim.gdextension then fails to open, dot-sim
+   * stays unloaded, and every module runs its GDScript twin (same bytes, slower). A start
+   * that fails while they are on is retried once that way, so a side module that does not
+   * load costs speed, not the game. window.__TMC_NATIVES__ says which one is running.
+   */
+  var NATIVE_LIBS = /*GDEXTENSION_LIBS*/[];
+  var nativesOff = new URLSearchParams(location.search).get("natives") === "0";
+  var nativeLibs = nativesOff ? [] : NATIVE_LIBS;
+  window.__TMC_NATIVES__ = nativeLibs.length ? "native" : "script";
+
   var config = {
     canvas: canvas,
+    gdextensionLibs: nativeLibs,
     // The base name of the export, and NOT optional. Everything the engine fetches
     // after index.js is derived from it -- index.wasm, index.pck, the worklets -- so
     // without it the first request is for "/.pck", which 404s, and the loading overlay
@@ -370,6 +387,14 @@
     status.classList.add("hidden");
     canvas.focus();
   }).catch(function (error) {
+    if (nativeLibs.length) {
+      // Once, and only from a start that had native modules: ?natives=0 is the fallback.
+      console.error("start failed with native modules (" + nativeLibs.join(", ") + "); retrying without them: " + error);
+      var url = new URL(location.href);
+      url.searchParams.set("natives", "0");
+      location.replace(url.href);
+      return;
+    }
     message.textContent = "This did not load.";
     detail.className = "error";
     detail.textContent = String(error);
