@@ -302,7 +302,8 @@ func _selftest_operator_surface() -> bool:
 			return false
 
 		for entry in announced:
-			if str(entry.get("dir", "")) == "dot_server" and str(entry.get("id", "")) != "modcommunity/dot-server":
+			if str(entry.get("dir", "")) == "dot_server" \
+					and not (str(entry.get("id", "")) in ["modcommunity/dot-server", "gamespice-platform/server"]):
 				printerr("selftest FAILED: dot_server is advertised as %s" % str(entry.get("id", "")))
 				return false
 
@@ -867,7 +868,7 @@ const ADDONS_LOCK := "res://addons.lock"
 
 
 ## Tells every joining client which addon versions this server runs, so an addon release can skip the client build: an older shell fetches the newer addons as packs
-## (`modcommunity/<repo>@<version>`), lays them over its own and restarts into them (dot-cloud's `DotCloudAddonSet`).
+## (`modcommunity/dot-<name>@<version>`, the alias of `gamespice-platform/<name>`; [method TmcAddonNamespaces.announced_pack_for] says why), lays them over its own and restarts into them (dot-cloud's `DotCloudAddonSet`).
 ## The lock, not a guess at the checkout: setup.sh puts every clone at the locked ref. `TMC_ADDONS_LOCK=off` advertises nothing, because then the lock is not true.
 func _advertise_addons() -> void:
 	if OS.get_environment("TMC_ADDONS_LOCK") == "off":
@@ -1023,7 +1024,7 @@ static func addon_set_from(lock_text: String, dirs: PackedStringArray) -> Array:
 		if not versions.has(repo):
 			continue
 
-		var pack := TmcAddonNamespaces.pack_for(dir)
+		var pack := TmcAddonNamespaces.announced_pack_for(dir)
 
 		out.append({
 			"dir": dir,
@@ -1044,7 +1045,7 @@ static func addon_repo(dir: String) -> String:
 ## Whose namespace a repository's packs are published under. setup.sh's `repo_url`: the
 ## `dot-*` addons are the organisation's, everything else (the weapons pack) Christian's.
 static func content_owner(repo: String) -> String:
-	return "modcommunity" if repo.begins_with("dot-") else "gamemann"
+	return TmcAddonNamespaces.ORG if repo.begins_with("dot-") else "gamemann"
 
 
 ## Reports `sv_web_build`: the shell build this server's players are pinned to. EMPTY by default, which means the site's newest compatible shell, with no restart needed to move.
@@ -1127,7 +1128,7 @@ func _publish_requires() -> void:
 var _mounted_versions: Dictionary = {}
 
 
-## Registers `sv_pack_pins`: compact JSON of content id to version for every pack this server runs at a pinned version -- the addons its lock names (`modcommunity/dot-*`)
+## Registers `sv_pack_pins`: compact JSON of content id to version for every pack this server runs at a pinned version -- the addons its lock names (`gamespice-platform/*` and their `modcommunity/dot-*` aliases)
 ## and each pack mounted from the site. The site's content-retention sweep reads it so it never deletes a map or addon version a live server is pinned to.
 ## Always registered (NOTIFY, so the query reports it); empty until something is pinned.
 func _register_pack_pins() -> void:
@@ -1163,6 +1164,12 @@ static func pack_pins_json(addon_set: Array, mounted: Dictionary) -> String:
 
 		if id != "" and version != "":
 			pins[id] = version
+
+			# Both trees hold the version, and the sweep must spare it in whichever one a client fetches.
+			var pack := TmcAddonNamespaces.pack_for(str(entry.get("dir", "")))
+
+			if id == str(pack["old_id"]):
+				pins[str(pack["id"])] = version
 
 	for id in mounted:
 		var version := str(mounted[id])

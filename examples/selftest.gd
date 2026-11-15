@@ -802,7 +802,11 @@ func _test_addon_announce() -> void:
 	var renamed := Host.addon_set_from("fc-weapons\tv1.4.11\n", PackedStringArray(["arena_weapons"]))
 	_check(renamed.size() == 1 and renamed[0]["id"] == "gamemann/fc-weapons" and renamed[0]["version"] == "1.4.11", "a lock under the renamed repository's name announces the same pack")
 	_check(TmcAddonNamespaces.lock_repo("arena_weapons") == "fc-weapons" and TmcAddonNamespaces.dir_for("arena-weapons") == "arena_weapons", "arena_weapons is locked as fc-weapons, and its old name still finds the dir")
-	_check(out[1]["id"] == "modcommunity/dot-core" and out[1]["version"] == "0.1.30", "a dot-* addon keeps the organisation's id and version")
+	_check(out[1]["id"] == "modcommunity/dot-core" and out[1]["repo"] == "dot-core" and out[1]["version"] == "0.1.30", "a dot-* addon is announced under its old id, which every shell takes, at the lock's version")
+	var core := TmcAddonNamespaces.pack_for("dot_core")
+	_check(core["id"] == "gamespice-platform/core" and core["repo"] == "core" and core["old_id"] == "modcommunity/dot-core", "a dot-* addon's pack is gamespice-platform/<name>, with the modcommunity alias as its old id")
+	_check(TmcAddonNamespaces.dir_for_id("gamespice-platform/core") == "dot_core" and TmcAddonNamespaces.dir_for_id("modcommunity/dot-core") == "dot_core" and TmcAddonNamespaces.dir_for_id("gamemann/fc-weapons") == "arena_weapons", "both of an addon's ids find its dir")
+	_check(TmcAddonNamespaces.covers(TmcAddonNamespaces.DEFAULTS, "gamespice-platform/core") and TmcAddonNamespaces.covers(TmcAddonNamespaces.DEFAULTS, "modcommunity/dot-core"), "the shell takes the organisation's packs under the new and the old id")
 	_check(Host.addon_set_from(lock, PackedStringArray(["natural_disasters"])).is_empty(), "an addon the lock does not name is not announced")
 
 	var cfg := TmcAddonsConfig.new()
@@ -832,6 +836,7 @@ func _test_addon_announce() -> void:
 
 	var pins: Variant = JSON.parse_string(Host.pack_pins_json(out, {"modcommunity/dot-core": "9.9.9", "ow/map_a": "1.0.0"}))
 	_check(pins is Dictionary and pins.get("ow/map_a") == "1.0.0" and pins.get("modcommunity/dot-core") == "9.9.9", "sv_pack_pins lists mounted packs, and what is mounted wins over the lock")
+	_check(pins is Dictionary and pins.get("gamespice-platform/core") == "0.1.30" and not pins.has("gamespice-platform/fc-weapons"), "sv_pack_pins also pins a dot-* addon's version under its new id")
 	_check(Host.pack_pins_json([], {}) == "", "nothing pinned reports nothing")
 
 	# Download groups: the game names them per dir, the shell unions what it is about to build.

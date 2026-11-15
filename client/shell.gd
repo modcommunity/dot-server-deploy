@@ -2272,6 +2272,9 @@ func _solo_overlay(content_id: String, needs: Dictionary, subscribed: Array = []
 			continue
 		var pack := TmcAddonNamespaces.pack_for(dir)
 		var latest: DotResult = await TmcSolo.resolve_latest(self, str(pack["id"]), _cloud.http_base_urls)
+		if not latest.ok and str(pack["old_id"]) != "":
+			# Before the site renamed the organisation's packs only the old id is published.
+			latest = await TmcSolo.resolve_latest(self, str(pack["old_id"]), _cloud.http_base_urls)
 		if not latest.ok:
 			DotLog.warn(CHANNEL, "a game addon this solo game needs is not published", {
 				"content": content_id, "dir": dir, "id": pack["id"], "why": str(latest.error),

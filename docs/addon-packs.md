@@ -1,6 +1,6 @@
 # Addon releases reach players by a restart
 
-**What this platform wants:** a fix to an addon reaches every player by a server restart; a new shell is needed only for the engine, the boot stage or security. Every addon tag is already a signed pack on the content origin (`modcommunity/<repo>@<version>`, published by the site's release sync). This is the client side that takes one. dot-cloud's [docs/addon-packs.md](../../dot-cloud/docs/addon-packs.md) has why each dot-cloud piece is shaped the way it is.
+**What this platform wants:** a fix to an addon reaches every player by a server restart; a new shell is needed only for the engine, the boot stage or security. Every addon tag is already a signed pack on the content origin (`gamespice-platform/<name>@<version>`, published by the site's release sync; the old `modcommunity/dot-<name>` id is a mirrored alias that gets every new version too, see [Pack ids after the Gamespice rename](#pack-ids-after-the-gamespice-rename)). This is the client side that takes one. dot-cloud's [docs/addon-packs.md](../../dot-cloud/docs/addon-packs.md) has why each dot-cloud piece is shaped the way it is.
 
 ## How it works
 
@@ -42,7 +42,7 @@ The shell builds the overlay with the union of what the wanted entries name (`Tm
 
 ## Whose packs may replace the build's addons
 
-`TmcAddonNamespaces` (`client/tmc_addon_namespaces.gd`) is the `namespaces` list `DotCloudAddonSet.plan_for` takes an overlay from: the first-party defaults (`modcommunity/` plus the game addons published under their author: `gamemann/fc-weapons` (and its old id `gamemann/arena-weapons`), `zee-dot-weapons`, `zed-dot-weapons`, `natural-disasters`; a shell carries none of these, see [web-client.md](web-client.md#the-shell-carries-the-dot--addons-only)) plus what an operator who exports their own shell writes in `cfg/addons/namespaces.txt` (one `owner/` or `owner/repo` per line; the presets already include `cfg/addons/*`). It decides only whose pack may **replace** the shell's own `addons/<dir>`, which then runs for every game the shell plays, from the boot scene, before sign-in. So it is read from the shell build and **never from a server**: a server that could extend it could replace the player's code.
+`TmcAddonNamespaces` (`client/tmc_addon_namespaces.gd`) is the `namespaces` list `DotCloudAddonSet.plan_for` takes an overlay from: the first-party defaults (`gamespice-platform/` and the old `modcommunity/`, plus the game addons published under their author: `gamemann/fc-weapons` (and its old id `gamemann/arena-weapons`), `zee-dot-weapons`, `zed-dot-weapons`, `natural-disasters`; a shell carries none of these, see [web-client.md](web-client.md#the-shell-carries-the-dot--addons-only)) plus what an operator who exports their own shell writes in `cfg/addons/namespaces.txt` (one `owner/` or `owner/repo` per line; the presets already include `cfg/addons/*`). It decides only whose pack may **replace** the shell's own `addons/<dir>`, which then runs for every game the shell plays, from the boot scene, before sign-in. So it is read from the shell build and **never from a server**: a server that could extend it could replace the player's code.
 
 The server side is `cfg/content/addons.yml`: `namespaces:` (the owners the operator trusts; it must match the shell build's file) and `overlays: [owner/repo@version]`, addon packs announced in `addon_set` beside `addons.lock`'s; one replaces the lock's entry for the dir its pack carries (`TmcAddonNamespaces.dir_for`: `gamemann/zee-dot-weapons` is `zee_weapons`, `gamemann/fc-weapons` is `arena_weapons`), so an untagged dev publish can stand in for a lock bump on a dev server. An overlay whose owner is not under `namespaces:` fails the boot. A player on a stock shell refuses it (`refused` in the debug log) and joins on the build's own copy.
 
@@ -55,6 +55,15 @@ If a creator ever needs to replace a shared addon itself, the options are:
 - **(c) Keep the first-party list** (current). Nothing a creator ships today needs it.
 
 Deriving the list from the pack's own manifest is not an option: the pack would vouch for itself, so any approved creator could replace any addon by naming its dir.
+
+### Pack ids after the Gamespice rename
+
+The Dot packs moved from `modcommunity/dot-<name>` to `gamespice-platform/<name>`. The site keeps the old id as a mirrored `RetiredPackId`, so both ids get every version. `TmcAddonNamespaces.pack_for(dir)` returns the new id as `id` and the old one as `old_id`/`old_repo`; `dir_for_id` maps either back to the dir. Until the steps below are done, the server still **announces the old id** (`announced_pack_for`, used by `TmcHost.addon_set_from`):
+
+- every shell exported so far accepts only `modcommunity/` overlays, and
+- `DotCloudAddonSet` matches a pack to the shell's built version by the pack's file name (`dot-<name>`, the `addons.lock` key) and refuses an id whose file name is not the repo. Announcing `gamespice-platform/core` would make every shell refetch every addon or refuse it.
+
+The solo path in `client/shell.gd` resolves the new id first and falls back to the old one. `sv_pack_pins` pins both ids. Switching the announcement to the new ids needs a dot-cloud lookup by lock alias, a newly exported shell, and the site's prod migration (`npm run db:pack-rename:gamespice`).
 
 ## The end-to-end proof
 

@@ -9,13 +9,19 @@ extends RefCounted
 ## `cfg/addons/namespaces.txt` (one per line, `#` comments), which the export presets already include.
 ## It is read from the shell build and never from a server: a server that could extend it could replace the player's code.
 
-## The organisation's, and the game addons published under their author (the weapons packs, natural-disasters).
+## The organisation's (both its ids), and the game addons published under their author (the weapons packs, natural-disasters).
 ## A shell carries none of those (it is dot-* addons only), so these are what it fetches them under when a server announces them.
-## `gamemann/arena-weapons` stays for servers that still announce the old id.
-const DEFAULTS: PackedStringArray = ["modcommunity/", "gamemann/zee-dot-weapons", "gamemann/zed-dot-weapons", "gamemann/fc-weapons", "gamemann/arena-weapons", "gamemann/natural-disasters"]
+## `modcommunity/` and `gamemann/arena-weapons` stay for servers that still announce the old ids.
+const DEFAULTS: PackedStringArray = ["gamespice-platform/", "modcommunity/", "gamemann/zee-dot-weapons", "gamemann/zed-dot-weapons", "gamemann/fc-weapons", "gamemann/arena-weapons", "gamemann/natural-disasters"]
 
 ## Old repository names a lock or content list may still use, to the current one (`arena_weapons` lives in fc-weapons).
 const PUBLISHED_AS := {"arena-weapons": "fc-weapons"}
+
+## The organisation's packs: `dot-<name>` is published as `gamespice-platform/<name>`.
+const ORG := "gamespice-platform"
+
+## Its old owner. `modcommunity/dot-<name>` is a mirrored alias of the new id (website-city `RetiredPackId.mirror`), so it keeps every new version.
+const OLD_ORG := "modcommunity"
 
 ## Where an operator's additions live in the shell build.
 const FILE := "res://cfg/addons/namespaces.txt"
@@ -120,13 +126,36 @@ static func dir_for(repo: String) -> String:
 	return lock.replace("-", "_")
 
 
-## The pack [param dir]'s code is published as: `{repo, id}`, where `repo` is the id's name ([DotCloudAddonSet] refuses any other).
-## `dot-*` packs are the organisation's, the game addons their author's.
+## The pack [param dir]'s code is published as: `{repo, id, old_repo, old_id}`, where `repo` is the id's name ([DotCloudAddonSet] refuses any other).
+## `dot-*` packs are the organisation's (`gamespice-platform/<name>`, with the `modcommunity/dot-<name>` alias as `old_*`), the game addons their author's (no alias).
 static func pack_for(dir: String) -> Dictionary:
 	var lock := lock_repo(dir)
 	var repo := str(PUBLISHED_AS.get(lock, lock))
-	var owner := "modcommunity" if repo.begins_with("dot-") else "gamemann"
-	return {"repo": repo, "id": "%s/%s" % [owner, repo]}
+
+	if repo.begins_with("dot-"):
+		var name := repo.trim_prefix("dot-")
+		return {"repo": name, "id": "%s/%s" % [ORG, name], "old_repo": repo, "old_id": "%s/%s" % [OLD_ORG, repo]}
+
+	return {"repo": repo, "id": "gamemann/%s" % repo, "old_repo": "", "old_id": ""}
+
+
+## The `{repo, id}` a server announces for [param dir]: the old id while it has one. Every shell exported so far takes only `modcommunity/`, and
+## [DotCloudAddonSet] compares the version by `repo` against the shell's lock, which names `dot-<name>`; the alias receives every new version.
+static func announced_pack_for(dir: String) -> Dictionary:
+	var pack := pack_for(dir)
+
+	if str(pack["old_id"]) != "":
+		return {"repo": pack["old_repo"], "id": pack["old_id"]}
+
+	return {"repo": pack["repo"], "id": pack["id"]}
+
+
+## The addon directory a content id installs to: `gamespice-platform/<name>` is `dot_<name>`, anything else [method dir_for] of its name.
+static func dir_for_id(id: String) -> String:
+	if id.begins_with(ORG + "/"):
+		return "dot_" + id.get_file().replace("-", "_")
+
+	return dir_for(id.get_file())
 
 
 ## Whether [param id] (`owner/repo`) falls under [param namespaces], as [DotCloudAddonSet] decides.
