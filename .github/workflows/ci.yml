@@ -1,4 +1,4 @@
-# Every script parses, then every suite runs. The whole check is in modcommunity/dot-ci,
+# Every script parses, then every suite runs. The whole check is in gamespice-platform/ci,
 # so that fixing it is one commit rather than one per repository; its README says what
 # the inputs are and why a release does not touch the content origin.
 #
@@ -31,7 +31,7 @@ jobs:
     # fresh checkout does not have. The parse pass is the part that catches a lock
     # behind the code -- armed against that night's lock, it fails on host/tmc_vote.gd.
     validate:
-        uses: modcommunity/dot-ci/.github/workflows/validate.yml@v1.3.12
+        uses: gamespice-platform/ci/.github/workflows/validate.yml@v1.3.12
         with:
             suites: 'examples/selftest examples/admin_loading_selftest'
             shell-command: 'for f in setup.sh demo.sh upgrade.sh play.sh tools/*.sh deploy/*.sh; do bash -n "$f" || exit 1; done'
@@ -65,7 +65,7 @@ jobs:
               run: |
                   set -euo pipefail
                   mine="$(grep -oE '^GODOT_VERSION="[^"]+"' tools/fetch-godot.sh | head -1 | cut -d'"' -f2)"
-                  theirs="$(curl -fsSL https://raw.githubusercontent.com/modcommunity/dot-ci/v1/godot.pin \
+                  theirs="$(curl -fsSL https://raw.githubusercontent.com/gamespice-platform/ci/v1/godot.pin \
                       | grep -oE '^GODOT_VERSION=.+$' | head -1 | cut -d= -f2-)"
                   echo "here:   $mine"
                   echo "dot-ci: $theirs"
