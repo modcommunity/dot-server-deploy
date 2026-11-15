@@ -11,7 +11,7 @@ const RoundsWithoutMatch := preload("res://examples/fixtures/rounds_without_matc
 
 const Host := preload("res://host/tmc_host.gd")
 
-const CHECKS := 520
+const CHECKS := 524
 
 var _passed := 0
 var _failed := 0
