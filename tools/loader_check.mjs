@@ -63,21 +63,24 @@ function check(ok, what) {
   if (!ok) failed++;
 }
 
-for (const newer of [false, true]) {
-  const p = await browser.newPage();
-  await p.goto(`http://127.0.0.1:${pagePort}/${newer ? 'newer' : 'plain'}`);
-  await p.waitForFunction(() => document.body.innerText.includes('newer version of the client'), null, { timeout: 8000 })
-    .catch(() => {});
-  const text = await p.evaluate(() => document.body.innerText);
-  check(text.includes('This game needs a newer version of the client.'), `${newer ? 'with' : 'without'} a newer build: says so plainly`);
-  check(text.includes(SENTENCE), '  and quotes the addon sentence');
-  check(text.includes('Nothing was downloaded.'), '  and that nothing was downloaded');
-  const btn = await p.$('button:has-text("Reload for the new client")');
-  check(newer ? btn !== null : btn === null, newer ? '  and offers the reload' : '  and offers no reload');
-  await p.close();
+try {
+  for (const newer of [false, true]) {
+    const p = await browser.newPage();
+    await p.goto(`http://127.0.0.1:${pagePort}/${newer ? 'newer' : 'plain'}`);
+    await p.waitForFunction(() => document.body.innerText.includes('newer version of the client'), null, { timeout: 8000 })
+      .catch(() => {});
+    const text = await p.evaluate(() => document.body.innerText);
+    check(text.includes('This game needs a newer version of the client.'), `${newer ? 'with' : 'without'} a newer build: says so plainly`);
+    check(text.includes(SENTENCE), '  and quotes the addon sentence');
+    check(text.includes('Nothing was downloaded.'), '  and that nothing was downloaded');
+    const btn = await p.$('button:has-text("Reload for the new client")');
+    check(newer ? btn !== null : btn === null, newer ? '  and offers the reload' : '  and offers no reload');
+    await p.close();
+  }
+} finally {
+  await browser.close();
 }
 
-await browser.close();
 game.close(); page.close();
 console.log(failed ? `${failed} failed` : 'loader check passed');
 process.exit(failed ? 1 : 0);

@@ -68,11 +68,14 @@ async function closes(variant, click, arm) {
   return dialogs;
 }
 
-check(await closes('modals', true, true) === 1, 'armed, clicked, allow-modals: the Leave site? dialog is raised');
-check(await closes('modals', true, false) === 0, 'disarmed (main menu): no dialog');
-check(await closes('modals', false, true) === 0, 'armed but never clicked: Chromium suppresses it (needs a gesture in the frame)');
-check(await closes('nomodals', true, true) === 0, 'control, frame without allow-modals: no dialog (the site bug)');
-await browser.close();
+try {
+  check(await closes('modals', true, true) === 1, 'armed, clicked, allow-modals: the Leave site? dialog is raised');
+  check(await closes('modals', true, false) === 0, 'disarmed (main menu): no dialog');
+  check(await closes('modals', false, true) === 0, 'armed but never clicked: Chromium suppresses it (needs a gesture in the frame)');
+  check(await closes('nomodals', true, true) === 0, 'control, frame without allow-modals: no dialog (the site bug)');
+} finally {
+  await browser.close();
+}
 game.close(); page.close();
 console.log(failed ? `${failed} failed` : 'leave prompt check passed');
 process.exit(failed ? 1 : 0);

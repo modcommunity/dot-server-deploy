@@ -58,28 +58,31 @@ async function open(path) {
   return [p, errors];
 }
 
-// Mount already there at evaluation is covered by tools/loader_check.mjs.
-{
-  const [p, errors] = await open('/after600');
-  await p.waitForSelector('#tmc-game-canvas iframe', { timeout: 5000 }).catch(() => {});
-  check((await p.$('#tmc-game-canvas iframe')) !== null, 'mount inserted 600 ms late: the frame still mounts');
-  check(!errors.some(e => e.includes('no #tmc-game-canvas')), '  and no "no mount" error was logged');
-  await p.close();
-}
-{
-  const [p, errors] = await open('/never');
-  await p.waitForTimeout(4000);
-  check(errors.some(e => e.includes('no #tmc-game-canvas to mount into')), 'mount never inserted: the clear error is logged after the wait');
-  await p.close();
-}
-{
-  const [p, errors] = await open('/never');
-  await p.waitForTimeout(1000);
-  check(!errors.some(e => e.includes('no #tmc-game-canvas')), 'mount never inserted: no error yet at 1 s (it is still waiting)');
-  await p.close();
+try {
+  // Mount already there at evaluation is covered by tools/loader_check.mjs.
+  {
+    const [p, errors] = await open('/after600');
+    await p.waitForSelector('#tmc-game-canvas iframe', { timeout: 5000 }).catch(() => {});
+    check((await p.$('#tmc-game-canvas iframe')) !== null, 'mount inserted 600 ms late: the frame still mounts');
+    check(!errors.some(e => e.includes('no #tmc-game-canvas')), '  and no "no mount" error was logged');
+    await p.close();
+  }
+  {
+    const [p, errors] = await open('/never');
+    await p.waitForTimeout(4000);
+    check(errors.some(e => e.includes('no #tmc-game-canvas to mount into')), 'mount never inserted: the clear error is logged after the wait');
+    await p.close();
+  }
+  {
+    const [p, errors] = await open('/never');
+    await p.waitForTimeout(1000);
+    check(!errors.some(e => e.includes('no #tmc-game-canvas')), 'mount never inserted: no error yet at 1 s (it is still waiting)');
+    await p.close();
+  }
+} finally {
+  await browser.close();
 }
 
-await browser.close();
 page.close();
 console.log(failed ? `${failed} failed` : 'loader mount check passed');
 process.exit(failed ? 1 : 0);

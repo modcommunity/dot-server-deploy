@@ -136,66 +136,70 @@ const browser = await chromium.launch({
   headless: true,
   args: ['--use-gl=swiftshader', '--enable-unsafe-swiftshader'],
 });
-// A fresh context is a fresh IndexedDB and sessionStorage: a first visit.
-const ctx = await browser.newContext({ viewport: { width: 1300, height: 740 } });
-const page = await ctx.newPage();
+try {
+  // A fresh context is a fresh IndexedDB and sessionStorage: a first visit.
+  const ctx = await browser.newContext({ viewport: { width: 1300, height: 740 } });
+  const page = await ctx.newPage();
 
-let load = 0;
-const lines = [[], [], [], [], []];
-const contentGets = [[], [], [], [], []];
-const isGame = f => f.parentFrame() === page.mainFrame();
+  let load = 0;
+  const lines = [[], [], [], [], []];
+  const contentGets = [[], [], [], [], []];
+  const isGame = f => f.parentFrame() === page.mainFrame();
 
-page.on('framenavigated', f => { if (isGame(f)) load++; });
-page.on('console', m => { if (load > 0) (lines[Math.min(load, 4)]).push(m.text()); });
-page.on('request', r => {
-  const p = new URL(r.url()).pathname;
-  if (p.startsWith('/content/') && load > 0) contentGets[Math.min(load, 4)].push(p);
-});
+  page.on('framenavigated', f => { if (isGame(f)) load++; });
+  page.on('console', m => { if (load > 0) (lines[Math.min(load, 4)]).push(m.text()); });
+  page.on('request', r => {
+    const p = new URL(r.url()).pathname;
+    if (p.startsWith('/content/') && load > 0) contentGets[Math.min(load, 4)].push(p);
+  });
 
-await page.goto(origin + '/host.html', { waitUntil: 'load', timeout: 60000 });
+  await page.goto(origin + '/host.html', { waitUntil: 'load', timeout: 60000 });
 
-const has = (n, s) => lines[n].some(l => l.includes(s));
-const deadline = Date.now() + secs * 1000;
-while (Date.now() < deadline && !(load >= 2 && has(2, 'game loaded'))) {
-  await new Promise(r => setTimeout(r, 1000));
+  const has = (n, s) => lines[n].some(l => l.includes(s));
+  const deadline = Date.now() + secs * 1000;
+  while (Date.now() < deadline && !(load >= 2 && has(2, 'game loaded'))) {
+    await new Promise(r => setTimeout(r, 1000));
+  }
+  // Long enough for a third load to start if the cap were what stopped the loop.
+  await new Promise(r => setTimeout(r, 8000));
+  await page.screenshot({ path: shot }).catch(() => {});
+  srv.close();
+
+  const field = (n, msg, key) => {
+    const l = lines[n].find(x => x.includes(msg)) ?? '';
+    const m = l.match(new RegExp(`${key}=("(?:[^"\\\\]|\\\\.)*"|\\S+)`));
+    return m ? m[1] : '';
+  };
+  const manifests = n => new Set(contentGets[n].filter(p => p.endsWith('/manifest.json')).map(p => p.split('/').slice(2, 4).join('/')));
+  // Load 1 restarts before it syncs any game, so what it fetched is the addon packs.
+  const addonPacks = [...manifests(1)].filter(id => !lines[1].some(l => l.includes('syncing content') && l.includes(id)));
+  const again = addonPacks.filter(id => contentGets[2].some(p => p.startsWith(`/content/${id}/`)));
+
+  const built = field(1, 'addon overlay ready for the next start', 'addons');
+  const booted = field(2, 'booted on the addon overlay', 'addons');
+  const who1 = field(1, 'signed in member=', 'member');
+  const who2 = field(2, 'signed in member=', 'member');
+
+  const checks = [
+    ['load 1 found newer addons and updated', has(1, 'updating before joining') && built !== ''],
+    ['exactly two loads', load === 2],
+    ['load 2 mounted the overlay at boot', has(2, '[dot_cloud boot] mounted the addon overlay')],
+    [`load 2 booted on what load 1 built (${booted || 'nothing'})`, booted !== '' && booted === built],
+    [`load 2 downloaded no addon pack (load 1 fetched ${addonPacks.length})`, addonPacks.length > 0 && again.length === 0],
+    [`signed in as the same member on both loads (${who1 || '-'} / ${who2 || '-'})`, who1 === `backbone:${MEMBER.id}` && who2 === who1],
+    [`the handoff was redeemed once (${redeemsAccepted} accepted of ${redeems})`, redeemsAccepted === 1],
+    ['load 2 joined the game', has(2, 'game loaded')],
+  ];
+
+  let failed = 0;
+  for (const [what, ok] of checks) {
+    console.log(`${ok ? 'PASS' : 'FAIL'}  ${what}`);
+    if (!ok) failed++;
+  }
+  if (again.length) console.log(`  load 2 fetched again: ${again.join(', ')}`);
+  console.log(`${checks.length - failed}/${checks.length} checks passed; ${load} loads; screenshot ${shot}`);
+  process.exitCode = failed ? 1 : 0;
+} finally {
+  await browser.close();
 }
-// Long enough for a third load to start if the cap were what stopped the loop.
-await new Promise(r => setTimeout(r, 8000));
-await page.screenshot({ path: shot }).catch(() => {});
-await browser.close();
-srv.close();
-
-const field = (n, msg, key) => {
-  const l = lines[n].find(x => x.includes(msg)) ?? '';
-  const m = l.match(new RegExp(`${key}=("(?:[^"\\\\]|\\\\.)*"|\\S+)`));
-  return m ? m[1] : '';
-};
-const manifests = n => new Set(contentGets[n].filter(p => p.endsWith('/manifest.json')).map(p => p.split('/').slice(2, 4).join('/')));
-// Load 1 restarts before it syncs any game, so what it fetched is the addon packs.
-const addonPacks = [...manifests(1)].filter(id => !lines[1].some(l => l.includes('syncing content') && l.includes(id)));
-const again = addonPacks.filter(id => contentGets[2].some(p => p.startsWith(`/content/${id}/`)));
-
-const built = field(1, 'addon overlay ready for the next start', 'addons');
-const booted = field(2, 'booted on the addon overlay', 'addons');
-const who1 = field(1, 'signed in member=', 'member');
-const who2 = field(2, 'signed in member=', 'member');
-
-const checks = [
-  ['load 1 found newer addons and updated', has(1, 'updating before joining') && built !== ''],
-  ['exactly two loads', load === 2],
-  ['load 2 mounted the overlay at boot', has(2, '[dot_cloud boot] mounted the addon overlay')],
-  [`load 2 booted on what load 1 built (${booted || 'nothing'})`, booted !== '' && booted === built],
-  [`load 2 downloaded no addon pack (load 1 fetched ${addonPacks.length})`, addonPacks.length > 0 && again.length === 0],
-  [`signed in as the same member on both loads (${who1 || '-'} / ${who2 || '-'})`, who1 === `backbone:${MEMBER.id}` && who2 === who1],
-  [`the handoff was redeemed once (${redeemsAccepted} accepted of ${redeems})`, redeemsAccepted === 1],
-  ['load 2 joined the game', has(2, 'game loaded')],
-];
-
-let failed = 0;
-for (const [what, ok] of checks) {
-  console.log(`${ok ? 'PASS' : 'FAIL'}  ${what}`);
-  if (!ok) failed++;
-}
-if (again.length) console.log(`  load 2 fetched again: ${again.join(', ')}`);
-console.log(`${checks.length - failed}/${checks.length} checks passed; ${load} loads; screenshot ${shot}`);
-process.exit(failed ? 1 : 0);
+process.exit(process.exitCode);

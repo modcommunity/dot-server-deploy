@@ -58,99 +58,103 @@ const ctx = cdp ? await cdp.newContext({ viewport: { width: 1280, height: 720 } 
   executablePath: process.env.CHROME || (fs.existsSync('/usr/bin/google-chrome') ? '/usr/bin/google-chrome' : undefined),
   headless: true, args: ['--use-angle=gl', '--enable-gpu', '--ignore-gpu-blocklist'], viewport: { width: 1280, height: 720 },
 });
-const page = ctx.pages()[0] || await ctx.newPage();
-const t0 = Date.now();
-const lines = [];
-const log = s => { const l = `${((Date.now() - t0) / 1000).toFixed(1)} ${s}`; lines.push(l); console.log(l.slice(0, 400)); };
-page.on('console', m => log(`[${m.type()}] ${m.text()}`));
-page.on('pageerror', e => log(`[pageerror] ${e.message}`));
-page.on('crash', () => log('[pageerror] the tab crashed (renderer out of memory)'));
-const FATAL = /RangeError|out of memory|Aborted\(|\babort\(|memory access out of bounds|unreachable|Cannot enlarge memory|tab crashed|could not allocate|Parse Error|Failed to load script/i;
-const fatal = () => lines.find(l => FATAL.test(l)) || '';
+try {
+  const page = ctx.pages()[0] || await ctx.newPage();
+  const t0 = Date.now();
+  const lines = [];
+  const log = s => { const l = `${((Date.now() - t0) / 1000).toFixed(1)} ${s}`; lines.push(l); console.log(l.slice(0, 400)); };
+  page.on('console', m => log(`[${m.type()}] ${m.text()}`));
+  page.on('pageerror', e => log(`[pageerror] ${e.message}`));
+  page.on('crash', () => log('[pageerror] the tab crashed (renderer out of memory)'));
+  const FATAL = /RangeError|out of memory|Aborted\(|\babort\(|memory access out of bounds|unreachable|Cannot enlarge memory|tab crashed|could not allocate|Parse Error|Failed to load script/i;
+  const fatal = () => lines.find(l => FATAL.test(l)) || '';
 
-// Every WebAssembly.Memory the page makes (the engine's heap is the big one), in every frame, before any script runs.
-await ctx.addInitScript(() => {
-  const Orig = WebAssembly.Memory;
-  window.__wasmMems = [];
-  WebAssembly.Memory = function (d) { const m = new Orig(d); window.__wasmMems.push(m); return m; };
-  WebAssembly.Memory.prototype = Orig.prototype;
-  // A module that defines its own memory (or a build that hands it over as an import/export) never calls the constructor: take it from the instance too.
-  const grab = (imports, inst) => {
-    for (const ns of Object.values(imports || {})) if (ns && typeof ns === 'object') for (const v of Object.values(ns)) if (v instanceof Orig) window.__wasmMems.push(v);
-    if (inst) for (const v of Object.values(inst.exports || {})) if (v instanceof Orig) window.__wasmMems.push(v);
+  // Every WebAssembly.Memory the page makes (the engine's heap is the big one), in every frame, before any script runs.
+  await ctx.addInitScript(() => {
+    const Orig = WebAssembly.Memory;
+    window.__wasmMems = [];
+    WebAssembly.Memory = function (d) { const m = new Orig(d); window.__wasmMems.push(m); return m; };
+    WebAssembly.Memory.prototype = Orig.prototype;
+    // A module that defines its own memory (or a build that hands it over as an import/export) never calls the constructor: take it from the instance too.
+    const grab = (imports, inst) => {
+      for (const ns of Object.values(imports || {})) if (ns && typeof ns === 'object') for (const v of Object.values(ns)) if (v instanceof Orig) window.__wasmMems.push(v);
+      if (inst) for (const v of Object.values(inst.exports || {})) if (v instanceof Orig) window.__wasmMems.push(v);
+    };
+    const oi = WebAssembly.instantiate;
+    WebAssembly.instantiate = async function (src, imports) { const r = await oi.call(WebAssembly, src, imports); grab(imports, r.instance || r); return r; };
+    const ois = WebAssembly.instantiateStreaming;
+    if (ois) WebAssembly.instantiateStreaming = async function (src, imports) { const r = await ois.call(WebAssembly, src, imports); grab(imports, r.instance); return r; };
+  });
+  const cdpSession = await ctx.newCDPSession(page).catch(() => null);
+  if (cdpSession) await cdpSession.send('Performance.enable').catch(() => {});
+  const heap = async () => {
+    const wasm = await Promise.all(page.frames().map(f => f.evaluate(
+      () => Math.max(0, ...(window.__wasmMems || []).map(m => m.buffer.byteLength))).catch(() => 0))).then(v => Math.max(0, ...v));
+    let js = 0;
+    if (cdpSession) {
+      const r = await cdpSession.send('Performance.getMetrics').catch(() => null);
+      js = r ? (r.metrics.find(x => x.name === 'JSHeapUsedSize') || { value: 0 }).value : 0;
+    }
+    const ua = await page.evaluate(async () => (window.crossOriginIsolated && performance.measureUserAgentSpecificMemory)
+      ? (await performance.measureUserAgentSpecificMemory()).bytes : 0).catch(() => 0);
+    return { wasm, js, ua };
   };
-  const oi = WebAssembly.instantiate;
-  WebAssembly.instantiate = async function (src, imports) { const r = await oi.call(WebAssembly, src, imports); grab(imports, r.instance || r); return r; };
-  const ois = WebAssembly.instantiateStreaming;
-  if (ois) WebAssembly.instantiateStreaming = async function (src, imports) { const r = await ois.call(WebAssembly, src, imports); grab(imports, r.instance); return r; };
-});
-const cdpSession = await ctx.newCDPSession(page).catch(() => null);
-if (cdpSession) await cdpSession.send('Performance.enable').catch(() => {});
-const heap = async () => {
-  const wasm = await Promise.all(page.frames().map(f => f.evaluate(
-    () => Math.max(0, ...(window.__wasmMems || []).map(m => m.buffer.byteLength))).catch(() => 0))).then(v => Math.max(0, ...v));
-  let js = 0;
-  if (cdpSession) {
-    const r = await cdpSession.send('Performance.getMetrics').catch(() => null);
-    js = r ? (r.metrics.find(x => x.name === 'JSHeapUsedSize') || { value: 0 }).value : 0;
-  }
-  const ua = await page.evaluate(async () => (window.crossOriginIsolated && performance.measureUserAgentSpecificMemory)
-    ? (await performance.measureUserAgentSpecificMemory()).bytes : 0).catch(() => 0);
-  return { wasm, js, ua };
-};
-const mb = n => (n / 1048576).toFixed(0);
+  const mb = n => (n / 1048576).toFixed(0);
 
-const rows = [];
-let failure = '';
-const waitLoaded = async (from, secs, slug) => {
-  const loadedRe = new RegExp(loadedFmt.replace('{map}', slug.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), 'i');
-  const until = Date.now() + secs * 1000;
-  while (Date.now() < until) {
-    await page.waitForTimeout(1000);
-    if (fatal()) return false;
-    if (loadedRe.test(lines.slice(from).join('\n'))) return true;
-  }
-  return false;
-};
+  const rows = [];
+  let failure = '';
+  const waitLoaded = async (from, secs, slug) => {
+    const loadedRe = new RegExp(loadedFmt.replace('{map}', slug.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), 'i');
+    const until = Date.now() + secs * 1000;
+    while (Date.now() < until) {
+      await page.waitForTimeout(1000);
+      if (fatal()) return false;
+      if (loadedRe.test(lines.slice(from).join('\n'))) return true;
+    }
+    return false;
+  };
 
-await page.goto(u.toString());
-for (let i = 0; i < maps.length && !failure; i++) {
-  const from = lines.length;
-  if (i === 0) {
-    // The shell starts the game, then the game loads its first map and the match goes live; typing before that is swallowed by the cover.
-    const until = Date.now() + startSecs * 1000;
-    while (Date.now() < until && !/state from=COUNTDOWN .* to=LIVE|to=LIVE/.test(lines.join('\n')) && !fatal()) await page.waitForTimeout(1000);
+  await page.goto(u.toString());
+  for (let i = 0; i < maps.length && !failure; i++) {
+    const from = lines.length;
+    if (i === 0) {
+      // The shell starts the game, then the game loads its first map and the match goes live; typing before that is swallowed by the cover.
+      const until = Date.now() + startSecs * 1000;
+      while (Date.now() < until && !/state from=COUNTDOWN .* to=LIVE|to=LIVE/.test(lines.join('\n')) && !fatal()) await page.waitForTimeout(1000);
+    }
+    {
+      await page.mouse.click(640, 360).catch(() => {});
+      await page.keyboard.press('Backquote');
+      await page.waitForTimeout(500);
+      await page.keyboard.type(`${cmd} ${maps[i]}`, { delay: 30 });
+      await page.keyboard.press('Enter');
+      await page.waitForTimeout(1500);
+      await page.screenshot({ path: shot.replace(/\.png$/, `-${i + 1}.png`) }).catch(() => {});  // the console as typed, for a run that never loads
+      await page.keyboard.press('Backquote');
+      log(`[rotate] map ${maps[i]}`);
+    }
+    const secs = perMap;
+    if (!await waitLoaded(from, secs, maps[i])) { failure = fatal() ? `fatal: ${fatal().slice(0, 200)}` : `map ${maps[i]} (#${i + 1}) not loaded within ${secs} s`; break; }
+    await page.waitForTimeout(5000);
+    if (fatal()) { failure = `fatal: ${fatal().slice(0, 200)}`; break; }
+    const h = await heap();
+    rows.push({ n: i + 1, map: maps[i], ...h });
+    log(`[heap] #${i + 1} ${maps[i]}: wasm ${mb(h.wasm)} MB, js ${mb(h.js)} MB${h.ua ? `, ua ${mb(h.ua)} MB` : ''}`);
   }
-  {
-    await page.mouse.click(640, 360).catch(() => {});
-    await page.keyboard.press('Backquote');
-    await page.waitForTimeout(500);
-    await page.keyboard.type(`${cmd} ${maps[i]}`, { delay: 30 });
-    await page.keyboard.press('Enter');
-    await page.waitForTimeout(1500);
-    await page.screenshot({ path: shot.replace(/\.png$/, `-${i + 1}.png`) }).catch(() => {});  // the console as typed, for a run that never loads
-    await page.keyboard.press('Backquote');
-    log(`[rotate] map ${maps[i]}`);
+  await page.screenshot({ path: shot }).catch(() => {});
+  fs.rmSync(profile, { recursive: true, force: true });
+
+  console.log('\n| # | map | wasm MB | js MB |\n| - | --- | --- | --- |');
+  for (const r of rows) console.log(`| ${r.n} | ${r.map} | ${mb(r.wasm)} | ${mb(r.js)} |`);
+  if (!failure && maxGrowth > 0 && rows.length > 1 && rows[0].wasm) {
+    const g = (rows[rows.length - 1].wasm - rows[0].wasm) / 1048576;
+    if (g > maxGrowth) failure = `wasm heap grew ${g.toFixed(0)} MB over the rotation (limit ${maxGrowth})`;
   }
-  const secs = perMap;
-  if (!await waitLoaded(from, secs, maps[i])) { failure = fatal() ? `fatal: ${fatal().slice(0, 200)}` : `map ${maps[i]} (#${i + 1}) not loaded within ${secs} s`; break; }
-  await page.waitForTimeout(5000);
-  if (fatal()) { failure = `fatal: ${fatal().slice(0, 200)}`; break; }
-  const h = await heap();
-  rows.push({ n: i + 1, map: maps[i], ...h });
-  log(`[heap] #${i + 1} ${maps[i]}: wasm ${mb(h.wasm)} MB, js ${mb(h.js)} MB${h.ua ? `, ua ${mb(h.ua)} MB` : ''}`);
+  console.log(failure ? `\nrotate: FAIL ${failure}` : `\nrotate: ok (${rows.length} maps, screenshot ${shot})`);
+  if (srv) srv.close();
+  process.exitCode = failure ? 1 : 0;
+} finally {
+  await ctx.close();
+  if (cdp) await cdp.close();
 }
-await page.screenshot({ path: shot }).catch(() => {});
-await ctx.close();
-if (cdp) await cdp.close();
-fs.rmSync(profile, { recursive: true, force: true });
-
-console.log('\n| # | map | wasm MB | js MB |\n| - | --- | --- | --- |');
-for (const r of rows) console.log(`| ${r.n} | ${r.map} | ${mb(r.wasm)} | ${mb(r.js)} |`);
-if (!failure && maxGrowth > 0 && rows.length > 1 && rows[0].wasm) {
-  const g = (rows[rows.length - 1].wasm - rows[0].wasm) / 1048576;
-  if (g > maxGrowth) failure = `wasm heap grew ${g.toFixed(0)} MB over the rotation (limit ${maxGrowth})`;
-}
-console.log(failure ? `\nrotate: FAIL ${failure}` : `\nrotate: ok (${rows.length} maps, screenshot ${shot})`);
-if (srv) srv.close();
-process.exit(failure ? 1 : 0);
+process.exit(process.exitCode);

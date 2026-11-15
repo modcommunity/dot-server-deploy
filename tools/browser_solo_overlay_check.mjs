@@ -139,98 +139,102 @@ const ctx = cdp ? await cdp.newContext({ viewport: { width: 1280, height: 720 } 
   args: ['--use-angle=gl', '--enable-gpu', '--ignore-gpu-blocklist'],
   viewport: { width: 1280, height: 720 },
 });
-const page = ctx.pages()[0] || await ctx.newPage();
+try {
+  const page = ctx.pages()[0] || await ctx.newPage();
 
-const t0 = Date.now();
-const lines = [];
-const log = s => { const l = `${((Date.now() - t0) / 1000).toFixed(1)} ${s}`; lines.push(l); console.log(l); };
-page.on('console', m => log(`[${m.type()}] ${m.text()}`));
-page.on('pageerror', e => log(`[pageerror] ${e.message}`));
-let loads = 0;
-page.on('framenavigated', f => {
-  if (f !== page.mainFrame()) return;
-  log(`[nav] ${f.url()}`);
-  if (!f.url().includes('solo-overlay-check-seed')) loads += 1;
-});
+  const t0 = Date.now();
+  const lines = [];
+  const log = s => { const l = `${((Date.now() - t0) / 1000).toFixed(1)} ${s}`; lines.push(l); console.log(l); };
+  page.on('console', m => log(`[${m.type()}] ${m.text()}`));
+  page.on('pageerror', e => log(`[pageerror] ${e.message}`));
+  let loads = 0;
+  page.on('framenavigated', f => {
+    if (f !== page.mainFrame()) return;
+    log(`[nav] ${f.url()}`);
+    if (!f.url().includes('solo-overlay-check-seed')) loads += 1;
+  });
 
-// Seed on the origin before the shell's first load: same tab, so sessionStorage carries over.
-const origin = new URL(url).origin;
-if (state !== 'fresh') {
-  await page.goto(`${origin}/solo-overlay-check-seed`).catch(() => {});
-  const seeded = await page.evaluate(async ({ state, attempt, wanted, fp, buildId, userDir }) => {
-    if (state === 'counter2') {
-      // The flat form is what the player's tab held; the keyed one is what a shell after the fix writes for this build.
-      const flat = { [attempt]: 2 };
-      sessionStorage.setItem('tmc.addon_updates', JSON.stringify(fp ? { build: `${buildId}/${fp}`, counts: flat } : flat));
-      return sessionStorage.getItem('tmc.addon_updates');
-    }
-    // The failed mark, as Emscripten's IDBFS keeps user://: one record per directory and file, keyed by path.
-    const plan = JSON.stringify({ state: 'failed', build: fp, addons: wanted, shell: buildId });
-    const db = await new Promise((ok, no) => {
-      const r = indexedDB.open('/userfs', 21);
-      r.onupgradeneeded = () => {
-        const s = r.result.createObjectStore('FILE_DATA');
-        s.createIndex('timestamp', 'timestamp', { unique: false });
-      };
-      r.onsuccess = () => ok(r.result);
-      r.onerror = () => no(r.error);
-    });
-    const tx = db.transaction('FILE_DATA', 'readwrite');
-    const store = tx.objectStore('FILE_DATA');
-    const now = new Date();
-    const dirs = [];
-    for (let p = `${userDir}/dot_cloud_addons`; p.length > '/userfs'.length; p = p.slice(0, p.lastIndexOf('/'))) dirs.unshift(p);
-    for (const d of dirs) store.put({ timestamp: now, mode: 0o40777 }, d);
-    store.put({ timestamp: now, mode: 0o100666, contents: new TextEncoder().encode(plan) }, `${userDir}/dot_cloud_addons/plan.json`);
-    await new Promise((ok, no) => { tx.oncomplete = ok; tx.onerror = () => no(tx.error); });
-    db.close();
-    return plan;
-  }, { state, attempt, wanted, fp, buildId, userDir });
-  log(`[seed] ${state}: ${seeded}`);
-}
-
-const BROKEN = [/playing on this build's/, /Parse Error/i, /Failed to load script/, /ZeeViewModel/, /follow_hands/];
-const verdict = () => {
-  const text = lines.join('\n');
-  if (BROKEN.some(r => r.test(text))) return 'broken';
-  if (/solo game started/.test(text)) return 'started';
-  if (/not starting it without them/.test(text)) return 'blocked';
-  return 'none';
-};
-
-await page.goto(url);
-const deadline = Date.now() + secs * 1000;
-while (Date.now() < deadline) {
-  await page.waitForTimeout(2000);
-  const v = verdict();
-  if (v === 'broken' || v === 'blocked') break;
-  if (v === 'started') {
-    // A started game is given a few seconds more for the parse errors a game without its addons prints,
-    // and with --map until its map has loaded.
-    const until = Date.now() + lingerSecs * 1000;
-    while (Date.now() < until && verdict() === 'started') {
-      if (mapLoaded && mapLoaded.test(lines.join('\n'))) { await page.waitForTimeout(3000); break; }
-      await page.waitForTimeout(1000);
-    }
-    break;
+  // Seed on the origin before the shell's first load: same tab, so sessionStorage carries over.
+  const origin = new URL(url).origin;
+  if (state !== 'fresh') {
+    await page.goto(`${origin}/solo-overlay-check-seed`).catch(() => {});
+    const seeded = await page.evaluate(async ({ state, attempt, wanted, fp, buildId, userDir }) => {
+      if (state === 'counter2') {
+        // The flat form is what the player's tab held; the keyed one is what a shell after the fix writes for this build.
+        const flat = { [attempt]: 2 };
+        sessionStorage.setItem('tmc.addon_updates', JSON.stringify(fp ? { build: `${buildId}/${fp}`, counts: flat } : flat));
+        return sessionStorage.getItem('tmc.addon_updates');
+      }
+      // The failed mark, as Emscripten's IDBFS keeps user://: one record per directory and file, keyed by path.
+      const plan = JSON.stringify({ state: 'failed', build: fp, addons: wanted, shell: buildId });
+      const db = await new Promise((ok, no) => {
+        const r = indexedDB.open('/userfs', 21);
+        r.onupgradeneeded = () => {
+          const s = r.result.createObjectStore('FILE_DATA');
+          s.createIndex('timestamp', 'timestamp', { unique: false });
+        };
+        r.onsuccess = () => ok(r.result);
+        r.onerror = () => no(r.error);
+      });
+      const tx = db.transaction('FILE_DATA', 'readwrite');
+      const store = tx.objectStore('FILE_DATA');
+      const now = new Date();
+      const dirs = [];
+      for (let p = `${userDir}/dot_cloud_addons`; p.length > '/userfs'.length; p = p.slice(0, p.lastIndexOf('/'))) dirs.unshift(p);
+      for (const d of dirs) store.put({ timestamp: now, mode: 0o40777 }, d);
+      store.put({ timestamp: now, mode: 0o100666, contents: new TextEncoder().encode(plan) }, `${userDir}/dot_cloud_addons/plan.json`);
+      await new Promise((ok, no) => { tx.oncomplete = ok; tx.onerror = () => no(tx.error); });
+      db.close();
+      return plan;
+    }, { state, attempt, wanted, fp, buildId, userDir });
+    log(`[seed] ${state}: ${seeded}`);
   }
-}
-const engine = await page.evaluate(() => window.__TMC_ENGINE__ || '').catch(() => '');
-await page.screenshot({ path: shot }).catch(() => {});
-await ctx.close();
-if (cdp) await cdp.close();
-if (srv) srv.close();
-fs.rmSync(profile, { recursive: true, force: true });
 
-const v = verdict();
-console.log(`\nverdict: ${v} (state ${state}, shell ${buildId || '?'}, engine ${engine || '?'}, expect ${expect.join('|')}) screenshot ${shot}`);
-const engineOk = !threads || engine === (threads === '1' ? 'threads' : 'single');
-if (!engineOk) console.log(`engine: wanted ${threads === '1' ? 'threads' : 'single'}, the page ran ${engine || 'none'}`);
-let mapOk = true;
-if (mapLoaded && v === 'started') {
-  mapOk = mapLoaded.test(lines.join('\n'));
-  console.log(`map: ${mapSlug} ${mapOk ? 'loaded' : 'not seen'} (/${mapLoadedSrc}/i within ${lingerSecs} s of the start)`);
+  const BROKEN = [/playing on this build's/, /Parse Error/i, /Failed to load script/, /ZeeViewModel/, /follow_hands/];
+  const verdict = () => {
+    const text = lines.join('\n');
+    if (BROKEN.some(r => r.test(text))) return 'broken';
+    if (/solo game started/.test(text)) return 'started';
+    if (/not starting it without them/.test(text)) return 'blocked';
+    return 'none';
+  };
+
+  await page.goto(url);
+  const deadline = Date.now() + secs * 1000;
+  while (Date.now() < deadline) {
+    await page.waitForTimeout(2000);
+    const v = verdict();
+    if (v === 'broken' || v === 'blocked') break;
+    if (v === 'started') {
+      // A started game is given a few seconds more for the parse errors a game without its addons prints,
+      // and with --map until its map has loaded.
+      const until = Date.now() + lingerSecs * 1000;
+      while (Date.now() < until && verdict() === 'started') {
+        if (mapLoaded && mapLoaded.test(lines.join('\n'))) { await page.waitForTimeout(3000); break; }
+        await page.waitForTimeout(1000);
+      }
+      break;
+    }
+  }
+  const engine = await page.evaluate(() => window.__TMC_ENGINE__ || '').catch(() => '');
+  await page.screenshot({ path: shot }).catch(() => {});
+  if (srv) srv.close();
+  fs.rmSync(profile, { recursive: true, force: true });
+
+  const v = verdict();
+  console.log(`\nverdict: ${v} (state ${state}, shell ${buildId || '?'}, engine ${engine || '?'}, expect ${expect.join('|')}) screenshot ${shot}`);
+  const engineOk = !threads || engine === (threads === '1' ? 'threads' : 'single');
+  if (!engineOk) console.log(`engine: wanted ${threads === '1' ? 'threads' : 'single'}, the page ran ${engine || 'none'}`);
+  let mapOk = true;
+  if (mapLoaded && v === 'started') {
+    mapOk = mapLoaded.test(lines.join('\n'));
+    console.log(`map: ${mapSlug} ${mapOk ? 'loaded' : 'not seen'} (/${mapLoadedSrc}/i within ${lingerSecs} s of the start)`);
+  }
+  const loadsOk = maxLoads <= 0 || loads <= maxLoads;
+  console.log(`loads: ${loads}${maxLoads > 0 ? ` (at most ${maxLoads})` : ''}${loadsOk ? '' : ': the shell restarted the page'}`);
+  process.exitCode = expect.includes(v) && mapOk && loadsOk && engineOk ? 0 : 1;
+} finally {
+  await ctx.close();
+  if (cdp) await cdp.close();
 }
-const loadsOk = maxLoads <= 0 || loads <= maxLoads;
-console.log(`loads: ${loads}${maxLoads > 0 ? ` (at most ${maxLoads})` : ''}${loadsOk ? '' : ': the shell restarted the page'}`);
-process.exit(expect.includes(v) && mapOk && loadsOk && engineOk ? 0 : 1);
+process.exit(process.exitCode);
