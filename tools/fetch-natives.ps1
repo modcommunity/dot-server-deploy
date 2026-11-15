@@ -40,8 +40,8 @@ if (-not $boot -and -not $NoClone -and (Test-Path -LiteralPath (Join-Path $Root 
     $repos = Join-Path $Root 'addons\.repos'
     New-Item -ItemType Directory -Force -Path $repos | Out-Null
     if (-not (Test-Path -LiteralPath (Join-Path $repos '.gdignore'))) { New-Item -ItemType File -Path (Join-Path $repos '.gdignore') | Out-Null }
-    $gitBase = if ($env:TMC_GIT_BASE) { $env:TMC_GIT_BASE } else { 'https://github.com/modcommunity' }
-    & git clone --quiet --depth 1 "$gitBase/dot-bootstrap.git" (Join-Path $repos 'dot-bootstrap') 2>$null
+    $gitBase = if ($env:TMC_GIT_BASE) { $env:TMC_GIT_BASE } else { 'https://github.com/gamespice-platform' }
+    & git clone --quiet --depth 1 "$gitBase/$(if ($env:TMC_GIT_BASE) { 'dot-' })bootstrap.git" (Join-Path $repos 'dot-bootstrap') 2>$null
     if ($LASTEXITCODE -eq 0) { $boot = Join-Path $repos 'dot-bootstrap\bootstrap.ps1' }
 }
 if (-not $boot) {

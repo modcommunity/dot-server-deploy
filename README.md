@@ -1,9 +1,9 @@
-Everything a server owner needs to run a game under TMC's dot ecosystem with one command. It is a Godot project that boots a [dot-server](https://github.com/modcommunity/dot-server), reads its settings from `cfg/*.yml`, loads games from `content/` and serves a browser client. It ships no game of its own: games are fetched as signed packs.
+Everything a server owner needs to run a game under TMC's dot ecosystem with one command. It is a Godot project that boots a [dot-server](https://github.com/gamespice-platform/server), reads its settings from `cfg/*.yml`, loads games from `content/` and serves a browser client. It ships no game of its own: games are fetched as signed packs.
 
 ## Install and run
 
 ```bash
-git clone https://github.com/modcommunity/dot-server-deploy && cd dot-server-deploy
+git clone https://github.com/gamespice-platform/server-deploy && cd dot-server-deploy
 ./setup.sh                      # fetches a Godot runtime, links the addons, writes ./server
 ./server --games fatalcontact   # installs the game if needed, then starts the server
 ./server --help                 # every command and option
@@ -92,6 +92,6 @@ Options include `--port`, `--bind`, `--name`, `--max-players`, `--game`, `--map`
 
 ## Status and licence
 
-Part of the TMC **dot-\*** family of Godot addons. Written with Claude Code and maintained by `gamemann`. Every addon has headless tests, but little of this has been played by real users yet, so expect rough edges and please [open an issue](https://github.com/modcommunity/dot-server-deploy/issues) when you hit one.
+Part of the TMC **dot-\*** family of Godot addons. Written with Claude Code and maintained by `gamemann`. Every addon has headless tests, but little of this has been played by real users yet, so expect rough edges and please [open an issue](https://github.com/gamespice-platform/server-deploy/issues) when you hit one.
 
 MIT licence, see [LICENSE](LICENSE). The only closed part of the TMC platform is the web back end; you can use your own instead of TMC's.

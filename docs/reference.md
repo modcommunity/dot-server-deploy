@@ -7,7 +7,7 @@ The long-form reference for dot-server-deploy: guided install, layout, configura
 **For a server operator**: you run a game server for players and want it to stay up through upgrades. **For a developer**: you want to see your game running in a server and browser. The rest of this file is the reference; this block is all most people need.
 
 ```bash
-git clone https://github.com/modcommunity/dot-server-deploy && cd dot-server-deploy
+git clone https://github.com/gamespice-platform/server-deploy && cd dot-server-deploy
 ./setup.sh              # fetches a Godot runtime, links the addons, writes ./server
 ./server --games fatalcontact  # installs the game if needed, then starts the server
 ./server --help         # every command and option
@@ -46,7 +46,7 @@ It prints a link. Open it.
 ## A Server You Start With One Command
 TMC's server tool, as a thing you can run.
 
-This repository is where the [dot-*](https://github.com/modcommunity) family comes together into something a server owner starts with one command. It is a Godot project that boots a [dot-server](https://github.com/modcommunity/dot-server), reads its configuration from `cfg/*.yml`, loads games out of `content/`, and serves a browser client. It ships **no game of its own**. The games are copied in from their own repositories by `setup.sh`: [game-hungario](https://github.com/zees-games/game-hungario) and [game-airdrift](https://github.com/zees-games/game-airdrift).
+This repository is where the [dot-*](https://github.com/gamespice-platform) family comes together into something a server owner starts with one command. It is a Godot project that boots a [dot-server](https://github.com/gamespice-platform/server), reads its configuration from `cfg/*.yml`, loads games out of `content/`, and serves a browser client. It ships **no game of its own**. The games are copied in from their own repositories by `setup.sh`: [game-hungario](https://github.com/zees-games/game-hungario) and [game-airdrift](https://github.com/zees-games/game-airdrift).
 
 ```bash
 ./setup.sh              # get a runtime, wire the addons into addons/, write ./server

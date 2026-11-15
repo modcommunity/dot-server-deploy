@@ -40,7 +40,7 @@ for c in "${DOT_BOOTSTRAP:-}" "$ROOT/../dot-bootstrap" "$ROOT/addons/.repos/dot-
 done
 if [ -z "$BOOT" ] && [ "$CLONE" = 1 ] && [ -d "$ROOT/addons" ]; then
     mkdir -p "$ROOT/addons/.repos"; [ -f "$ROOT/addons/.repos/.gdignore" ] || : > "$ROOT/addons/.repos/.gdignore"
-    git clone --quiet --depth 1 "${TMC_GIT_BASE:-https://github.com/modcommunity}/dot-bootstrap.git" \
+    git clone --quiet --depth 1 "${TMC_GIT_BASE:-https://github.com/gamespice-platform}/${TMC_GIT_BASE:+dot-}bootstrap.git" \
         "$ROOT/addons/.repos/dot-bootstrap" 2>/dev/null && BOOT="$ROOT/addons/.repos/dot-bootstrap/bootstrap.sh"
 fi
 if [ -z "$BOOT" ]; then

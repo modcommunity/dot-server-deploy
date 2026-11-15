@@ -852,13 +852,13 @@ fi
 # developer's machine with a key loaded; the machine this flag is for is a fresh server
 # where that is the one thing not configured. These repositories are public, so HTTPS
 # needs no credential at all.
-GIT_BASE_DEFAULT="https://github.com/modcommunity"
+GIT_BASE_DEFAULT="https://github.com/gamespice-platform"
 GIT_BASE="${TMC_GIT_BASE:-$GIT_BASE_DEFAULT}"
 
 ## Where one repository is cloned from, which is $GIT_BASE for all but one of them.
 ##
 ## [b]`mg-buses-from-hell` lived under a different GitHub owner AND a different name, and
-## nothing here could have known either.[/b] Every other repository in the family is `modcommunity/<name>`, and
+## nothing here could have known either.[/b] Every other repository in the family is `gamespice-platform/<name>` (the dot- prefix dropped), and
 ## the rule that the repository name IS the directory name is what lets this script clone
 ## fifty-odd siblings without carrying a list of them. That rule holds; what does not is
 ## the OWNER, for exactly one game.
@@ -905,7 +905,9 @@ repo_url() {
             # The addons, and this project. Falls through to $GIT_BASE below.
             # An addon that is the author's own, not the organisation's.
             dot-radio|dot-trail) printf '%s/%s.git\n' "$GAMES_GIT_BASE" "$repo"; return ;;
-            dot-*) ;;
+            # Only a few repositories keep the dot- name; the organisation dropped the prefix.
+            dot-ci|dot-map-convert) printf 'https://github.com/modcommunity/%s.git\n' "$repo"; return ;;
+            dot-*) printf '%s/%s.git\n' "$GIT_BASE" "${repo#dot-}"; return ;;
             # Renamed on GitHub while the directory (and the pack id) kept the old
             # name; GitHub redirects the old URL, but a redirect is not a contract.
             mg-deathrun)  printf '%s/game-deathrun.git\n' "$GAMES_GIT_BASE"; return ;;
