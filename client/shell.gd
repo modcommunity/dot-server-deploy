@@ -1068,6 +1068,7 @@ func _new_cloud() -> DotCloudClient:
 	# The shell is a player's client even headless, where dot-cloud's `auto` would read "server" and leave client-only files (API 8) behind.
 	# A solo game runs its server here too, so [method _start_solo] widens this to both.
 	cloud.config.side = "client"
+	cloud.add_child(_new_cloud_scheduler())
 
 	# A player may keep nothing: `--content-cache off` points the store at a session folder emptied now and on quit.
 	# An explicit `--cloud-cache-dir` wins; DotCloudConfig already reads the cache dir and size off the command line.
@@ -1101,6 +1102,17 @@ func _new_cloud() -> DotCloudClient:
 	cloud.manifest_url_template = "{base}/{id}/{version}/manifest.json"
 	cloud.manifest_url_fallbacks = PackedStringArray(["{base}/{id}/manifest.json"])
 	return cloud
+
+
+## The hashing scheduler [DotCloudClient] finds as its `CloudScheduler` child, made here so the web never hashes on worker threads.
+## On the threaded web engine a worker's `user://` reads are proxied to the browser's main thread one call a frame, so each mount-time
+## [DotHashJob] took ~0.7 s and FC's ~700 objects sat at "Unpacking 0 of 1" for minutes (web-mt-shell-unpack-hang-1).
+## On the main thread the same jobs share the frame budget, as they always have on the single-threaded engine.
+static func _new_cloud_scheduler() -> DotScheduler:
+	var scheduler := DotScheduler.new()
+	scheduler.name = "CloudScheduler"
+	scheduler.use_threads = not DotPlatform.is_web()
+	return scheduler
 
 
 ## A pack this client is too old to run (CODE_VERSION), told plainly and passed to the page.
@@ -2849,9 +2861,11 @@ static func _in_tooling_dir(path: String) -> bool:
 
 ## Compiles a delivered pack's scripts a slice per frame with dot-cloud's warm_content, then
 ## slice-loads its scenes and resources. An addon without warm_content falls back to
-## [method _slice_load] for everything. Both are no-ops where threads exist.
+## [method _slice_load] for everything. Both are no-ops natively. On the web they run on the main thread even on the threaded
+## engine: a [method ResourceLoader.load_threaded_request] there never finished (FC's 326 scripts at 0 % for minutes, no frame
+## drawn; web-mt-shell-unpack-hang-1), so warm_content is forced past its own "threads exist" skip.
 func _warm_pack(keys: Array[String]) -> Variant:
-	if _cloud == null or not _cloud.has_method("warm_content") or DotPlatform.has_threads():
+	if _cloud == null or not _cloud.has_method("warm_content") or not DotPlatform.is_web():
 		await _slice_load(_pack_script_paths(keys))
 		return null
 
@@ -2864,7 +2878,7 @@ func _warm_pack(keys: Array[String]) -> Variant:
 			_progress.value = fraction * 100.0
 		if loading != null:
 			loading.set_progress(fraction, _text("shell.loading.scripts", {}, "Preparing the game…"))
-	var warmed: Variant = await _cloud.call("warm_content", get_tree(), PackedStringArray(keys), false, on_progress)
+	var warmed: Variant = await _cloud.call("warm_content", get_tree(), PackedStringArray(keys), true, on_progress)
 	if warmed != null:
 		slice_frames_yielded = warmed.frames_yielded
 
@@ -2902,7 +2916,8 @@ func _slice_load(paths: PackedStringArray, force: bool = false) -> void:
 		if loading != null:
 			loading.set_progress(fraction, _text("shell.loading.scripts", {}, "Preparing the game…")))
 
-	var res: DotResult = await loader.load_all(get_tree(), paths)
+	# Never threaded on the web: see [method _warm_pack].
+	var res: DotResult = await loader.load_all(get_tree(), paths, not DotPlatform.is_web())
 	slice_frames_yielded = loader.frames_yielded
 
 	if not res.ok:

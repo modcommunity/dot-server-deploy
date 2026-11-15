@@ -2,17 +2,22 @@
 // (browser_solo_overlay_check.mjs, browser_solo_rotate_check.mjs). The proxy matters: a local shell's /content is empty, so a solo game
 // that needs an addon overlay (FC: fc-weapons) could not fetch it and refused to start ("This game needs ..., which could not be
 // downloaded"), and the CDN sends no CORS header to another origin. Returns the server and the page URL for `givenUrl`'s query.
+// `coi` sends COOP/COEP on every response, as the site does, so the page is cross-origin isolated and embed.html picks the threaded engine.
 import http from 'node:http';
 import https from 'node:https';
 import fs from 'node:fs';
 import path from 'node:path';
 
-export async function serveShell({ dir, port, buildId, upstream, givenUrl }) {
+export async function serveShell({ dir, port, buildId, upstream, givenUrl, coi = false }) {
   if (!fs.existsSync(path.join(dir, 'embed.html'))) throw new Error(`--serve ${dir} has no embed.html`);
   const base = upstream.replace(/\/$/, '');
   const types = { '.html': 'text/html', '.js': 'text/javascript', '.wasm': 'application/wasm', '.json': 'application/json', '.png': 'image/png' };
   const prefix = `/godot/${buildId || 'local'}/`;
   const srv = http.createServer((req, res) => {
+    if (coi) {
+      res.setHeader('cross-origin-opener-policy', 'same-origin');
+      res.setHeader('cross-origin-embedder-policy', 'require-corp');
+    }
     const u = new URL(req.url, 'http://x');
     if (u.pathname.startsWith('/content/')) {
       const lib = base.startsWith('https:') ? https : http;
@@ -25,7 +30,8 @@ export async function serveShell({ dir, port, buildId, upstream, givenUrl }) {
       return;
     }
     if (!u.pathname.startsWith(prefix)) { res.writeHead(404, { 'content-type': 'text/html' }); res.end('<!doctype html>'); return; }
-    const p = path.join(dir, decodeURIComponent(u.pathname.slice(prefix.length)));
+    // Resolved first: a relative --serve (`web/build`) never started with its own absolute path, so every file was a 403.
+    const p = path.join(path.resolve(dir), decodeURIComponent(u.pathname.slice(prefix.length)));
     if (!p.startsWith(path.resolve(dir))) { res.writeHead(403); res.end(); return; }
     fs.readFile(p, (e, d) => {
       if (e) { res.writeHead(404); res.end(); return; }

@@ -3,7 +3,7 @@
 //   node tools/browser_solo_overlay_check.mjs --url <embed.html?solo=...> --state fresh|counter2|failed \
 //       [--serve <web export dir> --port 8098 --content https://dotgames.org] [--lock addons.lock | --fp HEX] \
 //       [--addons arena_weapons@1.4.46,zee_weapons@0.1.62] [--expect started,blocked] [--secs 240] [--shot out.png]
-//       [--map <slug>] [--linger <secs>] [--map-loaded <regex>] [--max-loads N]
+//       [--map <slug>] [--linger <secs>] [--map-loaded <regex>] [--max-loads N] [--threads 1|0]
 //
 // The bug it was written for (2026-11-13): a tab that had restarted twice for PLAYLOT's weapon addons gave up and started
 // the game without zee_weapons, so its scripts did not parse and the page stayed black. The shell now blocks such a game
@@ -34,7 +34,12 @@
 // --max-loads N fails the run when the shell page loaded more than N times (default 1 with --state fresh, 0 = any otherwise):
 // a first visit must not restart into its addons (2026-11-14: a fresh PLAYLOT visit fetched the shell, built the overlay, reloaded and
 // fetched it all again). The shell mounts an overlay that only adds addons in place. Printed as `loads: N`.
-// Exit 0 when the verdict is in --expect and the loads are within --max-loads, 1 otherwise, 2 on usage.
+// --threads 1 serves --serve with COOP/COEP so the page runs the threaded engine (index-mt), and fails unless it did; --threads 0
+// adds ?threads=0. The threaded run is the check for web-mt-shell-unpack-hang-1 (2026-11-14): FC sat at "Unpacking 0 of 1" for
+// minutes because dot-cloud hashed every object on worker threads, whose user:// reads the browser serves one a frame. Run it as
+//   --serve web/build --url http://x/godot/<build>/embed.html?solo=gamemann/game-fatal-contact --threads 1 --expect started --secs 240
+// Exit 0 when the verdict is in --expect, the loads are within --max-loads and the engine is the one --threads asked for, 1 otherwise,
+// 2 on usage.
 import { serveShell } from './local_shell_server.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -63,6 +68,10 @@ const lingerSecs = +opt('linger', mapSlug ? '120' : '8');
 const maxLoads = +opt('max-loads', state === 'fresh' ? '1' : '0');
 const mapLoadedSrc = opt('map-loaded', 'world built|map changed|map loaded|round began');
 const mapLoaded = mapSlug && mapLoadedSrc ? new RegExp(mapLoadedSrc, 'i') : null;
+const threads = opt('threads', '');
+if (threads && !['0', '1'].includes(threads)) { console.error(`--threads ${threads}: 1 or 0`); process.exit(2); }
+if (threads === '1' && !serve) { console.error('--threads 1 needs --serve: the page must be served with COOP/COEP'); process.exit(2); }
+if (threads === '0' && url) { const u = new URL(url); u.searchParams.set('threads', '0'); url = u.toString(); }
 if (mapSlug) {
   if (!/^[A-Za-z0-9_.-]+$/.test(mapSlug)) { console.error(`--map ${mapSlug}: not a map id`); process.exit(2); }
   if (url) { const u = new URL(url); u.searchParams.set('map', mapSlug); url = u.toString(); }
@@ -114,7 +123,7 @@ const { chromium } = loadPlaywright();
 
 let srv = null;
 if (serve) {
-  try { ({ srv, url } = await serveShell({ dir: serve, port, buildId, upstream, givenUrl: url })); } catch (e) { console.error(String(e.message)); process.exit(2); }
+  try { ({ srv, url } = await serveShell({ dir: serve, port, buildId, upstream, givenUrl: url, coi: threads === '1' })); } catch (e) { console.error(String(e.message)); process.exit(2); }
 }
 
 // GPU_CDP_URL (set by dot-bootstrap's `gpu.sh cdp-run -- node tools/browser_solo_overlay_check.mjs ...`) drives a real
@@ -204,6 +213,7 @@ while (Date.now() < deadline) {
     break;
   }
 }
+const engine = await page.evaluate(() => window.__TMC_ENGINE__ || '').catch(() => '');
 await page.screenshot({ path: shot }).catch(() => {});
 await ctx.close();
 if (cdp) await cdp.close();
@@ -211,7 +221,9 @@ if (srv) srv.close();
 fs.rmSync(profile, { recursive: true, force: true });
 
 const v = verdict();
-console.log(`\nverdict: ${v} (state ${state}, shell ${buildId || '?'}, expect ${expect.join('|')}) screenshot ${shot}`);
+console.log(`\nverdict: ${v} (state ${state}, shell ${buildId || '?'}, engine ${engine || '?'}, expect ${expect.join('|')}) screenshot ${shot}`);
+const engineOk = !threads || engine === (threads === '1' ? 'threads' : 'single');
+if (!engineOk) console.log(`engine: wanted ${threads === '1' ? 'threads' : 'single'}, the page ran ${engine || 'none'}`);
 let mapOk = true;
 if (mapLoaded && v === 'started') {
   mapOk = mapLoaded.test(lines.join('\n'));
@@ -219,4 +231,4 @@ if (mapLoaded && v === 'started') {
 }
 const loadsOk = maxLoads <= 0 || loads <= maxLoads;
 console.log(`loads: ${loads}${maxLoads > 0 ? ` (at most ${maxLoads})` : ''}${loadsOk ? '' : ': the shell restarted the page'}`);
-process.exit(expect.includes(v) && mapOk && loadsOk ? 0 : 1);
+process.exit(expect.includes(v) && mapOk && loadsOk && engineOk ? 0 : 1);
