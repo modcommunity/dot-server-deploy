@@ -64,8 +64,6 @@ enum SoloOverlay { NONE, RESTARTING, BLOCKED }
 enum InPlace { RUNNING, REFUSED, STALE }
 ## Where dot-cloud's boot script records the overlay it mounted ([method DotCloudAddonSet.mounted_this_boot] reads it).
 const OVERLAY_SETTING := "dot_cloud/addon_overlay"
-## The boot script's record of which build [constant DotCloudAddonSet.SHELL_CLASSES] was kept for; dot-cloud names it only there.
-const SHELL_CLASSES_BUILD := "user://dot_cloud_addons/shell_classes.build"
 ## Whether to fetch this game's maps pack in solo; see [method TmcSolo.skip_maps].
 var _solo_maps_check: CheckBox = null
 ## What the pack being fetched is, said in the status line over every cloud phase text.
@@ -1801,67 +1799,17 @@ static func _overlay_additive(plan: Dictionary) -> bool:
 	return true
 
 
-## Mounts the overlay the plan on disk names in this process, as dot-cloud's boot script does at a start
-## ([code]addons/dot_cloud/boot/dot_cloud_boot.gd[/code]; keep the two in step), and confirms it. Only for an
-## [method _overlay_additive] plan: mounting a pack refreshes the global class list, and with no compiled copy of these
-## addons in memory their scripts load from it. [constant InPlace.REFUSED] leaves the plan ready for a restart.
+## Mounts the overlay the plan on disk names in this process and confirms it, through [method DotCloudAddonSet.mount_now] (the
+## boot script may name no class, so the shell makes the call). Only for an [method _overlay_additive] plan: mounting
+## refreshes the global class list, and with no compiled copy of these addons in memory their scripts load from it.
+## [constant InPlace.REFUSED] leaves the plan ready for a restart.
 func _mount_in_place() -> InPlace:
-	var plan := DotCloudAddonSet.read_plan()
-	var pack := str(plan.get("pack", ""))
-	if str(plan.get("state", "")) != DotCloudAddonSet.STATE_READY or not pack.begins_with(DotCloudAddonSet.DIR + "/") \
-			or not FileAccess.file_exists(pack):
-		return InPlace.REFUSED
-
-	# The build's own class list, kept before the overlay's replaces it: the next overlay is merged from it.
-	var build := DotCloudAddonSet.build_fingerprint()
-	if FileAccess.get_file_as_string(SHELL_CLASSES_BUILD) != build:
-		var classes := FileAccess.get_file_as_string(DotCloudScriptClass.CACHE_PATH)
-		if classes != "":
-			DotPaths.write_text(DotCloudAddonSet.SHELL_CLASSES, classes)
-			DotPaths.write_text(SHELL_CLASSES_BUILD, build)
-
-	# Booting, as the boot script leaves it, so confirm_boot checks it; and nothing to resume, or the next visit would start this game again.
-	var resume: Variant = plan.get("resume", {})
-	plan["resume"] = {}
-	plan["state"] = DotCloudAddonSet.STATE_BOOTING
-	plan["attempts"] = 0
-	DotCloudAddonSet.write_plan(plan)
-
-	if not ProjectSettings.load_resource_pack(pack, true):
-		plan["state"] = DotCloudAddonSet.STATE_READY
-		plan["resume"] = resume
-		DotCloudAddonSet.write_plan(plan)
-		DotLog.warn(CHANNEL, "the engine refused the addon overlay here; restarting onto it instead", {"pack": pack})
-		return InPlace.REFUSED
-
-	ProjectSettings.set_setting(OVERLAY_SETTING, pack)
-	var uids: Variant = plan.get("uids", [])
-	if uids is Array:
-		for pair: Variant in uids:
-			if pair is Array and (pair as Array).size() == 2:
-				_register_overlay_uid(str(pair[0]), str(pair[1]))
-
-	DotCloudAddonSet.confirm_boot()
-	if str(DotCloudAddonSet.read_plan().get("state", "")) != DotCloudAddonSet.STATE_OK:
-		return InPlace.STALE
-	DotLog.info(CHANNEL, "mounted this solo game's addons without a restart", {
-		"pack": pack.get_file(), "addons": (plan.get("addons", {}) as Dictionary).keys(),
-	})
-	return InPlace.RUNNING
-
-
-## Points a uid the overlay declares at its file, by the boot script's rule: only inside `res://addons/`.
-static func _register_overlay_uid(text: String, path: String) -> void:
-	if not path.begins_with("res://addons/") or path.contains(".."):
-		return
-	var id := ResourceUID.text_to_id(text)
-	if id == ResourceUID.INVALID_ID:
-		return
-	if ResourceUID.has_id(id):
-		if ResourceUID.get_id_path(id).begins_with("res://addons/"):
-			ResourceUID.set_id(id, path)
-	else:
-		ResourceUID.add_id(id, path)
+	match DotCloudAddonSet.mount_now():
+		DotCloudAddonSet.MountNow.RUNNING:
+			return InPlace.RUNNING
+		DotCloudAddonSet.MountNow.STALE:
+			return InPlace.STALE
+	return InPlace.REFUSED
 
 
 ## Where the last restart onto newer addons was going and who was signed in, taken once:

@@ -516,7 +516,7 @@ func _test_overlay_in_place() -> void:
 
 	var dir := "solo_check_overlay"
 	var root := "res://addons/%s" % dir
-	var shell_classes_build: String = (load("res://client/shell.gd") as GDScript).get_script_constant_map()["SHELL_CLASSES_BUILD"]
+	var shell_classes_build: String = DotCloudAddonSet.SHELL_CLASSES_BUILD
 	var setting: String = (load("res://client/shell.gd") as GDScript).get_script_constant_map()["OVERLAY_SETTING"]
 	var kept := {}
 	for path: String in [DotCloudAddonSet.PLAN, DotCloudAddonSet.SHELL_CLASSES, shell_classes_build]:
