@@ -20,12 +20,20 @@ const GATE_META := &"dot_load_gate"
 const FALLBACK_SETTLE_FRAMES := 10
 ## The most a game with no gate is covered for, camera or not.
 const FALLBACK_MAX_SEC := 5.0
-## The most the material warm-up may take before the screen drops anyway; the web build
-## has stalled on it with the match already running underneath.
-const DRAW_MAX_SEC := 6.0
-
 ## Seconds a game on the root contract has, after it is on screen, to say it is ready.
 var warm_wait_sec: float = 20.0
+
+## Seconds the material warm-up may take before the screen drops anyway, with a warning; 0 is no
+## limit. The web build has stalled on it with the match already running underneath. Checked
+## between frames, so it holds only because [member draw_budget_msec] keeps every frame short.
+## Project setting [code]tmc/cover/draw_max_sec[/code] overrides it.
+var draw_max_sec: float = float(ProjectSettings.get_setting("tmc/cover/draw_max_sec", 6.0))
+
+## Milliseconds each round of the warm-up may cost its frame ([member DotRenderWarmup.budget_msec]);
+## 0 puts every item up at once. Unbudgeted, PLAYLOT's 184 items went up in one round: one frame of
+## serial shader compiles some 12 s long, which no time-out between frames could cut and during
+## which the screen did not move. Project setting [code]tmc/cover/draw_budget_msec[/code] overrides it.
+var draw_budget_msec: float = float(ProjectSettings.get_setting("tmc/cover/draw_budget_msec", 50.0))
 
 var loading: TmcLoadingScreen = null
 var game_root: Node = null
@@ -262,22 +270,43 @@ func _draw_once(items: Array) -> void:
 	warm.name = "Warmup"
 	# The camera is often under a body a load gate froze; a disabled warm-up never ends.
 	warm.process_mode = Node.PROCESS_MODE_ALWAYS
+	warm.budget_msec = maxf(draw_budget_msec, 0.0)
 	warm.add_items(items)
 	var count := warm.item_count()
 	var started := Time.get_ticks_msec()
 	cam.add_child(warm)
 	warm.start()
-	var done := [false]
-	warm.finished.connect(func(_n: int) -> void: done[0] = true)
-	while not done[0] and Time.get_ticks_msec() - started < int(DRAW_MAX_SEC * 1000.0):
+	# A Dictionary: a lambda captures a bool by value. Rounds are read before the warm-up frees itself.
+	var state := {"done": false, "rounds": 0, "placed": 0}
+	warm.finished.connect(func(placed: int) -> void:
+		state["done"] = true
+		state["placed"] = placed
+		state["rounds"] = int(warm.describe().get("rounds", 0)))
+	var limit_msec := int(draw_max_sec * 1000.0)
+	var frames := 0
+	var longest_usec := 0
+	var last_usec := Time.get_ticks_usec()
+	while not bool(state["done"]) and is_instance_valid(warm) and (limit_msec <= 0 or Time.get_ticks_msec() - started < limit_msec):
 		await get_tree().process_frame
-	if not done[0]:
-		DotLog.warn(CHANNEL, "the material warm-up did not finish in time; moving on", {
-			"step": "warm-up", "items": count, "seconds": DRAW_MAX_SEC})
-		warm.queue_free()
+		var now := Time.get_ticks_usec()
+		longest_usec = maxi(longest_usec, now - last_usec)
+		last_usec = now
+		frames += 1
+	var took := {"items": count, "ms": Time.get_ticks_msec() - started, "frames": frames,
+		"longest_frame_ms": roundi(longest_usec / 1000.0), "budget_msec": draw_budget_msec}
+	if not bool(state["done"]):
+		var where: Dictionary = warm.describe() if is_instance_valid(warm) else {}
+		took["rounds"] = int(where.get("rounds", 0))
+		took["placed"] = int(where.get("placed", 0))
+		took["seconds"] = draw_max_sec
+		took["step"] = "warm-up"
+		DotLog.warn(CHANNEL, "the material warm-up did not finish in time; moving on, and what it did not reach compiles in play", took)
+		if is_instance_valid(warm):
+			warm.queue_free()
 		return
-	DotLog.info(CHANNEL, "drew the game's materials once under the loading screen", {
-		"items": count, "ms": Time.get_ticks_msec() - started})
+	took["rounds"] = state["rounds"]
+	took["placed"] = state["placed"]
+	DotLog.info(CHANNEL, "drew the game's materials once under the loading screen", took)
 
 
 func describe() -> Dictionary:

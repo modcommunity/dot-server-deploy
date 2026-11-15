@@ -2,7 +2,7 @@ extends Node
 
 ## The admin menu and the loading screen, both halves, without a server.
 
-const CHECKS := 192
+const CHECKS := 197
 
 var _passed := 0
 var _failed := 0
@@ -48,6 +48,7 @@ func _run() -> void:
 	_test_shell_version()
 	await _test_loading_fetch()
 	await _test_cover_gate()
+	await _test_cover_draw_budget()
 	await _test_cover_contract()
 	await _test_cover_fallback()
 	await _test_slice_preload()
@@ -1262,6 +1263,41 @@ func _test_cover_gate() -> void:
 	_check(gate2.is_hosted() and not gate2.is_cover_showing() and screen.is_showing(),
 		"watch() finds it by its metadata and takes the job over")
 	root2.free()
+	_cover_free(rig)
+	_done()
+
+
+## The shell's warm-up goes up in budgeted rounds, so its time-out can cut it between frames. Unbudgeted, PLAYLOT's
+## 184 items went up in one round: one 12 s frame of shader compiles that no time-out could cut (2026-11-15).
+func _test_cover_draw_budget() -> void:
+	_section("the shell's warm-up is budgeted, and its time-out is a setting")
+	var rig := _cover_rig()
+	var cover: TmcGameCover = rig[1]
+	var root: Node = rig[2]
+	_check(cover.draw_budget_msec > 0.0, "the warm-up is budgeted by default", str(cover.draw_budget_msec))
+	var cam := Camera3D.new()
+	root.add_child(cam)
+	cam.make_current()
+	var budgets: Array = []
+	cam.child_entered_tree.connect(func(n: Node) -> void:
+		if n is DotRenderWarmup:
+			budgets.append((n as DotRenderWarmup).budget_msec))
+	var mats: Array = []
+	for i in 3:
+		mats.append(StandardMaterial3D.new())
+	cover.draw_budget_msec = 25.0
+	cover.draw_max_sec = 0.0
+	await cover._draw_once(mats)
+	_check(budgets == [25.0], "the warm-up gets the cover's budget", str(budgets))
+	_check(not cam.has_node("Warmup") or cam.get_node("Warmup").is_queued_for_deletion(), "with no time-out (0) it still ends when the warm-up does")
+
+	# Headless draws no frame, so a warm-up only ends at its own 5 s: a 0.2 s limit must end it first.
+	cover.draw_max_sec = 0.2
+	var t0 := Time.get_ticks_msec()
+	await cover._draw_once(mats)
+	var took := Time.get_ticks_msec() - t0
+	_check(took < 2000, "a time-out cuts the warm-up between frames", "%d ms" % took)
+	_check(not cam.has_node("Warmup") or cam.get_node("Warmup").is_queued_for_deletion(), "and drops it")
 	_cover_free(rig)
 	_done()
 
