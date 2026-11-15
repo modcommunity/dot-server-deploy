@@ -130,6 +130,8 @@ if (serve) {
 // GPU's Chrome on a staging box. Without it, Chrome here renders WebGL in software, and the shot can come out black
 // while the game runs.
 const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'solo-overlay-profile-'));
+// Remove on every exit path (a failed check used to leave the Chromium profile in /tmp).
+process.on('exit', () => { try { fs.rmSync(profile, { recursive: true, force: true }); } catch {} });
 const cdp = process.env.GPU_CDP_URL ? await chromium.connectOverCDP(process.env.GPU_CDP_URL) : null;
 const ctx = cdp ? await cdp.newContext({ viewport: { width: 1280, height: 720 } }) : await chromium.launchPersistentContext(profile, {
   executablePath: process.env.CHROME || (fs.existsSync('/usr/bin/google-chrome') ? '/usr/bin/google-chrome' : undefined),
