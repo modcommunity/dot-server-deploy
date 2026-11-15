@@ -58,7 +58,7 @@ Deriving the list from the pack's own manifest is not an option: the pack would 
 
 ### Pack ids after the Gamespice rename
 
-The Dot packs moved from `modcommunity/dot-<name>` to `gamespice-platform/<name>`. The site keeps the old id as a mirrored `RetiredPackId`, so both ids get every version. `TmcAddonNamespaces.pack_for(dir)` returns the new id as `id` and the old one as `old_id`/`old_repo`; `dir_for_id` maps either back to the dir. Until the steps below are done, the server still **announces the old id** (`announced_pack_for`, used by `TmcHost.addon_set_from`):
+The Gamespice packs moved from `modcommunity/dot-<name>` to `gamespice-platform/<name>`. The site keeps the old id as a mirrored `RetiredPackId`, so both ids get every version. `TmcAddonNamespaces.pack_for(dir)` returns the new id as `id` and the old one as `old_id`/`old_repo`; `dir_for_id` maps either back to the dir. Until the steps below are done, the server still **announces the old id** (`announced_pack_for`, used by `TmcHost.addon_set_from`):
 
 - every shell exported so far accepts only `modcommunity/` overlays, and
 - `DotCloudAddonSet` matches a pack to the shell's built version by the pack's file name (`dot-<name>`, the `addons.lock` key) and refuses an id whose file name is not the repo. Announcing `gamespice-platform/core` would make every shell refetch every addon or refuse it.
