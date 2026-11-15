@@ -3,7 +3,7 @@
 //   node tools/browser_solo_overlay_check.mjs --url <embed.html?solo=...> --state fresh|counter2|failed \
 //       [--serve <web export dir> --port 8098 --content https://dotgames.org] [--lock addons.lock | --fp HEX] \
 //       [--addons arena_weapons@1.4.46,zee_weapons@0.1.62] [--expect started,blocked] [--secs 240] [--shot out.png]
-//       [--map <slug>] [--linger <secs>] [--map-loaded <regex>]
+//       [--map <slug>] [--linger <secs>] [--map-loaded <regex>] [--max-loads N]
 //
 // The bug it was written for (2026-11-13): a tab that had restarted twice for PLAYLOT's weapon addons gave up and started
 // the game without zee_weapons, so its scripts did not parse and the page stayed black. The shell now blocks such a game
@@ -31,7 +31,10 @@
 // than the game takes to start) and the check ends early once the console matches --map-loaded (default
 // "world built|map changed|map loaded|round began", case-insensitive). With --map, a map-loaded line that never shows is reported as
 // `map: <slug> not seen` and fails the run (exit 1); --map-loaded '' turns that requirement off.
-// Exit 0 when the verdict is in --expect, 1 otherwise, 2 on usage.
+// --max-loads N fails the run when the shell page loaded more than N times (default 1 with --state fresh, 0 = any otherwise):
+// a first visit must not restart into its addons (2026-11-14: a fresh PLAYLOT visit fetched the shell, built the overlay, reloaded and
+// fetched it all again). The shell mounts an overlay that only adds addons in place. Printed as `loads: N`.
+// Exit 0 when the verdict is in --expect and the loads are within --max-loads, 1 otherwise, 2 on usage.
 import { serveShell } from './local_shell_server.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -57,6 +60,7 @@ const userDir = opt('userdir', '/userfs/godot/app_userdata/TMC server');
 let url = opt('url', '');
 const mapSlug = opt('map', '');
 const lingerSecs = +opt('linger', mapSlug ? '120' : '8');
+const maxLoads = +opt('max-loads', state === 'fresh' ? '1' : '0');
 const mapLoadedSrc = opt('map-loaded', 'world built|map changed|map loaded|round began');
 const mapLoaded = mapSlug && mapLoadedSrc ? new RegExp(mapLoadedSrc, 'i') : null;
 if (mapSlug) {
@@ -131,7 +135,12 @@ const lines = [];
 const log = s => { const l = `${((Date.now() - t0) / 1000).toFixed(1)} ${s}`; lines.push(l); console.log(l); };
 page.on('console', m => log(`[${m.type()}] ${m.text()}`));
 page.on('pageerror', e => log(`[pageerror] ${e.message}`));
-page.on('framenavigated', f => { if (f === page.mainFrame()) log(`[nav] ${f.url()}`); });
+let loads = 0;
+page.on('framenavigated', f => {
+  if (f !== page.mainFrame()) return;
+  log(`[nav] ${f.url()}`);
+  if (!f.url().includes('solo-overlay-check-seed')) loads += 1;
+});
 
 // Seed on the origin before the shell's first load: same tab, so sessionStorage carries over.
 const origin = new URL(url).origin;
@@ -208,4 +217,6 @@ if (mapLoaded && v === 'started') {
   mapOk = mapLoaded.test(lines.join('\n'));
   console.log(`map: ${mapSlug} ${mapOk ? 'loaded' : 'not seen'} (/${mapLoadedSrc}/i within ${lingerSecs} s of the start)`);
 }
-process.exit(expect.includes(v) && mapOk ? 0 : 1);
+const loadsOk = maxLoads <= 0 || loads <= maxLoads;
+console.log(`loads: ${loads}${maxLoads > 0 ? ` (at most ${maxLoads})` : ''}${loadsOk ? '' : ': the shell restarted the page'}`);
+process.exit(expect.includes(v) && mapOk && loadsOk ? 0 : 1);

@@ -59,6 +59,13 @@ var _solo_retry: String = ""
 
 ## What [method _solo_overlay] did: nothing was missing, a restart into the addons is under way, or they are missing and cannot be had now.
 enum SoloOverlay { NONE, RESTARTING, BLOCKED }
+## What [method _mount_in_place] did: the overlay runs; the engine refused it (restart onto it instead); or it is mounted but an
+## addon still runs a compiled copy (blocked, as a failed boot is).
+enum InPlace { RUNNING, REFUSED, STALE }
+## Where dot-cloud's boot script records the overlay it mounted ([method DotCloudAddonSet.mounted_this_boot] reads it).
+const OVERLAY_SETTING := "dot_cloud/addon_overlay"
+## The boot script's record of which build [constant DotCloudAddonSet.SHELL_CLASSES] was kept for; dot-cloud names it only there.
+const SHELL_CLASSES_BUILD := "user://dot_cloud_addons/shell_classes.build"
 ## Whether to fetch this game's maps pack in solo; see [method TmcSolo.skip_maps].
 var _solo_maps_check: CheckBox = null
 ## What the pack being fetched is, said in the status line over every cloud phase text.
@@ -1768,6 +1775,83 @@ func _stamp_plan() -> void:
 	DotCloudAddonSet.write_plan(plan)
 
 
+## Whether [param plan]'s overlay only adds to this process: no overlay is mounted yet and none of its addons is here. Such an
+## overlay can be mounted without a restart ([method _mount_in_place]); one that replaces an addon cannot.
+static func _overlay_additive(plan: Dictionary) -> bool:
+	if str(ProjectSettings.get_setting(OVERLAY_SETTING, "")) != "":
+		return false
+	var addons: Variant = plan.get("addons", {})
+	if not (addons is Dictionary) or (addons as Dictionary).is_empty():
+		return false
+	for dir: String in addons:
+		if DirAccess.dir_exists_absolute("res://addons/%s" % dir):
+			return false
+	return true
+
+
+## Mounts the overlay the plan on disk names in this process, as dot-cloud's boot script does at a start
+## ([code]addons/dot_cloud/boot/dot_cloud_boot.gd[/code]; keep the two in step), and confirms it. Only for an
+## [method _overlay_additive] plan: mounting a pack refreshes the global class list, and with no compiled copy of these
+## addons in memory their scripts load from it. [constant InPlace.REFUSED] leaves the plan ready for a restart.
+func _mount_in_place() -> InPlace:
+	var plan := DotCloudAddonSet.read_plan()
+	var pack := str(plan.get("pack", ""))
+	if str(plan.get("state", "")) != DotCloudAddonSet.STATE_READY or not pack.begins_with(DotCloudAddonSet.DIR + "/") \
+			or not FileAccess.file_exists(pack):
+		return InPlace.REFUSED
+
+	# The build's own class list, kept before the overlay's replaces it: the next overlay is merged from it.
+	var build := DotCloudAddonSet.build_fingerprint()
+	if FileAccess.get_file_as_string(SHELL_CLASSES_BUILD) != build:
+		var classes := FileAccess.get_file_as_string(DotCloudScriptClass.CACHE_PATH)
+		if classes != "":
+			DotPaths.write_text(DotCloudAddonSet.SHELL_CLASSES, classes)
+			DotPaths.write_text(SHELL_CLASSES_BUILD, build)
+
+	# Booting, as the boot script leaves it, so confirm_boot checks it; and nothing to resume, or the next visit would start this game again.
+	var resume: Variant = plan.get("resume", {})
+	plan["resume"] = {}
+	plan["state"] = DotCloudAddonSet.STATE_BOOTING
+	plan["attempts"] = 0
+	DotCloudAddonSet.write_plan(plan)
+
+	if not ProjectSettings.load_resource_pack(pack, true):
+		plan["state"] = DotCloudAddonSet.STATE_READY
+		plan["resume"] = resume
+		DotCloudAddonSet.write_plan(plan)
+		DotLog.warn(CHANNEL, "the engine refused the addon overlay here; restarting onto it instead", {"pack": pack})
+		return InPlace.REFUSED
+
+	ProjectSettings.set_setting(OVERLAY_SETTING, pack)
+	var uids: Variant = plan.get("uids", [])
+	if uids is Array:
+		for pair: Variant in uids:
+			if pair is Array and (pair as Array).size() == 2:
+				_register_overlay_uid(str(pair[0]), str(pair[1]))
+
+	DotCloudAddonSet.confirm_boot()
+	if str(DotCloudAddonSet.read_plan().get("state", "")) != DotCloudAddonSet.STATE_OK:
+		return InPlace.STALE
+	DotLog.info(CHANNEL, "mounted this solo game's addons without a restart", {
+		"pack": pack.get_file(), "addons": (plan.get("addons", {}) as Dictionary).keys(),
+	})
+	return InPlace.RUNNING
+
+
+## Points a uid the overlay declares at its file, by the boot script's rule: only inside `res://addons/`.
+static func _register_overlay_uid(text: String, path: String) -> void:
+	if not path.begins_with("res://addons/") or path.contains(".."):
+		return
+	var id := ResourceUID.text_to_id(text)
+	if id == ResourceUID.INVALID_ID:
+		return
+	if ResourceUID.has_id(id):
+		if ResourceUID.get_id_path(id).begins_with("res://addons/"):
+			ResourceUID.set_id(id, path)
+	else:
+		ResourceUID.add_id(id, path)
+
+
 ## Where the last restart onto newer addons was going and who was signed in, taken once:
 ## `{server, member}`, or empty.
 func _take_resume() -> Dictionary:
@@ -2197,9 +2281,10 @@ static func solo_addons_in(text: String) -> Dictionary:
 
 
 ## The addons in [param needs] (from [method _solo_needs]) that this shell neither carries nor
-## has mounted, fetched as the overlay a server would announce and restarted into, as
+## has mounted, fetched as the overlay a server would announce. When it only adds addons to this process (a first visit, a new shell
+## build) it is mounted here and the game starts ([method _mount_in_place]); otherwise it is restarted into, as
 ## [method _update_addons] does for a join. [constant SoloOverlay.RESTARTING] when a restart is under way (the caller stops
-## there); [constant SoloOverlay.NONE] when nothing is missing; [constant SoloOverlay.BLOCKED] when the addons are missing and
+## there); [constant SoloOverlay.NONE] when nothing is missing or it is mounted here; [constant SoloOverlay.BLOCKED] when the addons are missing and
 ## cannot be had now: after a failed start on the same overlay in this shell build, after [constant MAX_UPDATE_RESTARTS] restarts for it,
 ## or when building it failed. Blocked never plays on: the game's scripts do not parse without its addons, which is the black screen
 ## PLAYLOT showed on 2026-11-13. The caller fails the start and the solo button becomes Retry ([member _solo_retry]).
@@ -2284,6 +2369,21 @@ func _solo_overlay(content_id: String, needs: Dictionary, subscribed: Array = []
 		return SoloOverlay.BLOCKED
 
 	_stamp_plan()
+
+	# A first visit, or the first start on a new shell build, has none of these addons in this process: mount them here and play on,
+	# rather than reload the page and fetch the shell again (the "update" restart a fresh PLAYLOT visit showed on 2026-11-14).
+	# A restart stays for an overlay that would replace a mounted addon: a compiled script is never read again. It also stays
+	# for a workshop subscription (never on a first visit): an online join drops that overlay, and only a restart unmounts it.
+	if _overlay_additive(built.value) and not plan_holds_subscription(built.value) \
+			and not plan_holds_subscription({"addons": wanted}):
+		match _mount_in_place():
+			InPlace.RUNNING:
+				_clear_update_attempts(target)
+				return SoloOverlay.NONE
+			InPlace.STALE:
+				_solo_retry = attempt
+				return SoloOverlay.BLOCKED
+
 	_note_update_attempt(attempt)
 
 	var keep := DotCloudAddonSet.plan_files(built.value)

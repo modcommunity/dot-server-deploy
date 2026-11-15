@@ -4,7 +4,7 @@ extends Node
 ## `game.yml` reader against the host's, the shell's map list against the stock server one, and the
 ## session a game reads its map packs from. godot --headless --path .
 
-const CHECKS := 84
+const CHECKS := 92
 
 ## Every game repository, beside this project or in games/: the repositories of cfg/content/games.yml (shipped content-lists/games.yml).
 
@@ -42,6 +42,8 @@ func _ready() -> void:
 	_test_sim_child_args()
 	_test_requires_reader()
 	_test_overlay_blocked()
+	# Last: it mounts a pack, which nothing unmounts.
+	_test_overlay_in_place()
 
 	print("")
 	print("%d sections, %d completed" % [_entered, _completed])
@@ -503,6 +505,85 @@ func _test_overlay_blocked() -> void:
 		DotPaths.write_text(DotCloudAddonSet.PLAN, plan_before)
 	else:
 		DotCloudAddonSet.forget()
+	_done()
+
+
+## A fresh visit must not restart the page (PLAYLOT on 2026-11-14: a first visit fetched the shell, built zee_weapons and
+## arena_weapons into an overlay, then reloaded and fetched the shell again). An overlay that only adds addons is mounted in this
+## process and its classes resolve; one that would replace an addon, or come after another overlay, still restarts.
+func _test_overlay_in_place() -> void:
+	_section("a solo game's addons that only add to this process are mounted without a restart")
+
+	var dir := "solo_check_overlay"
+	var root := "res://addons/%s" % dir
+	var shell_classes_build: String = (load("res://client/shell.gd") as GDScript).get_script_constant_map()["SHELL_CLASSES_BUILD"]
+	var setting: String = (load("res://client/shell.gd") as GDScript).get_script_constant_map()["OVERLAY_SETTING"]
+	var kept := {}
+	for path: String in [DotCloudAddonSet.PLAN, DotCloudAddonSet.SHELL_CLASSES, shell_classes_build]:
+		kept[path] = FileAccess.get_file_as_string(path) if FileAccess.file_exists(path) else null
+		DirAccess.remove_absolute(path)
+	var setting_before: Variant = ProjectSettings.get_setting(setting, "")
+
+	# The overlay as DotCloudAddonSet assembles it: the addon's files and the build's class list with its class added.
+	var scratch := DotCloudAddonSet.DIR.path_join("solo_check_scratch")
+	DotPaths.ensure_dir(scratch)
+	var scripts := {
+		root.path_join("solo_check_overlay_probe.gd"): "class_name SoloCheckOverlayProbe\nextends RefCounted\n\nfunc answer() -> int:\n\treturn 42\n",
+		root.path_join("user.gd"): "extends RefCounted\n\nfunc answer() -> int:\n\treturn SoloCheckOverlayProbe.new().answer()\n",
+	}
+	var packer := PCKPacker.new()
+	var pack := DotCloudAddonSet.DIR.path_join("solo_check_overlay.pck")
+	packer.pck_start(pack)
+	var files := {root.path_join("plugin.cfg"): "[plugin]\nname=\"solo_check_overlay\"\n"}
+	files.merge(scripts)
+	var n := 0
+	for target: String in files:
+		var source := scratch.path_join("f%d" % n)
+		n += 1
+		DotPaths.write_text(source, str(files[target]), false)
+		packer.add_file(target, source)
+	DotCloudAddonSet._write_class_cache(scripts, PackedStringArray([root]), scratch)
+	packer.add_file(DotCloudScriptClass.CACHE_PATH, scratch.path_join("global_script_class_cache.cfg"))
+	packer.flush(false)
+
+	var plan := {
+		"format": DotCloudAddonSet.FORMAT, "build": DotCloudAddonSet.build_fingerprint(), "pack": pack,
+		"addons": {dir: {"repo": dir, "version": "0.0.1"}}, "uids": [], "probes": {},
+		"state": DotCloudAddonSet.STATE_READY, "resume": {"solo": "gamemann/game-playlot"},
+	}
+	DotCloudAddonSet.write_plan(plan)
+
+	var shell: Node = (load("res://client/shell.gd") as GDScript).new()
+	var restarted := [false]
+	shell.set("restart_fn", func() -> void: restarted[0] = true)
+
+	_check(shell.call("_overlay_additive", plan), "a first visit's overlay only adds addons")
+	_check(not shell.call("_overlay_additive", {"addons": {"dot_core": {}, dir: {}}}),
+		"an overlay that would replace an addon the shell carries is not mounted in place")
+	var in_place: int = shell.call("_mount_in_place")
+	_check(in_place == 0 and not restarted[0], "it is mounted in this process, with no restart", "got %d" % in_place)
+	var after := DotCloudAddonSet.read_plan()
+	_check(str(after.get("state", "")) == DotCloudAddonSet.STATE_OK and DotCloudAddonSet.mounted_this_boot(after),
+		"the plan says ok and names the mounted pack", str(after))
+	_check((after.get("resume", {}) as Dictionary).is_empty(), "nothing is left to resume on the next visit")
+	_check(FileAccess.get_file_as_string(DotCloudAddonSet.SHELL_CLASSES) != ""
+		and FileAccess.get_file_as_string(shell_classes_build) == DotCloudAddonSet.build_fingerprint(),
+		"the shell's own class list is kept for the next overlay")
+	var user := load(root.path_join("user.gd")) as GDScript
+	var answer: int = int(user.new().answer()) if user != null and user.can_instantiate() else -1
+	_check(answer == 42, "a script naming the overlay's class_name compiles and runs", "got %d" % answer)
+	_check(not shell.call("_overlay_additive", {"addons": {"solo_check_other": {}}}),
+		"a second overlay after this one restarts")
+
+	shell.free()
+	ProjectSettings.set_setting(setting, setting_before)
+	for path: String in kept:
+		if kept[path] == null:
+			DirAccess.remove_absolute(path)
+		else:
+			DotPaths.write_text(path, str(kept[path]))
+	DotPaths.remove_tree(scratch)
+	DirAccess.remove_absolute(pack)
 	_done()
 
 
