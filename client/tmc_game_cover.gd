@@ -23,9 +23,10 @@ const FALLBACK_MAX_SEC := 5.0
 ## Seconds a game on the root contract has, after it is on screen, to say it is ready.
 var warm_wait_sec: float = 20.0
 
-## Seconds the material warm-up may take before the screen drops anyway, with a warning; 0 is no
-## limit. The web build has stalled on it with the match already running underneath. Checked
-## between frames, so it holds only because [member draw_budget_msec] keeps every frame short.
+## Seconds the material warm-up may hold the screen, with a warning past it; 0 is no limit. Past it
+## the screen lifts and the warm-up keeps drawing the rest in play, one budgeted round a frame, so
+## nothing is skipped. Checked between frames, so it holds only because [member draw_budget_msec]
+## keeps every frame short.
 ## Project setting [code]tmc/cover/draw_max_sec[/code] overrides it.
 var draw_max_sec: float = float(ProjectSettings.get_setting("tmc/cover/draw_max_sec", 6.0))
 
@@ -145,7 +146,8 @@ func _on_gate_ready(gate: Object) -> void:
 	loading.begin(TmcLoadingScreen.REASON_WARM, "", "", true)
 	var game: Variant = gate.get(&"game_root")
 	var items: Array = []
-	if game is Node and is_instance_valid(game):
+	# A gate with warm_game_root off warms only its warm_items(); null is a gate from before it.
+	if game is Node and is_instance_valid(game) and gate.get(&"warm_game_root") != false:
 		items = DotRenderWarmup.collect(game)
 	var extra: Variant = gate.call(&"warm_items")
 	if extra is Array:
@@ -276,12 +278,14 @@ func _draw_once(items: Array) -> void:
 	var started := Time.get_ticks_msec()
 	cam.add_child(warm)
 	warm.start()
-	# A Dictionary: a lambda captures a bool by value. Rounds are read before the warm-up frees itself.
-	var state := {"done": false, "rounds": 0, "placed": 0}
+	# A Dictionary: a lambda captures a bool by value. The warm-up's own account is read before it frees itself.
+	var state := {"done": false, "deferred": false, "placed": 0, "seen": {}}
 	warm.finished.connect(func(placed: int) -> void:
 		state["done"] = true
 		state["placed"] = placed
-		state["rounds"] = int(warm.describe().get("rounds", 0)))
+		state["seen"] = warm.describe()
+		if bool(state["deferred"]):
+			DotLog.info(CHANNEL, "the deferred material warm-up finished in play", _warm_fields(state["seen"], {"items": count, "placed": placed, "ms": Time.get_ticks_msec() - started})))
 	var limit_msec := int(draw_max_sec * 1000.0)
 	var frames := 0
 	var longest_usec := 0
@@ -295,19 +299,35 @@ func _draw_once(items: Array) -> void:
 	var took := {"items": count, "ms": Time.get_ticks_msec() - started, "frames": frames,
 		"longest_frame_ms": roundi(longest_usec / 1000.0), "budget_msec": draw_budget_msec}
 	if not bool(state["done"]):
-		var where: Dictionary = warm.describe() if is_instance_valid(warm) else {}
-		took["rounds"] = int(where.get("rounds", 0))
-		took["placed"] = int(where.get("placed", 0))
+		# Not cut: the warm-up keeps drawing its rounds in play, each held to the budget, so what it has not reached
+		# yet compiles a round at a time instead of on first use in a fight. It logs again when it ends (or, freed
+		# with its camera first, DotRenderWarmup warns with what it never drew).
+		took = _warm_fields(warm.describe() if is_instance_valid(warm) else {}, took)
 		took["seconds"] = draw_max_sec
 		took["step"] = "warm-up"
-		DotLog.warn(CHANNEL, "the material warm-up did not finish in time; moving on, and what it did not reach compiles in play", took)
 		if is_instance_valid(warm):
-			warm.queue_free()
+			state["deferred"] = true
+			# In play a frame matters more than the finish: hold every dear item seen, so cheap rounds never grow
+			# back onto a compile (decay 0.5 let one 32-item round take 2.7 s on staging02). Checked with `in`:
+			# a pinned dot-core from before dear_decay lacks it.
+			if &"dear_decay" in warm:
+				warm.set(&"dear_decay", 1.0)
+			DotLog.warn(CHANNEL, "the material warm-up did not finish under the loading screen; lifting it and drawing the rest in play", took)
+		else:
+			DotLog.warn(CHANNEL, "the material warm-up was freed before it finished; what it did not reach compiles on first use", took)
 		return
-	took["rounds"] = state["rounds"]
+	took = _warm_fields(state["seen"], took)
 	took["placed"] = state["placed"]
 	DotLog.info(CHANNEL, "drew the game's materials once under the loading screen", took)
 
 
 func describe() -> Dictionary:
 	return {"gates": _gates.size(), "warming": _warming.size(), "fallback": _fallback.size()}
+
+
+## [param into] plus the warm-up's own account of its rounds from [param seen] (a [method DotRenderWarmup.describe]).
+static func _warm_fields(seen: Dictionary, into: Dictionary) -> Dictionary:
+	for key: String in ["rounds", "placed", "left", "longest_round_ms", "longest_round_items", "over_budget_rounds"]:
+		if seen.has(key):
+			into[key] = seen[key]
+	return into

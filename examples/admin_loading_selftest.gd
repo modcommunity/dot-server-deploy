@@ -1296,8 +1296,13 @@ func _test_cover_draw_budget() -> void:
 	var t0 := Time.get_ticks_msec()
 	await cover._draw_once(mats)
 	var took := Time.get_ticks_msec() - t0
-	_check(took < 2000, "a time-out cuts the warm-up between frames", "%d ms" % took)
-	_check(not cam.has_node("Warmup") or cam.get_node("Warmup").is_queued_for_deletion(), "and drops it")
+	_check(took < 2000, "a time-out lifts the screen between frames", "%d ms" % took)
+	# What it did not reach is deferred, not skipped: the warm-up keeps drawing in play.
+	var left := cam.get_node_or_null("Warmup") as DotRenderWarmup
+	_check(left != null and not left.is_queued_for_deletion(), "and leaves the warm-up drawing the rest in play")
+	if left != null:
+		left.queue_free()
+		await get_tree().process_frame
 	_cover_free(rig)
 	_done()
 
