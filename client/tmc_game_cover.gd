@@ -275,6 +275,8 @@ func _draw_once(items: Array) -> void:
 	warm.budget_msec = maxf(draw_budget_msec, 0.0)
 	warm.add_items(items)
 	var count := warm.item_count()
+	# Items offered against items drawn: DotRenderWarmup drops those whose pipeline another already compiles.
+	var offered := items.size()
 	var started := Time.get_ticks_msec()
 	cam.add_child(warm)
 	warm.start()
@@ -297,7 +299,7 @@ func _draw_once(items: Array) -> void:
 		last_usec = now
 		frames += 1
 	var took := {"items": count, "ms": Time.get_ticks_msec() - started, "frames": frames,
-		"longest_frame_ms": roundi(longest_usec / 1000.0), "budget_msec": draw_budget_msec}
+		"longest_frame_ms": roundi(longest_usec / 1000.0), "budget_msec": draw_budget_msec, "offered": offered}
 	if not bool(state["done"]):
 		# Not cut: the warm-up keeps drawing its rounds in play, each held to the budget, so what it has not reached
 		# yet compiles a round at a time instead of on first use in a fight. It logs again when it ends (or, freed
@@ -327,7 +329,7 @@ func describe() -> Dictionary:
 
 ## [param into] plus the warm-up's own account of its rounds from [param seen] (a [method DotRenderWarmup.describe]).
 static func _warm_fields(seen: Dictionary, into: Dictionary) -> Dictionary:
-	for key: String in ["rounds", "placed", "left", "longest_round_ms", "longest_round_items", "over_budget_rounds"]:
+	for key: String in ["deduped", "rounds", "placed", "left", "longest_round_ms", "longest_round_items", "over_budget_rounds"]:
 		if seen.has(key):
 			into[key] = seen[key]
 	return into
