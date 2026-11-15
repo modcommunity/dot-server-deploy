@@ -337,7 +337,8 @@ static func _lists(result: Variant, path: String) -> bool:
 
 ## Derive [param source]'s requires.json into [param out_path], the way dot-ci's `package.sh --pack`
 ## does: dot-core's `tools/dot_requires.gd`, run with `--path` the source project.
-static func derive_requires(source: String, out_path: String) -> DotResult:
+## [param pins] is addon to level, the levels the shell this box ships has; omitted, they are read from addons.lock ([method pinned_args]). A floor above one fails the derivation, never clamped to it.
+static func derive_requires(source: String, out_path: String, pins: Dictionary = {}) -> DotResult:
 	var src := ProjectSettings.globalize_path(source)
 
 	if not FileAccess.file_exists(src.path_join("project.godot")):
@@ -363,7 +364,8 @@ static func derive_requires(source: String, out_path: String) -> DotResult:
 	DirAccess.make_dir_recursive_absolute(out_abs.get_base_dir())
 	DirAccess.remove_absolute(out_abs)
 
-	var run := _run_requires(src, ["--out", out_abs])
+	var pin_args := pinned_args(pins if not pins.is_empty() else pinned_levels())
+	var run := _run_requires(src, ["--out", out_abs] + pin_args)
 
 	# A source never imported has no class cache: dot_requires.gd then fails to PARSE (its DotAddonApi
 	# is unknown) before it can print its own "import the project first" and exit 2 -- the case on a
@@ -371,7 +373,7 @@ static func derive_requires(source: String, out_path: String) -> DotResult:
 	var unimported := int(run["code"]) != 0 and str(run["output"]).contains("Identifier \"DotAddonApi\" not declared")
 	if unimported or (int(run["code"]) == 2 and str(run["output"]).contains("import the project first")):
 		_godot(["--headless", "--path", src, "--import"])
-		run = _run_requires(src, ["--out", out_abs])
+		run = _run_requires(src, ["--out", out_abs] + pin_args)
 
 	if int(run["code"]) != 0:
 		return DotResult.fail(
@@ -397,6 +399,33 @@ static func derive_requires(source: String, out_path: String) -> DotResult:
 	said.sort()
 	print("  requires.json: %s" % ", ".join(said))
 	return DotResult.success(out_abs)
+
+
+## The addon levels at the commits addons.lock pins, which is what the shell this box ships has: dot-core's [method DotAddonApi.pinned_levels] reads each addon folder at the locked ref.
+## The repositories are looked for in DOT_REPOS_ROOT, beside this project, then in TMC_REPOS_DIR and ~/godot; a root fills only the addons the earlier ones could not read. An addon none could read is left out, so a floor on it is judged against the linked build.
+static func pinned_levels() -> Dictionary:
+	var here := ProjectSettings.globalize_path("res://")
+	var lock := here.path_join("addons.lock")
+	var roots: Array[String] = [OS.get_environment("DOT_REPOS_ROOT"), here.path_join("..").simplify_path(), OS.get_environment("TMC_REPOS_DIR"), OS.get_environment("HOME").path_join("godot")]
+	var out := {}
+	for root in roots:
+		if root == "":
+			continue
+		var found := DotAddonApi.pinned_levels(lock, root)
+		for addon in found:
+			if not out.has(addon):
+				out[addon] = found[addon]
+	return out
+
+
+## [param pins] as the repeatable `--pin NAME=LEVEL` arguments of dot_requires.gd.
+static func pinned_args(pins: Dictionary) -> Array:
+	var out := []
+	var names: Array = pins.keys()
+	names.sort()
+	for addon in names:
+		out.append_array(["--pin", "%s=%d" % [addon, int(pins[addon])]])
+	return out
 
 
 static func _run_requires(src: String, args: Array) -> Dictionary:

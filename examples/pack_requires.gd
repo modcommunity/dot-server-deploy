@@ -4,7 +4,7 @@ extends Node
 
 const Pack := preload("res://tools/pack.gd")
 
-const CHECKS := 13
+const CHECKS := 18
 const GAME := "lookatme"
 const GAME_REPO := "mg-look-at-me"
 const FLOORED_REPO := "game-arena"
@@ -23,6 +23,7 @@ func _ready() -> void:
 
 	_test_published()
 	_test_floors()
+	_test_floor_above_shell()
 	_test_not_a_project()
 
 	DotPaths.remove_tree(SCRATCH)
@@ -142,6 +143,34 @@ func _test_floors() -> void:
 			wrong.append("%s %s, floor %d" % [addon, got.get(addon, "absent"), int(floors[addon])])
 	_check(not floors.is_empty() and wrong.is_empty(),
 		"every floored addon asks for its floor, not the level it was built against (%d floored)" % floors.size(), ", ".join(wrong))
+	_done()
+
+
+func _test_floor_above_shell() -> void:
+	_section("a floor above the level the pinned shell ships fails loudly, and is not clamped")
+
+	var source := _source(FLOORED_REPO)
+	var floor_path := source.path_join(DotAddonApi.FLOOR_FILE)
+	if not _check(source != "" and FileAccess.file_exists(floor_path), "%s is here, with a %s" % [FLOORED_REPO, DotAddonApi.FLOOR_FILE]):
+		_done()
+		return
+
+	var floors: Dictionary = DotAddonApi.parse(FileAccess.get_file_as_string(floor_path), DotAddonApi.FLOOR_FILE).value
+	var addon := "dot_net"
+	var floor_level := int(floors.get(addon, 0))
+	if not _check(floor_level > 1, "the game floors %s above 1" % addon, str(floors)):
+		_done()
+		return
+
+	var pinned := Pack.pinned_levels()
+	_check(pinned.has(addon), "addons.lock reads to a level for %s (the repositories are reachable)" % addon, str(pinned.keys()))
+
+	var low := Pack.derive_requires(source, SCRATCH.path_join("low.json"), {addon: floor_level - 1})
+	_check(not low.ok and str(low.error).contains("%s has a floor of %d, above the %d the pinned shell has" % [addon, floor_level, floor_level - 1]),
+		"a shell one level below the floor refuses the derivation", str(low.error) if not low.ok else "it succeeded")
+
+	var level := Pack.derive_requires(source, SCRATCH.path_join("level.json"), {addon: floor_level})
+	_check(level.ok, "a shell at the floor is accepted", str(level.error) if not level.ok else "")
 	_done()
 
 
