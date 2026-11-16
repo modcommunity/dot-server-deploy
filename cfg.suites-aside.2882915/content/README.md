@@ -1,0 +1,1 @@
+Content-specific configuration goes into the `cfg/content/` directory. There should be a sub directory for each content item. So a path example would be `cfg/content/a-cool-game/conf1.yml`.

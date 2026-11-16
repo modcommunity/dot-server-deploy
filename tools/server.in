@@ -1533,7 +1533,7 @@ check_lock_exported() {
 
 ## [b]A shell carries the dot-* addons and nothing else.[/b] A game's own addons (the
 ## weapons packs, natural_disasters) and their models reach a player as dot-cloud overlay
-## packs when they join. Baked in, arena-weapons v1.4.28's embedded textures took the web
+## packs when they join. Baked in, fc-weapons (then arena-weapons) v1.4.28's embedded textures took the web
 ## pck from 44 MB to 147 MB, past the upload limit. These are the folders every export
 ## leaves out: everything under addons/ that is not dot_*.
 shell_left_out_addons() {

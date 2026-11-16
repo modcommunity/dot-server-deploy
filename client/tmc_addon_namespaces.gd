@@ -11,14 +11,27 @@ extends RefCounted
 
 ## The organisation's (both its ids), and the game addons published under their author (the weapons packs, natural-disasters).
 ## A shell carries none of those (it is dot-* addons only), so these are what it fetches them under when a server announces them.
-## `modcommunity/` and `gamemann/arena-weapons` stay for servers that still announce the old ids.
+## `modcommunity/` and `gamemann/arena-weapons` (fc-weapons' old id) stay for servers that still announce the old ids.
 const DEFAULTS: PackedStringArray = ["gamespice-platform/", "modcommunity/", "gamemann/zee-dot-weapons", "gamemann/zed-dot-weapons", "gamemann/fc-weapons", "gamemann/arena-weapons", "gamemann/natural-disasters", "gamemann/dot-trail", "gamemann/dot-radio"]
 
-## Old repository names a lock or content list may still use, to the current one (`arena_weapons` lives in fc-weapons).
+## Old repository names a lock or content list may still use, to the current one (fc-weapons was arena-weapons).
 const PUBLISHED_AS := {"arena-weapons": "fc-weapons"}
 
 ## The `dot-*` addons that are their author's, not the organisation's: published as `gamemann/<repo>` (the repository name, `dot-` kept), like the weapons packs.
 const AUTHOR_DOT_ADDONS: PackedStringArray = ["dot-trail", "dot-radio"]
+
+## Addon directories a repository has renamed, current to legacy. fc-weapons (Fatal Contact's weapons) holds `addons/fc_weapons`;
+## its tags up to [constant LEGACY_LAST] hold the legacy `addons/arena_weapons`. The legacy name is used only where the ref holds it,
+## and every use logs a deprecation warning naming that ref. A game naming one while its ref holds the other is an error, never an
+## alias: `res://` paths name the directory. `tools/check-pinned.sh` reads the pinned ref's own tree, and `setup.sh` links what the
+## checkout holds; move [constant LEGACY_LAST] only with the tag that first holds `addons/fc_weapons`.
+const LEGACY_DIRS := {"fc_weapons": "arena_weapons"}
+
+## The last version of each renamed repository whose tree still holds its legacy directory.
+const LEGACY_LAST := {"fc-weapons": "1.4.51"}
+
+## Each legacy use already warned about (`dir@ref`), so a server that announces every join warns once.
+static var _warned := {}
 
 ## The organisation's packs: `dot-<name>` is published as `gamespice-platform/<name>`.
 const ORG := "gamespice-platform"
@@ -98,35 +111,62 @@ static func load_shell() -> PackedStringArray:
 	return out
 
 
-## The repository an addon directory comes from, as setup.sh and addons.lock name it: underscores become dashes, bar the two weapons packs.
+## The repository an addon directory comes from, as setup.sh and addons.lock name it: underscores become dashes, bar the weapons packs
+## (`fc_weapons` and its legacy `arena_weapons` are both fc-weapons).
 static func lock_repo(dir: String) -> String:
 	if dir == "zee_weapons":
 		return "zee-dot-weapons"
 	if dir == "zed_weapons":
 		return "zed-dot-weapons"
-	if dir == "arena_weapons":
+	if dir == "fc_weapons" or is_legacy_dir(dir):
 		return "fc-weapons"
 
 	return dir.replace("_", "-")
 
 
-## The addon directory a pack repository (as published or as the lock names it) installs to: the inverse of [method lock_repo] and
-## [constant PUBLISHED_AS], so `fc-weapons` is `arena_weapons` and `zee-dot-weapons` is `zee_weapons`.
-static func dir_for(repo: String) -> String:
-	var lock := repo
-
-	for name: String in PUBLISHED_AS:
-		if PUBLISHED_AS[name] == repo:
-			lock = name
+## The addon directory a pack repository (as published or as the lock names it) installs to at [param version]: the inverse of
+## [method lock_repo] and [constant PUBLISHED_AS], so `fc-weapons` is `fc_weapons` and `zee-dot-weapons` is `zee_weapons`.
+## A version at or below the repository's [constant LEGACY_LAST] holds the legacy directory, which is returned with a warning naming
+## the ref. No version means the current name.
+static func dir_for(repo: String, version: String = "") -> String:
+	var lock := str(PUBLISHED_AS.get(repo, repo))
+	var dir := lock.replace("-", "_")
 
 	if lock == "zee-dot-weapons":
-		return "zee_weapons"
-	if lock == "zed-dot-weapons":
-		return "zed_weapons"
-	if lock == "fc-weapons":
-		return "arena_weapons"
+		dir = "zee_weapons"
+	elif lock == "zed-dot-weapons":
+		dir = "zed_weapons"
 
-	return lock.replace("-", "_")
+	if LEGACY_DIRS.has(dir) and holds_legacy(lock, version):
+		var legacy := str(LEGACY_DIRS[dir])
+		warn_legacy(legacy, "%s@%s" % [repo, version])
+		return legacy
+
+	return dir
+
+
+## Whether [param repo] at [param version] still holds its legacy directory (a renamed repository, at or below [constant LEGACY_LAST]).
+static func holds_legacy(repo: String, version: String) -> bool:
+	var last := str(LEGACY_LAST.get(str(PUBLISHED_AS.get(repo, repo)), ""))
+	return last != "" and version != "" and DotCloudAddonSet.compare_versions(version.trim_prefix("v"), last) <= 0
+
+
+## Whether [param dir] is a renamed repository's legacy directory (`arena_weapons`).
+static func is_legacy_dir(dir: String) -> bool:
+	return LEGACY_DIRS.values().has(dir)
+
+
+## The deprecation warning for a legacy directory in use at [param ref] (`repo@version`), once per pair.
+static func warn_legacy(dir: String, ref: String) -> void:
+	var key := "%s@%s" % [dir, ref]
+
+	if _warned.has(key):
+		return
+
+	_warned[key] = true
+	var current := str(LEGACY_DIRS.find_key(dir))
+	DotLog.warn("tmc.addons", "addons/%s is a legacy directory (deprecated): %s still holds it; a newer tag holds addons/%s" % [dir, ref, current],
+		{"dir": dir, "ref": ref, "current": current})
 
 
 ## The pack [param dir]'s code is published as: `{repo, id, old_repo, old_id}`, where `repo` is the id's name ([DotCloudAddonSet] refuses any other).
@@ -153,12 +193,13 @@ static func announced_pack_for(dir: String) -> Dictionary:
 	return {"repo": pack["repo"], "id": pack["id"]}
 
 
-## The addon directory a content id installs to: `gamespice-platform/<name>` is `dot_<name>`, anything else [method dir_for] of its name.
-static func dir_for_id(id: String) -> String:
+## The addon directory a content id installs to: `gamespice-platform/<name>` is `dot_<name>`, anything else [method dir_for] of its name
+## (at [param version], which decides a renamed repository's directory).
+static func dir_for_id(id: String, version: String = "") -> String:
 	if id.begins_with(ORG + "/"):
 		return "dot_" + id.get_file().replace("-", "_")
 
-	return dir_for(id.get_file())
+	return dir_for(id.get_file(), version)
 
 
 ## Whether [param id] (`owner/repo`) falls under [param namespaces], as [DotCloudAddonSet] decides.

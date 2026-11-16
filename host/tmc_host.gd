@@ -1042,7 +1042,7 @@ static func merge_overlays(base: Array, extra: Array) -> Array:
 	return out
 
 
-## One `{dir, repo, id, version}` per installed addon the lock names. A game addon's pack (arena-weapons, the zee/zed weapons) carries its code at
+## One `{dir, repo, id, version}` per installed addon the lock names. A game addon's pack (fc-weapons, the zee/zed weapons) carries its code at
 ## `addons/<dir>/`, which [DotCloudAddonSet] (dot-cloud 0.1.46+) overlays like a dot-* pack, so every one is announced.
 static func addon_set_from(lock_text: String, dirs: PackedStringArray) -> Array:
 	var versions := {}
@@ -1066,13 +1066,17 @@ static func addon_set_from(lock_text: String, dirs: PackedStringArray) -> Array:
 
 		var repo := addon_repo(dir)
 
-		# An older lock may still name a renamed repository by its old name (arena-weapons).
+		# An older lock may still name a renamed repository by its old name (fc-weapons was arena-weapons).
 		for old: String in TmcAddonNamespaces.PUBLISHED_AS:
 			if TmcAddonNamespaces.PUBLISHED_AS[old] == repo and not versions.has(repo) and versions.has(old):
 				repo = old
 
 		if not versions.has(repo):
 			continue
+
+		# The directory is what the installed ref holds; the legacy one (arena_weapons) is announced as it is, and said so.
+		if TmcAddonNamespaces.is_legacy_dir(dir):
+			TmcAddonNamespaces.warn_legacy(dir, "%s@%s" % [repo, versions[repo]])
 
 		var pack := TmcAddonNamespaces.announced_pack_for(dir)
 

@@ -108,7 +108,7 @@ The game origin's CSP is `script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' b
 
 ## The shell carries the dot-* addons only
 
-Every preset (Web and desktop) excludes every addon that is not a dot-* addon: `addons/arena_weapons/*`, `addons/zee_weapons/*`, `addons/zed_weapons/*`, `addons/natural_disasters/*`. A game's own addons reach a player as dot-cloud overlay packs when a server announces them (see [addon-packs.md](addon-packs.md)). Servers and `setup.sh` still install all of them from `addons.lock`. The reason is arena-weapons v1.4.28 (commit 0e24447). It switched its models to `gltf/embedded_image_handling=2`, which puts BasisU textures inside each `.scn` (about 5 MB per weapon). `tools/web_shrink.gd` only converts `.ctex` files and cannot see them, so the Web pck grew from 44 MB to 147 MB and the upload was refused (413).
+Every preset (Web and desktop) excludes every addon that is not a dot-* addon: `addons/fc_weapons/*` and the legacy `addons/arena_weapons/*` (fc-weapons up to v1.4.51), `addons/zee_weapons/*`, `addons/zed_weapons/*`, `addons/natural_disasters/*`. A game's own addons reach a player as dot-cloud overlay packs when a server announces them (see [addon-packs.md](addon-packs.md)). Servers and `setup.sh` still install all of them from `addons.lock`. The reason is fc-weapons (then arena-weapons) v1.4.28 (commit 0e24447). It switched its models to `gltf/embedded_image_handling=2`, which puts BasisU textures inside each `.scn` (about 5 MB per weapon). `tools/web_shrink.gd` only converts `.ctex` files and cannot see them, so the Web pck grew from 44 MB to 147 MB and the upload was refused (413).
 
 `./server export-web` and `export-native` enforce this rule in four steps:
 
@@ -117,11 +117,11 @@ Every preset (Web and desktop) excludes every addon that is not a dot-* addon: `
 - `check_shell_dot_only` refuses an artifact that carries any `addons/<non-dot>/`.
 - `check_shell_web_size` refuses a Web pck over `SHELL_WEB_MAX_MB` (40) after `web_shrink`.
 
-`tools/check_shell_addons.sh`, run by `tools/check.sh`, checks the preset text, the namespaces and these calls. `tools/shell_pck_check.sh` checks an exported pck. On a local export (2026-11-11) the Web `index.pck` was 23,993,501 bytes. A Web pck zip of the same tree with arena-weapons v1.4.27 was 118.9 MB before shrink, 97.1 MB of it `addons/arena_weapons/assets`.
+`tools/check_shell_addons.sh`, run by `tools/check.sh`, checks the preset text, the namespaces and these calls. `tools/shell_pck_check.sh` checks an exported pck. On a local export (2026-11-11) the Web `index.pck` was 23,993,501 bytes. A Web pck zip of the same tree with fc-weapons v1.4.27 was 118.9 MB before shrink, 97.1 MB of it `addons/arena_weapons/assets`.
 
-`TmcPackRoots` is gone with them. It listed a mounted pack's `addons/arena_weapons/assets` on the build's own arena_weapons. Now that arena_weapons arrives as an overlay at `res://addons/`, its assets resolve at their own paths.
+`TmcPackRoots` is gone with them. It listed a mounted pack's `addons/arena_weapons/assets` on the build's own arena_weapons. Now that the weapons addon arrives as an overlay at `res://addons/`, its assets resolve at their own paths.
 
-**A browser player has a game addon only from its overlay pack.** The shell has no build copy to fall back on. The arena-weapons (v1.4.29+), zee-dot-weapons (v0.1.62+) and zed-dot-weapons (v0.1.13+) packs carry `addons/<dir>/` and dot-cloud v0.1.46+ overlays a pack whose plugin.cfg sits there, so `addon_set_from` announces all of them (the `DATA_PACK_REPOS` exception for arena-weapons is gone).
+**A browser player has a game addon only from its overlay pack.** The shell has no build copy to fall back on. The fc-weapons (v1.4.29+), zee-dot-weapons (v0.1.62+) and zed-dot-weapons (v0.1.13+) packs carry `addons/<dir>/` and dot-cloud v0.1.46+ overlays a pack whose plugin.cfg sits there, so `addon_set_from` announces all of them (the `DATA_PACK_REPOS` exception for fc-weapons is gone).
 
 ## Surface textures ride in a pack, not the shell
 

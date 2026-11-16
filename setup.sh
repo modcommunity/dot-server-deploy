@@ -962,7 +962,7 @@ ADDONS_LOCK="$ROOT/addons.lock"
 lock_ref() {
     [ "${TMC_ADDONS_LOCK:-on}" != "off" ] || return 1
     local pin a p2
-    # Either name of a renamed repository finds its pin (arena-weapons is fc-weapons).
+    # Either name of a renamed repository finds its pin (fc-weapons was arena-weapons).
     a="$(repo_alias "$1")" || a="$1"
     pin="$(content_list addons "$ROOT/cfg" 2>/dev/null | awk -F'\t' -v r="$1" -v a="$a" '($2 == r || $2 == a) && $3 != "" { print $3; exit }')"
     # An `addons:` entry in server.yml that names a version is the operator's word over the shipped list and the lock.
@@ -1475,7 +1475,8 @@ while IFS= read -r _repo; do
     case "$_repo" in
         zee-dot-weapons) ADDONS_ALL+=(zee_weapons) ;;
         zed-dot-weapons) ADDONS_ALL+=(zed_weapons) ;;
-        fc-weapons|arena-weapons) ADDONS_ALL+=(arena_weapons) ;;
+        # fc_weapons, or the legacy arena_weapons where the locked ref still holds it: settle_renamed_dirs.
+        fc-weapons|arena-weapons) ADDONS_ALL+=(fc_weapons) ;;
         *)               ADDONS_ALL+=("${_repo//-/_}") ;;
     esac
 done < <(content_addon_repos "$ROOT/cfg") || die "cfg/content/addons.yml: could not be read" 5
@@ -1583,6 +1584,7 @@ if [ ${#DROPPED_GAMES[@]} -gt 0 ] && [ "${PUBLISHED_GAMES:-0}" -ne 1 ]; then
 
     if [ "$derive_ok" -eq 1 ]; then
         mapfile -t ADDONS < <(printf '%s\n' "${DERIVED_ADDONS[@]}" | sort -u)
+        ADDONS_FROM_GAMES=1
 
         # A game naming an addon the full list does not have is DRIFT, and it is drift
         # in the direction that still works -- the addon gets wired in, because the game
@@ -1591,6 +1593,8 @@ if [ ${#DROPPED_GAMES[@]} -gt 0 ] && [ "${PUBLISHED_GAMES:-0}" -ne 1 ]; then
         # would then be short by exactly this name with nothing printing it.
         unlisted=""
         for a in "${ADDONS[@]}"; do
+            # A game still on the legacy arena_weapons is listed as fc_weapons.
+            [ "$a" = arena_weapons ] && continue
             case " ${ADDONS_ALL[*]} " in *" $a "*) ;; *) unlisted="$unlisted $a" ;; esac
         done
         [ -n "$unlisted" ] && warn "declared by a game and missing from ADDONS_ALL:$unlisted
@@ -1661,6 +1665,7 @@ addon_repo() {
     case "$1" in
         zee_weapons) printf 'zee-dot-weapons\n' ;;
         zed_weapons) printf 'zed-dot-weapons\n' ;;
+        fc_weapons)    printf 'fc-weapons\n' ;;
         arena_weapons) printf 'fc-weapons\n' ;;
         *)           printf '%s\n' "${1//_/-}" ;;
     esac
@@ -1764,6 +1769,45 @@ git_root_of() {
     return 1
 }
 
+## fc-weapons moved its addon from addons/arena_weapons to addons/fc_weapons; its tags up
+## to v1.4.51 hold the legacy one. The other name of a renamed addon directory, or nothing.
+renamed_dir_other() {
+    case "$1" in
+        fc_weapons)    printf 'arena_weapons\n' ;;
+        arena_weapons) printf 'fc_weapons\n' ;;
+        *) return 1 ;;
+    esac
+}
+
+## Each renamed addon is wired in under the directory its checkout (at the locked ref)
+## holds, decided by that tree and never by a fallback. The list's fc_weapons becomes the
+## legacy arena_weapons where the checkout still holds that; every legacy use prints a
+## deprecation warning naming the ref. A game that declares one name while the checkout
+## holds the other is an error, not an alias: its res:// paths name the directory.
+## A checkout holding neither is left to the clone step (it is missing).
+settle_renamed_dirs() {
+    local i name other root ref
+    for i in "${!ADDONS[@]}"; do
+        name="${ADDONS[$i]}"
+        other="$(renamed_dir_other "$name")" || continue
+        if ! addon_source "$name"; then
+            addon_source "$other" || continue
+            root="$(git_root_of "$SRC")" && ref="$(git -C "$root" describe --tags --always 2>/dev/null)" || ref="?"
+            [ "${ADDONS_FROM_GAMES:-0}" -eq 1 ] && die "A game here declares addons/$name, but $(addon_repo "$name") at $ref holds addons/$other.
+
+    Move the game and the addons.lock pin to the same side of the rename:
+    tags up to v1.4.51 hold the legacy addons/arena_weapons, newer ones addons/fc_weapons." 5
+            ADDONS[$i]="$other"
+            name="$other"
+            addon_source "$name"
+        fi
+        if [ "$name" = arena_weapons ]; then
+            root="$(git_root_of "$SRC")" && ref="$(git -C "$root" describe --tags --always 2>/dev/null)" || ref="?"
+            warn "addons/arena_weapons is a legacy directory (deprecated): $(addon_repo "$name") at $ref still holds it; a newer tag holds addons/fc_weapons"
+        fi
+    done
+}
+
 ## Link, copy or record-as-missing every addon. Run twice: once to find out what is
 ## absent, and once more after cloning it.
 ##
@@ -1807,6 +1851,7 @@ resolve_addons() {
     done
 }
 
+settle_renamed_dirs
 resolve_addons
 
 if [ ${#MISSING[@]} -gt 0 ] && [ "$DO_CLONE" -eq 1 ]; then
@@ -1817,6 +1862,7 @@ if [ ${#MISSING[@]} -gt 0 ] && [ "$DO_CLONE" -eq 1 ]; then
         [ -f "$ADDONS_REPOS/.gdignore" ] || : > "$ADDONS_REPOS/.gdignore"
     fi
     clone_repos "$ADDONS_CLONE_DEST" "${MISSING[@]}"
+    settle_renamed_dirs
     resolve_addons
 fi
 

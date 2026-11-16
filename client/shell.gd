@@ -2104,7 +2104,7 @@ func _load_solo_inner(content_id: String, version: String) -> DotResult:
 	_solo_version = wanted
 	DotLog.info(CHANNEL, "starting solo", {"content": content_id, "version": wanted})
 
-	# The game addons its pack requires (zee_weapons for Prop Hunt, arena_weapons for Fatal Contact)
+	# The game addons its pack requires (zee_weapons for Prop Hunt, fc_weapons for Fatal Contact; arena_weapons up to fc-weapons v1.4.51)
 	# are not in this shell: fetched as the overlay a server would announce, then a restart into it.
 	# Asked of the store before the pack is fetched, because the pack's own requirement check refuses
 	# it while one is missing. Returns only when nothing is missing or it cannot be had.

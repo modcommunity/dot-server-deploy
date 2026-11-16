@@ -1,0 +1,255 @@
+# General server settings.
+#
+# Anything dot-server exposes as a console variable can go here too, under its own
+# name -- this file is compiled to a .cfg and handed to dot-server's console, which
+# is the parser and the validator. data/from_yaml.cfg is what it became; read that
+# when a setting appears not to work.
+
+# Left commented so a panel's TMC_NAME / TMC_MAX_PLAYERS apply: a key set in any cfg/server file beats the egg variable.
+#sv_name: "TMC Test Server"
+#sv_maxplayers: 64
+
+# Every startup variable of a panel has a key here (docs/configuration.md has the table); a key set in this file beats the TMC_* variable.
+#hostname: "My Server"        # alias of sv_name
+#games:                       # owner/repo ids to install, offer and rotate
+#  - owner/game-one
+#  - owner/game-two
+#auto_update: when-needed     # TMC_AUTO_UPDATE: when-needed, always, never
+#channel: latest              # TMC_CHANNEL: latest or stable
+#games_mode: hide             # TMC_GAMES_MODE: hide, remove, keep
+#no_install: false            # TMC_NO_INSTALL
+#verbose: false               # TMC_VERBOSE
+#query_port: 0                # TMC_QUERY_PORT
+#a2s_port: 0                  # TMC_A2S_PORT
+#query_bind_ip: "*"           # TMC_QUERY_BIND
+
+# The characters that make a chat line a command: `!rtv`, `/rtv`. The FIRST one is what help
+# and the game vote's ballot line tell players to type, so list yours first. maps.yml and
+# games.yml can rename the vote commands (a `commands:` block with `prefix` and `names`).
+#chat_command_prefixes: ["!", "/"]
+
+# How long to hold the slot of a player whose browser tab went into the background.
+#
+# A BROWSER STOPS DRIVING THE GAME'S MAIN LOOP FOR A HIDDEN TAB. It stops calling
+# requestAnimationFrame, which stops _process, every timer and the multiplayer poll
+# together -- so the client sends no heartbeat and reads nothing, while its socket
+# sits open and perfectly healthy. To the server that is indistinguishable from a
+# machine that died, and `sv_timeout` (60s by default) drops the player about a
+# minute into a tab switch. This is the setting that stops that.
+#
+# The client announces the switch on its way out, while the page is still live, and
+# announces its return; the server holds the slot for up to this many seconds. It is
+# a ceiling on what a client may ask for, not a grant -- a number a client chose for
+# itself would be a way to sit on a slot of a full server indefinitely.
+#
+# KEEP IT IN MINUTES. While the tab is hidden the server goes on sending to a client
+# that is not reading, and those bytes queue: the longer the grace, the bigger the
+# burst on the way back and the more a parked tab costs everyone still playing.
+# 0 refuses the grace entirely and restores the old behaviour.
+sv_background_grace: 300
+
+# Empty means anyone may join.
+sv_password: ""
+
+# Which kinds of client may join. Cross-play is the default: browsers, the desktop
+# client and phones all speak the same protocol to this server. 0 refuses that kind at
+# the door with a sentence saying where to join from instead, and the site stops
+# offering that Play button once its next scan sees it. A client too old to say what it
+# is gets in either way. TMC_ALLOW_WEB / _DESKTOP / _MOBILE override these from a panel.
+sv_allow_web: 1
+sv_allow_desktop: 1
+sv_allow_mobile: 1
+
+# Which version of the site's web game loader this server's browser players get. Empty
+# is the site's default, which is right for almost every server. Set it to a version from
+# the site's admin panel when this server runs older addons than the default loader
+# expects. A version the site has disabled is ignored and players get the default, so this
+# can hold a server back but never stop a launch. TMC_WEB_LOADER overrides it from a panel,
+# and `sv_web_loader <version>` over rcon changes it while running.
+# sv_web_loader: ""
+
+# Pins this server's browser players to one web shell build the site lists as ACTIVE or
+# DEPRECATED. Empty is the default and almost always right: the site serves the newest
+# shell compatible with this server's game, and a new shell needs no restart here. Pin
+# only to hold a server on an older shell. A build the site has disabled is ignored.
+# TMC_WEB_BUILD overrides it from a panel, and `sv_web_build <id>` over rcon changes it.
+# sv_web_build: ""
+
+# Whether the server reads commands from its own stdin when stdin is a PIPE.
+#
+# A terminal is always read, and a file too. A pipe is not, by default, because a
+# reader waiting on a pipe whose writer never closes stops the process from exiting.
+# Turn this on only if something (a supervisor, `docker run -i` without `-t`) feeds
+# console commands down a pipe, and have it close the pipe to stop the server.
+# RCON (rcon.yml) is the usual way in, and needs none of this.
+# sv_stdin_console_pipes: false
+
+# Simulation rate, fixed at boot; 66 is the deployed default (higher costs CPU and bandwidth on every client). setup.sh offers this value and writes the answer.
+sv_tickrate: 66
+
+# What an empty server does. 1 (the default): it idles at a low tick rate while nobody is
+# connected, and every map clock waits and starts again from the top when somebody joins. 0: it
+# keeps running, and when a map's time limit runs out on nobody it changes to a map from the
+# rotation (dot-vote's `empty_choice`, random by default; set it in a game's map_vote metadata).
+# Live: `sv_hibernate_when_empty 0` wakes an empty server at once. A game always loads awake.
+# sv_hibernate_when_empty: 1
+
+# Which game in the content directory boots.
+#
+# Empty means "whatever content/ says is the default" -- a game marks itself with
+# `default: true` in its descriptor, and failing that the first one found wins. Set
+# it here to pin a box to one game regardless of what is dropped in beside it.
+#
+# `./server --game <id>` and TMC_GAME both override this, and a running server is
+# moved with `game <id>` over RCON without a restart. `./server games` lists
+# what this content directory actually has.
+game: ""   # `sv_game` is an accepted old spelling
+
+# Which map that game starts on.
+#
+# Empty means the game's own default, which is the normal case: a game that has maps
+# names one in its own config and that is where the reasoning about which one lives.
+# This is for a box that runs the same game as another and should come up somewhere
+# else -- a second surf server on the same content, say.
+#
+# `./server --map <id>`, TMC_MAP, and `./server -- +map <id>` all override this. The
+# last of those is the spelling every other dedicated server uses and is why this
+# setting exists at all; it used to be accepted, dispatched into a console that had
+# no game loaded yet, and dropped without a word.
+#
+# A GAME DECIDES WHETHER IT HAS MAPS. A game of built geometry does not,
+# and neither does a game whose catalogue has never heard of this id. Both are a line
+# in the log and not a refusal to boot -- an operator's typo should not cost a server
+# that is already full of people.
+map: ""
+
+# The app's URL segment on the website, reported in a query as the game's name.
+#
+# Unique and lowercase because the site already made it so, which is the whole
+# reason to reuse it rather than invent a second identifier that has to be kept in
+# step. Empty falls back to the running game's id, which is the right answer on a
+# box running one game.
+#
+# DISPLAY ONLY. A server can claim any app it likes, and nothing that has to be
+# certain which app a server belongs to -- a launch resolving a build, a play grant
+# -- reads this. Those ask the backbone, which knows. It is what a listing prints
+# next to the hostname, and it is also A2S's `folder`, which is the field trackers
+# group servers by.
+#
+# `sv_query_app` is also a cvar, so it can be changed on a running server.
+sv_query_app: ""
+
+sv_tags: [tmc]
+
+# Server queries.
+#
+# `query_enabled` is on by dot-server's own default and answers the dot query
+# protocol (DQP). `a2s_enabled` adds the twenty-year-old one beside it on the same
+# socket -- told apart by the first four bytes -- because the trackers, uptime
+# monitors and server browsers that already exist speak A2S and nothing else. TMC's
+# own scanner is one of them.
+#
+# `query_bind_ip` is the setting a reverse-proxied server cannot do without. Set
+# `net_bind_ip` to loopback when nginx terminates TLS in front of the game, and
+# nginx forwards a WebSocket but CANNOT forward UDP -- so a query listener sharing
+# that setting is listening where nothing can ask it, and a tracker cannot tell that
+# from a server that is down. `*` puts the query port, and only the query port, on
+# every interface. RCON deliberately does not follow it.
+a2s_enabled: true
+query_bind_ip: "*"
+
+# The games this server offers, or nothing for everything in content/.
+#
+# A server no longer has to carry the whole catalogue. A game is a signed pack on
+# the content origin plus a `game.yml` that says how to start it; `./server install-games`
+# fetches both, and `./server` does it at startup when this is set. So a box holds the two
+# or three games it is for, and adding one is a restart rather than a redeploy.
+#
+# It is also a FILTER, and it has to be, because installing two games does not by itself
+# stop a content directory that already has ten from offering all of them. The `games`
+# listing, `changelevel`, the vote menu and the boot game all read the same scanned set,
+# and this narrows it once, before any of them see it.
+#
+# Empty means everything, which is what a development checkout and a hand-run server want.
+# `game` must name one of these; a game that is asked for and is not installed is
+# reported at boot and is not fatal.
+#
+#games:
+#  - g2gfast
+#  - fatalcontact
+
+# Where this server fetches content it does not have, tried in order.
+#
+# A game's imported maps are not in its repository -- `maps/imported/` is gitignored,
+# because 66 MB of converted geometry does not belong in a git history -- so a server
+# stood up by cloning the repositories has the game and none of its maps. They are
+# published as signed dot-cloud packs instead, and this is where it looks for them.
+#
+# `content/` and `dist/` on this box are searched FIRST and need no entry here: a pack
+# sitting beside the game, or one this server published itself with `./server pack`,
+# is not worth a network request.
+#
+# Empty means the network half is off, which is right for a LAN deployment and for a
+# build that ships everything it runs. A manifest still has to be signed by a key in
+# data/content.json whatever the source, so adding a URL here is not by itself a way
+# to be handed somebody else's scripts.
+content_urls:
+  - "https://content.gamespice.net/content"
+
+# Network (was net.yml)
+# -----------------------------------------
+# Network & bind.
+
+net_bind_ip: "0.0.0.0"
+net_port: 6064
+
+# How clients connect. `dual` (the default): browsers over WebSocket on TCP net_port,
+# native (desktop app) clients over ENet on UDP net_enet_port, in the same match. A
+# native client tries UDP first and falls back to WebSocket. `websocket` puts everyone
+# on WebSocket (the behaviour before dual); `enet` serves native clients only.
+net_transport: dual
+
+# 0: the same number as net_port, over UDP. A2S and DQP answer there too by default;
+# the server tells the three apart by their first bytes (net_enet_share_udp). Publish
+# the UDP port as well as the TCP one. nginx does not carry UDP: the ENet port is
+# reached directly, never through the proxy, and needs no certificate.
+net_enet_port: 0
+# Empty follows query_bind_ip, which is what a server behind nginx wants.
+net_enet_bind_ip: ""
+
+# Uses the bind IP if not set. Only needed if the server is behind NAT. Nothing binds
+# to it -- it is what the join address is printed from and what a listing reports.
+net_public_ip: ""
+
+# Performance
+# -----------------------------------------
+# These are CEILINGS on what each game asks for, applied when the game's module loads:
+# the value in force is the lower of the game's and yours, and 0 on either side means no
+# limit from that side. Boxes from before 2026-10-22 keep a separate cfg/net.yml, read after this file until 2026-12-31.
+
+# Maximum bytes per second per client (1000000 is about 8 Mbit/s). 0 = unlimited.
+net_max_bps: 1000000
+
+# Maximum packets per second per client. 0 = unlimited. Leave it at 0 unless you know
+# the game's update rate: a packet cap below it starves snapshots.
+net_max_pps: 0
+
+# Maximum snapshots per second sent to a client. 0 = use the game's own rate. Never
+# above the game's tick rate; it is lowered to a divisor of the tick rate if need be.
+net_max_update_rate: 0
+
+# Run physics on its own thread (physics/3d/run_on_separate_thread). Read by ./server, which writes
+# override.cfg before the engine starts. Default off: no measured gain on a headless server, and a
+# space query is then safe only inside the physics step. See docs/operator-config.md. TMC_PHYSICS_THREAD=1 does the same.
+# sv_physics_thread: 0
+
+# Physics engine: godot (default) or jolt. Read by ./server, which writes override.cfg before the engine
+# starts (the engine reads physics/3d/physics_engine once). Jolt passed the dot-player-controller, dot-physics,
+# dot-combat, game-arena and game-zombie-zone suites; see docs/operator-config.md. TMC_PHYSICS_ENGINE=jolt does the same.
+# sv_physics_engine: godot
+
+# Addons to install and announce, by id: owner/repo or owner/repo@version (no version = addons.lock's).
+# ./setup.sh installs them; the owner must be trusted (see docs/addon-packs.md).
+# addons:
+#   - gamemann/dot-trail
+#   - gamemann/dot-radio

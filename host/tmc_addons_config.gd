@@ -54,6 +54,8 @@ static func addon_ref(raw: String, namespaces: PackedStringArray, lock_versions:
 			"write %s@<version>, or add %s to addons.lock" % [id, TmcAddonNamespaces.lock_repo(dir)]
 		)
 
+	# The version decides the directory: fc-weapons up to 1.4.51 holds the legacy arena_weapons.
+	dir = TmcAddonNamespaces.dir_for_id(id, version)
 	return DotResult.success({"dir": dir, "repo": repo, "id": id, "version": version})
 
 
@@ -398,6 +400,7 @@ func _read_namespaces(value: Variant) -> DotResult:
 ## `{dir, repo, id, version}` for each `overlays:` entry, in the shape `addon_set_from` returns.
 ## The directory is [method TmcAddonNamespaces.dir_for] (the inverse of `TmcHost.addon_repo`): an overlay of `gamemann/zee-dot-weapons` replaces
 ## the lock's `zee_weapons`, not a `zee_dot_weapons` no pack carries (the shell refused that as "not an addon pack" and joined on its own copy).
+## The version decides a renamed directory: `gamemann/fc-weapons@1.4.40` is the legacy `arena_weapons` (with a warning), a newer one `fc_weapons`.
 func overlay_set() -> Array:
 	var out: Array = []
 
@@ -405,7 +408,8 @@ func overlay_set() -> Array:
 		var ref := TmcGameRef.parse(entry)
 		var id := str(ref["id"])
 		var repo := id.get_slice("/", 1)
-		out.append({"dir": TmcAddonNamespaces.dir_for(repo), "repo": repo, "id": id, "version": str(ref["version"]).trim_prefix("v")})
+		var version := str(ref["version"]).trim_prefix("v")
+		out.append({"dir": TmcAddonNamespaces.dir_for(repo, version), "repo": repo, "id": id, "version": version})
 
 	return out
 

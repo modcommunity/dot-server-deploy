@@ -1,0 +1,46 @@
+# WHICH GAMES THIS SERVER PLAYS, over the games that are merely installed in content/.
+#
+# The same as maps.yml, for the game vote and the choice of the next game. A game that is
+# installed but not in the active rotation stays installed and an admin can still change to
+# it (`changelevel <game>`); it is left out of the game ballot, !game_nominate, the next game
+# a !game_rtv or the end of a game picks, and the content/-order fallback. vote.yml's
+# `vote_exclude:` still works and is applied on top of this.
+#
+# No file, or nothing set here, offers every installed game.
+#
+#   rotation: main              which list plays; `sv_game_rotation <name>` switches it live
+#   mode: random                random = the ballot and the cooldown choose
+#                               cycle  = a fixed order, in the order written, wrapping; the
+#                                        end of a game moves straight to the next one
+#                                        (!game_rtv and an admin can still change it)
+#   cooldown: 2                 games back that random will not offer again
+#   games:                      the simplest form: one list, which is a rotation called main
+#     - gamemann/*
+#   rotations:
+#     main:                     if both `games:` and rotations: main are written, main wins
+#       games: [game-arena, mg-*, gamemann/game-g2gfast]
+#     party:
+#       mode: cycle
+#       games: [mg-wipeout, mg-deathrun, mg-smash-copter]
+#     testing:
+#       games: [game-murder-mystery]
+#
+# Entries, as content.yml names games: an id (owner/name), its name half (game-arena), `owner/*`
+# for every installed game of an owner, and name globs (`mg-*`, `"*"`; quote a glob that starts
+# with *). Matched against the games installed in content/. An entry that matches nothing logs
+# a WARN and is skipped; an empty rotation WARNs and offers every installed game. A game with
+# several modes (several game ids over one content id) is one entry, its content id.
+#
+# Command names for the game vote (`!game_rtv`, `!game_nominate`, `!game_next`, `!game_vote`):
+#
+#   commands:
+#     prefix: game_             the default
+#     names:
+#       rtv: [rtv, rockthevote]   the first is what help shows, the rest are aliases
+#       nextmap: next
+#       vote: vote
+#
+# The roles are dot-vote's. A name another command already has logs a WARN and is skipped.
+# Players are told to type the first of server.yml's `chat_command_prefixes` before it.
+#
+# This template changes nothing until you uncomment something.

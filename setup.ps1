@@ -220,7 +220,7 @@ $addons = @('dot_core','dot_log','dot_net','dot_game','dot_entity','dot_server',
             'dot_vehicle','dot_achievements','dot_objective','dot_effects','dot_spectate','dot_economy','dot_settings','dot_console',
             'dot_audio','dot_fx','dot_lighting','dot_weather','dot_procedural_generation','dot_inventory','dot_peer_to_peer','dot_weapon','dot_physics',
             'dot_spawn','dot_team','dot_player','dot_player_class','dot_player_char','zee_weapons','dot_party','dot_matchmaking',
-            'dot_locale','dot_replay','dot_friends','dot_sql','dot_menu','dot_mobile','dot_bot','zed_weapons','dot_radio','dot_trail','dot_flashlight','dot_bot_record','dot_workbench','natural_disasters','arena_weapons','dot_sim')
+            'dot_locale','dot_replay','dot_friends','dot_sql','dot_menu','dot_mobile','dot_bot','zed_weapons','dot_radio','dot_trail','dot_flashlight','dot_bot_record','dot_workbench','natural_disasters','fc_weapons','dot_sim')
 
 # The repository an addon lives in: setup.sh's addon_repo(), exception for exception (also
 # compared by tools/check_lists.sh). The weapons packs (zee_weapons -> zee-dot-weapons,
@@ -230,6 +230,7 @@ function Get-AddonRepo([string]$name) {
     switch ($name) {
         'zee_weapons' { return 'zee-dot-weapons' }
         'zed_weapons' { return 'zed-dot-weapons' }
+        'fc_weapons'    { return 'fc-weapons' }
         'arena_weapons' { return 'fc-weapons' }
         default       { return ($name -replace '_', '-') }
     }
@@ -242,6 +243,17 @@ $missing = @()
 foreach ($name in $addons) {
     $repo   = Get-AddonRepo $name
     $source = Join-Path $Root "..\$repo\addons\$name"
+    # fc-weapons moved addons\arena_weapons to addons\fc_weapons; its tags up to v1.4.51 hold
+    # the legacy name. The checkout decides which one is linked (setup.sh: settle_renamed_dirs).
+    if ($name -eq 'fc_weapons' -and -not (Test-Path -LiteralPath $source -PathType Container)) {
+        $legacy = Join-Path $Root "..\$repo\addons\arena_weapons"
+        if (Test-Path -LiteralPath $legacy -PathType Container) {
+            $ref = (& git -C (Join-Path $Root "..\$repo") describe --tags --always 2>$null)
+            if (-not $ref) { $ref = '?' }
+            Warn "addons\arena_weapons is a legacy directory (deprecated): $repo at $ref still holds it; a newer tag holds addons\fc_weapons"
+            $name = 'arena_weapons'; $source = $legacy
+        }
+    }
     $link   = Join-Path $Root "addons\$name"
 
     if (Test-Path -LiteralPath $source -PathType Container) {

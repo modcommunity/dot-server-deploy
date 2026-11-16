@@ -1,0 +1,22 @@
+# Trails: an image ribbon that follows a player. Players buy them with points on the site or in the game's
+# Trails menu page; this server checks every wear request against what the site says the player owns.
+#
+# Needs the dot-trail addon: add `- repo: dot-trail` to cfg/content/addons.yml, run setup, restart.
+# Off until trail_enabled is true.
+trail_enabled: false
+
+# The published trail pack players download before joining, as <id>@<version> (dot-cloud). Empty: no pack,
+# so only trails already in this build are drawn.
+trail_pack: ""
+
+# The pack's source directory (trails.json and the images). Empty means data/trails/.
+trail_store_dir: ""
+
+# The site that sells trails, and a FILE holding its server API key (one line; never in the environment or
+# on the command line). Without both, only free and group trails can be worn.
+trail_site_url: ""
+trail_api_key_file: cfg/trail.key
+trail_entitlements_path: /api/trails/entitlements
+
+# Seconds between one player's wear requests.
+trail_equip_cooldown: 2.0

@@ -11,7 +11,7 @@ const RoundsWithoutMatch := preload("res://examples/fixtures/rounds_without_matc
 
 const Host := preload("res://host/tmc_host.gd")
 
-const CHECKS := 588
+const CHECKS := 596
 
 var _passed := 0
 var _failed := 0
@@ -905,11 +905,18 @@ func _test_addon_announce() -> void:
 	_check(out.size() == 2 and out[0]["id"] == "gamemann/fc-weapons" and out[0]["repo"] == "fc-weapons" and out[0]["version"] == "1.4.10", "a game addon's pack is announced under its author and published name, at the lock's version")
 	var renamed := Host.addon_set_from("fc-weapons\tv1.4.11\n", PackedStringArray(["arena_weapons"]))
 	_check(renamed.size() == 1 and renamed[0]["id"] == "gamemann/fc-weapons" and renamed[0]["version"] == "1.4.11", "a lock under the renamed repository's name announces the same pack")
-	_check(TmcAddonNamespaces.lock_repo("arena_weapons") == "fc-weapons" and TmcAddonNamespaces.dir_for("arena-weapons") == "arena_weapons", "arena_weapons is locked as fc-weapons, and its old name still finds the dir")
+	_check(TmcAddonNamespaces.lock_repo("arena_weapons") == "fc-weapons" and TmcAddonNamespaces.lock_repo("fc_weapons") == "fc-weapons", "fc_weapons and its legacy arena_weapons are both locked as fc-weapons")
+	_check(TmcAddonNamespaces.dir_for("fc-weapons") == "fc_weapons" and TmcAddonNamespaces.dir_for("arena-weapons") == "fc_weapons", "fc-weapons, by either repository name, installs to fc_weapons")
+	_check(TmcAddonNamespaces.dir_for("fc-weapons", "1.4.51") == "arena_weapons" and TmcAddonNamespaces.dir_for("arena-weapons", "v1.4.10") == "arena_weapons", "a version up to the last legacy tag (1.4.51) holds the legacy arena_weapons")
+	_check(TmcAddonNamespaces.dir_for("fc-weapons", "1.4.52") == "fc_weapons" and TmcAddonNamespaces.dir_for("fc-weapons", "1.5.0") == "fc_weapons", "a newer version holds fc_weapons")
+	_check(TmcAddonNamespaces._warned.has("arena_weapons@fc-weapons@1.4.51") and not TmcAddonNamespaces._warned.has("fc_weapons@fc-weapons@1.5.0"), "the legacy dir is warned about, naming the ref; the current one is not")
+	var current := Host.addon_set_from("fc-weapons\tv1.5.0\n", PackedStringArray(["fc_weapons"]))
+	_check(current.size() == 1 and current[0]["dir"] == "fc_weapons" and current[0]["id"] == "gamemann/fc-weapons" and current[0]["version"] == "1.5.0", "an installed fc_weapons is announced as fc-weapons")
+	_check(TmcAddonNamespaces._warned.has("arena_weapons@fc-weapons@1.4.11"), "an installed legacy arena_weapons is announced with a warning naming the locked ref")
 	_check(out[1]["id"] == "modcommunity/dot-core" and out[1]["repo"] == "dot-core" and out[1]["version"] == "0.1.30", "a dot-* addon is announced under its old id, which every shell takes, at the lock's version")
 	var core := TmcAddonNamespaces.pack_for("dot_core")
 	_check(core["id"] == "gamespice-platform/core" and core["repo"] == "core" and core["old_id"] == "modcommunity/dot-core", "a dot-* addon's pack is gamespice-platform/<name>, with the modcommunity alias as its old id")
-	_check(TmcAddonNamespaces.dir_for_id("gamespice-platform/core") == "dot_core" and TmcAddonNamespaces.dir_for_id("modcommunity/dot-core") == "dot_core" and TmcAddonNamespaces.dir_for_id("gamemann/fc-weapons") == "arena_weapons", "both of an addon's ids find its dir")
+	_check(TmcAddonNamespaces.dir_for_id("gamespice-platform/core") == "dot_core" and TmcAddonNamespaces.dir_for_id("modcommunity/dot-core") == "dot_core" and TmcAddonNamespaces.dir_for_id("gamemann/fc-weapons") == "fc_weapons" and TmcAddonNamespaces.dir_for_id("gamemann/fc-weapons", "1.4.40") == "arena_weapons", "both of an addon's ids find its dir, a renamed one's by version")
 	_check(TmcAddonNamespaces.covers(TmcAddonNamespaces.DEFAULTS, "gamespice-platform/core") and TmcAddonNamespaces.covers(TmcAddonNamespaces.DEFAULTS, "modcommunity/dot-core"), "the shell takes the organisation's packs under the new and the old id")
 	_check(Host.addon_set_from(lock, PackedStringArray(["natural_disasters"])).is_empty(), "an addon the lock does not name is not announced")
 
@@ -923,7 +930,9 @@ func _test_addon_announce() -> void:
 	cfg = TmcAddonsConfig.new()
 	_check(cfg.read({"overlays": ["gamemann/zee-dot-weapons@0.1.63", "gamemann/fc-weapons@1.4.40"]}).ok, "a default owner's game-addon overlay is read")
 	var games := cfg.overlay_set()
-	_check(games[0]["dir"] == "zee_weapons" and games[1]["dir"] == "arena_weapons" and games[1]["repo"] == "fc-weapons", "a game-addon overlay names the dir its pack carries, not its repository's")
+	_check(games[0]["dir"] == "zee_weapons" and games[1]["dir"] == "arena_weapons" and games[1]["repo"] == "fc-weapons", "a game-addon overlay names the dir its pack carries, not its repository's (fc-weapons 1.4.40: the legacy one)")
+	cfg = TmcAddonsConfig.new()
+	_check(cfg.read({"overlays": ["gamemann/fc-weapons@1.5.0"]}).ok and cfg.overlay_set()[0]["dir"] == "fc_weapons", "an fc-weapons overlay past the rename names fc_weapons")
 	var swapped := Host.merge_overlays(out, games)
 	_check(swapped.size() == 3 and swapped[1]["dir"] == "zee_weapons" and swapped[2]["version"] == "1.4.40", "a game-addon overlay replaces the lock's entry for its dir")
 	_check(not TmcAddonsConfig.new().read({"namespaces": ["*"]}).ok and not TmcAddonsConfig.new().read({"namespaces": ["alice"]}).ok, "a wildcard or a bare name is not a namespace")
@@ -938,6 +947,7 @@ func _test_addon_announce() -> void:
 	_check(TmcAddonsConfig.addon_ref("gamemann/dot-radio", spaces0, {"dot-radio": "v0.1.4"}).value["version"] == "0.1.4", "an addons: entry without a version takes the lock's")
 	_check(not TmcAddonsConfig.addon_ref("gamemann/dot-radio", spaces0).ok, "an addons: entry with no version anywhere is refused")
 	_check(not TmcAddonsConfig.addon_ref("mallory/dot-radio@1.0.0", spaces0).ok, "an addons: entry from an untrusted owner is refused")
+	_check(TmcAddonsConfig.addon_ref("gamemann/fc-weapons", spaces0, {"fc-weapons": "v1.4.51"}).value["dir"] == "arena_weapons" and TmcAddonsConfig.addon_ref("gamemann/fc-weapons@1.5.0", spaces0).value["dir"] == "fc_weapons", "an addons: fc-weapons entry takes the dir its version holds (legacy arena_weapons up to 1.4.51)")
 	var listed := Host.addons_from_list(PackedStringArray(["gamemann/dot-trail@0.1.5", "gamemann/dot-radio@0.1.4", "mallory/x@1.0.0", "gamemann/dot-radio"]), spaces0, "", PackedStringArray(["dot_trail"]))
 	_check(listed["entries"].size() == 1 and listed["errors"].size() == 3, "addons_from_list announces the installed trusted ones and reports each of the rest")
 	var hc := TmcConfig.new()
@@ -947,7 +957,7 @@ func _test_addon_announce() -> void:
 	_check(spaces.size() == TmcAddonNamespaces.DEFAULTS.size() + 1 and TmcAddonNamespaces.covers(spaces, "alice/dot-x") and not TmcAddonNamespaces.covers(spaces, "alicia/dot-x"), "operator namespaces extend the defaults; owner prefix needs the slash")
 	_check(TmcAddonNamespaces.parse_lines("# c\nalice/ # me\n\n") == PackedStringArray(["alice/"]), "the namespaces file is one entry per line with comments")
 	_check(TmcAddonNamespaces.covers(TmcAddonNamespaces.DEFAULTS, "gamemann/arena-weapons") and not TmcAddonNamespaces.covers(TmcAddonNamespaces.DEFAULTS, "gamemann/arena-weapons-evil"), "the defaults keep their exact-id entries exact")
-	for dir: String in ["arena_weapons", "zee_weapons", "zed_weapons", "natural_disasters"]:
+	for dir: String in ["fc_weapons", "zee_weapons", "zed_weapons", "natural_disasters"]:
 		var id := str(TmcAddonNamespaces.pack_for(dir)["id"])
 		_check(str(TmcAddonNamespaces.pack_for(dir)["repo"]) == id.get_file(), "%s's pack repo is its id's name, as the addon set requires" % dir)
 		_check(TmcAddonNamespaces.dir_for(id.get_file()) == dir and TmcAddonNamespaces.dir_for(TmcAddonNamespaces.lock_repo(dir)) == dir, "%s round-trips through its pack and lock names" % dir)

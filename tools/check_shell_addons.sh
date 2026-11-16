@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # A shell carries the dot-* addons and nothing else. The game addons (the weapons packs,
 # natural_disasters) reach a player as dot-cloud overlay packs when they join; baked in,
-# arena-weapons v1.4.28's embedded textures took the web pck from 44 MB to 147 MB.
+# fc-weapons (then arena-weapons) v1.4.28's embedded textures took the web pck from 44 MB to 147 MB.
 #
 # Text only, no Godot: every non-dot repository addons.lock names is excluded by every
 # preset in export_presets.example.cfg, the shell takes its overlay (TmcAddonNamespaces),
@@ -19,7 +19,8 @@ dir_of() {
     case "$1" in
         zee-dot-weapons) echo zee_weapons ;;
         zed-dot-weapons) echo zed_weapons ;;
-        fc-weapons|arena-weapons) echo arena_weapons ;;
+        # Both names: fc-weapons holds fc_weapons, its tags up to v1.4.51 the legacy arena_weapons.
+        fc-weapons|arena-weapons) echo fc_weapons arena_weapons ;;
         *) echo "${1//-/_}" ;;
     esac
 }
@@ -31,10 +32,11 @@ presets="$(grep -c '^exclude_filter=' export_presets.example.cfg)"
 [ "$presets" -ge 4 ] || bad "export_presets.example.cfg has $presets exclude filters, expected 4"
 
 for repo in "${repos[@]}"; do
-    dir="$(dir_of "$repo")"
-    missing="$(grep '^exclude_filter=' export_presets.example.cfg | grep -cvF "addons/$dir/*")"
-    [ "$missing" -eq 0 ] && good "every preset excludes addons/$dir/ ($repo)" \
-        || bad "$missing preset(s) in export_presets.example.cfg do not exclude addons/$dir/* ($repo)"
+    for dir in $(dir_of "$repo"); do
+        missing="$(grep '^exclude_filter=' export_presets.example.cfg | grep -cvF "addons/$dir/*")"
+        [ "$missing" -eq 0 ] && good "every preset excludes addons/$dir/ ($repo)" \
+            || bad "$missing preset(s) in export_presets.example.cfg do not exclude addons/$dir/* ($repo)"
+    done
 
     owner="gamemann/$repo"
     grep -qF "\"$owner\"" client/tmc_addon_namespaces.gd && good "the shell takes $owner as an overlay" \

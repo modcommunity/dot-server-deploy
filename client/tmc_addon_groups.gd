@@ -7,7 +7,7 @@ extends RefCounted
 ## dot-cloud takes one list for every pack of an overlay, so this is the union of what the wanted entries name.
 ## An entry without the field adds nothing: it is a pack the game does not narrow, and a pack without `groups.json` has only ungrouped files,
 ## which every selection takes. If no wanted entry names any, or one names `*` or something malformed, it is everything (`*`), the old behaviour.
-## A game that narrows one grouped pack therefore has to name every grouped pack its server runs (today only arena-weapons has groups).
+## A game that narrows one grouped pack therefore has to name every grouped pack its server runs (today only fc-weapons has groups).
 ##
 ## Never narrower than the overlay already running: a player who goes from a server with every weapon to one with a few keeps them all,
 ## and does not restart again on the way back.
