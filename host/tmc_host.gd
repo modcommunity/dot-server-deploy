@@ -670,6 +670,13 @@ func _boot() -> bool:
 
 	admins = source.value as TmcAdmins
 	config.note_console_result(server.console)
+	if config.alias_failures > 0:
+		_die(EXIT_CONFIG, "an alias names something this server does not have (see the ERR lines above)")
+		return false
+	server.console.command("aliases", func(ctx: DotCmdContext) -> void:
+		ctx.reply_lines(config.alias_lines()),
+		"List the effective aliases (cvars and commands) with the layer and file:line each came from.",
+		DotAdminFlags.CHANGEMAP)
 	var added := server.admins.add_source(admins)
 
 	if not added.ok:
@@ -689,6 +696,7 @@ func _boot() -> bool:
 		server.games.add_game(descriptor)
 
 	var wanted := config.initial_game if config.initial_game != "" else content.default_game
+	config.load_game_aliases(_content_dir, wanted)
 
 	if wanted == "":
 		# Legitimate, and said out loud. dot-server supports a server with no game and a

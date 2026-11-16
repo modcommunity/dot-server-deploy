@@ -1,0 +1,5 @@
+# Default aliases, layer 1 of 3 (these, then the boot game's content/<game>/aliases.yml, then cfg/server/alias.yml; a later layer overrides an earlier one).
+# `alias_name: target`. `remove: [name]` drops an alias an earlier layer made; writing a name again remaps it.
+# These are the old spellings: `game` and `games` are the names, like the `map` command.
+sv_game: game
+sv_games: games

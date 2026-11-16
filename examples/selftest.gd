@@ -304,6 +304,28 @@ func _test_aliases() -> void:
 		_check(not r.ok and str(r.error).contains(bad[label][1]) and str(r.error).contains("alias.yml:"),
 			"alias.yml '%s' fails loudly naming file and line (%s)" % [label, str(r.error).replace("\n", " | ")])
 
+	# Layers: addon defaults (host/aliases.yml), then game, then server; later wins; each can add, remove or remap.
+	var cfg_l := TmcConfig.new()
+	cfg_l._load_default_aliases()
+	_check(cfg_l.aliases.get("sv_game", {}).get("layer", "") == "addon" and cfg_l.aliases["sv_game"]["target"] == "game",
+		"layer 1 ships sv_game -> game (%s)" % str(cfg_l.aliases.get("sv_game")))
+	_check(cfg_l.aliases.has("sv_games"), "layer 1 ships sv_games -> games")
+	cfg_l.merge_alias_layer("game", "content/g/aliases.yml", "gm: game\nsv_game: map\nremove: [sv_games]\n")
+	_check(cfg_l.aliases.has("gm") and cfg_l.aliases["gm"]["layer"] == "game", "the game layer ADDS an alias")
+	_check(cfg_l.aliases["sv_game"]["target"] == "map" and cfg_l.aliases["sv_game"]["layer"] == "game", "the game layer REMAPS an addon alias")
+	_check(not cfg_l.aliases.has("sv_games"), "the game layer REMOVES an addon alias")
+	cfg_l.merge_alias_layer("server", "cfg/server/alias.yml", "sv_game: game\nremove: gm\nsv_games: games\n")
+	_check(cfg_l.aliases["sv_game"]["target"] == "game" and cfg_l.aliases["sv_game"]["layer"] == "server", "the server layer overrides the game layer's remap")
+	_check(not cfg_l.aliases.has("gm"), "the server layer REMOVES a game-layer alias")
+	_check(cfg_l.aliases.has("sv_games") and cfg_l.aliases["sv_games"]["layer"] == "server", "and re-adds one the game layer removed")
+	_check(cfg_l.alias_lines().size() == 2, "alias_lines lists the effective table (%s)" % str(cfg_l.alias_lines()))
+
+	var rem := TmcConfig.load_dir(_alias_cfg("remove", "sv_game: \"deathrun\"\n", "remove: [sv_game]\n"))
+	_check(rem.ok and (rem.value as TmcConfig).initial_game == "" and (rem.value as TmcConfig).console_lines.has("sv_game deathrun"),
+		"remove: [sv_game] in alias.yml turns the old spelling back into an ordinary (unknown) setting")
+	var remap := TmcConfig.load_dir(_alias_cfg("remap", "sv_game: \"m1\"\n", "sv_game: map\n"))
+	_check(remap.ok and (remap.value as TmcConfig).initial_map == "m1" and (remap.value as TmcConfig).initial_game == "", "alias.yml REMAPS sv_game to map")
+
 	# No cap: a few hundred entries load.
 	var many := ""
 	for i in 500:

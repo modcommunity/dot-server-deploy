@@ -70,15 +70,22 @@ selftest's "a server's settings per game" section holds these rules and ties the
 Settings that one addon reads live in `cfg/addon/<addon>/<file>`, and the operator's overrides in `cfg/server/addon/<addon>/<file>`, which is the strongest layer (for `rcon.yml` too; an empty `rcon_password` there switches RCON off). `TmcConfig.LAYERED` names the files and their addons; `server.yml` is `cfg/server/server.yml` (a flat `cfg/server.yml` is a shim) and carries `net_*` too; other `cfg/server/*.yml` add keys. The flat files, `addons.yml` (now `packs.yml`), `games.yml` (now `game_rotation.yml`; the rotation lives in `cfg/content/games.yml`) and `content.yml` (now `cfg/server/content/overrides.yml`) are read through `DotCfgLegacy` until 2026-12-31, and a template is never copied beside a flat file that exists, because the new path wins whole. `./server cfg-migrate [--dry-run]` moves them and keeps the originals in `cfg.bak/`. `net.yml` is merged into `server.yml` (a leftover `net.yml` is still read after it, with a WARN, so it wins); subsystem keys left in `server.yml` (`log_*`, `rcon_*` bar the password, `TmcConfig.LEGACY_KEYS`) are applied with one WARN naming the addon folder. A game's entry under `games:` of `content.yml` moves to `cfg/game/<game>/server.yml` (`TmcGameConfig.read_game_files`: the same keys, `sv_name` and `sv_maxplayers` accepted, laid over the `content.yml` entry key by key). `defaults:` and the stock template `cfg.example/content.yml` (which `client/solo.json` mirrors) stay in `content.yml` for now.
 
 
-## Aliases: `cfg/server/alias.yml`
+## Aliases: one table for cvars and commands
 
-`game:` in `server.yml` picks the boot game and `game <id>` at the console switches live, the same pairing as `map`. `sv_game` and `sv_games` are old spellings that are aliases of `game` and `games` **by default**, built in and silent: nothing to write, and old files keep working. If both spellings are written with different values the plain name wins and one line says so.
+`game:` in `server.yml` picks the boot game and `game <id>` at the console switches live, the same pairing as `map`. `sv_game` and `sv_games` are old spellings that are aliases of `game` and `games` **by default** (silent; nothing to write, old files keep working). If both spellings are written with different values the plain name wins and one line says so.
 
-`cfg/server/alias.yml` is the same mechanism for your own names, read before every other file. One `alias_name: target` per line, `#` comments, no limit on the number of entries:
+An alias is `alias_name: target`. It works as a key in any `cfg/` file (when the target is one word: `sv_games: a,b` is read as `games: a,b`) and is registered on the console (so it also works at a prompt, in RCON, with a target that has arguments: `restart: changelevel smash`). Three layers, later overrides earlier:
+
+1. **Addon defaults**: `host/aliases.yml` and any `addons/<addon>/aliases.yml` (this is where `sv_game: game` and `sv_games: games` live).
+2. **The game**: `content/<game>/aliases.yml` of the boot game. Console only (config files are read before the game is chosen); a game pack's mistakes are ERR lines, never a refused boot.
+3. **The owner**: `cfg/server/alias.yml`.
+
+Every layer uses the same syntax, `#` comments, no limit on entries:
 
 ```yaml
-sv_games: games        # (already built in; shown as the shape)
-kickall: kick all      # a console alias with arguments
+kickall: kick all            # ADD
+sv_game: map                 # REMAP an alias an earlier layer made (same name, new target)
+remove: [sv_games]           # REMOVE aliases an earlier layer made (also `remove: sv_games`)
 ```
 
-A target that is one word works as a config key in any `cfg/` file (`sv_games: a,b` is read as `games: a,b`) and is registered on the console as an alias, so it also works at a prompt and over RCON. A target with arguments is a console alias only. Refused loudly, with an ERR naming `file:line` (and an unusable boot for file-level mistakes): a line that is not `name: target`, a name defined twice, an alias to itself, an alias to another alias (no chains or loops), an alias that shadows a setting, cvar or command, and a target that is not a setting, cvar or command this server has.
+`aliases` at the console lists the effective table with the layer and `file:line` each entry came from. Refused loudly, as an ERR naming `file:line` and a failed boot (owner and addon layers): a line that is not `name: target`, a name twice in one file, an alias to itself, an alias to another alias (no chains or loops), an alias shadowing a setting, cvar or command, and a target that is not a setting, cvar or command this server has. `remove:` of a name no earlier layer made is a WARN.

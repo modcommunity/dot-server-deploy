@@ -1,5 +1,5 @@
 # Your own names for settings and console commands. One `alias_name: target` per line.
-# `sv_game: game` and `sv_games: games` are built in and need no line here.
+# `sv_game: game` and `sv_games: games` ship in host/aliases.yml (layer 1). Here you can add, remap (same name, new target) or `remove: [sv_games]` them. Layers: addons, content/<game>/aliases.yml, then this file.
 #
 # A one-word target also works as a key in any cfg/ file and as a console alias;
 # a target with arguments is a console alias only. Chains, loops, a name that shadows

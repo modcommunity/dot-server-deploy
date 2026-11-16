@@ -150,8 +150,6 @@ const LEGACY_KEYS := {
 
 ## Keys that exist and are handled somewhere other than a config object, listed so they are not reported as unknown (a key silently ignored and not reported looks like it took effect).
 ## `net_public_ip` is here, not in [constant BOOT_KEYS], because dot-server should have no such setting: what a server binds to and what a player types differ, and only the second is behind NAT.
-## Old spellings that stay accepted silently, by default, through the same mechanism as `cfg/server/alias.yml`. `game` and `games` are the names (like the `map` command).
-const BUILTIN_ALIASES := {"sv_game": "game", "sv_games": "games"}
 ## The settings this file reads itself, as named in `server.yml`, i.e. the config keys that exist without a console cvar behind them.
 const HOST_KEYS := ["game", "games", "map", "sv_map", "sv_query_app", "sv_web_loader", "sv_web_build", "content_urls", "net_public_ip", "sv_tags", "chat_command_prefixes", "log_router"]
 ## The alias file, under `cfg/server/`. Read before every other file so a key in any of them can use an alias.
@@ -296,12 +294,14 @@ var vote_exclude: PackedStringArray = PackedStringArray()
 ## The game to load at boot, or "" for whatever the content directory says is first.
 var initial_game: String = ""
 
-## Aliases, `alias name -> {"target": String, "source": String, "builtin": bool}`: the built-ins in [constant BUILTIN_ALIASES] plus `cfg/server/alias.yml`.
+## Aliases, `alias name -> {"target", "source", "layer": "addon"|"game"|"server"}`: layers in order, addon defaults (`host/aliases.yml`, `addons/*/aliases.yml`), the boot game's `content/<game>/aliases.yml`, then `cfg/server/alias.yml`.
 ## One mechanism for both uses: a key in a config file written under an alias name is read as its target (when the target is one word), and the same table is
 ## registered on the console so `sv_games` typed at a prompt or in RCON runs `games`. An alias is never a chain: its target is a real name, validated after boot ([method check_aliases]).
 var aliases: Dictionary = {}
 ## Config keys that were written under their own name, so an alias to them written in another file cannot override them.
 var _written_keys: Dictionary = {}
+## How many aliases failed [method check_aliases] outside the game layer; the host refuses to boot on any.
+var alias_failures: int = 0
 
 ## The site's web loader version this server's browser players should get, or "" for the site's default. Reported as the NOTIFY cvar `sv_web_loader` (see `TmcHost._register_web_loader`).
 ## A host field and not a console line, as `sv_game` is: the cvar is registered after dot-server boots, and the YAML's console lines run during that boot, so it would be dropped as unknown.
@@ -921,18 +921,15 @@ static func _truthy(value: Variant) -> bool:
 	return str(value).strip_edges().to_lower() in ["1", "true", "yes", "on"]
 
 
-## Reads `cfg/server/alias.yml`: one `alias_name: target` per line (`#` starts a comment), on top of [constant BUILTIN_ALIASES]. No limit on the number of entries.
-## A file that cannot be understood is a failed boot naming `path:line`, not a skipped line: an alias that silently did not exist is a setting that silently did nothing.
-func _load_aliases(path: String) -> DotResult:
-	for alias_name: String in BUILTIN_ALIASES:
-		aliases[alias_name] = {"target": BUILTIN_ALIASES[alias_name], "source": "built-in", "builtin": true}
-	if not FileAccess.file_exists(path):
-		return DotResult.success(null)
-	files_read.append("%s/%s" % [SERVER_DIR, ALIAS_FILE])
-	var errors := PackedStringArray()
-	var seen := {}
+## One layer's text -> {"set": {alias: {"target", "line"}}, "remove": [{"name", "line"}], "errors": PackedStringArray}.
+## Syntax, the same in every layer: one `alias_name: target` per line (`#` starts a comment, quotes are optional), and the reserved `remove: name` or `remove: [a, b]` to drop an alias an earlier layer made.
+## Writing a name an earlier layer already has REMAPS it. A file that cannot be understood is reported with `path:line`, never skipped: an alias that silently did not exist is a setting that silently did nothing.
+static func parse_alias_text(text: String, path: String) -> Dictionary:
+	var out := {"set": {}, "remove": [], "errors": PackedStringArray()}
+	var errors: PackedStringArray = out["errors"]
+	var word_re := RegEx.create_from_string("^[A-Za-z_][A-Za-z0-9_.]*$")
 	var number := 0
-	for raw in FileAccess.get_file_as_string(path).split("\n"):
+	for raw in text.split("\n"):
 		number += 1
 		var line := raw.strip_edges()
 		var hash_at := line.find(" #")
@@ -948,35 +945,100 @@ func _load_aliases(path: String) -> DotResult:
 			continue
 		var alias_name := line.substr(0, colon).strip_edges().trim_prefix("\"").trim_suffix("\"")
 		var target := line.substr(colon + 1).strip_edges().trim_prefix("\"").trim_suffix("\"").strip_edges()
-		var word_re := RegEx.create_from_string("^[A-Za-z_][A-Za-z0-9_.]*$")
+		if alias_name == "remove":
+			var inner := target.trim_prefix("[").trim_suffix("]")
+			for piece in inner.split(","):
+				var gone := piece.strip_edges().trim_prefix("\"").trim_suffix("\"")
+				if gone != "":
+					(out["remove"] as Array).append({"name": gone, "line": number})
+			continue
 		if word_re.search(alias_name) == null:
 			errors.append("%s:%d: `%s` is not a usable alias name (letters, digits, _ and . only)" % [path, number, alias_name])
 			continue
 		if target == "":
 			errors.append("%s:%d: alias `%s` has no target" % [path, number, alias_name])
 			continue
-		if seen.has(alias_name):
-			errors.append("%s:%d: alias `%s` is defined twice (first on line %d)" % [path, number, alias_name, seen[alias_name]])
+		if (out["set"] as Dictionary).has(alias_name):
+			errors.append("%s:%d: alias `%s` is defined twice in this file (first on line %d)" % [path, number, alias_name, (out["set"][alias_name] as Dictionary)["line"]])
 			continue
-		seen[alias_name] = number
-		aliases[alias_name] = {"target": target, "source": "%s:%d" % [path, number], "builtin": false}
-	# Shape checks that need nothing but this file: no alias to itself, no chain to another alias, none shadowing a setting this file reads itself.
-	for alias_name: String in aliases:
-		var entry: Dictionary = aliases[alias_name]
-		if entry["builtin"]:
-			continue
+		(out["set"] as Dictionary)[alias_name] = {"target": target, "line": number}
+	return out
+
+
+## Merges one layer into [member aliases]: removals first, then additions and remaps. Layers are applied in order (addon defaults, game, server), so a later one overrides an earlier one.
+## Returns the errors of this layer, already logged as ERR lines naming file and line.
+func merge_alias_layer(layer: String, path: String, text: String) -> PackedStringArray:
+	var parsed := parse_alias_text(text, path)
+	var errors: PackedStringArray = parsed["errors"]
+	for removal: Dictionary in parsed["remove"]:
+		if aliases.has(removal["name"]):
+			aliases.erase(removal["name"])
+		else:
+			DotLog.warn(CHANNEL, "%s:%d: remove: `%s` is not an alias an earlier layer made" % [path, removal["line"], removal["name"]])
+	for alias_name: String in parsed["set"]:
+		var entry: Dictionary = parsed["set"][alias_name]
 		var first := String(entry["target"]).split(" ")[0]
 		if first == alias_name:
-			errors.append("%s: alias `%s` points at itself" % [entry["source"], alias_name])
-		elif aliases.has(first):
-			errors.append("%s: alias `%s` points at the alias `%s`; name the real target (chains and loops are refused)" % [entry["source"], alias_name, first])
+			errors.append("%s:%d: alias `%s` points at itself" % [path, entry["line"], alias_name])
+			continue
 		if alias_name in HOST_KEYS:
-			errors.append("%s: alias `%s` would shadow the setting of that name" % [entry["source"], alias_name])
+			errors.append("%s:%d: alias `%s` would shadow the setting of that name" % [path, entry["line"], alias_name])
+			continue
+		aliases[alias_name] = {"target": entry["target"], "source": "%s:%d" % [path, entry["line"]], "layer": layer}
+	# Chains and loops, over the table as it now stands: an alias must name a real target, never another alias.
+	for alias_name: String in aliases:
+		var entry2: Dictionary = aliases[alias_name]
+		var first2 := String(entry2["target"]).split(" ")[0]
+		if aliases.has(first2) and String(entry2["layer"]) == layer:
+			errors.append("%s: alias `%s` points at the alias `%s`; name the real target (chains and loops are refused)" % [entry2["source"], alias_name, first2])
+	for message in errors:
+		DotLog.error(CHANNEL, message)
+	return errors
+
+
+## Layer 1, the defaults that ship: `host/aliases.yml` and every `aliases.yml` an addon carries (`res://addons/*/aliases.yml`). Layer 3, the owner's `cfg/server/alias.yml`, is [method _load_aliases].
+func _load_default_aliases() -> PackedStringArray:
+	var errors := PackedStringArray()
+	var paths: Array[String] = ["res://host/aliases.yml"]
+	var dir := DirAccess.open("res://addons")
+	if dir != null:
+		var names := Array(dir.get_directories())
+		names.sort()
+		for addon: String in names:
+			paths.append("res://addons/%s/aliases.yml" % addon)
+	for path in paths:
+		if FileAccess.file_exists(path):
+			errors.append_array(merge_alias_layer("addon", path, FileAccess.get_file_as_string(path)))
+	return errors
+
+
+## Layer 2: the boot game's own `content/<game>/aliases.yml`, merged once the game is chosen. Not fatal, as a game pack should not be able to stop a server: its errors are ERR lines and its bad lines are skipped.
+func load_game_aliases(content_dir: String, game_id: String) -> void:
+	var path := "%s/%s/aliases.yml" % [content_dir, game_id]
+	if game_id != "" and FileAccess.file_exists(path):
+		merge_alias_layer("game", path, FileAccess.get_file_as_string(path))
+
+
+## Reads the defaults and `cfg/server/alias.yml`. No limit on the number of entries. A file mistake fails the boot (the message names every `path:line`).
+func _load_aliases(path: String) -> DotResult:
+	var errors := _load_default_aliases()
+	if FileAccess.file_exists(path):
+		files_read.append("%s/%s" % [SERVER_DIR, ALIAS_FILE])
+		errors.append_array(merge_alias_layer("server", path, FileAccess.get_file_as_string(path)))
 	if not errors.is_empty():
-		for message in errors:
-			DotLog.error(CHANNEL, message)
-		return DotResult.fail(DotError.CODE_INVALID, "%s is not usable:\n  %s" % [path, "\n  ".join(errors)])
+		return DotResult.fail(DotError.CODE_INVALID, "alias files are not usable:\n  %s" % "\n  ".join(errors))
 	return DotResult.success(null)
+
+
+## Effective aliases as lines, `name -> target  [layer, source]`, for the `aliases` command and the boot report.
+func alias_lines() -> PackedStringArray:
+	var names := Array(aliases.keys())
+	names.sort()
+	var out := PackedStringArray()
+	for alias_name: String in names:
+		var entry: Dictionary = aliases[alias_name]
+		out.append("%-20s -> %s    [%s: %s]" % [alias_name, entry["target"], entry["layer"], entry["source"]])
+	return out
 
 
 ## After the console is up: every alias target must be a real setting, command or cvar, and no alias may shadow one. Failures are ERR lines naming the file and line, and entries in [member unknown].
@@ -995,10 +1057,12 @@ func check_aliases(console: DotConsole) -> int:
 		if problem != "":
 			DotLog.error(CHANNEL, "%s: %s" % [entry["source"], problem])
 			unknown.append("%s: %s" % [entry["source"], problem])
-			failures += 1
+			if String(entry["layer"]) != "game":
+				failures += 1
 			continue
 		if console.has_method("set_alias") and (console.find_command(first) != null or console.find_cvar(first) != null):
 			console.set_alias(alias_name, String(entry["target"]))
+	alias_failures = failures
 	return failures
 
 
