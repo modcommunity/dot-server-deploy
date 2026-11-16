@@ -11,7 +11,7 @@ const RoundsWithoutMatch := preload("res://examples/fixtures/rounds_without_matc
 
 const Host := preload("res://host/tmc_host.gd")
 
-const CHECKS := 524
+const CHECKS := 525
 
 var _passed := 0
 var _failed := 0
@@ -1380,6 +1380,30 @@ func _test_game_refs() -> void:
 	var added: DotResult = installer.stamp_dependencies("name: X\n", PackedStringArray(["a/b@1.0.0"]))
 	_check(added.ok and str(added.value).ends_with("dependencies:\n  - a/b@1.0.0"),
 		"and adds the list to a descriptor that had none", str(added))
+
+	# A version kept because the newest needs newer addons must be one that mounts. Prop Hunt 0.1.15
+	# was signed before the site stamped runs_code: provides without it, 54 .gd files.
+	var stale := DotCloudManifest.new()
+	stale.provides = {"schema": 1, "kinds": ["game"]}
+	var gd := DotCloudFile.new()
+	gd.path = "scripts/ph_world.gd"
+	stale.files.append(gd)
+	var declared := DotCloudManifest.new()
+	declared.provides = {"schema": 1, "kinds": ["game"], "runs_code": true}
+	declared.files.append(gd)
+	var data_only := DotCloudManifest.new()
+	data_only.provides = {"schema": 1, "kinds": ["game"]}
+	var tex := DotCloudFile.new()
+	tex.path = "textures/a.png"
+	data_only.files.append(tex)
+	var legacy := DotCloudManifest.new()
+	legacy.files.append(gd)
+	_check(str(installer.refused_at_mount(stale)).contains("runs_code")
+			and str(installer.refused_at_mount(stale)).contains("scripts/ph_world.gd")
+			and installer.refused_at_mount(declared) == "" and installer.refused_at_mount(data_only) == ""
+			and installer.refused_at_mount(legacy) == "",
+		"a kept pack that ships code without declaring runs_code is named unusable; declared, data-only and pre-provides packs are not",
+		str(installer.refused_at_mount(stale)))
 
 	var base := {"kind": "pack", "scene": "scenes/server.tscn", "content_id": "gamemann/demo", "version": "1.0.0"}
 	var pinned := base.duplicate()

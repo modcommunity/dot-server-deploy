@@ -173,6 +173,8 @@ func _init() -> void:
 	var added := PackedStringArray()
 	# Games whose wanted version needs newer addons than this box has: "<raw>: <why>".
 	var behind := PackedStringArray()
+	# Of those, the ones whose installed version dot-cloud will refuse to mount: "<raw>: <why>".
+	var unusable := PackedStringArray()
 	var index := {}
 	# The origin the catalogue came from. Descriptor paths in it are relative and must resolve against
 	# THAT origin rather than against whichever base is first in the list -- a mirror that is a version
@@ -271,14 +273,26 @@ func _init() -> void:
 				# [b]Addons too old is not "could not install".[/b] Nothing is wrong with the pack or the
 				# origin; this box is one addon release behind it.
 				if got.error.code == DotError.CODE_VERSION:
+					# "Kept the installed version" is only a fallback if that version mounts. One
+					# signed before the site declared runs_code is refused at mount, so the game
+					# is gone, not kept: say so here, where the reason is, not at the mount.
+					var dead := (await _kept_refused(path, cloud)) if have else ""
 					DotLog.warn(CHANNEL, "a game needs newer addons than this server has", {
 						"game": str(want["id"]),
 						"version": str(want["version"]) if str(want["version"]) != "" else "latest",
 						"why": got.error.message,
 						"detail": got.error.detail,
-						"kept": "the installed version" if have else "nothing installed",
+						"kept": "nothing installed" if not have else (
+							"nothing usable: the installed version will be refused" if dead != "" else "the installed version"),
 					})
 					behind.append("%s: %s" % [str(want["raw"]), got.error.message])
+					if dead != "":
+						DotLog.error(CHANNEL, "the installed version of a game cannot run either", {
+							"game": str(want["id"]),
+							"why": dead,
+							"fix": "update this server's addons (Reinstall on Pterodactyl), or republish that version",
+						})
+						unusable.append("%s: %s" % [str(want["raw"]), dead])
 					continue
 
 				DotLog.error(CHANNEL, "could not install a game", {
@@ -375,6 +389,11 @@ func _init() -> void:
 		print("  BEHIND   : %s" % "; ".join(behind))
 		print("             this server's addons are older than those games need;")
 		print("             the installed versions were kept")
+
+	if not unusable.is_empty():
+		print("  UNUSABLE : %s" % "; ".join(unusable))
+		print("             the kept version will be refused at mount: NOT running until")
+		print("             the addons update (Reinstall on Pterodactyl) or it is republished")
 
 	# Before the others: it is the one failure the launcher can fix by itself.
 	if not behind.is_empty():
@@ -688,6 +707,57 @@ func _pack_update_due(
 		target = str(latest.value)
 
 	return DotResult.success("" if target == have_version else target)
+
+
+## Why the installed version under [param path] will not mount, or "" when it will (or nobody can
+## say: an unreadable descriptor or an unreachable origin is not a verdict).
+func _kept_refused(path: String, cloud: DotCloudClient) -> String:
+	if cloud == null:
+		return ""
+
+	var parsed := TmcYaml.parse_file(path)
+
+	if not parsed.ok:
+		return ""
+
+	var tree := parsed.value as Dictionary
+	var id := str(TmcYaml.at(tree, "content_id", ""))
+	var version := str(TmcYaml.at(tree, "version", ""))
+
+	if id == "" or version == "":
+		return ""
+
+	var got: DotResult = await cloud.resolve_manifest(StringName(id), version)
+
+	if not got.ok:
+		return ""
+
+	var why := refused_at_mount(got.value as DotCloudManifest)
+	return "" if why == "" else "%s@%s %s" % [id, version, why]
+
+
+## Why dot-cloud's mount will refuse [param manifest], or "". The same rule as
+## DotCloudClient._rescan_for_code, by path alone: a manifest with `provides` that does not declare
+## `runs_code` and lists a code file. Packs signed before the site stamped `runs_code`
+## (website-city 3e0fa9487, 2026-11-13) are exactly that, so they are no fallback.
+static func refused_at_mount(manifest: DotCloudManifest) -> String:
+	if manifest == null or manifest.provides.is_empty() or bool(manifest.provides.get("runs_code", false)):
+		return ""
+
+	if DotCloudProvides.has_code_kind(manifest.provides):
+		return "provides entries of kind entity, tool or script but its signed manifest does not declare runs_code; republish it"
+
+	var code := PackedStringArray()
+
+	for f in manifest.wanted_files():
+		if DotCloudScriptScan.CODE_EXTENSIONS.has(str(f.path).get_extension().to_lower()):
+			code.append(f.path)
+
+	if code.is_empty():
+		return ""
+
+	return "ships %d code file(s) (%s) but its signed manifest does not declare runs_code; republish it" % [
+		code.size(), code[0]]
 
 
 ## Installs a game from a PUBLISHED pack, descriptor and all. The descriptor travels inside the
