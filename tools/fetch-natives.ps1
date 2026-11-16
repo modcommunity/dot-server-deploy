@@ -9,11 +9,11 @@
     function (and the helpers it needs) out of bootstrap.ps1 at run time, by parsing it,
     and supplies only what is specific to here: the pin comes from addons.lock instead of
     a game's .gitignore, and the place is the repository addons\<addon> links into.
-    bootstrap.ps1 is looked for in $env:DOT_BOOTSTRAP, beside this checkout and in
+    bootstrap.ps1 is looked for in $env:GS_BOOTSTRAP (old name $env:DOT_BOOTSTRAP), beside this checkout and in
     addons\.repos\; with none, it is cloned shallow into addons\.repos\ (unless -NoClone).
 
     Never run for export-web: a .gdextension in a web build stops every script.
-    $env:DOT_NATIVES = 'none' skips everything; a platform with no zip warns and the
+    $env:GS_NATIVES = 'none' (old name DOT_NATIVES) skips everything; a platform with no zip warns and the
     GDScript twins run.
 
 .EXAMPLE
@@ -29,11 +29,11 @@ param(
 $ErrorActionPreference = 'Stop'
 $Root = Split-Path -Parent $PSScriptRoot
 $NativeRepos = @('dot-sim')          # addons that publish a platform zip
-if ($env:DOT_NATIVES -eq 'none') { exit 0 }
+if (($(if ($env:GS_NATIVES) { $env:GS_NATIVES } else { $env:DOT_NATIVES })) -eq 'none') { exit 0 }
 if ($env:TMC_NO_CLONE) { $NoClone = $true }
 
 $boot = $null
-foreach ($c in @($env:DOT_BOOTSTRAP, (Join-Path $Root '..\dot-bootstrap'), (Join-Path $Root 'addons\.repos\dot-bootstrap'))) {
+foreach ($c in @($(if ($env:GS_BOOTSTRAP) { $env:GS_BOOTSTRAP } else { $env:DOT_BOOTSTRAP }), (Join-Path $Root '..\dot-bootstrap'), (Join-Path $Root 'addons\.repos\dot-bootstrap'))) {
     if ($c -and (Test-Path -LiteralPath (Join-Path $c 'bootstrap.ps1'))) { $boot = Join-Path $c 'bootstrap.ps1'; break }
 }
 if (-not $boot -and -not $NoClone -and (Test-Path -LiteralPath (Join-Path $Root 'addons')) -and (Get-Command git -ErrorAction SilentlyContinue)) {

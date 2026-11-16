@@ -58,9 +58,9 @@ fi
 
 # A fake release unpacks, is checksum-verified, and the library lands in the addon's repository.
 boot=""
-for c in "${DOT_BOOTSTRAP:-}" ../dot-bootstrap; do [ -n "$c" ] && [ -f "$c/bootstrap.sh" ] && { boot="$c"; break; }; done
+for c in "${GS_BOOTSTRAP:-${DOT_BOOTSTRAP:-}}" ../dot-bootstrap; do [ -n "$c" ] && [ -f "$c/bootstrap.sh" ] && { boot="$c"; break; }; done
 if [ -z "$boot" ]; then
-    printf '  %sSKIP%s the unpack run: no dot-bootstrap beside this checkout (DOT_BOOTSTRAP=)\n' "$YLW" "$OFF"
+    printf '  %sSKIP%s the unpack run: no dot-bootstrap beside this checkout (GS_BOOTSTRAP=)\n' "$YLW" "$OFF"
 else
     T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
     plat="$(eval "$(sed -n '/^native_platform() {/,/^}/p' "$boot/bootstrap.sh")"; native_platform)"
@@ -71,13 +71,13 @@ else
     R="$T/rel/dot-sim/releases/download/v9.9.9"; mkdir -p "$R"
     (cd "$T/z" && python3 -m zipfile -c "$R/dot_sim-9.9.9-$plat.zip" addons)
     (cd "$R" && sha256sum "dot_sim-9.9.9-$plat.zip" > SHA256SUMS.natives)
-    out="$(DOT_BOOTSTRAP="$boot" DOT_NATIVES_BASE="file://$T/rel" bash "$T/p/srv/tools/fetch-natives.sh" 2>&1)"
+    out="$(GS_BOOTSTRAP="$boot" GS_NATIVES_BASE="file://$T/rel" bash "$T/p/srv/tools/fetch-natives.sh" 2>&1)"
     [ -f "$T/p/dot-sim/addons/dot_sim/bin/$plat/libdot_sim.so" ] && [ -f "$T/p/dot-sim/addons/dot_sim/dot_sim.gdextension" ]
     t "the platform zip unpacks into the addon's repository" $?
     grep -q 'dot-sim: native motor=on' <<<"$out"; t "it logs 'dot-sim: native motor=on'" $?
     rm -rf "$T/p/dot-sim/addons/dot_sim/bin" "$T/p/dot-sim/addons/dot_sim/dot_sim.gdextension"
     echo bad > "$R/dot_sim-9.9.9-$plat.zip"
-    out="$(DOT_BOOTSTRAP="$boot" DOT_NATIVES_BASE="file://$T/rel" bash "$T/p/srv/tools/fetch-natives.sh" 2>&1)"
+    out="$(GS_BOOTSTRAP="$boot" GS_NATIVES_BASE="file://$T/rel" bash "$T/p/srv/tools/fetch-natives.sh" 2>&1)"
     [ ! -e "$T/p/dot-sim/addons/dot_sim/bin/$plat" ] && grep -q 'native motor=off' <<<"$out"
     t "a checksum mismatch installs nothing and falls back to GDScript" $?
 
@@ -88,7 +88,7 @@ else
         (cd "$T/m/$mp" && python3 -m zipfile -c "$R/dot_sim-9.9.9-$mp.zip" addons)
     done
     (cd "$R" && sha256sum dot_sim-9.9.9-macos-*.zip > SHA256SUMS.natives)
-    natrun() { DOT_BOOTSTRAP="$boot" DOT_NATIVES_BASE="file://$T/rel" bash "$T/p/srv/tools/fetch-natives.sh" --platform macos-arm64 --platform macos-x86_64 2>&1; }
+    natrun() { GS_BOOTSTRAP="$boot" GS_NATIVES_BASE="file://$T/rel" bash "$T/p/srv/tools/fetch-natives.sh" --platform macos-arm64 --platform macos-x86_64 2>&1; }
     natrun >/dev/null
     out="$(natrun)"
     ! grep -q 'installed into' <<<"$out" && [ -f "$T/p/dot-sim/addons/dot_sim/bin/.natives-macos-arm64" ] && [ -f "$T/p/dot-sim/addons/dot_sim/bin/.natives-macos-x86_64" ]

@@ -13,7 +13,7 @@
 # or a time finer than a day.
 #
 # Every key is a DotBotDemoConfig property with a `bot_record_` prefix (`record` alone is
-# `bot_record`). DOT_BOT_RECORD_* and --bot-record-* override them; the console cvars of the
+# `bot_record`). GS_BOT_RECORD_* and --bot-record-* override them; the console cvars of the
 # same names change them while the server runs.
 
 # On by default. 0 stops recording and flushes what is queued.

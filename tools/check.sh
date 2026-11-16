@@ -50,7 +50,7 @@ if [ -z "${TMC_CHECK_NO_RELINK:-}" ]; then
         [ -d "$d/dot-core" ] && { REPOS_DIR="$d"; break; }
     done
     if [ -n "${REPOS_DIR:-}" ]; then
-        [ -z "${DOT_BOOTSTRAP:-}" ] && [ -d "$REPOS_DIR/dot-bootstrap" ] && export DOT_BOOTSTRAP="$REPOS_DIR/dot-bootstrap"
+        [ -z "${GS_BOOTSTRAP:-${DOT_BOOTSTRAP:-}}" ] && [ -d "$REPOS_DIR/dot-bootstrap" ] && export GS_BOOTSTRAP="$REPOS_DIR/dot-bootstrap"
         # stale = addons/dot_core is not (a link into) the dot-core repository
         stale=0
         case "$(readlink -f addons/dot_core 2>/dev/null)" in */dot-core/addons/dot_core) ;; *) stale=1 ;; esac
@@ -110,7 +110,7 @@ done < <(find host client examples -name '*.gd' 2>/dev/null | sort)
 
 echo
 echo "shell scripts"
-for f in setup.sh tools/server.in docker-entrypoint.sh docker-healthcheck.sh tools/content_trust.sh tools/check_content_trust.sh tools/check.sh tools/check_boot_failures.sh tools/check_lists.sh tools/check_tickrate.sh tools/check_physics_thread.sh tools/check_deploy_modes.sh tools/check_self_update.sh tools/check_supervise.sh tools/check_channels.sh tools/check_client_host_only.sh tools/check_shell_addons.sh tools/import_defs.sh tools/check_import_defs.sh tools/check_game_listing.sh tools/deploy-modes.sh tools/enet_relay_all_games.sh; do
+for f in setup.sh tools/server.in docker-entrypoint.sh docker-healthcheck.sh tools/content_trust.sh tools/check_content_trust.sh tools/check.sh tools/check_boot_failures.sh tools/check_lists.sh tools/check_tickrate.sh tools/check_physics_thread.sh tools/check_deploy_modes.sh tools/check_self_update.sh tools/check_supervise.sh tools/check_gs_env.sh tools/gs-env.sh tools/check_channels.sh tools/check_client_host_only.sh tools/check_shell_addons.sh tools/import_defs.sh tools/check_import_defs.sh tools/check_game_listing.sh tools/deploy-modes.sh tools/enet_relay_all_games.sh; do
     [ -f "$f" ] || continue
     if bash -n "$f" 2>/dev/null; then
         printf '  %sok%s   %s\n' "$GRN" "$OFF" "$f"
@@ -137,6 +137,7 @@ bash tools/check_deploy_modes.sh || fails=$((fails + 1))
 bash tools/check_publish_manifest.sh || fails=$((fails + 1))
 bash tools/check_self_update.sh || fails=$((fails + 1))
 bash tools/check_supervise.sh || fails=$((fails + 1))
+bash tools/check_gs_env.sh || fails=$((fails + 1))
 bash tools/check_channels.sh || fails=$((fails + 1))
 bash tools/check_client_host_only.sh || fails=$((fails + 1))
 bash tools/check_shell_addons.sh || fails=$((fails + 1))

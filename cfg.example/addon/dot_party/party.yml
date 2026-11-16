@@ -29,7 +29,7 @@ party_server_id: 0
 # --- Timings -------------------------------------------------------------------
 #
 # The website's own numbers, mirrored. Every setting of the addon's DotPartyConfig is
-# accepted here with a `party_` prefix, and DOT_PARTY_* / --party-* override them.
+# accepted here with a `party_` prefix, and GS_PARTY_* / --party-* override them.
 
 # Seconds between full roster reports to the website (it asks for 10 to 30).
 party_state_report_sec: 15

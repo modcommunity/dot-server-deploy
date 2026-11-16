@@ -62,6 +62,6 @@ replay_keep_mib: 512
 
 # Every other setting of the addon's DotReplayConfig is accepted with a `replay_` prefix
 # (replay_chunk_seconds, replay_keyframe_seconds, replay_compression, replay_chunk_kib,
-# replay_max_record_kib), and DOT_REPLAY_* / --replay-* override them: `./server --
+# replay_max_record_kib), and GS_REPLAY_* / --replay-* override them: `./server --
 # --replay-ring-seconds 300` for one tournament without editing this file.
 replay_keyframe_seconds: 10

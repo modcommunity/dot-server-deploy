@@ -11,7 +11,7 @@ const RoundsWithoutMatch := preload("res://examples/fixtures/rounds_without_matc
 
 const Host := preload("res://host/tmc_host.gd")
 
-const CHECKS := 568
+const CHECKS := 570
 
 var _passed := 0
 var _failed := 0
@@ -2361,6 +2361,18 @@ func _test_vote() -> void:
 	var config := loaded.value as TmcConfig
 
 	_check(config.vote.enabled, "vote.yml turns voting on")
+
+	# The Gamespice spelling: GS_GAME_VOTE_* wins over the old DOT_ one, and GS_VOTE_* is still the map vote's.
+	OS.set_environment("DOT_GAME_VOTE_EXTEND_SECONDS", "1234")
+	OS.set_environment("GS_GAME_VOTE_EXTEND_SECONDS", "777")
+	OS.set_environment("GS_VOTE_MAX_EXTENDS", "9")
+	var gs_loaded := TmcConfig.load_dir(CFG)
+	OS.unset_environment("DOT_GAME_VOTE_EXTEND_SECONDS")
+	OS.unset_environment("GS_GAME_VOTE_EXTEND_SECONDS")
+	OS.unset_environment("GS_VOTE_MAX_EXTENDS")
+	var gs_config := gs_loaded.value as TmcConfig if gs_loaded.ok else null
+	_check(gs_config != null and is_equal_approx(gs_config.vote.extend_seconds, 777.0), "GS_GAME_VOTE_* wins over the old DOT_GAME_VOTE_*")
+	_check(gs_config != null and gs_config.vote.max_extends != 9, "and GS_VOTE_* does not reach the server vote either")
 	_check(
 		is_equal_approx(config.vote.extend_seconds, 1234.0),
 		"DOT_GAME_VOTE_* overrides vote.yml (%.0f)" % config.vote.extend_seconds,

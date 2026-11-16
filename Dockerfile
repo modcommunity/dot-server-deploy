@@ -97,7 +97,8 @@ WORKDIR /src/dot-server-deploy
 # sources at all the full addon list is wired in, which is the only answer that
 # still works when the set of games is decided at run time.
 ARG TMC_BUILD_GAMES=all
-# DOT_NATIVES=none: no native library (tools/fetch-natives.sh skips; the check below allows it).
+# GS_NATIVES=none (old name DOT_NATIVES): no native library (tools/fetch-natives.sh skips; the check below allows it).
+ARG GS_NATIVES=
 ARG DOT_NATIVES=
 
 RUN ./setup.sh --godot /usr/local/bin/godot --vendor --addons-dir .. \
@@ -107,11 +108,11 @@ RUN ./setup.sh --godot /usr/local/bin/godot --vendor --addons-dir .. \
 # run: tools/fetch-natives.sh, through dot-bootstrap's fetcher found beside the project
 # in this build context. Without it the server runs the GDScript twins -- the same
 # results, slower, paid for by a 32-player server with bots -- and nothing but a log
-# line says so, so the build fails instead. --build-arg DOT_NATIVES=none builds without.
-RUN [ "$DOT_NATIVES" = none ] \
+# line says so, so the build fails instead. --build-arg GS_NATIVES=none builds without.
+RUN [ "${GS_NATIVES:-$DOT_NATIVES}" = none ] \
  || { [ -f addons/dot_sim/dot_sim.gdextension ] && ls addons/dot_sim/bin/linux-*/* >/dev/null 2>&1; } \
  || { echo "dot-sim native library missing from the image (see setup.sh's native libraries step;" \
-           "DOT_NATIVES=none builds without it)" >&2; exit 1; }
+           "GS_NATIVES=none builds without it)" >&2; exit 1; }
 
 # The configuration generated during the build is thrown away. cfg/ is a volume at
 # run time and the RCON password printed into a build log is a password in a build

@@ -14,7 +14,7 @@
 #
 # This is dot-vote's DotVoteRules, so every setting below is documented on the
 # property of the same name and layers the way everything else in this family
-# layers: these defaults < this file < DOT_GAME_VOTE_* < --game-vote-* (see below).
+# layers: these defaults < this file < GS_GAME_VOTE_* < --game-vote-* (see below).
 #
 # ENUMS ARE WRITTEN BY NAME. `method: instant_runoff`, not `method: 2`. A config
 # file full of enum indices is one nobody can read or diff, and renumbering an enum
@@ -26,8 +26,8 @@
 # only vote on the server. With two or more games both votes run at once, each on its
 # own clock and its own ballot.
 #
-# THE ENVIRONMENT AND THE COMMAND LINE use DOT_GAME_VOTE_* and --game-vote-*, not
-# dot-vote's own DOT_VOTE_* and --vote-*. Those belong to the MAP vote inside a game,
+# THE ENVIRONMENT AND THE COMMAND LINE use GS_GAME_VOTE_* and --game-vote-*, not
+# dot-vote's own GS_VOTE_* and --vote-*. Those belong to the MAP vote inside a game,
 # which runs in this same process and reads its own layers; one prefix for both would
 # make `--vote-extend-seconds 900` change two votes at once.
 #

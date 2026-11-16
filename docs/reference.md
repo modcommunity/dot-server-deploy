@@ -217,11 +217,11 @@ The YAML reader is a deliberately small subset and refuses everything else with 
 
 `vote.yml` is the one file that is not a console surface: it is dot-vote's `DotVoteRules`, applied straight onto the resource, so every setting in it is documented on the property of the same name. **Enums are written by name**, so `method: instant_runoff` rather than `method: 2`, because a config file full of enum indices is one nobody can read or diff, and renumbering an enum would silently change how a server counts votes.
 
-`party.yml` and `matchmaking.yml` work the same way one step along: every setting of dot-party's `DotPartyConfig` is accepted with a `party_` prefix, your terms for a party booking are `party_reserve_*`, and every setting of dot-matchmaking's `DotMatchmakingConfig` is `mm_*`. The names are the addons' own, so a setting the addon gains needs no change here. `DOT_PARTY_*` / `--party-*` and `DOT_MM_*` / `--mm-*` override them, like every config in the family.
+`party.yml` and `matchmaking.yml` work the same way one step along: every setting of dot-party's `DotPartyConfig` is accepted with a `party_` prefix, your terms for a party booking are `party_reserve_*`, and every setting of dot-matchmaking's `DotMatchmakingConfig` is `mm_*`. The names are the addons' own, so a setting the addon gains needs no change here. `GS_PARTY_*` / `--party-*` and `GS_MM_*` / `--mm-*` override them, like every config in the family.
 
 `admin_menu.yml` and `loading.yml` are this deployment's own and are described in [The admin menu](#the-admin-menu) and [Loading screens](#loading-screens). Their unknown keys and bad URLs are reported at boot, like everything else's.
 
-`replay.yml` is the same again over dot-replay's `DotReplayConfig` (`replay_ring_seconds`, `replay_keyframe_seconds`, `replay_compression`, …), plus seven switches of this deployment's own: `replay_enabled`, `replay_record` (every match to a file), `replay_clip_on_punish`, `replay_clip_seconds`, `replay_evidence_cooldown_sec`, and `replay_keep_files` / `replay_keep_mib`, which cap each of `data/replays/matches`, `clips` and `evidence` separately so a moderator's manual saves never push evidence off the disk. `DOT_REPLAY_*` / `--replay-*` override them, so `./server -- --replay-ring-seconds 300` keeps five minutes for one tournament.
+`replay.yml` is the same again over dot-replay's `DotReplayConfig` (`replay_ring_seconds`, `replay_keyframe_seconds`, `replay_compression`, …), plus seven switches of this deployment's own: `replay_enabled`, `replay_record` (every match to a file), `replay_clip_on_punish`, `replay_clip_seconds`, `replay_evidence_cooldown_sec`, and `replay_keep_files` / `replay_keep_mib`, which cap each of `data/replays/matches`, `clips` and `evidence` separately so a moderator's manual saves never push evidence off the disk. `GS_REPLAY_*` / `--replay-*` override them, so `./server -- --replay-ring-seconds 300` keeps five minutes for one tournament.
 
 ## ./server
 
@@ -508,9 +508,9 @@ Step 3 is the one that cannot be skipped or widened. An entry without `content_i
 **2. The relay turned on.** `DotChatRelayConfig` is a `DotConfig`, so it layers like everything else here: exported defaults, then `user://chat_relay.json`, then the environment, then argv:
 
 ```bash
-DOT_CHAT_RELAY_ENABLED=1          # carry chat both ways
-DOT_CHAT_RELAY_ALLOW_COMMANDS=1   # let `/something` run as a console command
-DOT_CHAT_RELAY_COMMAND_SOURCE=2   # 2 is RCON; 3, the default, is CHAT
+GS_CHAT_RELAY_ENABLED=1          # carry chat both ways
+GS_CHAT_RELAY_ALLOW_COMMANDS=1   # let `/something` run as a console command
+GS_CHAT_RELAY_COMMAND_SOURCE=2   # 2 is RCON; 3, the default, is CHAT
 ```
 
 `demo.sh` exports all three. **The source is the decision.** At CHAT a relayed command reaches only what a connected player could type, and several games here deliberately withhold that from their map change, because a map change destroys every run in progress, and a records server does not let a player do that by typing. At RCON it reaches what an operator at a remote console reaches, which is what "my site admins are administrators of this server" actually means. It is not a promotion either way: the uid is still resolved from the site author and the permission answer is still this server's own files.

@@ -52,13 +52,14 @@ static func apply(auth_path: String) -> String:
 	var query := DotWeb.query_param("backbone") if DotPlatform.is_web() else ""
 	var url := resolve(
 		FileAccess.get_file_as_string(auth_path),
-		OS.get_environment(ENV_KEY),
+		DotConfig.gs_env(ENV_KEY),
 		OS.get_cmdline_user_args(),
 		query
 	)
 
 	if url != "":
 		OS.set_environment(ENV_KEY, url)
+		OS.set_environment("GS_BROWSER_BACKBONE_URL", url)
 		DotLog.info("tmc.shell", "server browsers list the site from client/auth.json", {"site": url})
 
 	return url

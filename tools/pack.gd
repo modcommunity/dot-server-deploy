@@ -402,11 +402,11 @@ static func derive_requires(source: String, out_path: String, pins: Dictionary =
 
 
 ## The addon levels at the commits addons.lock pins, which is what the shell this box ships has: dot-core's [method DotAddonApi.pinned_levels] reads each addon folder at the locked ref.
-## The repositories are looked for in DOT_REPOS_ROOT, beside this project, then in TMC_REPOS_DIR and ~/godot; a root fills only the addons the earlier ones could not read. An addon none could read is left out, so a floor on it is judged against the linked build.
+## The repositories are looked for in GS_REPOS_ROOT (old name DOT_REPOS_ROOT), beside this project, then in TMC_REPOS_DIR and ~/godot; a root fills only the addons the earlier ones could not read. An addon none could read is left out, so a floor on it is judged against the linked build.
 static func pinned_levels() -> Dictionary:
 	var here := ProjectSettings.globalize_path("res://")
 	var lock := here.path_join("addons.lock")
-	var roots: Array[String] = [OS.get_environment("DOT_REPOS_ROOT"), here.path_join("..").simplify_path(), OS.get_environment("TMC_REPOS_DIR"), OS.get_environment("HOME").path_join("godot")]
+	var roots: Array[String] = [DotConfig.gs_env("DOT_REPOS_ROOT"), here.path_join("..").simplify_path(), OS.get_environment("TMC_REPOS_DIR"), OS.get_environment("HOME").path_join("godot")]
 	var out := {}
 	for root in roots:
 		if root == "":

@@ -315,10 +315,10 @@ usage() {
 
   Four layers, later winning:
 
-    exported defaults  <  cfg/*.yml  <  DOT_SERVER_*  <  command line
+    exported defaults  <  cfg/*.yml  <  GS_SERVER_*  <  command line
 
-  DOT_SERVER_* is dot-server's own environment layer and sits in the RIGHT place
-  -- above the file, below an argument. `DOT_SERVER_SV_MAXPLAYERS=32` is a nudge
+  GS_SERVER_* is dot-server's own environment layer and sits in the RIGHT place
+  -- above the file, below an argument. `GS_SERVER_SV_MAXPLAYERS=32` is a nudge
   a `--max-players` still beats. It is the one to reach for on a live box.
 
   TMC_* is not a fifth layer, and never beats a file

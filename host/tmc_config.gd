@@ -271,7 +271,7 @@ var users: Dictionary = {}
 var auth: Dictionary = {}
 
 ## `vote.yml`, as a real [DotVoteRules]. Applied through [method DotConfig.apply_dictionary] rather than key by key, because that reads an enum by name and coerces every scalar through the property's type,
-## the same path `DOT_GAME_VOTE_*` takes (see [method _layer_vote_overrides]); a second table would be a second place for `method: instant_runoff` to mean something else.
+## the same path `GS_GAME_VOTE_*` takes (see [method _layer_vote_overrides]); a second table would be a second place for `method: instant_runoff` to mean something else.
 var vote: DotVoteRules = DotVoteRules.new()
 
 ## `admin_menu.yml`, as parsed. Handed to [TmcAdminMenu], which is the only thing that
@@ -462,8 +462,8 @@ func _warn_legacy_keys(path: String, tree: Dictionary) -> void:
 		path, DotCfgLegacy.REMOVE_AFTER, ", ".join(moved)], {"path": path})
 
 
-## The environment and the command line over `vote.yml`, under DOT_GAME_VOTE_* and --game-vote-*, not dot-vote's own prefixes:
-## a game loaded from `content/` runs its own MAP vote in this process under `DOT_VOTE_*`, and one prefix for both would make a flag change two votes. The server-level vote's commands are `game_*` for the same reason.
+## The environment and the command line over `vote.yml`, under GS_GAME_VOTE_* and --game-vote-*, not dot-vote's own prefixes:
+## a game loaded from `content/` runs its own MAP vote in this process under `GS_VOTE_*`, and one prefix for both would make a flag change two votes. The server-level vote's commands are `game_*` for the same reason.
 func _layer_vote_overrides() -> void:
 	var before := vote.unknown_keys.size()
 
@@ -474,7 +474,7 @@ func _layer_vote_overrides() -> void:
 		unknown.append("--game-vote-: %s" % vote.unknown_keys[i])
 
 
-## The environment and the command line over `party.yml` and `matchmaking.yml`, under the addons' own prefixes (`DOT_PARTY_*` / `--party-*`, `DOT_MM_*` / `--mm-*`):
+## The environment and the command line over `party.yml` and `matchmaking.yml`, under the addons' own prefixes (`GS_PARTY_*` / `--party-*`, `GS_MM_*` / `--mm-*`):
 ## unlike the vote there is one of each in the process, so no second one for a prefix to collide with.
 func _layer_party_overrides() -> void:
 	for target in [party, matchmaking]:
@@ -486,7 +486,7 @@ func _layer_party_overrides() -> void:
 			unknown.append("%s: %s" % [cfg.cli_prefix(), cfg.unknown_keys[i]])
 
 
-## The environment and the command line over `replay.yml`: dot-replay's own `DOT_REPLAY_*` and `--replay-*`, as with the party (one recorder per process);
+## The environment and the command line over `replay.yml`: dot-replay's own `GS_REPLAY_*` and `--replay-*`, as with the party (one recorder per process);
 ## `--replay-ring-seconds 300` for one tournament is the case the prefix exists for. A layered value the addon refuses is caught when [TmcReplay] validates again: the ring is not built, said at ERROR.
 func _layer_replay_overrides() -> void:
 	var before := replay.unknown_keys.size()

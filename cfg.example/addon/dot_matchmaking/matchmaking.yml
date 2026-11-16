@@ -13,7 +13,7 @@ mm_enabled: false
 mm_region: local
 
 # Every setting of the addon's DotMatchmakingConfig is accepted with an `mm_` prefix, and
-# DOT_MM_* / --mm-* override them. Ratings are kept in data/matchmaking/ unless
+# GS_MM_* / --mm-* override them. Ratings are kept in data/matchmaking/ unless
 # mm_ratings_file names somewhere else.
 mm_pass_interval_sec: 1.0
 mm_leaver_takes_loss: true

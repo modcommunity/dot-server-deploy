@@ -79,10 +79,10 @@ Exit codes: `2` usage, `3` no runtime, `4` no project (`install-games`: addons b
 **Configuration**
 
 - `cfg/` is never overwritten and never tracked; change a default in `cfg.example/`, and remember existing boxes keep their copy. [config](docs/configuration.md#cfg-is-written-by-setup-cfgexample-is-tracked)
-- Layers: defaults < `cfg/*.yml` < `DOT_SERVER_*` < argv. `TMC_*` become arguments, so they outrank the YAML. [config](docs/configuration.md#layers)
+- Layers: defaults < `cfg/*.yml` < `GS_SERVER_*` < argv. `TMC_*` become arguments, so they outrank the YAML. [config](docs/configuration.md#layers)
 - `cfg/*.yml` reaches dot-server as console lines; a setting whose cvar does not exist yet at that point is a config field the host applies. [config](docs/configuration.md#the-configuration-is-a-surface-not-a-second-parser)
 - `TmcYaml` reads `on`/`off` as bools; a word-valued setting must accept a bool. [config](docs/configuration.md#the-configuration-is-a-surface-not-a-second-parser)
-- The game vote's prefix is `DOT_GAME_VOTE_*`, never `DOT_VOTE_*` (the loaded game's map vote). [config](docs/configuration.md#prefixes-that-keep-two-copies-of-an-addon-apart)
+- The game vote's prefix is `GS_GAME_VOTE_*`, never `GS_VOTE_*` (the loaded game's map vote). [config](docs/configuration.md#prefixes-that-keep-two-copies-of-an-addon-apart)
 - `cfg/server/content/overrides.yml` refuses identity keys and unknown keys by name; unpinned maps resolve per start into `data/content-maps.json`, never per join. [config](docs/configuration.md#a-server-owners-settings-per-game-cfgservercontentoverridesyml)
 - Admin roles grant nothing to an unauthenticated session, by design. [config](docs/configuration.md#roles-in-flags-out)
 

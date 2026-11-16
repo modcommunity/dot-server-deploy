@@ -15,10 +15,12 @@ So `cfg.example/` is the only copy. `cfg/` is gitignored, written file by file o
 ## Layers
 
 ```
-exported defaults  <  cfg/*.yml  <  DOT_SERVER_* (and each addon's DOT_* prefix)  <  command line
+exported defaults  <  cfg/*.yml  <  GS_SERVER_* (and each addon's GS_<ADDON>_ prefix)  <  command line
 ```
 
-**`TMC_*` is not a fifth layer.** Each `TMC_*` variable becomes the matching launcher ARGUMENT, so it outranks the YAML. That is for a container or a panel with no `cfg/` to edit; `DOT_SERVER_*` is the nudge a `--` argument still beats. `./server --help` has the table. Secrets are refused from argv and the environment (`--rcon-password` is rejected outright).
+**`TMC_*` is not a fifth layer.** Each `TMC_*` variable becomes the matching launcher ARGUMENT, so it outranks the YAML. That is for a container or a panel with no `cfg/` to edit; `GS_SERVER_*` is the nudge a `--` argument still beats. `./server --help` has the table. Secrets are refused from argv and the environment (`--rcon-password` is rejected outright).
+
+**Environment names are `GS_*`.** Every `DOT_X` variable is now read as `GS_X` first (`DotConfig.gs_env`, API 37); the old `DOT_X` name still works and logs one WARN line per name (`gs.config`), `GS_QUIET_DEPRECATION=1` silences it in the shell tools. The shell tools (`tools/gs-env.sh`) and the PowerShell scripts do the same. `deploy/env.example` shows the new names. The old names go when 0.2 does.
 
 ## The configuration is a surface, not a second parser
 
@@ -32,8 +34,8 @@ exported defaults  <  cfg/*.yml  <  DOT_SERVER_* (and each addon's DOT_* prefix)
 
 ## Prefixes that keep two copies of an addon apart
 
-- `vote.yml` is the GAME vote's `DotVoteRules` and layers `DOT_GAME_VOTE_*` / `--game-vote-*`, **not `DOT_VOTE_*`**, which is the prefix of the MAP vote inside the loaded game in the same process. One prefix for both would make one flag change two votes. `TmcConfig._layer_vote_overrides`; selftest asserts the plain prefix does not reach it.
-- `party.yml` and `matchmaking.yml` are **by prefix, not by table**: `party_<prop>` lands on `DotPartyConfig`, `party_reserve_<prop>` on `DotPartyReservePolicy`, `mm_<prop>` on `DotMatchmakingConfig`, so a setting the addon gains needs no change here. Plain `Resource`s are coerced through the property's own type by `TmcConfig._set_on_resource`, and enums are read by name. `DOT_PARTY_*` / `DOT_MM_*` layer on top, because there is only one of each in the process.
+- `vote.yml` is the GAME vote's `DotVoteRules` and layers `GS_GAME_VOTE_*` / `--game-vote-*`, **not `GS_VOTE_*`**, which is the prefix of the MAP vote inside the loaded game in the same process. One prefix for both would make one flag change two votes. `TmcConfig._layer_vote_overrides`; selftest asserts the plain prefix does not reach it.
+- `party.yml` and `matchmaking.yml` are **by prefix, not by table**: `party_<prop>` lands on `DotPartyConfig`, `party_reserve_<prop>` on `DotPartyReservePolicy`, `mm_<prop>` on `DotMatchmakingConfig`, so a setting the addon gains needs no change here. Plain `Resource`s are coerced through the property's own type by `TmcConfig._set_on_resource`, and enums are read by name. `GS_PARTY_*` / `GS_MM_*` layer on top, because there is only one of each in the process.
 - `replay.yml` is the same over `DotReplayConfig` plus this deployment's own switches.
 - `bot_record.yml` is the demonstration recorder: `bot_record` and `bot_record_<property>` over dot-bot-record's `DotBotDemoConfig`, registered as the `bot_record_config` service for the game that records; the rules text is in the template.
 - `radio.yml` is a plain table of `radio_*` keys (`TmcConfig.RADIO_KEYS`) read by `TmcRadio`, because dot-radio has no config resource of its own; it is off by default and needs the addon. See [operator-services](operator-services.md#the-radio-optional).

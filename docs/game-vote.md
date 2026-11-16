@@ -6,7 +6,7 @@
 !game_nominate g2gfast   !game_rtv   !game_vote 2      !game_timeleft   !game_next
 ```
 
-The engine is dot-vote, and the whole policy is `vote.yml`, a `DotVoteRules` layered `defaults < vote.yml < DOT_GAME_VOTE_* < --game-vote-*` ([configuration.md](configuration.md#prefixes-that-keep-two-copies-of-an-addon-apart)). `host/tmc_vote.gd` is only the wiring: who counts as a player and an admin, and where announcements go.
+The engine is dot-vote, and the whole policy is `vote.yml`, a `DotVoteRules` layered `defaults < vote.yml < GS_GAME_VOTE_* < --game-vote-*` ([configuration.md](configuration.md#prefixes-that-keep-two-copies-of-an-addon-apart)). `host/tmc_vote.gd` is only the wiring: who counts as a player and an admin, and where announcements go.
 
 ## The `game_` prefix is load-bearing
 

@@ -12,16 +12,17 @@
 # that function (and the helpers it needs) out of bootstrap.sh at run time, the way
 # dot-bootstrap's own tests do, and supplies only what is specific to here: the pin comes
 # from addons.lock instead of a game's .gitignore. bootstrap.sh is looked for in
-# $DOT_BOOTSTRAP, beside this checkout, and in addons/.repos/; a server box that has none
+# $GS_BOOTSTRAP (or the old $DOT_BOOTSTRAP), beside this checkout, and in addons/.repos/; a server box that has none
 # clones it shallow into addons/.repos/ (unless --no-clone).
 #
 # [b]export-web runs it for web-wasm32 only[/b]: dot-sim's side module, which the Web
 # preset's dlink template loads (server.in web_native_mode). A .gdextension in a web build
 # exported with the plain template stops every script, so export-web picks the template
 # from what this installed, and refuses a pck whose .gdextension has no side module.
-# DOT_NATIVES=none skips everything; a platform with no zip warns and the GDScript twins run.
+# GS_NATIVES=none (or the old DOT_NATIVES=none) skips everything; a platform with no zip warns and the GDScript twins run.
 set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+. "$ROOT/tools/gs-env.sh"; gs_env_alias BOOTSTRAP NATIVES NATIVES_BASE
 NATIVE_REPOS="dot-sim"          # addons that publish a platform zip
 PLATFORMS=(); CLONE=1
 while [ $# -gt 0 ]; do
@@ -31,11 +32,11 @@ while [ $# -gt 0 ]; do
         *) echo "unknown argument $1" >&2; exit 2 ;;
     esac
 done
-[ "${DOT_NATIVES:-}" = none ] && exit 0
+[ "${GS_NATIVES:-${DOT_NATIVES:-}}" = none ] && exit 0
 [ -n "${TMC_NO_CLONE:-}" ] && CLONE=0
 
 BOOT=""
-for c in "${DOT_BOOTSTRAP:-}" "$ROOT/../dot-bootstrap" "$ROOT/addons/.repos/dot-bootstrap"; do
+for c in "${GS_BOOTSTRAP:-${DOT_BOOTSTRAP:-}}" "$ROOT/../dot-bootstrap" "$ROOT/addons/.repos/dot-bootstrap"; do
     [ -n "$c" ] && [ -f "$c/bootstrap.sh" ] && { BOOT="$c/bootstrap.sh"; break; }
 done
 if [ -z "$BOOT" ] && [ "$CLONE" = 1 ] && [ -d "$ROOT/addons" ]; then

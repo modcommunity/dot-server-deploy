@@ -13,7 +13,7 @@ const pw = (await import(process.env.PLAYWRIGHT_CORE ?? '/home/christian/stack/w
 const { chromium } = pw;
 
 const loader = fs.readFileSync(new URL('../web/tmc-loader.js', import.meta.url), 'utf8');
-const dotWebPath = process.env.DOT_WEB_JS
+const dotWebPath = (process.env.GS_WEB_JS ?? process.env.DOT_WEB_JS)
   ?? new URL('../../dot-core/addons/dot_core/web/dot_web.js', import.meta.url);
 const guardJs = fs.readFileSync(dotWebPath, 'utf8');
 if (!guardJs.includes('__dotTabGuard')) { console.log('FAIL no __dotTabGuard in ' + dotWebPath); process.exit(1); }
