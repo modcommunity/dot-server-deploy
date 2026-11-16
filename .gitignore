@@ -104,3 +104,4 @@ node_modules/
 /screenshots/
 /.boot_check/
 /override.cfg
+cfg.suites-aside.*/
