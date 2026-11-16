@@ -50,7 +50,7 @@ exempt: [dm_old_map]
 maps: [dm_new_map]
 ```
 
-**Change one game only.** Put the file under `cfg/server/game/<game>/` instead, for example `cfg/server/game/game-arena/maps.yml`. Other games on the box are unaffected.
+**Change one game only.** Put the file under `cfg/server/game/<game>/` instead, for example `cfg/server/game/game-fatal-contact/maps.yml`. Other games on the box are unaffected.
 
 **Choose what gets downloaded.** `cfg/content/addons.yml` and `cfg/content/games.yml` list the addon repositories and the games or packs this server installs (the old `cfg/addons.yml` and `cfg/games.yml` work until 2026-12-31 with one warning). Per-game overrides go in `cfg/server/content/overrides.yml` (the old `cfg/content.yml` is read the same way), see [content-lists.md](content-lists.md). Most servers need no rotation file: with none, a game rotates through its installed maps sorted by name, and several games rotate in the order of `games.yml`. To pick maps and the order, add them to the game's entry:
 

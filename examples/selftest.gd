@@ -57,6 +57,7 @@ func _run() -> void:
 	_test_bot_record()
 	await _test_replay()
 	await _test_friends()
+	_test_game_cfg_dirs()
 	_test_radio()
 	_test_addon_announce()
 
@@ -935,6 +936,113 @@ func _test_addon_announce() -> void:
 	_check(TmcAddonGroups.wanted_groups(server, {"arena_weapons": {}, "zee_weapons": {}}, {"groups": ["weapon-knife"]}) == PackedStringArray(["weapon-awp", "weapon-knife", "weapon-rifle", "weapon-x"]), "never narrower than the running overlay")
 	_check(TmcAddonGroups.wanted_groups(server, {"arena_weapons": {}}, {"addons": {}}) == PackedStringArray(["*"]), "a plan from before groups took everything, and keeps it")
 	_check(TmcAddonGroups.covers(PackedStringArray(["a", "b"]), PackedStringArray(["b"])) and not TmcAddonGroups.covers(PackedStringArray(["a"]), PackedStringArray(["a", "b"])) and not TmcAddonGroups.covers(PackedStringArray(["a"]), PackedStringArray(["*"])) and TmcAddonGroups.covers(PackedStringArray(["*"]), PackedStringArray(["z"])), "an overlay covers a server only with every group it needs")
+	_done()
+
+
+## `cfg/game/<game>/`: the current id, the migration from a retired one, and a base file for every game.
+func _test_game_cfg_dirs() -> void:
+	_section("cfg/game/<game>/ is the game's current id; every game gets a base config")
+	var root := ProjectSettings.globalize_path("user://selftest_game_cfg")
+	DotPaths.remove_tree(root)
+
+	# Every game the build carries.
+	var scanned := TmcContent.scan("res://content")
+	var content: TmcContent = scanned.value if scanned.ok else null
+
+	if not _check(content != null and not content.games.is_empty(), "the content index reads"):
+		_done()
+		return
+
+	var names := {}
+
+	for descriptor in content.games:
+		names[TmcGameConfig.cfg_id(descriptor)] = descriptor.game_id
+
+	_check(names.has("game-fatal-contact") and not names.has("game-arena") and not names.has("fatalcontact"),
+		"Fatal Contact's config directory is game-fatal-contact", str(names.keys()))
+	_check(names.size() == content.games.size(), "no two games share a config directory", "%d dirs for %d games" % [names.size(), content.games.size()])
+
+	var written := TmcGameConfig.write_base_configs(root, content)
+	var missing := PackedStringArray()
+
+	for descriptor in content.games:
+		var name := TmcGameConfig.cfg_id(descriptor)
+		var path := "%s/game/%s/server.yml" % [root, name]
+
+		if not FileAccess.file_exists(path):
+			missing.append(name)
+		elif FileAccess.file_exists(path):
+			var parsed := TmcYaml.parse_file(path)
+
+			if not parsed.ok:
+				missing.append(name + " (unreadable)")
+
+	_check(missing.is_empty(), "every game (%d) gets a readable base cfg/game/<id>/server.yml on a cfg/ with none" % content.games.size(), str(missing))
+	_check(written.size() == content.games.size(), "first boot writes one for each (%d)" % written.size(), str(written.size()))
+
+	var text := FileAccess.get_file_as_string("%s/game/game-fatal-contact/server.yml" % root)
+	_check(text.contains("# cvars:") and text.contains("arena_scorelimit") and not text.contains("\n  arena_"),
+		"a base config lists the game's cvars, all commented out")
+	var live := PackedStringArray()
+
+	for line in text.split("\n"):
+		if line.strip_edges() != "" and not line.begins_with("#"):
+			live.append(line)
+
+	_check(live.is_empty(), "and holds no live setting that could pin a default", str(live))
+
+	# Never overwritten.
+	var marker := FileAccess.open("%s/game/game-fatal-contact/server.yml" % root, FileAccess.WRITE)
+	marker.store_string("max_players: 7\n")
+	marker.close()
+	_check(TmcGameConfig.write_base_configs(root, content).is_empty()
+		and FileAccess.get_file_as_string("%s/game/game-fatal-contact/server.yml" % root) == "max_players: 7\n",
+		"a second run writes nothing and keeps an owner's file")
+
+	# A retired directory moves, whole, and is still the game's settings.
+	var old := ProjectSettings.globalize_path("user://selftest_game_cfg_old")
+	DotPaths.remove_tree(old)
+	DirAccess.make_dir_recursive_absolute(old + "/game/game-arena")
+	DirAccess.make_dir_recursive_absolute(old + "/server/game/game-final-contact/sub")
+	DirAccess.make_dir_recursive_absolute(old + "/game/game-fatal-contact")
+	_put(old + "/game/game-arena/server.yml", "max_players: 9\n")
+	_put(old + "/game/game-arena/extra.yml", "kept: 1\n")
+	_put(old + "/game/game-fatal-contact/server.yml", "max_players: 5\n")
+	_put(old + "/server/game/game-final-contact/server.yml", "max_players: 11\n")
+	_put(old + "/server/game/game-final-contact/sub/a.yml", "a: 1\n")
+	var lines := TmcGameConfig.migrate_retired_dirs(old)
+	_check(lines.size() == 2, "one line per migrated directory", str(lines))
+	_check(not DirAccess.dir_exists_absolute(old + "/game/game-arena")
+		and FileAccess.get_file_as_string(old + "/game/game-fatal-contact/extra.yml") == "kept: 1\n",
+		"a file the current directory lacks is moved into it")
+	_check(FileAccess.get_file_as_string(old + "/game/game-fatal-contact/server.yml") == "max_players: 5\n"
+		and FileAccess.get_file_as_string(old + "/game/game-fatal-contact/server.yml.from-game-arena") == "max_players: 9\n",
+		"a differing file is kept beside it, not lost and not replacing it")
+	_check(FileAccess.get_file_as_string(old + "/server/game/game-fatal-contact/server.yml") == "max_players: 11\n"
+		and FileAccess.file_exists(old + "/server/game/game-fatal-contact/sub/a.yml"),
+		"an operator directory with no successor is renamed whole, subdirectories too")
+	_check(TmcGameConfig.migrate_retired_dirs(old).is_empty(), "a second run has nothing to do")
+
+	# Until migrated, the old name still reaches the game.
+	var cvars := TmcGameConfig.new()
+	var fc := content.find("fatalcontact")
+	var legacy := {"game-arena": {"marker": 1}}
+	_check(fc != null and TmcGameConfig.section_in(legacy, fc).get("marker", 0) == 1,
+		"a section still under game-arena applies to Fatal Contact until it is migrated")
+	_check(cvars != null and fc != null and TmcGameConfig.section_in({"game-fatal-contact": {"marker": 2}, "game-arena": {"marker": 1}}, fc).get("marker", 0) == 2,
+		"and the section under the current name wins")
+
+	# The shell migration in tools/cfg_sync.sh names the same directories.
+	var sync := FileAccess.get_file_as_string("res://tools/cfg_sync.sh")
+	var drift := PackedStringArray()
+
+	for retired: String in TmcGameConfig.RETIRED_DIRS:
+		if not sync.contains("%s:%s" % [retired, TmcGameConfig.RETIRED_DIRS[retired]]):
+			drift.append(retired)
+
+	_check(drift.is_empty(), "tools/cfg_sync.sh renames every retired directory the host does", str(drift))
+	DotPaths.remove_tree(root)
+	DotPaths.remove_tree(old)
 	_done()
 
 

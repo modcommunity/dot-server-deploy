@@ -547,6 +547,11 @@ func _apply_game_config() -> DotResult:
 		return loaded
 
 	var overrides := loaded.value as TmcGameConfig
+
+	# Before the settings are laid over the descriptors, so the file shows the game's own defaults.
+	for written in TmcGameConfig.write_base_configs(_config_dir, content):
+		DotLog.info(CHANNEL, "wrote a base config for a game with none", {"file": "cfg/" + written})
+
 	overrides.apply_all(content)
 
 	for line in overrides.warnings:
