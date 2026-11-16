@@ -12,10 +12,13 @@ extends RefCounted
 ## The organisation's (both its ids), and the game addons published under their author (the weapons packs, natural-disasters).
 ## A shell carries none of those (it is dot-* addons only), so these are what it fetches them under when a server announces them.
 ## `modcommunity/` and `gamemann/arena-weapons` stay for servers that still announce the old ids.
-const DEFAULTS: PackedStringArray = ["gamespice-platform/", "modcommunity/", "gamemann/zee-dot-weapons", "gamemann/zed-dot-weapons", "gamemann/fc-weapons", "gamemann/arena-weapons", "gamemann/natural-disasters"]
+const DEFAULTS: PackedStringArray = ["gamespice-platform/", "modcommunity/", "gamemann/zee-dot-weapons", "gamemann/zed-dot-weapons", "gamemann/fc-weapons", "gamemann/arena-weapons", "gamemann/natural-disasters", "gamemann/dot-trail", "gamemann/dot-radio"]
 
 ## Old repository names a lock or content list may still use, to the current one (`arena_weapons` lives in fc-weapons).
 const PUBLISHED_AS := {"arena-weapons": "fc-weapons"}
+
+## The `dot-*` addons that are their author's, not the organisation's: published as `gamemann/<repo>` (the repository name, `dot-` kept), like the weapons packs.
+const AUTHOR_DOT_ADDONS: PackedStringArray = ["dot-trail", "dot-radio"]
 
 ## The organisation's packs: `dot-<name>` is published as `gamespice-platform/<name>`.
 const ORG := "gamespice-platform"
@@ -132,7 +135,7 @@ static func pack_for(dir: String) -> Dictionary:
 	var lock := lock_repo(dir)
 	var repo := str(PUBLISHED_AS.get(lock, lock))
 
-	if repo.begins_with("dot-"):
+	if repo.begins_with("dot-") and not AUTHOR_DOT_ADDONS.has(repo):
 		var name := repo.trim_prefix("dot-")
 		return {"repo": name, "id": "%s/%s" % [ORG, name], "old_repo": repo, "old_id": "%s/%s" % [OLD_ORG, repo]}
 

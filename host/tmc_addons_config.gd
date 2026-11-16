@@ -22,6 +22,41 @@ var defaults_add: PackedStringArray = PackedStringArray()
 ## `namespaces:`, extra owners (`owner/`) or ids whose packs may replace a shell's addons, as written. The same list belongs in the operator's own shell build ([TmcAddonNamespaces]).
 var namespaces: PackedStringArray = PackedStringArray()
 
+## `owner/repo[@version]` -> `{dir, repo, id, version}` for an entry of `server.yml`'s `addons:` list, or a loud failure.
+## [param namespaces] is [method TmcAddonNamespaces.resolve] of the trusted owners; [param lock_versions] is the lock's `repo -> version`, which an unpinned
+## entry takes. The owner has to be trusted (a creator's code is never installed or announced by name alone) and the repository has to be one this box can name a directory for.
+static func addon_ref(raw: String, namespaces: PackedStringArray, lock_versions: Dictionary = {}) -> DotResult:
+	var parsed := parse_entry(raw)
+
+	if not parsed.ok:
+		return DotResult.fail(DotError.CODE_INVALID, "addons: %s" % parsed.error.message, "an addon is owner/repo or owner/repo@version, e.g. gamemann/dot-trail")
+
+	var ref := TmcGameRef.parse(str(parsed.value))
+	var id := str(ref["id"])
+
+	if not TmcAddonNamespaces.covers(namespaces, id):
+		return DotResult.fail(
+			DotError.CODE_INVALID, "addons: '%s' is not from a trusted owner." % id,
+			"trusted: %s; add the owner under namespaces: in cfg/content/addons.yml (and the same in your shell build)" % ", ".join(namespaces)
+		)
+
+	var repo := id.get_slice("/", 1)
+	var dir := TmcAddonNamespaces.dir_for_id(id)
+	var version := str(ref["version"]).trim_prefix("v")
+
+	if version == "":
+		var lock := TmcAddonNamespaces.lock_repo(dir)
+		version = str(lock_versions.get(lock, "")).trim_prefix("v")
+
+	if version == "":
+		return DotResult.fail(
+			DotError.CODE_INVALID, "addons: %s has no version." % id,
+			"write %s@<version>, or add %s to addons.lock" % [id, TmcAddonNamespaces.lock_repo(dir)]
+		)
+
+	return DotResult.success({"dir": dir, "repo": repo, "id": id, "version": version})
+
+
 ## `overlays:`, `owner/repo@version` addon packs to announce to clients beyond `addons.lock`.
 var overlays: PackedStringArray = PackedStringArray()
 

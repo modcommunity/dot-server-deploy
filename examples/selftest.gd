@@ -11,7 +11,7 @@ const RoundsWithoutMatch := preload("res://examples/fixtures/rounds_without_matc
 
 const Host := preload("res://host/tmc_host.gd")
 
-const CHECKS := 570
+const CHECKS := 580
 
 var _passed := 0
 var _failed := 0
@@ -908,6 +908,21 @@ func _test_addon_announce() -> void:
 	var swapped := Host.merge_overlays(out, games)
 	_check(swapped.size() == 3 and swapped[1]["dir"] == "zee_weapons" and swapped[2]["version"] == "1.4.40", "a game-addon overlay replaces the lock's entry for its dir")
 	_check(not TmcAddonsConfig.new().read({"namespaces": ["*"]}).ok and not TmcAddonsConfig.new().read({"namespaces": ["alice"]}).ok, "a wildcard or a bare name is not a namespace")
+
+	for name in ["dot_trail", "dot_radio"]:
+		var author := TmcAddonNamespaces.pack_for(name)
+		_check(author["id"] == "gamemann/" + name.replace("_", "-") and author["repo"] == name.replace("_", "-") and author["old_id"] == "", "%s is announced under its author, gamemann/, with no alias" % name)
+		_check(TmcAddonNamespaces.covers(TmcAddonNamespaces.DEFAULTS, str(author["id"])) and TmcAddonNamespaces.dir_for_id(str(author["id"])) == name, "the shell takes %s's pack, and its id finds the dir" % name)
+	var spaces0 := TmcAddonNamespaces.DEFAULTS
+	var ref := TmcAddonsConfig.addon_ref("gamemann/dot-trail@v0.1.5", spaces0)
+	_check(ref.ok and ref.value["dir"] == "dot_trail" and ref.value["id"] == "gamemann/dot-trail" and ref.value["version"] == "0.1.5", "addons: gamemann/dot-trail@version resolves to the dir, id and version")
+	_check(TmcAddonsConfig.addon_ref("gamemann/dot-radio", spaces0, {"dot-radio": "v0.1.4"}).value["version"] == "0.1.4", "an addons: entry without a version takes the lock's")
+	_check(not TmcAddonsConfig.addon_ref("gamemann/dot-radio", spaces0).ok, "an addons: entry with no version anywhere is refused")
+	_check(not TmcAddonsConfig.addon_ref("mallory/dot-radio@1.0.0", spaces0).ok, "an addons: entry from an untrusted owner is refused")
+	var listed := Host.addons_from_list(PackedStringArray(["gamemann/dot-trail@0.1.5", "gamemann/dot-radio@0.1.4", "mallory/x@1.0.0", "gamemann/dot-radio"]), spaces0, "", PackedStringArray(["dot_trail"]))
+	_check(listed["entries"].size() == 1 and listed["errors"].size() == 3, "addons_from_list announces the installed trusted ones and reports each of the rest")
+	var hc := TmcConfig.new()
+	_check(hc != null and TmcConfig.HOST_KEYS.has("addons"), "addons is a server.yml host key")
 
 	var spaces := TmcAddonNamespaces.resolve(PackedStringArray(["alice/", "bad entry", "modcommunity/"]))
 	_check(spaces.size() == TmcAddonNamespaces.DEFAULTS.size() + 1 and TmcAddonNamespaces.covers(spaces, "alice/dot-x") and not TmcAddonNamespaces.covers(spaces, "alicia/dot-x"), "operator namespaces extend the defaults; owner prefix needs the slash")

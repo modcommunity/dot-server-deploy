@@ -907,6 +907,16 @@ func _advertise_addons() -> void:
 	else:
 		DotLog.warn(CHANNEL, "addons.yml overlays not announced: %s" % loaded.error.message)
 
+	# server.yml's `addons:` list: installed by setup.sh, announced here at the listed version (the lock's when it names none).
+	var spaces := TmcAddonNamespaces.resolve((loaded.value as TmcAddonsConfig).namespaces if loaded.ok else PackedStringArray())
+	var listed := addons_from_list(config.addons_listed, spaces, FileAccess.get_file_as_string(ADDONS_LOCK), dirs)
+
+	for problem in listed["errors"]:
+		DotLog.error(CHANNEL, "server.yml addons: not announced: %s" % problem)
+		push_error("TMC: server.yml addons: %s" % problem)
+
+	announced = merge_overlays(announced, listed["entries"])
+
 	_addon_announced = announced
 	server.set("addon_set", with_groups(announced, _addon_groups))
 
@@ -987,6 +997,33 @@ func _advertise_addon_groups() -> void:
 	})
 
 
+## The announcement for server.yml's `addons:` entries: `{entries: [{dir, repo, id, version}], errors: [String]}`. An id nothing on this box can install (unknown owner,
+## no version, a directory that is not under addons/) is an error line each, never silently dropped and never guessed at.
+static func addons_from_list(listed: PackedStringArray, namespaces: PackedStringArray, lock_text: String, dirs: PackedStringArray) -> Dictionary:
+	var versions := {}
+
+	for raw in lock_text.split("\n"):
+		var parts := raw.strip_edges().split("\t", false)
+
+		if parts.size() >= 2 and not parts[0].begins_with("#"):
+			versions[parts[0]] = parts[1]
+
+	var entries: Array = []
+	var errors := PackedStringArray()
+
+	for text in listed:
+		var one := TmcAddonsConfig.addon_ref(text, namespaces, versions)
+
+		if not one.ok:
+			errors.append("%s (%s)" % [one.error.message, str(one.error.detail)])
+		elif not dirs.has(str((one.value as Dictionary)["dir"])):
+			errors.append("%s: addons/%s is not installed; run ./setup.sh" % [text, (one.value as Dictionary)["dir"]])
+		else:
+			entries.append(one.value)
+
+	return {"entries": entries, "errors": errors}
+
+
 ## [param base] with [param extra] laid over it by `dir`.
 static func merge_overlays(base: Array, extra: Array) -> Array:
 	var out: Array = []
@@ -1058,7 +1095,7 @@ static func addon_repo(dir: String) -> String:
 ## Whose namespace a repository's packs are published under. setup.sh's `repo_url`: the
 ## `dot-*` addons are the organisation's, everything else (the weapons pack) Christian's.
 static func content_owner(repo: String) -> String:
-	return TmcAddonNamespaces.ORG if repo.begins_with("dot-") else "gamemann"
+	return TmcAddonNamespaces.ORG if repo.begins_with("dot-") and not TmcAddonNamespaces.AUTHOR_DOT_ADDONS.has(repo) else "gamemann"
 
 
 ## Reports `sv_web_build`: the shell build this server's players are pinned to. EMPTY by default, which means the site's newest compatible shell, with no restart needed to move.

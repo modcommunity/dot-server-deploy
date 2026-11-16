@@ -151,7 +151,7 @@ const LEGACY_KEYS := {
 ## Keys that exist and are handled somewhere other than a config object, listed so they are not reported as unknown (a key silently ignored and not reported looks like it took effect).
 ## `net_public_ip` is here, not in [constant BOOT_KEYS], because dot-server should have no such setting: what a server binds to and what a player types differ, and only the second is behind NAT.
 ## The settings this file reads itself, as named in `server.yml`, i.e. the config keys that exist without a console cvar behind them.
-const HOST_KEYS := ["game", "games", "map", "sv_map", "sv_query_app", "sv_web_loader", "sv_web_build", "content_urls", "net_public_ip", "sv_tags", "chat_command_prefixes", "log_router"]
+const HOST_KEYS := ["game", "games", "map", "sv_map", "sv_query_app", "sv_web_loader", "sv_web_build", "content_urls", "addons", "net_public_ip", "sv_tags", "chat_command_prefixes", "log_router"]
 ## The alias file, under `cfg/server/`. Read before every other file so a key in any of them can use an alias.
 const ALIAS_FILE := "alias.yml"
 
@@ -321,6 +321,10 @@ var initial_map: String = ""
 ## A filter, not an installer (`tools/install_games.gd` puts descriptors on disk): the `games` listing, `changelevel`, the vote menu and the boot game all read the scanned set,
 ## so the scan is where it must apply or the other three offer a game this server was told not to run. Empty means everything, not none; an id not on disk is reported, not fatal (the pack may still be downloading).
 var games_allow: PackedStringArray = PackedStringArray()
+
+## `addons:` in server.yml, as written (`owner/repo` or `owner/repo@version`): the addons this server installs and announces by id, the way `games:` names games.
+## Shape and the trusted-owner rule are checked when read; whether the directory is installed is checked by [TmcHost] when it announces.
+var addons_listed: PackedStringArray = PackedStringArray()
 
 ## Where this server fetches content it does not have, in order: `content_urls` in the YAML. Empty means only packs already on disk (`content/`, `dist/`) can be used.
 ## This is how a cloned server gets its maps: `maps/imported/` is gitignored, so a clone has the game and none of its maps, which live on the content origin; the browser client always had a base URL, the server did not.
@@ -1130,6 +1134,25 @@ func _apply_settings(file: String, tree: Dictionary) -> DotResult:
 
 			continue
 
+		if name == "addons":
+			# A list, or one string. Every entry is checked now, against the first-party owners; an owner the operator trusts through `namespaces:` in cfg/content/addons.yml is rechecked by the host, which reads that file.
+			var raw_entries: Array = (value as Array) if value is Array else [value]
+
+			for entry in raw_entries:
+				var text := String(entry).strip_edges()
+
+				if text == "":
+					continue
+
+				var known := TmcAddonsConfig.parse_entry(text)
+
+				if not known.ok:
+					unknown.append("%s: addons: %s" % [file, known.error.message])
+				elif not addons_listed.has(str(known.value)):
+					addons_listed.append(str(known.value))
+
+			continue
+
 		if name == "content_urls":
 			# A list, or one string for the common case of a single origin. Not passed
 			# through as a console line: this is dot-cloud's, and dot-server's console
@@ -1411,6 +1434,8 @@ func describe_lines() -> PackedStringArray:
 	# Same argument a third time: a server offering three of the ten games on its disk is a deliberate choice, and without this line a filtered server looks like an empty content directory.
 	out.append("games    : %s" % (
 		", ".join(games_allow) if not games_allow.is_empty() else "(everything in content/)"))
+	out.append("addons   : %s" % (
+		", ".join(addons_listed) if not addons_listed.is_empty() else "(the lock's)"))
 	out.append("content  : %s" % (
 		", ".join(content_urls) if not content_urls.is_empty() else "(local only)"))
 	out.append("rcon     : %s" % ("on, port %d" % server.effective_rcon_port() if server.rcon_password != "" else "off"))

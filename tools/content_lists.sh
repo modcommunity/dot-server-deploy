@@ -142,3 +142,49 @@ content_game_entries() {
 content_addon_repos() {
     content_list addons "$@" | awk -F'\t' '$1 == "repo" { print $2 }'
 }
+
+# server.yml's `addons:` list: addons installed by id, the way `games:` names games.
+#
+#   content_server_addons [CONFIG_DIR]    repository<TAB>pin, one per entry; nonzero (and a message) on a bad entry
+#
+# An entry is `owner/repo` or `owner/repo@version`. The owner has to be trusted: the first-party owners, the author's
+# exact addon ids (the same list as client/tmc_addon_namespaces.gd DEFAULTS, and a test keeps them equal), or an owner/ or
+# owner/repo under `namespaces:` in cfg/content/addons.yml. `gamespice-platform/<name>` is the repository `dot-<name>`.
+# Nothing is guessed: an id that does not parse or is not trusted fails, so a typo cannot install nothing quietly.
+_cl_trusted_ids="gamemann/zee-dot-weapons gamemann/zed-dot-weapons gamemann/fc-weapons gamemann/arena-weapons gamemann/natural-disasters gamemann/dot-trail gamemann/dot-radio"
+
+content_server_addons() {
+    local cfg="${1:-${CONFIG_DIR:-$CL_ROOT/cfg}}" file="" f entry id pin owner repo trusted ns rc=0
+    for f in "$cfg/server/server.yml" "$cfg/server.yml"; do [ -f "$f" ] && { file="$f"; break; }; done
+    [ -n "$file" ] || return 0
+    ns="$(for f in "$cfg/content/addons.yml" "$cfg/server/content/addons.yml"; do
+        [ -f "$f" ] && awk '/^namespaces:/ { m = 1; v = $0; sub(/^namespaces:[[:space:]]*/, "", v); if (v ~ /^\[/) { gsub(/[\[\],"\047]/, " ", v); print v; m = 0 } ; next } /^[^[:space:]#]/ { m = 0 } m && /^[[:space:]]*-/ { t = $0; sub(/^[[:space:]]*-[[:space:]]*/, "", t); sub(/[[:space:]]*#.*/, "", t); gsub(/["\047]/, "", t); print t }' "$f"
+    done | tr '\n' ' ')"
+    while IFS= read -r entry; do
+        [ -n "$entry" ] || continue
+        id="${entry%%@*}"; pin=""; case "$entry" in *@*) pin="${entry#*@}" ;; esac
+        case "$id" in
+            */*/*|/*|*/|*..*|*[!A-Za-z0-9._/-]*|"") echo "$file: addons: '$entry' is not owner/repo or owner/repo@version" >&2; rc=1; continue ;;
+            */*) ;;
+            *) echo "$file: addons: '$entry' is not owner/repo or owner/repo@version" >&2; rc=1; continue ;;
+        esac
+        case "$pin" in *[!A-Za-z0-9._+-]*) echo "$file: addons: '$entry' has a pin with odd characters" >&2; rc=1; continue ;; esac
+        owner="${id%%/*}"; repo="${id#*/}"; trusted=0
+        case "$owner" in gamespice-platform|modcommunity) trusted=1 ;; esac
+        case " $_cl_trusted_ids $ns " in *" $id "*|*" $owner/ "*) trusted=1 ;; esac
+        if [ "$trusted" -ne 1 ]; then
+            echo "$file: addons: '$id' is not from a trusted owner (first-party, the author's own addons, or one listed under namespaces: in cfg/content/addons.yml)" >&2
+            rc=1; continue
+        fi
+        [ "$owner" = gamespice-platform ] && repo="dot-$repo"
+        printf '%s\t%s\n' "$repo" "$pin"
+    done < <(awk '
+        /^addons:/ { v = $0; sub(/^addons:[[:space:]]*/, "", v); sub(/[[:space:]]*#.*/, "", v)
+            if (v ~ /^\[/) { gsub(/[\[\]"\047]/, "", v); n = split(v, a, ","); for (i = 1; i <= n; i++) { gsub(/^[[:space:]]+|[[:space:]]+$/, "", a[i]); if (a[i] != "") print a[i] }; m = 0 }
+            else if (v != "") { gsub(/["\047]/, "", v); print v; m = 0 }
+            else m = 1
+            next }
+        /^[^[:space:]#]/ { m = 0 }
+        m && /^[[:space:]]*-/ { t = $0; sub(/^[[:space:]]*-[[:space:]]*/, "", t); sub(/[[:space:]]*#.*/, "", t); gsub(/["\047]/, "", t); gsub(/[[:space:]]+$/, "", t); print t }' "$file")
+    return $rc
+}

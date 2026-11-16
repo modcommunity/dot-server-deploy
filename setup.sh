@@ -961,10 +961,13 @@ ADDONS_LOCK="$ROOT/addons.lock"
 
 lock_ref() {
     [ "${TMC_ADDONS_LOCK:-on}" != "off" ] || return 1
-    local pin a
+    local pin a p2
     # Either name of a renamed repository finds its pin (arena-weapons is fc-weapons).
     a="$(repo_alias "$1")" || a="$1"
     pin="$(content_list addons "$ROOT/cfg" 2>/dev/null | awk -F'\t' -v r="$1" -v a="$a" '($2 == r || $2 == a) && $3 != "" { print $3; exit }')"
+    # An `addons:` entry in server.yml that names a version is the operator's word over the shipped list and the lock.
+    p2="$(printf '%s' "${SERVER_ADDON_PINS:-}" | awk -F'\t' -v r="$1" -v a="$a" '($1 == r || $1 == a) && $2 != "" { print $2; exit }')"
+    if [ -n "$p2" ]; then printf '%s\n' "$p2"; return 0; fi
     if [ -n "$pin" ]; then printf '%s\n' "$pin"; return 0; fi
     [ -f "$ADDONS_LOCK" ] || return 1
     awk -v r="$1" -v a="$a" '($1 == r || $1 == a) && $2 != "" { print $2; found = 1; exit } END { exit !found }' \
@@ -1477,6 +1480,22 @@ while IFS= read -r _repo; do
     esac
 done < <(content_addon_repos "$ROOT/cfg") || die "cfg/content/addons.yml: could not be read" 5
 [ ${#ADDONS_ALL[@]} -gt 0 ] || die "cfg/content/addons.yml names no addons" 5
+# server.yml's `addons:` list adds to those (gamemann/dot-trail, gamemann/dot-radio@v0.1.5); a bad or untrusted id stops here, loudly.
+SERVER_ADDON_PINS=""
+SERVER_ADDON_DIRS=()
+_sa_out="$(content_server_addons "$ROOT/cfg")" || die "cfg/server/server.yml: addons: has an entry that cannot be installed (above)" 5
+while IFS=$'\t' read -r _repo _pin; do
+    [ -n "$_repo" ] || continue
+    case "$_repo" in
+        zee-dot-weapons) _dir=zee_weapons ;;
+        zed-dot-weapons) _dir=zed_weapons ;;
+        fc-weapons|arena-weapons) _dir=arena_weapons ;;
+        *) _dir="${_repo//-/_}" ;;
+    esac
+    case " ${ADDONS_ALL[*]} " in *" $_dir "*) ;; *) ADDONS_ALL+=("$_dir") ;; esac
+    SERVER_ADDON_DIRS+=("$_dir")
+    [ -z "$_pin" ] || SERVER_ADDON_PINS="$SERVER_ADDON_PINS$_repo"$'\t'"$_pin"$'\n'
+done <<< "$_sa_out"
 
 # What THIS project's own scripts name, whatever games it carries.
 #
@@ -1584,6 +1603,11 @@ if [ ${#DROPPED_GAMES[@]} -gt 0 ] && [ "${PUBLISHED_GAMES:-0}" -ne 1 ]; then
 else
     ADDONS=("${ADDONS_ALL[@]}")
 fi
+
+# What server.yml's `addons:` names is installed whatever the games declare (a game never names the trail or the radio; the operator does).
+for _dir in "${SERVER_ADDON_DIRS[@]}"; do
+    case " ${ADDONS[*]} " in *" $_dir "*) ;; *) ADDONS+=("$_dir") ;; esac
+done
 
 # This project's own clones, and the default home of every addon.
 #
