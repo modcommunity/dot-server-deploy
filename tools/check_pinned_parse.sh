@@ -26,7 +26,11 @@ for g in "${games[@]}"; do
         repo="$(basename "$(dirname "$(dirname "$(readlink -f "$l")")")")"
         ref="$(git -C "$SIB/$repo" tag -l 'v[0-9]*' --sort=-v:refname 2>/dev/null | head -1)"
         if [ -z "$ref" ]; then ref=HEAD; echo "WARN $g: $repo has no v* tag, using HEAD"; fi
-        if [ -d "$SIB/$repo/.git" ] && git -C "$SIB/$repo" archive "$ref" "addons/$d" 2>/dev/null | tar -x -C "$p"; then
+        if [ -d "$SIB/$repo/.git" ] && [ -z "$(git -C "$SIB/$repo" ls-tree "$ref" "addons/$d" 2>/dev/null)" ] &&
+           git -C "$SIB/$repo" check-ignore -q "addons/$d" && cp -a "$SIB/$repo/addons/$d" "$p/addons/$d"; then
+            # In no tag: a git-ignored download (godot-sqlite, the GDExtension binary dot-sql fetches). Copy it.
+            extra="$extra $repo:$d(ignored)"
+        elif [ -d "$SIB/$repo/.git" ] && git -C "$SIB/$repo" archive "$ref" "addons/$d" 2>/dev/null | tar -x -C "$p"; then
             extra="$extra $repo@$ref"
         else
             echo "FAIL $g: needs $repo ($d) which is not available at $ref"; fails=$((fails+1)); continue 2
