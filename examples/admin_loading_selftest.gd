@@ -2,7 +2,7 @@ extends Node
 
 ## The admin menu and the loading screen, both halves, without a server.
 
-const CHECKS := 219
+const CHECKS := 224
 
 var _passed := 0
 var _failed := 0
@@ -918,9 +918,14 @@ func _test_loading_client() -> void:
 	screen.begin(TmcLoadingScreen.REASON_GAME, "g2gfast", "Surf")
 	_check(not screen.is_showing(), "nothing is shown before a game has been played (the first connect)")
 
+	var covers := []
+	screen.cover_changed.connect(func(up: bool) -> void: covers.append(up))
 	in_game[0] = true
 	screen.begin(TmcLoadingScreen.REASON_GAME, "g2gfast", "Surf")
 	_check(screen.is_showing(), "a game change shows it at once")
+	_check(covers == [true], "and says the cover went up, so the shell can fit a phone's window round it", str(covers))
+	var block := screen.fit_card()
+	_check(block.x > 0.0 and block.y > 0.0 and block.y < 720.0, "its words and bar are what a window is fitted round", str(block))
 	var entry := screen.current_entry()
 	_check(entry["images"] == ["http://127.0.0.1:9/surf.jpg"] and entry["music"] == ["http://127.0.0.1:9/t.ogg"] and entry["title"] == "My Server",
 		"the game's picture, with the default's music and title falling through", str(entry))
@@ -932,6 +937,7 @@ func _test_loading_client() -> void:
 
 	screen.end(TmcLoadingScreen.REASON_GAME)
 	_check(not screen.is_showing(), "and goes when the game has spawned")
+	_check(covers == [true, false], "saying so, so the shell hands the window back to the game", str(covers))
 	_check(screen.current_entry()["images"] == ["http://127.0.0.1:9/surf.jpg"],
 		"the map hint is forgotten once the change it was for is over")
 
@@ -1139,6 +1145,20 @@ func _test_shell_style() -> void:
 		"down and up walk name, server and Connect in order")
 	_check(clear.focus_mode == Control.FOCUS_ALL and clear.focus_neighbor_top != NodePath(),
 		"and reach the footer's Clear downloaded content")
+	# The window is fitted round the menu's card, else the loading cover's words, else handed back.
+	var cover := TmcLoadingScreen.new()
+	cover.in_game_fn = func() -> bool: return true
+	add_child(cover)
+	shell.set("loading", cover)
+	cover.begin(TmcLoadingScreen.REASON_GAME, "g", "Game")
+	menu.visible = false
+	var fitted: Vector2 = shell.call("_fit_card")
+	_check(fitted != Vector2.ZERO and fitted == cover.fit_card(), "with the menu down, a portrait phone is fitted round the loading cover", str(fitted))
+	cover.end(TmcLoadingScreen.REASON_GAME)
+	_check(shell.call("_fit_card") == Vector2.ZERO, "and handed back when the cover lifts for the game")
+	shell.set("loading", null)
+	cover.free()
+	menu.visible = true
 	# Deferred, after the menu's own deferred focus and fit calls, which hold the shell.
 	shell.call_deferred("free")
 

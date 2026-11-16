@@ -13,6 +13,10 @@ const VERSION := 1
 ## Under the admin menu (30) and the notices (20), over the game.
 const LAYER := 15
 
+## The cover went up (true) or came down (false). The shell fits a phone's window around it
+## while it is up and hands the window back as it comes down, when the game takes over.
+signal cover_changed(up: bool)
+
 const MAX_IMAGE_BYTES := 4 * 1024 * 1024
 const MAX_AUDIO_BYTES := 12 * 1024 * 1024
 const MAX_URL := 512
@@ -113,6 +117,8 @@ var _step: Dictionary = {}
 var last_refusal := ""
 
 var _root: Control = null
+## The words and bar along the bottom: what a phone's window is fitted around (see [method fit_card]).
+var _block: MarginContainer = null
 
 ## The corner line naming the shell build, or null for an unstamped run.
 var _version: Label = null
@@ -263,6 +269,11 @@ func is_showing() -> bool:
 	return _visible
 
 
+## The smallest box, in canvas pixels, the screen's words and bar need; zero before it is built.
+func fit_card() -> Vector2:
+	return _block.get_combined_minimum_size() if _block != null else Vector2.ZERO
+
+
 ## Whether a fetch or sync that starts while a game is live may put the blocking cover over it.
 ## It may not in a solo game, nor for a late sync of suggested packs: the game covers its own
 ## map changes with its load gate, and the player must never be walled off from a match that
@@ -389,6 +400,7 @@ func _show() -> void:
 	if _visible:
 		return
 	_visible = true
+	cover_changed.emit(true)
 	_shown_at = _now()
 	_shown_msec = Time.get_ticks_msec()
 	_last_activity = _shown_at
@@ -410,6 +422,7 @@ func _hide(finished: bool) -> void:
 	if not _visible:
 		return
 	_visible = false
+	cover_changed.emit(false)
 	var shown_ms := Time.get_ticks_msec() - _shown_msec
 	DotLog.info(CHANNEL, "[TMC] cover down: %d ms" % shown_ms, {
 		"ms": shown_ms, "finished": finished, "status": _status.text if _status != null else ""})
@@ -954,6 +967,7 @@ func _build_view() -> void:
 	bottom.add_theme_constant_override("margin_bottom", 32)
 	bottom.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_root.add_child(bottom)
+	_block = bottom
 
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 6)

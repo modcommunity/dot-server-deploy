@@ -240,6 +240,8 @@ func _ready() -> void:
 	loading.in_game_fn = func() -> bool:
 		return _joining or (_has_spawned and _menu != null and not _menu.visible)
 	add_child(loading)
+	# A portrait phone sees the cover fitted, not letterboxed; it is handed back as the game takes over.
+	loading.cover_changed.connect(func(_up: bool) -> void: _fit_menu())
 
 	radio_link = TmcRadioLink.new()
 	radio_link.name = "RadioLink"
@@ -1076,17 +1078,18 @@ func _chain_focus(controls: Array) -> void:
 			here.focus_next = here.focus_neighbor_bottom
 
 
-## While the menu shows, lets the window grow its canvas to the screen's shape and scales
-## the canvas so the card reads at a phone's size ([method TmcShellStyle.fit_factor]). Put
-## back as the project had it the moment the menu hides, so a game never runs under it.
-## Off with [member menu_fit] (a suite, or a build that wants the letterbox).
+## While the menu or the loading cover shows, lets the window grow its canvas to the screen's shape and
+## scales the canvas so the card reads at a phone's size ([method TmcShellStyle.fit_factor]). Put back
+## as the project had it the moment both are down: a game starting under the cover sees the change only
+## as a resize. Off with [member menu_fit] (a suite, or a build that wants the letterbox).
 func _fit_menu() -> void:
 	if _menu == null or not is_inside_tree():
 		return
 	var window := get_window()
 	if window == null:
 		return
-	if not menu_fit or not _menu.visible or _menu_card == null:
+	var card := _fit_card()
+	if not menu_fit or card == Vector2.ZERO:
 		if not _fit_saved.is_empty():
 			# Cleared before restoring: setting the aspect emits size_changed, which calls
 			# this again re-entrantly (a frame caught the second call reading an empty dict).
@@ -1103,13 +1106,21 @@ func _fit_menu() -> void:
 		base = Vector2(
 			float(ProjectSettings.get_setting("display/window/size/viewport_width", 1280)),
 			float(ProjectSettings.get_setting("display/window/size/viewport_height", 720)))
-	var card := _menu_card.get_combined_minimum_size()
 	var factor := TmcShellStyle.fit_factor(
 		Vector2(window.size), DisplayServer.screen_get_scale(window.current_screen),
 		base, card, menu_fit_margin, menu_text_scale)
 	var scale := factor * float(_fit_saved["factor"])
 	window.content_scale_aspect = Window.CONTENT_SCALE_ASPECT_EXPAND
 	window.content_scale_factor = scale
+
+
+## What [method _fit_menu] fits around: the menu's card over the cover's words; zero when neither shows.
+func _fit_card() -> Vector2:
+	if _menu.visible and _menu_card != null:
+		return _menu_card.get_combined_minimum_size()
+	if loading != null and loading.is_showing():
+		return loading.fit_card()
+	return Vector2.ZERO
 
 
 ## Puts the menu into or out of "something is happening" state. One place, because every way a connection ends must undo the same two things, and a Connect button left disabled is a dead end.
