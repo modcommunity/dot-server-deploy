@@ -11,7 +11,7 @@ const RoundsWithoutMatch := preload("res://examples/fixtures/rounds_without_matc
 
 const Host := preload("res://host/tmc_host.gd")
 
-const CHECKS := 580
+const CHECKS := 588
 
 var _passed := 0
 var _failed := 0
@@ -291,6 +291,21 @@ func _test_aliases() -> void:
 	_check(cfg4 != null and cfg4.initial_game == "smash" and cfg4.initial_map == "m1", "alias.yml aliases work as config keys, quoting and comments included (%s)" % str(c4.error if not c4.ok else ""))
 	_check(cfg4 != null and cfg4.aliases.has("restart"), "an alias with arguments is kept for the console")
 
+	# Zee's MiniGames: the owner's own server.yml, verbatim (examples/fixtures/zee_minigames).
+	var zee := TmcConfig.load_dir("res://examples/fixtures/zee_minigames/cfg")
+	var zc: TmcConfig = zee.value if zee.ok else null
+	_check(zc != null, "the MiniGames server.yml loads (%s)" % str(zee.error if not zee.ok else ""))
+	_check(zc != null and zc.server.hostname == "Zee's MiniGames #1 | Party/Random Games!", "`hostname:` is the server name, quotes, apostrophe and # included")
+	_check(zc != null and zc.server.max_players == 40, "`sv_maxplayers: 40`")
+	_check(zc != null and zc.initial_game == "mg-smash-copter", "`game:` is the bare id")
+	_check(zc != null and zc.games_allow.size() == 7 and "gamemann/mg-smash-copter" in zc.games_allow,
+		"`games:` keeps seven of eight entries: mg-deathrun twice is one game (%s)" % str(zc.games_allow if zc else []))
+	_check(zc != null and zc.unknown.is_empty() and zc.console_lines.is_empty(), "and nothing in it is an unknown key or a console line")
+	var zo := TmcConfig.load_dir(_alias_cfg("zee_full", "game: gamemann/mg-smash-copter\nhostname: x\ngames: [gamemann/mg-smash-copter]\n", ""))
+	_check(zo.ok and (zo.value as TmcConfig).initial_game == "gamemann/mg-smash-copter", "`game:` also takes owner/repo")
+	var zh := TmcConfig.load_dir(_alias_cfg("zee_both", "sv_name: \"a\"\nhostname: \"b\"\n", ""))
+	_check(zh.ok and (zh.value as TmcConfig).server.hostname == "a", "`sv_name:` wins over its alias `hostname:`")
+
 	var bad := {
 		"line": ["not a mapping line", "name: target"],
 		"twice": ["a: game\na: games", "defined twice"],
@@ -319,7 +334,11 @@ func _test_aliases() -> void:
 	_check(cfg_l.aliases["sv_game"]["target"] == "game" and cfg_l.aliases["sv_game"]["layer"] == "server", "the server layer overrides the game layer's remap")
 	_check(not cfg_l.aliases.has("gm"), "the server layer REMOVES a game-layer alias")
 	_check(cfg_l.aliases.has("sv_games") and cfg_l.aliases["sv_games"]["layer"] == "server", "and re-adds one the game layer removed")
-	_check(cfg_l.alias_lines().size() == 2, "alias_lines lists the effective table (%s)" % str(cfg_l.alias_lines()))
+	var own_n := 0
+	for l in cfg_l.alias_lines():
+		if "[server:" in l:
+			own_n += 1
+	_check(own_n == 2 and cfg_l.alias_lines().size() == 15, "alias_lines lists the effective table (%s)" % str(cfg_l.alias_lines()))
 
 	var rem := TmcConfig.load_dir(_alias_cfg("remove", "sv_game: \"deathrun\"\n", "remove: [sv_game]\n"))
 	_check(rem.ok and (rem.value as TmcConfig).initial_game == "" and (rem.value as TmcConfig).console_lines.has("sv_game deathrun"),

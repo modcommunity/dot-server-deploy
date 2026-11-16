@@ -99,3 +99,55 @@ remove: [sv_games]           # REMOVE aliases an earlier layer made (also `remov
 ```
 
 `aliases` at the console lists the effective table with the layer and `file:line` each entry came from. Refused loudly, as an ERR naming `file:line` and a failed boot (owner and addon layers): a line that is not `name: target`, a name twice in one file, an alias to itself, an alias to another alias (no chains or loops), an alias shadowing a setting, cvar or command, and a target that is not a setting, cvar or command this server has. `remove:` of a name no earlier layer made is a WARN.
+
+## Every startup variable is a `server.yml` key
+
+A panel's Startup tab (the egg in `deploy/pterodactyl-egg.json`), `deploy/env.example` and the `TMC_*` environment all set the same things as `cfg/server/server.yml`. Every one of them has a key there. [b]Precedence, for all of them, is the order `tools/check_cfg_precedence.sh` tests:[/b]
+
+1. a flag on the `./server` command line (`--name X`), then
+2. a key in a `cfg/server/*.yml` file (or `cfg/net.yml`, `rcon.yml` for the RCON port), then
+3. the `TMC_*` variable the panel sets.
+
+The variable never overwrites a file and is dropped, with one `INFO <key>: cfg/server/server.yml wins over TMC_X` line, when a file sets the key. An empty variable is absent. A console command typed at runtime (`sv_maxplayers 20`, `game x`, `map y`) is applied after boot and changes the running server for as long as it runs; it does not write the file. A value that is not valid (`channel: sideways`, `verbose: maybe`) stops `./server` with a message naming the key, and there is no cap on any list.
+
+The key may also be written under any alias (`hostname:` for `sv_name`, `sv_games:` for `games`); the layered table in the section above lists them, `aliases` on the console shows the effective one, and `sv_name:` wins over `hostname:` when both are written.
+
+| Panel variable | `server.yml` key (aliases) | Live-changeable | Notes |
+|---|---|---|---|
+| `TMC_GAMES` | `games:` list of `owner/repo` (`sv_games`) | no (list is read at boot; `changelevel`/`game` pick among them) | installed, offered and rotated; a repeat is kept once with one WARN |
+| `TMC_GAME` | `game:` bare id or `owner/repo` (`sv_game`) | yes: `game <id>` | a bare id matches the `games:` entry whose name half it is; an `owner/repo` the list lacks is added to it |
+| `TMC_MAP` | `map:` (`sv_map`) | yes: `map <name>` | |
+| `TMC_CONTENT_URL` | `content_urls:` (`sv_content_url`) | no | one string or a list |
+| `TMC_GAMES_MODE` | `games_mode:` hide, remove, keep (`sv_games_mode`) | no (launcher) | |
+| `TMC_NO_INSTALL` | `no_install:` true/false (`sv_no_install`) | no (launcher) | |
+| `TMC_PORT` | `net_port:` (`sv_port`) | no (bind time) | |
+| `TMC_BIND` | `net_bind_ip:` (`sv_bind`) | no (bind time) | |
+| `TMC_RCON_PORT` | `rcon_port:` (`sv_rcon_port`), in `rcon.yml` or `server.yml` | no (bind time) | `rcon_password` is a secret and has no variable |
+| `TMC_QUERY_PORT` | `query_port:` (`sv_query_port`) | no (bind time) | |
+| `TMC_A2S_PORT` | `a2s_port:` (`sv_a2s_port`) | no (bind time) | |
+| `TMC_QUERY_BIND` | `query_bind_ip:` (`sv_query_bind`) | no (bind time) | |
+| `TMC_NAME` | `sv_name:` (`hostname`) | no | the name in the browser list |
+| `TMC_MAX_PLAYERS` | `sv_maxplayers:` | yes: `sv_maxplayers <n>` | |
+| `TMC_ALLOW_WEB` / `_DESKTOP` / `_MOBILE` | `sv_allow_web:` / `sv_allow_desktop:` / `sv_allow_mobile:` | yes (console cvars) | 1 admits, 0 refuses |
+| `TMC_WEB_BUILD` | `sv_web_build:` | yes: `sv_web_build` | |
+| `TMC_WEB_LOADER` | `sv_web_loader:` | yes: `sv_web_loader` | |
+| `TMC_AUTO_UPDATE` | `auto_update:` when-needed, always, never (`sv_auto_update`) | no (launcher, before boot) | |
+| `TMC_CHANNEL` | `channel:` latest, stable (`sv_channel`) | no (launcher, before boot) | |
+| `TMC_VERBOSE` | `verbose:` true/false (`sv_verbose`) | no (log level is fixed at start; `log_level:` in the file sets the default) | |
+| `DEPLOY_REPO`, `DEPLOY_BRANCH` | none | no | [b]Install-time only.[/b] The egg's install script reads them to clone this repository, which is what contains `server.yml`'s reader, so no file of ours can exist yet on the first install. A reinstall or an auto-update keeps following the checkout's own `origin`, which is the value the install wrote. |
+
+Three things in the egg are deliberately not keys: the secret (`rcon_password`, a file with a mode on it), the Godot runtime version (pinned with its checksum in `tools/fetch-godot.sh`), and the environment of the install container itself.
+
+### A complete example (a party server)
+
+```yaml
+hostname: "Zee's MiniGames #1 | Party/Random Games!"
+sv_maxplayers: 40
+game: mg-smash-copter          # bare id, or owner/repo
+games:                         # owner/repo ids; a repeat is one game
+  - gamemann/mg-look-at-me
+  - gamemann/mg-deathrun
+  - gamemann/mg-smash-copter
+```
+
+This exact file is `examples/fixtures/zee_minigames/cfg/server/server.yml`, checked by the selftest and by `tools/check_cfg_precedence.sh`.

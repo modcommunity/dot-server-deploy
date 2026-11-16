@@ -151,7 +151,7 @@ const LEGACY_KEYS := {
 ## Keys that exist and are handled somewhere other than a config object, listed so they are not reported as unknown (a key silently ignored and not reported looks like it took effect).
 ## `net_public_ip` is here, not in [constant BOOT_KEYS], because dot-server should have no such setting: what a server binds to and what a player types differ, and only the second is behind NAT.
 ## The settings this file reads itself, as named in `server.yml`, i.e. the config keys that exist without a console cvar behind them.
-const HOST_KEYS := ["game", "games", "map", "sv_map", "sv_query_app", "sv_web_loader", "sv_web_build", "content_urls", "addons", "net_public_ip", "sv_tags", "chat_command_prefixes", "log_router"]
+const HOST_KEYS := ["game", "games", "map", "sv_map", "sv_query_app", "sv_web_loader", "sv_web_build", "content_urls", "addons", "games_mode", "no_install", "auto_update", "channel", "verbose", "net_public_ip", "sv_tags", "chat_command_prefixes", "log_router"]
 ## The alias file, under `cfg/server/`. Read before every other file so a key in any of them can use an alias.
 const ALIAS_FILE := "alias.yml"
 
@@ -1122,15 +1122,19 @@ func _apply_settings(file: String, tree: Dictionary) -> DotResult:
 			# A list, or one string, as `content_urls` below takes either (`games: fatalcontact` is what an operator with one game writes).
 			# Not a console line: dot-server has no cvar for the set of games a host offers; `sv_game` picks one OF these, so the two spellings are deliberately unalike.
 			# Each entry through TmcGameRef, as the command-line override is, so `gamemann/game-g2gfast01@1.2.0` in a file means the same directory as in a panel field.
-			if value is Array:
-				for entry in (value as Array):
-					for dir_name in TmcGameRef.dirs_in(String(entry)):
-						if not dir_name in games_allow:
-							games_allow.append(dir_name)
-			else:
-				for dir_name in TmcGameRef.dirs_in(String(value)):
-					if not dir_name in games_allow:
+			# A game listed twice is one game: kept once, and ONE warning naming every repeat, never an error (a panel's list is edited by hand and copied around).
+			var repeats := PackedStringArray()
+			var entries: Array = (value as Array) if value is Array else [value]
+			for entry in entries:
+				for dir_name in TmcGameRef.dirs_in(String(entry)):
+					if dir_name in games_allow:
+						if not dir_name in repeats:
+							repeats.append(dir_name)
+					else:
 						games_allow.append(dir_name)
+
+			if not repeats.is_empty():
+				DotLog.warn(CHANNEL, "%s: games lists %s more than once; keeping one of each" % [file, ", ".join(repeats)])
 
 			continue
 

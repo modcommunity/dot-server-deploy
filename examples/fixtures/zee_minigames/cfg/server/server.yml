@@ -1,0 +1,12 @@
+hostname: "Zee's MiniGames #1 | Party/Random Games!"
+sv_maxplayers: 40
+game: mg-smash-copter
+games:
+  - gamemann/mg-look-at-me
+  - gamemann/mg-deathrun
+  - gamemann/game-prop-hunt
+  - gamemann/mg-smash-copter
+  - gamemann/mg-buses-of-hell
+  - gamemann/mg-dangerous-delivery
+  - gamemann/mg-wipeout
+  - gamemann/mg-deathrun

@@ -1,5 +1,18 @@
 # Default aliases, layer 1 of 3 (these, then the boot game's content/<game>/aliases.yml, then cfg/server/alias.yml; a later layer overrides an earlier one).
 # `alias_name: target`. `remove: [name]` drops an alias an earlier layer made; writing a name again remaps it.
-# These are the old spellings: `game` and `games` are the names, like the `map` command.
+# These are the old and the short spellings: `game` and `games` are the names, like the `map` command, and the table in docs/configuration.md lists every startup variable's key.
 sv_game: game
 sv_games: games
+hostname: sv_name
+sv_port: net_port
+sv_bind: net_bind_ip
+sv_query_port: query_port
+sv_a2s_port: a2s_port
+sv_query_bind: query_bind_ip
+sv_rcon_port: rcon_port
+sv_content_url: content_urls
+sv_games_mode: games_mode
+sv_no_install: no_install
+sv_auto_update: auto_update
+sv_channel: channel
+sv_verbose: verbose

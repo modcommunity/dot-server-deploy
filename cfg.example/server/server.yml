@@ -9,6 +9,20 @@
 #sv_name: "TMC Test Server"
 #sv_maxplayers: 64
 
+# Every startup variable of a panel has a key here (docs/configuration.md has the table); a key set in this file beats the TMC_* variable.
+#hostname: "My Server"        # alias of sv_name
+#games:                       # owner/repo ids to install, offer and rotate
+#  - owner/game-one
+#  - owner/game-two
+#auto_update: when-needed     # TMC_AUTO_UPDATE: when-needed, always, never
+#channel: latest              # TMC_CHANNEL: latest or stable
+#games_mode: hide             # TMC_GAMES_MODE: hide, remove, keep
+#no_install: false            # TMC_NO_INSTALL
+#verbose: false               # TMC_VERBOSE
+#query_port: 0                # TMC_QUERY_PORT
+#a2s_port: 0                  # TMC_A2S_PORT
+#query_bind_ip: "*"           # TMC_QUERY_BIND
+
 # The characters that make a chat line a command: `!rtv`, `/rtv`. The FIRST one is what help
 # and the game vote's ballot line tell players to type, so list yours first. maps.yml and
 # games.yml can rename the vote commands (a `commands:` block with `prefix` and `names`).

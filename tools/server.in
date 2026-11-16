@@ -168,6 +168,9 @@ usage() {
     cat <<'USAGE'
   ./server [command] [options] [-- +consolecommand ...]
 
+  Every TMC_* variable is also a cfg/server/server.yml key (the file wins over the
+  variable; a flag wins over both). See docs/configuration.md for the table.
+
   Commands
     run                 Start the server. The default.
     check               Boot, load the game, shut down. Exit 0 if it all worked.
@@ -454,18 +457,108 @@ rcon_cfg_value() {
 }
 
 
-## The operator's cfg files that can set a flat server key, strongest first.
+## The names KEY also answers to: every alias whose target is the one word KEY, from host/aliases.yml (layer 1) and then the owner's
+## cfg/server/alias.yml (layer 3, which can remap or `remove:` one). The game layer (content/<game>/aliases.yml) is console-only and not read here.
+alias_names_for() {
+    local f files=()
+    for f in "$PROJECT/host/aliases.yml" "$(abs "$CONFIG_DIR")/server/alias.yml"; do
+        [ -f "$f" ] && files+=("$f")
+    done
+    [ ${#files[@]} -gt 0 ] || return 0
+    awk -v key="$1" '
+        /^[[:space:]]*(#|$)/ { next }
+        {
+            line = $0; sub(/[[:space:]]+#.*$/, "", line)
+            if (line ~ /^[[:space:]]*remove[[:space:]]*:/) {
+                v = line; sub(/^[^:]*:[[:space:]]*/, "", v); gsub(/[][",\047]/, " ", v)
+                n = split(v, a, " "); for (i = 1; i <= n; i++) delete t[a[i]]
+                next
+            }
+            n = index(line, ":"); if (n == 0) next
+            name = substr(line, 1, n - 1); tgt = substr(line, n + 1)
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", name); gsub(/^[[:space:]]+|[[:space:]]+$/, "", tgt); gsub(/["\047]/, "", tgt)
+            t[name] = tgt
+        }
+        END { for (n in t) if (t[n] == key) print n }' "${files[@]}"
+}
+
+## An ERE alternation of KEY and the names that alias it.
+key_pattern() {
+    local pat="$1" a
+    for a in $(alias_names_for "$1"); do pat="$pat|$a"; done
+    printf '%s' "$pat"
+}
+
+## The operator's cfg files that can set a flat server key (under any of its names), strongest first.
 cfg_key_file() {
-    local d f
+    local d f pat
     d="$(abs "$CONFIG_DIR")"
+    pat="$(key_pattern "$1")"
     for f in "$d"/server/*.yml "$d/net.yml" "$d/server.yml"; do
         # TmcConfig ignores the flat server.yml beside cfg/server/server.yml; an old egg still rewrites it every start.
         [ "$f" = "$d/server.yml" ] && [ -f "$d/server/server.yml" ] && continue
-        if grep -qE "^[[:space:]]*$1[[:space:]]*:" "$f" 2>/dev/null; then
+        [ "$f" = "$d/server/alias.yml" ] && continue
+        if grep -qE "^[[:space:]]*($pat)[[:space:]]*:" "$f" 2>/dev/null; then
             printf '%s' "${f#"$d"/}"
             return 0
         fi
     done
+}
+
+## The value KEY has in the file cfg_key_file found, unquoted and without a trailing comment. Empty when no file sets it.
+cfg_scalar() {
+    local src d pat v
+    src="$(cfg_key_file "$1")"; [ -n "$src" ] || return 0
+    d="$(abs "$CONFIG_DIR")"; pat="$(key_pattern "$1")"
+    v="$(grep -E "^[[:space:]]*($pat)[[:space:]]*:" "$d/$src" | head -1 | sed -E "s/^[[:space:]]*($pat)[[:space:]]*:[[:space:]]*//")"
+    case "$v" in
+        \"*) v="${v#\"}"; v="${v%%\"*}" ;;
+        \'*) v="${v#\'}"; v="${v%%\'*}" ;;
+        *) v="$(printf '%s' "$v" | sed -E 's/[[:space:]]+#.*$//; s/[[:space:]]+$//')" ;;
+    esac
+    printf '%s' "$v"
+}
+
+## KEY as a list, one entry per line: a block (`- a`), an inline `[a, b]`, or one value / a comma list. Duplicates are kept (the host warns once).
+cfg_list() {
+    local src d
+    src="$(cfg_key_file "$1")"; [ -n "$src" ] || return 0
+    d="$(abs "$CONFIG_DIR")"
+    awk -v pat="^[ \t]*($(key_pattern "$1"))[ \t]*:" '
+        function clean(s) { sub(/[ \t]+#.*$/, "", s); gsub(/^[ \t]+|[ \t]+$/, "", s); gsub(/^["\047]|["\047]$/, "", s); return s }
+        function emit(v,   n, a, i, x) { n = split(v, a, ","); for (i = 1; i <= n; i++) { x = clean(a[i]); if (x != "") print x } }
+        inlist {
+            if ($0 ~ /^[ \t]*-([ \t]|$)/) { v = $0; sub(/^[ \t]*-[ \t]*/, "", v); v = clean(v); if (v != "") print v; next }
+            if ($0 ~ /^[ \t]*(#|$)/) next
+            inlist = 0
+        }
+        $0 ~ pat && !done {
+            v = $0; sub(pat, "", v); v = clean(v); done = 1
+            if (v == "") { inlist = 1; next }
+            if (v ~ /^\[/) gsub(/[][]/, "", v)
+            emit(v)
+        }' "$d/$src"
+}
+
+## 1 or empty from a file's true/false (1, true, yes, on / 0, false, no, off); anything else is refused naming the file and key.
+cfg_bool() {
+    case "$(printf '%s' "$2" | tr '[:upper:]' '[:lower:]')" in
+        1|true|yes|on) printf '1' ;;
+        0|false|no|off|"") printf '' ;;
+        *) die "cfg/$(cfg_key_file "$1"): $1 is '$2', not true or false" 2 ;;
+    esac
+}
+
+## A shell-owned setting (the launcher uses it; the host does not): flag > cfg file > TMC_* variable, the order every other key follows.
+## $1 variable, $2 key, $3 flag, $4 environment variable, $5 "bool" for true/false keys.
+file_setting() {
+    local var="$1" key="$2" flag="$3" envname="$4" src v
+    case "$ARGV_ALL" in *" $flag "*) return 0 ;; esac
+    src="$(cfg_key_file "$key")"; [ -n "$src" ] || return 0
+    v="$(cfg_scalar "$key")"
+    [ "${5:-}" = "bool" ] && v="$(cfg_bool "$key" "$v")"
+    [ -n "${!envname:-}" ] && info "$key: cfg/$src wins over $envname"
+    printf -v "$var" '%s' "$v"
 }
 
 ## True when a cfg list file (`cfg/content/<kind>.yml`, `cfg/server/content/<kind>.yml`) holds a download list.
@@ -530,14 +623,59 @@ for pair in "web:${TMC_ALLOW_WEB:-}" "desktop:${TMC_ALLOW_DESKTOP:-}" "mobile:${
 done
 PASSTHROUGH=(${PLATFORM_ARGS[@]+"${PLATFORM_ARGS[@]}"} ${PASSTHROUGH[@]+"${PASSTHROUGH[@]}"})
 
-yield_to_file OPT_PORT sv_port --port TMC_PORT "$(cfg_key_file net_port)"
+yield_to_file OPT_PORT net_port --port TMC_PORT
 yield_to_file OPT_BIND net_bind_ip --bind TMC_BIND
 yield_to_file OPT_NAME sv_name --name TMC_NAME
 yield_to_file OPT_MAX_PLAYERS sv_maxplayers --max-players TMC_MAX_PLAYERS
-yield_to_file OPT_GAME game --game TMC_GAME "$(cfg_key_file sv_game)"
+yield_to_file OPT_GAME game --game TMC_GAME
+yield_to_file OPT_MAP map --map TMC_MAP
+yield_to_file OPT_QUERY_PORT query_port --query-port TMC_QUERY_PORT
+yield_to_file OPT_A2S_PORT a2s_port --a2s-port TMC_A2S_PORT
+yield_to_file OPT_QUERY_BIND query_bind_ip --query-bind TMC_QUERY_BIND
+yield_to_file OPT_WEB_LOADER sv_web_loader --web-loader TMC_WEB_LOADER
+yield_to_file OPT_WEB_BUILD sv_web_build --web-build TMC_WEB_BUILD
+file_setting GAMES_MODE games_mode --games-mode TMC_GAMES_MODE
+file_setting AUTO_UPDATE auto_update --auto-update TMC_AUTO_UPDATE
+file_setting CHANNEL channel --channel TMC_CHANNEL
+file_setting NO_INSTALL no_install --no-install TMC_NO_INSTALL bool
+file_setting VERBOSE verbose --verbose TMC_VERBOSE bool
+[ -n "$VERBOSE" ] && VERBOSE="--verbose"
+case "$GAMES_MODE" in hide|remove|keep) ;; *) die "games_mode / --games-mode / TMC_GAMES_MODE is hide, remove or keep, not '$GAMES_MODE'" ;; esac
 yield_to_file OPT_CONTENT_URL content_urls --content-url TMC_CONTENT_URL
 yield_to_file OPT_RCON_PORT rcon_port --rcon-port TMC_RCON_PORT "$([ -n "$(rcon_cfg_value rcon_port)" ] && echo rcon.yml)"
 yield_to_file OPT_GAMES games --games TMC_GAMES "$(cfg_lists games)"
+
+# [b]`games:` in server.yml is the install list too[/b], not only the host's filter: a YAML list (or `[a, b]`, or one id) of owner/repo ids the server fetches, offers and rotates,
+# exactly what --games / TMC_GAMES says as a comma list. A flag still wins; a repeated id is one game (the host says so once, in its own log).
+case "$ARGV_ALL" in
+    *" --games "*) ;;
+    *)
+        FILE_GAMES=""
+        while IFS= read -r one; do
+            [ -n "$one" ] || continue
+            case ",$FILE_GAMES," in *",$one,"*) continue ;; esac
+            FILE_GAMES="${FILE_GAMES:+$FILE_GAMES,}$one"
+        done < <(cfg_list games)
+        [ -n "$FILE_GAMES" ] && OPT_GAMES="$FILE_GAMES"
+        ;;
+esac
+
+# `game:` takes a bare id (`mg-smash-copter`) or owner/repo, and means the entry of the list whose name half is that id. Naming a game the list lacks is said, and an owner/repo one is added
+# to the install list so it is fetched rather than refused at boot; a bare one cannot be fetched (no owner) and has to be in content/ already.
+GAME_NOW="${OPT_GAME:-$(cfg_scalar game)}"
+if [ -n "$OPT_GAMES" ] && [ -n "$GAME_NOW" ]; then
+    want="${GAME_NOW%@*}"; listed=""
+    for one in ${OPT_GAMES//,/ }; do
+        one="${one%@*}"
+        if [ "$one" = "$want" ] || [ "${one##*/}" = "$want" ]; then listed=1; break; fi
+    done
+    if [ -z "$listed" ]; then
+        case "$want" in
+            */*) warn "game: $want is not in games; adding it to the install list"; OPT_GAMES="$OPT_GAMES,$want" ;;
+            *)   warn "game: $want matches no entry of games ($OPT_GAMES); it must already be in $CONTENT_DIR" ;;
+        esac
+    fi
+fi
 
 # Built here rather than during parsing: see OPT_* above. An empty value is absent
 # rather than a flag with nothing after it, which is how "the environment did not set

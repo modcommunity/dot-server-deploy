@@ -66,6 +66,67 @@ check "an update never touches cfg/server/" grep -q "operator" "$C/server/addon/
 check "nor cfg/content/" cmp -s "$T/games.before" "$C/content/games.yml"
 check "nor the operator's server.yml" test "$before" = "$(sha256sum "$C/server/server.yml")"
 
+# Every startup variable is also a server.yml key (docs/configuration.md has the table). Flag > file > TMC_* variable, for all of them.
+D="$T/cfg2"
+mkdir -p "$D/server" "$D/content"
+cp examples/fixtures/zee_minigames/cfg/server/server.yml "$D/server/server.yml"
+# The dry run shell-escapes the commas of a list (`a\,b`); the checks below read it unescaped.
+runD() { env TMC_NO_INSTALL=1 TMC_AUTO_UPDATE=never "$@" ./server --config "$D" --dry-run 2>&1 | tr -d '\\'; }
+out="$(runD TMC_NAME=egg TMC_MAX_PLAYERS=12 TMC_GAME=other TMC_GAMES=egg/one)"
+check "the MiniGames file: hostname: beats TMC_NAME (an alias of sv_name)" bash -c '! grep -q -- "--name" <<<"$1"' _ "$out"
+check "  and says so" grep -q "INFO sv_name: cfg/server/server.yml wins over TMC_NAME" <<<"$out"
+check "  sv_maxplayers: beats TMC_MAX_PLAYERS" bash -c '! grep -q -- "--max-players" <<<"$1"' _ "$out"
+check "  game: beats TMC_GAME" bash -c '! grep -q -- "--game other" <<<"$1"' _ "$out"
+check "  games: beats TMC_GAMES" bash -c '! grep -q -- "--games egg/one" <<<"$1"' _ "$out"
+check "  the games list is passed on, mg-deathrun once" bash -c 'grep -o -- "--games [^ ]*" <<<"$1" | grep -q "^--games gamemann/mg-look-at-me,gamemann/mg-deathrun,gamemann/game-prop-hunt,gamemann/mg-smash-copter,gamemann/mg-buses-of-hell,gamemann/mg-dangerous-delivery,gamemann/mg-wipeout$"' _ "$out"
+check "  no warning that game: is missing from games:" bash -c '! grep -q "matches no entry" <<<"$1"' _ "$out"
+printf 'game: nowhere\ngames: [a/b]\n' > "$D/server/server.yml"
+out="$(runD)"
+check "a bare game: the list lacks is warned about" grep -q "game: nowhere matches no entry of games" <<<"$out"
+printf 'game: c/d\ngames: [a/b]\n' > "$D/server/server.yml"
+out="$(runD)"
+check "an owner/repo game: the list lacks is added to it" grep -q -- "--games a/b,c/d" <<<"$out"
+printf 'games: gamemann/mg-one\ngame: mg-one\n' > "$D/server/server.yml"
+out="$(runD)"
+check "one id and a bare game: that matches it" grep -q -- "--games gamemann/mg-one" <<<"$out"
+printf 'sv_games: [x/y, x/y]\n' > "$D/server/server.yml"
+out="$(runD)"
+check "the old sv_games: spelling feeds the install list, deduped" grep -q -- "--games x/y\( \|$\)" <<<"$out"
+printf 'sv_name: "a"\n' > "$D/server/server.yml"
+for pair in "net_port:28000:TMC_PORT:--port" "net_bind_ip:10.0.0.1:TMC_BIND:--bind" "map:de_x:TMC_MAP:--map" "query_port:28001:TMC_QUERY_PORT:--query-port" \
+        "a2s_port:28002:TMC_A2S_PORT:--a2s-port" "query_bind_ip:10.0.0.2:TMC_QUERY_BIND:--query-bind" "sv_web_loader:v1:TMC_WEB_LOADER:--web-loader" "sv_web_build:b1:TMC_WEB_BUILD:--web-build"; do
+    IFS=: read -r key val envname flag <<<"$pair"
+    printf '%s: %s\n' "$key" "$val" > "$D/server/server.yml"
+    out="$(runD "$envname=other")"
+    check "$key: in the file beats $envname" bash -c '! grep -q -- "$2 other" <<<"$1"' _ "$out" "$flag"
+    printf 'sv_name: "a"\n' > "$D/server/server.yml"
+    out="$(runD "$envname=other")"
+    check "$envname applies when no file sets $key" grep -q -- "$flag other" <<<"$out"
+done
+# The launcher's own settings: auto_update, channel, games_mode, no_install, verbose. A bad value is refused naming where it came from.
+printf 'channel: stable\n' > "$D/server/server.yml"
+out="$(runD TMC_CHANNEL=latest)"
+check "channel: in the file beats TMC_CHANNEL" grep -q "INFO channel: cfg/server/server.yml wins over TMC_CHANNEL" <<<"$out"
+printf 'channel: sideways\n' > "$D/server/server.yml"
+out="$(runD)"
+check "a bad channel: fails loudly" grep -q "channel.*latest or stable, not 'sideways'" <<<"$out"
+printf 'auto_update: sometimes\n' > "$D/server/server.yml"
+out="$(env TMC_NO_INSTALL=1 ./server --config "$D" --dry-run 2>&1)"
+check "a bad auto_update: fails loudly" grep -q "when-needed, always or never, not 'sometimes'" <<<"$out"
+printf 'games_mode: purge\n' > "$D/server/server.yml"
+out="$(runD)"
+check "a bad games_mode: fails loudly" grep -q "hide, remove or keep, not 'purge'" <<<"$out"
+printf 'verbose: maybe\n' > "$D/server/server.yml"
+out="$(runD)"
+check "a bad verbose: fails loudly" grep -q "verbose is 'maybe', not true or false" <<<"$out"
+printf 'verbose: false\nno_install: true\n' > "$D/server/server.yml"
+out="$(env TMC_VERBOSE=1 TMC_AUTO_UPDATE=never ./server --config "$D" --dry-run 2>&1)"
+check "verbose: false in the file beats TMC_VERBOSE=1" bash -c '! grep -q -- "--verbose" <<<"$1"' _ "$out"
+check "and says so" grep -q "INFO verbose: cfg/server/server.yml wins over TMC_VERBOSE" <<<"$out"
+printf 'no_install: perhaps\n' > "$D/server/server.yml"
+out="$(runD)"
+check "a bad no_install: fails loudly" grep -q "no_install is 'perhaps', not true or false" <<<"$out"
+
 # The egg and the entrypoint write nothing into cfg/.
 check "the egg has no config files to rewrite" python3 -I -c 'import json,sys; sys.exit(json.loads(json.load(open("deploy/pterodactyl-egg.json"))["config"]["files"]) != {})'
 check "the entrypoint passes no TMC_* as a flag" bash -c '! grep -qE "ARGS\+=\(--" docker-entrypoint.sh'
