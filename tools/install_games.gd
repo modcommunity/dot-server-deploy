@@ -173,6 +173,8 @@ func _init() -> void:
 	var added := PackedStringArray()
 	# Games whose wanted version needs newer addons than this box has: "<raw>: <why>".
 	var behind := PackedStringArray()
+	# The same, by content id, written to the install state as `behind` so the host can say so when that game loads.
+	var behind_ids := {}
 	# Of those, the ones whose installed version dot-cloud will refuse to mount: "<raw>: <why>".
 	var unusable := PackedStringArray()
 	var index := {}
@@ -277,7 +279,7 @@ func _init() -> void:
 					# signed before the site declared runs_code is refused at mount, so the game
 					# is gone, not kept: say so here, where the reason is, not at the mount.
 					var dead := (await _kept_refused(path, cloud)) if have else ""
-					DotLog.warn(CHANNEL, "a game needs newer addons than this server has", {
+					DotLog.error(CHANNEL, "a game needs newer addons than this server has", {
 						"game": str(want["id"]),
 						"version": str(want["version"]) if str(want["version"]) != "" else "latest",
 						"why": got.error.message,
@@ -286,6 +288,8 @@ func _init() -> void:
 							"nothing usable: the installed version will be refused" if dead != "" else "the installed version"),
 					})
 					behind.append("%s: %s" % [str(want["raw"]), got.error.message])
+					behind_ids[str(want["id"])] = {"wanted": str(want["version"]) if str(want["version"]) != "" else "latest",
+						"why": got.error.message}
 					if dead != "":
 						DotLog.error(CHANNEL, "the installed version of a game cannot run either", {
 							"game": str(want["id"]),
@@ -366,6 +370,7 @@ func _init() -> void:
 		_prune(present, installed, content_dir)
 
 	state["installed"] = installed
+	state["behind"] = behind_ids
 	_write_state(data_dir, state)
 
 	await _resolve_owner_maps(config_dir, data_dir, bases, content_dir, TmcGameRef.dirs_in(",".join(wanted)))

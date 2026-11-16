@@ -163,6 +163,8 @@ note() { printf '  %s%s%s\n' "$DIM" "$1" "$OFF"; }
 # The condition it guards is rare, which is why nobody hit it, and rare is exactly what
 # a warning is for.
 warn() { printf '  %s%s%s\n' "$YLW" "$1" "$OFF" >&2; }
+# A failure the server starts through anyway (an old game version kept): red and "ERROR", never a warning.
+err() { printf '  %sERROR: %s%s\n' "$RED" "$1" "$OFF" >&2; }
 
 usage() {
     cat <<'USAGE'
@@ -2333,12 +2335,14 @@ if [ -z "$NO_INSTALL" ] && { [ -n "$OPT_GAMES" ] || has_owner_maps || has_owner_
                 note "a game needs newer addons than this server has; updating them"
                 update_and_restart
             fi
+            # An older game than the list asks for is a broken server (old code, maybe no maps), so it is an ERROR
+            # here and again in the server log when that game loads (TmcHost reads the installer's `behind`).
             if [ -n "${TMC_AUTO_UPDATED:-}" ]; then
-                warn "even the newest addons this checkout locks are too old for a game above;"
-                warn "it stays on the version that runs until a server release catches up"
+                err "even the newest addons this checkout locks are too old for a game above;"
+                err "it runs an OLDER version than the list asks for until a server release catches up"
             else
-                warn "a game needs newer addons than this server has, and the update above did"
-                warn "not happen (its reason is printed above); it stays on the version that runs"
+                err "a game needs newer addons than this server has, and the update above did"
+                err "not happen (its reason is printed above); it runs an OLDER version than the list asks for"
             fi
             ;;
         *) warn "no games could be installed from the content origin" ;;

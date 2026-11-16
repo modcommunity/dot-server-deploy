@@ -1492,6 +1492,44 @@ func _on_game_loaded(_content_key: String) -> void:
 	_advertise_addon_groups()
 	_attach_addon_entries()
 	_publish_requires()
+	_report_behind_game(server.games.current_content_id())
+
+
+## Says, at ERROR, when the game that just loaded is older than the server's list asks for. The installer kept the version that runs because
+## this box's addons are too old for the asked one (tools/install_games.gd writes it as `behind` in its state), and a server quietly playing an
+## old build with old maps -- or none -- was read as "the update did not happen" for days. Once per load, never fatal: an old game beats no game.
+func _report_behind_game(content_id: String) -> void:
+	var entry := behind_entry(_absolute(_data_dir).path_join("installed-games.json"), content_id)
+
+	if entry.is_empty():
+		return
+
+	DotLog.error(CHANNEL, "this game is OLDER than the server list asks for", {
+		"game": content_id,
+		"running": str(_mounted_versions.get(content_id, "unknown")),
+		"wanted": str(entry.get("wanted", "latest")),
+		"why": str(entry.get("why", "")),
+		"fix": "Reinstall the server (its addons update to the release the newer game needs), or ask for a version these addons can run",
+	})
+
+
+## The installer's `behind` record for [param content_id] in the state file at [param path], or {} when there is none (no file, unreadable, or not behind).
+static func behind_entry(path: String, content_id: String) -> Dictionary:
+	if content_id == "" or not FileAccess.file_exists(path):
+		return {}
+
+	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
+
+	if not parsed is Dictionary:
+		return {}
+
+	var behind: Variant = (parsed as Dictionary).get("behind", {})
+
+	if not behind is Dictionary or not (behind as Dictionary).has(content_id):
+		return {}
+
+	var entry: Variant = (behind as Dictionary)[content_id]
+	return entry if entry is Dictionary else {"wanted": "latest", "why": str(entry)}
 
 
 ## Starts the extra packs that run on the server, as children of the DotServer node: the game's own root is private to DotGameManager,
@@ -1585,10 +1623,29 @@ func _apply_initial_map() -> void:
 	var session := _find_map_session(server.games)
 
 	if session == null:
-		DotLog.warn(CHANNEL, "a map was asked for and this game has no maps", {
+		# A game with its own map path (no DotMapSession) answers `start_on_map(id) -> DotResult`, the same change its `map` command makes.
+		var starter := _find_map_starter(server.games)
+
+		if starter != null:
+			await _ensure_map_content(StringName(config.initial_map), server.games)
+			var started: Variant = await starter.call("start_on_map", StringName(config.initial_map))
+
+			if started is DotResult and not (started as DotResult).ok:
+				DotLog.error(CHANNEL, "could not start on the map that was asked for", {
+					"map": config.initial_map,
+					"why": (started as DotResult).error.message,
+				})
+				return
+
+			DotLog.info(CHANNEL, "starting on the map that was asked for", {"map": config.initial_map})
+			return
+
+		# An ERROR, not a warning: the operator asked for a map and is not getting it, and on a game that has maps this means it is an old build.
+		DotLog.error(CHANNEL, "a map was asked for and this game has no way to change maps", {
 			"map": config.initial_map,
 			"game": server.games.current_content_id(),
-			"why": "not every game has a catalogue; a game of built geometry does not",
+			"why": "the game has no map session and no start_on_map; a game of built geometry has no maps, otherwise this is an old version of it",
+			"fix": "remove `map:` for this game, or Reinstall the server so the newest version of the game loads",
 		})
 		return
 
@@ -1671,6 +1728,23 @@ static func _find_map_fetcher(root: Node) -> Object:
 
 ## The loaded game's map session, or null. Duck-typed, like everything that crosses into a game: `has_method` and `call` rather than `is DotMapSession`,
 ## because this host has no business requiring dot-map (dot-vote's map source uses the same contract).
+## The node under [param root] that answers `start_on_map(id) -> DotResult`: a game whose map change is its own rather than a DotMapSession's.
+static func _find_map_starter(root: Node) -> Object:
+	if root == null:
+		return null
+
+	for child in root.get_children():
+		if child.has_method("start_on_map"):
+			return child
+
+		var found := _find_map_starter(child)
+
+		if found != null:
+			return found
+
+	return null
+
+
 static func _find_map_session(root: Node) -> Object:
 	if root == null:
 		return null

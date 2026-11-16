@@ -11,7 +11,7 @@ const RoundsWithoutMatch := preload("res://examples/fixtures/rounds_without_matc
 
 const Host := preload("res://host/tmc_host.gd")
 
-const CHECKS := 596
+const CHECKS := 600
 
 var _passed := 0
 var _failed := 0
@@ -60,6 +60,7 @@ func _run() -> void:
 	_test_game_cfg_dirs()
 	_test_radio()
 	_test_addon_announce()
+	_test_startup_checks()
 
 	print("")
 	_check(
@@ -3169,3 +3170,36 @@ func _test_auth() -> void:
 
 	DotPaths.remove_tree(work)
 	_done()
+
+
+## A game older than the list asks for, and a `map:` for a game without a DotMapSession: both used to end in a yellow warning nobody read.
+func _test_startup_checks() -> void:
+	_section("startup: an old game and a map path of the game's own")
+
+	var state_path := OS.get_user_data_dir().path_join("selftest-behind-state.json")
+	var f := FileAccess.open(state_path, FileAccess.WRITE)
+	f.store_string(JSON.stringify({"installed": {}, "behind": {"game-zombie-zone": {"wanted": "latest", "why": "needs dot_core 40"}}}))
+	f.close()
+	var entry := Host.behind_entry(state_path, "game-zombie-zone")
+	_check(str(entry.get("wanted", "")) == "latest" and str(entry.get("why", "")) == "needs dot_core 40",
+		"a game the installer kept older than asked is read back as behind (%s)" % entry)
+	_check(Host.behind_entry(state_path, "buses").is_empty(), "and a game that is current is not")
+	DirAccess.remove_absolute(state_path)
+
+	var root := Node.new()
+	var holder := Node.new()
+	root.add_child(holder)
+	var starter := _MapStarter.new()
+	holder.add_child(starter)
+	_check(Host._find_map_starter(root) == starter, "a game that answers start_on_map is found for `map:` (Zombie Zone has no map session)")
+	holder.remove_child(starter)
+	starter.free()
+	_check(Host._find_map_starter(root) == null, "and a game with neither is not, so the host logs an ERROR instead")
+	root.free()
+
+	_done()
+
+
+class _MapStarter extends Node:
+	func start_on_map(_id: StringName) -> DotResult:
+		return DotResult.success(null)
