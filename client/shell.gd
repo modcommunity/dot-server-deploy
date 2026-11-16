@@ -80,6 +80,25 @@ var _solo_session: TmcSoloSession = null
 ## The connect form's own pieces beyond [member _name], [member _address] and [member _join],
 ## kept so [method _show_connect_form] can take the whole form away for a solo launch.
 var _blurb: Label = null
+
+## The menu's glass card ([method _build_menu]).
+var _menu_card: PanelContainer = null
+## Powered by TMC, in the menu's bottom-right corner; null when the project turns it off.
+var _powered_by: TmcPoweredBy = null
+## The window's own aspect and scale, kept while [method _fit_menu] has them.
+var _fit_saved: Dictionary = {}
+
+## The menu card's width, in the project's 1280x720 canvas.
+var menu_card_width := 420.0
+## Scale the window up around the menu on a small screen (a phone). Off keeps the letterbox.
+var menu_fit := true
+## The space kept between the card and the window's edge while fitting, in canvas pixels.
+var menu_fit_margin := 16.0
+## How large the menu's text should look on a small screen, against the desktop's (1.0).
+## Fitting never makes the card bigger than the window, whatever this asks for.
+var menu_text_scale := 1.0
+## A confirmation's width, in canvas pixels; narrower when the window is (see _popup_dialog).
+var dialog_width := 420.0
 var _name_caption: Label = null
 var _address_caption: Label = null
 
@@ -217,6 +236,7 @@ func _ready() -> void:
 
 	loading = TmcLoadingScreen.new()
 	loading.name = "Loading"
+	loading.site_url = _workshop_site()
 	loading.in_game_fn = func() -> bool:
 		return _joining or (_has_spawned and _menu != null and not _menu.visible)
 	add_child(loading)
@@ -735,12 +755,9 @@ func _claim_party() -> void:
 	link.send_chat("/party_claim %s" % _party.party.id)
 
 
-## The menu's accent: the blue the arena rings the local player with, so menu and game do not look like two products.
-const ACCENT := Color(0.36, 0.68, 1.0)
-
-
-## The theme every control in the menu inherits.
-## [code]DotUiTheme.space()[/code], so the menu does not drift from the panels a game builds for its own pause and settings screens.
+## The menu's accent as text (friend names, the signed-in line): GameSpice's, from
+## [TmcShellStyle], so the menu and the site around it read as one product.
+const ACCENT := TmcShellStyle.ACCENT_TEXT
 
 
 func _build_menu() -> void:
@@ -752,13 +769,10 @@ func _build_menu() -> void:
 	_menu.name = "Shell"
 	_menu.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_menu.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_menu.theme = DotUiTheme.space().build()
+	_menu.theme = TmcShellStyle.theme()
 	layer.add_child(_menu)
 
 	_menu.add_child(MenuBackdrop.new())
-
-	# Which client this is: the first screen a player sees after the page's own progress.
-	TmcShellVersion.add_corner_label(_menu)
 
 	# CENTRED BY A CONTAINER, not an offset from the middle: an offset is centred at one window size and hangs off a short one.
 	var centre := CenterContainer.new()
@@ -766,42 +780,48 @@ func _build_menu() -> void:
 	centre.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_menu.add_child(centre)
 
-	var panel := PanelContainer.new()
-	panel.custom_minimum_size = Vector2(392.0, 0.0)
-	centre.add_child(panel)
+	# The glass card. Its width is a minimum, not a size: on a phone the window is scaled up
+	# around it ([method _fit_menu]) rather than the card squeezed into a column of 8 px text.
+	_menu_card = PanelContainer.new()
+	_menu_card.name = "Card"
+	_menu_card.custom_minimum_size = Vector2(menu_card_width, 0.0)
+	centre.add_child(_menu_card)
+
+	var stack := VBoxContainer.new()
+	stack.add_theme_constant_override("separation", 0)
+	_menu_card.add_child(stack)
+
+	# The flame along the card's top edge: the brand's gradient, the one place it is used.
+	stack.add_child(_flame_strip())
 
 	var pad := MarginContainer.new()
-	pad.add_theme_constant_override("margin_left", 30)
-	pad.add_theme_constant_override("margin_right", 30)
-	pad.add_theme_constant_override("margin_top", 28)
-	pad.add_theme_constant_override("margin_bottom", 26)
-	panel.add_child(pad)
+	pad.add_theme_constant_override("margin_left", 18)
+	pad.add_theme_constant_override("margin_right", 18)
+	pad.add_theme_constant_override("margin_top", 18)
+	pad.add_theme_constant_override("margin_bottom", 8)
+	stack.add_child(pad)
 
 	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 9)
+	box.add_theme_constant_override("separation", 10)
 	pad.add_child(box)
 
+	box.add_child(TmcShellStyle.eyebrow("GameSpice"))
+
 	var title := Label.new()
-	title.text = "TMC"
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	# Sized here rather than through the palette's heading size: this is a wordmark, and
-	# raising `heading_size` to fit it would also inflate every heading in the game.
-	title.add_theme_font_size_override("font_size", 46)
-	# The glow is an outline in the accent rather than a second label drawn behind it: one
-	# node, and it follows the font size instead of needing a matching offset.
-	title.add_theme_color_override(
-		"font_outline_color", Color(ACCENT.r, ACCENT.g, ACCENT.b, 0.30)
-	)
-	title.add_theme_constant_override("outline_size", 9)
+	title.name = "Title"
+	title.text = "Ready to play"
+	# Sized here rather than through the palette's heading size: this is the screen's one
+	# headline, and raising `heading_size` to fit it would inflate every heading in a game.
+	title.add_theme_font_size_override("font_size", 32)
+	title.add_theme_font_override("font", TmcShellStyle.bold(0.8))
 	box.add_child(title)
 
 	_blurb = Label.new()
 	_blurb.theme_type_variation = &"DotDim"
-	_blurb.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_blurb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(_blurb)
 
-	box.add_child(_gap(16))
+	box.add_child(_gap(8))
 
 	_name_caption = _caption("Display name")
 	box.add_child(_name_caption)
@@ -810,7 +830,7 @@ func _build_menu() -> void:
 	_name.placeholder_text = "Your name"
 	_name.text = "Guest %d" % (randi() % 900 + 100)
 	_name.max_length = 32
-	_name.custom_minimum_size = Vector2(0.0, 40.0)
+	_name.custom_minimum_size = Vector2(0.0, 44.0)
 	box.add_child(_name)
 
 	# Its own line rather than the status label: a status is the last thing that happened and the two fought
@@ -843,14 +863,15 @@ func _build_menu() -> void:
 	_address = LineEdit.new()
 	_address.placeholder_text = "host:port"
 	_address.text = "127.0.0.1:6064"
-	_address.custom_minimum_size = Vector2(0.0, 40.0)
+	_address.custom_minimum_size = Vector2(0.0, 44.0)
 	box.add_child(_address)
 
 	box.add_child(_gap(6))
 
 	_join = Button.new()
+	_join.name = "Connect"
 	_join.text = "Connect"
-	_join.custom_minimum_size = Vector2(0.0, 46.0)
+	_join.custom_minimum_size = Vector2(0.0, 50.0)
 	_join.pressed.connect(func() -> void: _connect_to(_address.text))
 	_primary(_join)
 	box.add_child(_join)
@@ -860,8 +881,9 @@ func _build_menu() -> void:
 	# games exist. After Leave it is how the player goes again without reloading the page.
 	_solo_button = Button.new()
 	_solo_button.text = "Play solo"
-	_solo_button.custom_minimum_size = Vector2(0.0, 40.0)
+	_solo_button.custom_minimum_size = Vector2(0.0, 50.0)
 	_solo_button.visible = false
+	TmcShellStyle.ghost(_solo_button)
 	_solo_button.pressed.connect(_on_solo_pressed)
 	box.add_child(_solo_button)
 
@@ -879,47 +901,89 @@ func _build_menu() -> void:
 	# zero on a menu is a progress indicator for nothing.
 	_progress = ProgressBar.new()
 	_progress.show_percentage = false
-	_progress.custom_minimum_size = Vector2(0.0, 6.0)
+	_progress.custom_minimum_size = Vector2(0.0, 4.0)
+	_progress.add_theme_stylebox_override("fill", TmcShellStyle.flame_fill())
+	_progress.add_theme_stylebox_override("background", TmcShellStyle.track())
 	_progress.visible = false
 	box.add_child(_progress)
 
 	_status = Label.new()
 	_status.theme_type_variation = &"DotDim"
-	_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(_status)
 
 	# The second line is the one a waiting player reads: file, bytes, rate and estimate answer "how much longer" and "of what"; empty rather than stale.
 	_detail = Label.new()
 	_detail.theme_type_variation = &"DotDim"
-	_detail.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_detail.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_detail.modulate = Color(1.0, 1.0, 1.0, 0.62)
 	_detail.visible = false
 	box.add_child(_detail)
 
+	# The card's footer, under a hairline: the quiet things a player reaches for when
+	# something went wrong, kept apart from the one button that matters.
+	var rule := HSeparator.new()
+	rule.add_theme_stylebox_override("separator", TmcShellStyle.hairline())
+	stack.add_child(rule)
+
+	var foot := MarginContainer.new()
+	foot.add_theme_constant_override("margin_left", 10)
+	foot.add_theme_constant_override("margin_right", 10)
+	foot.add_theme_constant_override("margin_top", 4)
+	foot.add_theme_constant_override("margin_bottom", 6)
+	stack.add_child(foot)
+
+	var foot_box := VBoxContainer.new()
+	foot_box.add_theme_constant_override("separation", 2)
+	foot.add_child(foot_box)
+
 	# The way out of a client that holds the wrong thing: a mounted pack cannot be unmounted, so a game or map that will not load is fixed by deleting the downloads.
 	# Always here, under the status line, because that is when a player needs it (this shell has no settings screen).
 	_clear = Button.new()
+	_clear.name = "ClearContent"
 	_clear.text = "Clear downloaded content\u2026"
 	_clear.flat = true
 	_clear.focus_mode = Control.FOCUS_ALL
-	_clear.add_theme_font_size_override("font_size", 12)
+	_clear.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	_clear.add_theme_font_size_override("font_size", 13)
+	_clear.add_theme_color_override("font_color", TmcShellStyle.MUTED)
+	_clear.add_theme_color_override("font_hover_color", TmcShellStyle.ACCENT_TEXT)
+	_clear.add_theme_color_override("font_focus_color", TmcShellStyle.ACCENT_TEXT)
 	_clear.pressed.connect(_ask_clear)
-	box.add_child(_clear)
+	foot_box.add_child(_clear)
 
 	# No Host button: a browser tab cannot listen, and offering a control that fails on
 	# the platform this shell exists for is worse than not offering it.
 	if DotPlatform.is_web():
-		box.add_child(_gap(2))
-
 		var note := Label.new()
 		note.text = "A browser tab cannot host. Follow a link to somebody's server."
 		note.theme_type_variation = &"DotDim"
-		note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		note.add_theme_font_size_override("font_size", 12)
-		box.add_child(note)
+		note.modulate = Color(1.0, 1.0, 1.0, 0.7)
+		var note_pad := MarginContainer.new()
+		note_pad.add_theme_constant_override("margin_left", 8)
+		note_pad.add_theme_constant_override("margin_right", 8)
+		note_pad.add_theme_constant_override("margin_bottom", 4)
+		note_pad.add_child(note)
+		foot_box.add_child(note_pad)
+
+	# The corners, added last so they draw over the backdrop: which client this is
+	# (bottom-left) and Powered by TMC (bottom-right), linked to the site this build signs
+	# in against. Both live in the menu, so neither is on screen during a game.
+	TmcShellVersion.add_corner_label(_menu)
+	_powered_by = TmcPoweredBy.add_to(_menu, _workshop_site())
+
+	# Up and down walk the card in order with a keyboard or a gamepad's d-pad, including
+	# from a text field, where the engine's own guess skips past the field below.
+	_chain_focus([_name, _address, _join, _solo_button, _solo_maps_check, _clear])
+
+	# A phone's window is scaled up around the card while the menu shows (see the method).
+	# Guarded so a suite can build the menu on a shell it never adds to the tree.
+	_menu.visibility_changed.connect(_fit_menu)
+	if is_inside_tree():
+		get_viewport().size_changed.connect(_fit_menu)
+	_fit_menu.call_deferred()
 
 	# Focused after it is in the tree: grab_focus out of the tree is an engine error, and a shell told to join at once has taken the panel down by the time the deferred call runs.
 	# A solo launch never shows the form: the site sent the player to play one game, not to type a name and address.
@@ -976,39 +1040,76 @@ func _gap(height: float) -> Control:
 	return spacer
 
 
-## Makes a button read as the one thing on screen to press: dot-ui's quiet Button suits a settings panel with six and not a screen with one.
-## Overridden on the instance, not in the theme, so every other button keeps the quiet style.
+## Makes a button read as the one thing on screen to press: the site's accent button
+## ([method TmcShellStyle.primary]). On the instance, so every other button stays quiet.
 func _primary(button: Button) -> void:
-	button.add_theme_stylebox_override("normal", _fill(ACCENT.darkened(0.10)))
-	button.add_theme_stylebox_override("hover", _fill(ACCENT))
-	button.add_theme_stylebox_override("pressed", _fill(ACCENT.darkened(0.30)))
-	button.add_theme_stylebox_override("focus", _outline(Color(1.0, 1.0, 1.0, 0.35)))
-	button.add_theme_stylebox_override("disabled", _fill(Color(0.16, 0.20, 0.29, 0.9)))
-	# Dark text on a bright fill. White on this blue is under 3:1 and the first thing to
-	# become unreadable on a phone in daylight.
-	button.add_theme_color_override("font_color", Color(0.02, 0.05, 0.10))
-	button.add_theme_color_override("font_hover_color", Color(0.02, 0.04, 0.09))
-	button.add_theme_color_override("font_pressed_color", Color(1.0, 1.0, 1.0))
-	button.add_theme_color_override("font_disabled_color", Color(0.55, 0.60, 0.70))
-	button.add_theme_font_size_override("font_size", 17)
+	TmcShellStyle.primary(button)
 
 
-func _fill(colour: Color, radius: int = 12) -> StyleBoxFlat:
-	var box := StyleBoxFlat.new()
-	box.bg_color = colour
-	box.set_corner_radius_all(radius)
-	box.content_margin_left = 14
-	box.content_margin_right = 14
-	box.content_margin_top = 10
-	box.content_margin_bottom = 10
-	return box
+## The brand's flame as a thin strip, full width, along the top of the menu's card.
+func _flame_strip() -> Control:
+	var strip := TextureRect.new()
+	strip.name = "Flame"
+	strip.texture = TmcShellStyle.flame_texture()
+	strip.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	strip.stretch_mode = TextureRect.STRETCH_SCALE
+	strip.custom_minimum_size = Vector2(0.0, 3.0)
+	strip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return strip
 
 
-func _outline(colour: Color, radius: int = 12) -> StyleBoxFlat:
-	var box := _fill(Color.TRANSPARENT, radius)
-	box.border_color = colour
-	box.set_border_width_all(2)
-	return box
+## Links [param controls] top to bottom for ui_up and ui_down, skipping none: a hidden one
+## is passed over by the engine's own focus walk, so the chain holds when the solo button
+## or the connect form is hidden.
+func _chain_focus(controls: Array) -> void:
+	var live: Array[Control] = []
+	for c: Variant in controls:
+		if c is Control:
+			live.append(c as Control)
+	for i in range(live.size()):
+		var here := live[i]
+		if i > 0:
+			here.focus_neighbor_top = here.get_path_to(live[i - 1])
+			here.focus_previous = here.focus_neighbor_top
+		if i < live.size() - 1:
+			here.focus_neighbor_bottom = here.get_path_to(live[i + 1])
+			here.focus_next = here.focus_neighbor_bottom
+
+
+## While the menu shows, lets the window grow its canvas to the screen's shape and scales
+## the canvas so the card reads at a phone's size ([method TmcShellStyle.fit_factor]). Put
+## back as the project had it the moment the menu hides, so a game never runs under it.
+## Off with [member menu_fit] (a suite, or a build that wants the letterbox).
+func _fit_menu() -> void:
+	if _menu == null or not is_inside_tree():
+		return
+	var window := get_window()
+	if window == null:
+		return
+	if not menu_fit or not _menu.visible or _menu_card == null:
+		if not _fit_saved.is_empty():
+			# Cleared before restoring: setting the aspect emits size_changed, which calls
+			# this again re-entrantly (a frame caught the second call reading an empty dict).
+			var saved := _fit_saved
+			_fit_saved = {}
+			window.content_scale_aspect = saved["aspect"]
+			window.content_scale_factor = saved["factor"]
+		return
+	# Kept on the way in, not once: a game may have changed them while the menu was hidden.
+	if _fit_saved.is_empty():
+		_fit_saved = {"aspect": window.content_scale_aspect, "factor": window.content_scale_factor}
+	var base := Vector2(window.content_scale_size)
+	if base.x <= 0.0 or base.y <= 0.0:
+		base = Vector2(
+			float(ProjectSettings.get_setting("display/window/size/viewport_width", 1280)),
+			float(ProjectSettings.get_setting("display/window/size/viewport_height", 720)))
+	var card := _menu_card.get_combined_minimum_size()
+	var factor := TmcShellStyle.fit_factor(
+		Vector2(window.size), DisplayServer.screen_get_scale(window.current_screen),
+		base, card, menu_fit_margin, menu_text_scale)
+	var scale := factor * float(_fit_saved["factor"])
+	window.content_scale_aspect = Window.CONTENT_SCALE_ASPECT_EXPAND
+	window.content_scale_factor = scale
 
 
 ## Puts the menu into or out of "something is happening" state. One place, because every way a connection ends must undo the same two things, and a Connect button left disabled is a dead end.
@@ -2556,14 +2657,14 @@ func _ask_download(summary: Dictionary) -> bool:
 	if _late_sync:
 		return not bool(summary.get("metered", false))
 
-	var dialog := ConfirmationDialog.new()
+	var dialog := TmcShellStyle.dialog(ConfirmationDialog.new())
 	dialog.title = _text("workshop.ask.title", {}, "Subscribed content")
 	dialog.dialog_text = _text("workshop.ask.text", {"size": DotPaths.format_bytes(int(summary.get("bytes", 0)))},
 		"Download %s of subscribed content?" % DotPaths.format_bytes(int(summary.get("bytes", 0))))
 	dialog.confirmed.connect(func() -> void: _download_answered.emit(true))
 	dialog.canceled.connect(func() -> void: _download_answered.emit(false))
 	add_child(dialog)
-	dialog.popup_centered(Vector2i(420, 0))
+	_popup_dialog(dialog)
 	var yes: bool = await _download_answered
 	dialog.queue_free()
 	return yes
@@ -3156,7 +3257,8 @@ func show_content_failed(reason: String) -> void:
 		centre.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		layer.add_child(centre)
 		_content_failed = PanelContainer.new()
-		_content_failed.theme = DotUiTheme.space().build()
+		_content_failed.theme = TmcShellStyle.theme()
+		_content_failed.add_theme_stylebox_override("panel", TmcShellStyle.card(16, Color(TmcShellStyle.PANEL, 0.96)))
 		_content_failed.custom_minimum_size = Vector2(420.0, 0.0)
 		centre.add_child(_content_failed)
 		var pad := MarginContainer.new()
@@ -3166,6 +3268,9 @@ func show_content_failed(reason: String) -> void:
 		var box := VBoxContainer.new()
 		box.add_theme_constant_override("separation", 8)
 		pad.add_child(box)
+		var heading := TmcShellStyle.eyebrow("Content problem")
+		heading.add_theme_color_override("font_color", TmcShellStyle.DANGER)
+		box.add_child(heading)
 		_content_failed_text = Label.new()
 		_content_failed_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		_content_failed_text.custom_minimum_size = Vector2(392.0, 0.0)
@@ -3177,6 +3282,7 @@ func show_content_failed(reason: String) -> void:
 		var dismiss := Button.new()
 		dismiss.text = "Dismiss"
 		dismiss.pressed.connect(_hide_content_failed)
+		TmcShellStyle.ghost(dismiss)
 		row.add_child(dismiss)
 		var clear := Button.new()
 		clear.name = "Clear"
@@ -3241,6 +3347,7 @@ func _ask_clear() -> void:
 		_clear_confirm.ok_button_text = "Clear and restart" if DotPlatform.can_self_restart() \
 			else "Clear on next start"
 		_clear_confirm.confirmed.connect(request_clear)
+		TmcShellStyle.dialog(_clear_confirm)
 		# The shell's own child, not the menu's: it is also asked for in a game, with the
 		# menu hidden, and a dialog under a hidden Control is hidden with it.
 		add_child(_clear_confirm)
@@ -3254,7 +3361,14 @@ func _ask_clear() -> void:
 			if DotPlatform.can_self_restart()
 			else "They are deleted the next time the game starts.")
 	)
-	_clear_confirm.popup_centered(Vector2i(420, 0))
+	_popup_dialog(_clear_confirm)
+
+
+## Centres [param dialog] at [member dialog_width], or narrower on a window that is narrower
+## (a phone held upright), so its message wraps on screen instead of running off it.
+func _popup_dialog(dialog: AcceptDialog) -> void:
+	var area := get_viewport().get_visible_rect().size if is_inside_tree() else Vector2(1280, 720)
+	dialog.popup_centered(Vector2i(TmcShellStyle.dialog_width(area, dialog_width, menu_fit_margin), 0))
 
 
 ## Deletes every download, by restarting into a start that deletes them first. Not now: a pack mounted this session stays merged into `res://` until exit,

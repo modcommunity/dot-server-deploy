@@ -202,7 +202,7 @@ func _make_ballot(topic: StringName) -> DotBallotPanel:
 ## a panel over a 3D world, but a ballot is drawn over whatever HUD a game has, and over a
 ## menu of bright text (a lot screen's prices) that text read through it, under the result.
 static func ballot_theme() -> DotUiTheme:
-	var t := DotUiTheme.space()
+	var t := TmcShellStyle.palette()
 	t.background.a = 1.0
 	return t
 
@@ -391,7 +391,7 @@ func _build_view() -> void:
 	_root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	# Never takes input: this is drawn over a game that wants every click.
 	_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_root.theme = DotUiTheme.space().build()
+	_root.theme = TmcShellStyle.theme()
 	add_child(_root)
 
 	# One column down the right-hand side: the lines, then the ballots. See the class notes.
@@ -428,9 +428,7 @@ func _make_line() -> Dictionary:
 	var panel := PanelContainer.new()
 	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.03, 0.04, 0.09, 0.78)
-	style.set_corner_radius_all(10)
+	var style := TmcShellStyle.plate(0.78, 12)
 	style.content_margin_left = 16
 	style.content_margin_right = 16
 	style.content_margin_top = 8

@@ -1183,6 +1183,22 @@ stamp_file_sizes() {
     return 0
 }
 
+## Powered by TMC on the boot page links to the TMC site this build signs in against:
+## client/auth.json's backbone_url, written into embed.html's `/*TMC_SITE*/""`. Only a plain
+## http(s) URL is stamped (anything else would be script in the page); no auth.json, or an
+## odd one, leaves the pill as text, which is what a dev export shows.
+stamp_tmc_site() {
+    local build="$1" auth="$PROJECT/client/auth.json" site
+    [ -f "$build/embed.html" ] && [ -f "$auth" ] || return 0
+    site=$(grep -o '"backbone_url"[[:space:]]*:[[:space:]]*"[^"]*"' "$auth" | head -1 | sed 's/.*:[[:space:]]*"//; s/"$//')
+    if ! [[ "$site" =~ ^https?://[A-Za-z0-9.:/-]+$ ]]; then
+        [ -n "$site" ] && printf '  %sclient/auth.json backbone_url is not a plain http(s) URL; Powered by TMC links nowhere%s\n' "$YLW" "$OFF" >&2
+        return 0
+    fi
+    sed -i "s#/\*TMC_SITE\*/\"\"#\"$site\"#" "$build/embed.html"
+    return 0
+}
+
 ## [b]The web build runs dot-sim natively[/b] (TMC_WEB_NATIVE, on by default): the Web preset
 ## exports with the dlink nothreads template (variant/extensions_support=true), which loads
 ## GDExtension side modules, and the pck carries addons/dot_sim/dot_sim.gdextension with a
@@ -1835,6 +1851,7 @@ case "$COMMAND" in
         # The byte counts of the engine files, from the index.html Godot just wrote, into
         # embed.html: the engine's progress callback only has a total when it is given one.
         stamp_file_sizes "$PROJECT/web/build"
+        stamp_tmc_site "$PROJECT/web/build"
 
         # And the loader website-city uploads, with the engine's location baked in.
         # It HAS to be baked: the site serves that file out of its own upload store,

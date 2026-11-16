@@ -2,7 +2,7 @@ extends Node
 
 ## The admin menu and the loading screen, both halves, without a server.
 
-const CHECKS := 197
+const CHECKS := 219
 
 var _passed := 0
 var _failed := 0
@@ -46,6 +46,7 @@ func _run() -> void:
 	_test_loading_server()
 	_test_loading_client()
 	_test_shell_version()
+	_test_shell_style()
 	await _test_loading_fetch()
 	await _test_cover_gate()
 	await _test_cover_draw_budget()
@@ -1068,6 +1069,101 @@ func _test_shell_version() -> void:
 
 	_check(TmcShellVersion.label_text() == "" or TmcShellVersion.label_text().begins_with("shell "),
 		"the line is empty or starts with shell")
+	_done()
+
+
+## The GameSpice look: the palette, the Powered by TMC pill in the bottom-right corner
+## (linked to the configured site, never a host of its own), the version line moved to the
+## bottom-left, the menu's card and its focus chain, and the phone fit's arithmetic.
+func _test_shell_style() -> void:
+	_section("the shell's GameSpice look and Powered by TMC")
+
+	_check(TmcShellStyle.ACCENT.to_html(false) == "f2542d" and TmcShellStyle.palette().accent == TmcShellStyle.ACCENT,
+		"the palette's accent is GameSpice's", TmcShellStyle.ACCENT.to_html(false))
+	_check(TmcShellStyle.theme().has_stylebox("focus", "Button"), "buttons have a focus ring for a keyboard or a pad")
+
+	var site := "https://site.example/"
+	var screen := TmcLoadingScreen.new()
+	screen.site_url = site
+	add_child(screen)
+	var badge: Dictionary = screen.describe().get("powered_by", {})
+	_check(str(badge.get("text", "")) == "Powered by TMC" and str(badge.get("url", "")) == site and bool(badge.get("pressable", false)),
+		"the loading screen shows Powered by TMC, linked to the site it was given", str(badge))
+	var pill := screen.find_child("PoweredByTmc", true, false) as TmcPoweredBy
+	_check(pill != null and pill.anchor_left == 1.0 and pill.anchor_top == 1.0 and pill.offset_right < 0.0 and pill.offset_bottom < 0.0,
+		"in the bottom-right corner, inset from the edge")
+	_check(pill != null and pill.focus_mode == Control.FOCUS_NONE, "and never takes a keyboard or pad's focus")
+	var version := screen.find_child("ShellVersion", true, false) as Label
+	_check(version == null or (version.anchor_left == 0.0 and version.anchor_top == 1.0),
+		"the version line, when there is one, has moved to the bottom-left")
+	screen.free()
+
+	var opened: Array[String] = []
+	var bare := TmcPoweredBy.new()
+	bare.open_url_fn = func(u: String) -> void: opened.append(u)
+	_check(not bare.describe()["pressable"] and not bare.open() and opened.is_empty(),
+		"with no site the pill is text that opens nothing")
+	bare.url = "javascript:alert(1)"
+	_check(not bare.describe()["pressable"] and not bare.open() and opened.is_empty(),
+		"nor does it open anything but a web address")
+	bare.url = " " + site + " "
+	_check(bare.open() and opened.size() == 1 and opened[0] == site, "a press opens the site through the injected opener", str(opened))
+	bare.free()
+
+	var before: Variant = ProjectSettings.get_setting(TmcPoweredBy.SETTING, true)
+	ProjectSettings.set_setting(TmcPoweredBy.SETTING, false)
+	var host := Control.new()
+	_check(TmcPoweredBy.add_to(host, site) == null and host.get_child_count() == 0, "the project setting turns the pill off")
+	ProjectSettings.set_setting(TmcPoweredBy.SETTING, before)
+	host.free()
+
+	# The menu, built on a shell that never enters the tree (its _ready connects to servers).
+	var shell: Node = (load("res://client/shell.gd") as GDScript).new()
+	shell.set("workshop_backbone_url", site)
+	shell.call("_build_menu")
+	var menu := shell.get("_menu") as Control
+	var card := menu.find_child("Card", true, false) as PanelContainer
+	_check(card != null and card.custom_minimum_size.x == float(shell.get("menu_card_width")),
+		"the menu is one glass card, its width a setting")
+	var join := shell.get("_join") as Button
+	_check(join != null and join.has_theme_stylebox_override("normal") and join.has_theme_stylebox_override("focus"),
+		"Connect is the accent button, with its own focus ring")
+	var menu_pill := menu.find_child("PoweredByTmc", true, false) as TmcPoweredBy
+	_check(menu_pill != null and menu_pill.url == site, "the menu has the pill too, linked to the configured site")
+	var name_field := shell.get("_name") as LineEdit
+	var address := shell.get("_address") as LineEdit
+	var clear := shell.get("_clear") as Button
+	_check(name_field.get_node_or_null(name_field.focus_neighbor_bottom) == address
+		and address.get_node_or_null(address.focus_neighbor_bottom) == join
+		and join.get_node_or_null(join.focus_neighbor_top) == address,
+		"down and up walk name, server and Connect in order")
+	_check(clear.focus_mode == Control.FOCUS_ALL and clear.focus_neighbor_top != NodePath(),
+		"and reach the footer's Clear downloaded content")
+	# Deferred, after the menu's own deferred focus and fit calls, which hold the shell.
+	shell.call_deferred("free")
+
+	# The phone fit. Desktop keeps its layout; a portrait phone is scaled until the card fills
+	# its width; a small or landscape window stops where the card stops fitting.
+	var base := Vector2(1280.0, 720.0)
+	var size := Vector2(420.0, 500.0)
+	var desk := TmcShellStyle.fit_factor(Vector2(1280.0, 720.0), 1.0, base, size, 16.0, 1.0)
+	_check(is_equal_approx(desk, 1.0), "a 1280x720 desktop window is not scaled", str(desk))
+	var phone := TmcShellStyle.fit_factor(Vector2(1170.0, 2532.0), 3.0, base, size, 16.0, 1.0)
+	_check(absf(phone - 1280.0 / 452.0) < 0.01, "a 390x844 phone at 3x scales the card to its width", str(phone))
+	var small := TmcShellStyle.fit_factor(Vector2(640.0, 360.0), 1.0, base, size, 16.0, 1.0)
+	_check(absf(small - 720.0 / 532.0) < 0.01, "a half-size window grows only until the card stops fitting", str(small))
+	var big := TmcShellStyle.fit_factor(Vector2(3840.0, 2160.0), 1.0, base, size, 16.0, 1.0)
+	_check(is_equal_approx(big, 1.0), "a big desktop window is never scaled up", str(big))
+	# Dialogs: a phone-width window narrows the confirmation, and its message wraps, because a
+	# frame at 390x844 showed the clear-content question running off the screen.
+	_check(TmcShellStyle.dialog_width(Vector2(1280.0, 720.0), 420.0, 16.0) == 420,
+		"a desktop confirmation keeps its width")
+	_check(TmcShellStyle.dialog_width(Vector2(300.0, 600.0), 420.0, 16.0) == 268,
+		"a narrow window's confirmation fits inside its margins")
+	var ask := TmcShellStyle.dialog(ConfirmationDialog.new())
+	_check(ask.get_label().autowrap_mode == TextServer.AUTOWRAP_WORD_SMART and ask.theme != null,
+		"a dressed confirmation wraps its message and carries the shell's theme")
+	ask.free()
 	_done()
 
 

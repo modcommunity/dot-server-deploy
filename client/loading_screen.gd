@@ -58,6 +58,10 @@ const REASON_WARM := &"warm"
 ## and the menu is hidden"; without it, a screen never goes up.
 var in_game_fn: Callable = Callable()
 
+## The TMC site the Powered by TMC pill opens (the shell's `backbone_url`). Set before the
+## screen enters the tree; "" leaves the pill as plain text.
+var site_url := ""
+
 ## Seconds a content fetch waits before showing. The server's document may change it.
 var show_delay_sec := 0.25
 
@@ -112,6 +116,7 @@ var _root: Control = null
 
 ## The corner line naming the shell build, or null for an unstamped run.
 var _version: Label = null
+var _powered_by: TmcPoweredBy = null
 var _backdrop: ColorRect = null
 var _image: TextureRect = null
 var _title: Label = null
@@ -902,11 +907,11 @@ func _build_view() -> void:
 	_root.offset_bottom = 0.0
 	# Takes the mouse while it is up: a click on a screen that says "loading" is not a shot.
 	_root.mouse_filter = Control.MOUSE_FILTER_STOP
-	_root.theme = DotUiTheme.space().build()
+	_root.theme = TmcShellStyle.theme()
 	add_child(_root)
 
 	_backdrop = ColorRect.new()
-	_backdrop.color = Color(0.02, 0.025, 0.05, 1.0)
+	_backdrop.color = TmcShellStyle.BG
 	_full(_backdrop)
 	_root.add_child(_backdrop)
 
@@ -921,8 +926,8 @@ func _build_view() -> void:
 	# white text nobody can read, and the owner's picture is not ours to choose.
 	var shade := TextureRect.new()
 	var gradient := Gradient.new()
-	gradient.set_color(0, Color(0, 0, 0, 0.05))
-	gradient.set_color(1, Color(0, 0, 0, 0.85))
+	gradient.set_color(0, Color(TmcShellStyle.BG, 0.05))
+	gradient.set_color(1, Color(TmcShellStyle.BG, 0.92))
 	var texture := GradientTexture2D.new()
 	texture.gradient = gradient
 	texture.fill_from = Vector2(0, 0.35)
@@ -956,13 +961,16 @@ func _build_view() -> void:
 	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	bottom.add_child(box)
 
+	box.add_child(TmcShellStyle.eyebrow("Loading"))
+
 	_title = Label.new()
 	_title.add_theme_font_size_override("font_size", 30)
+	_title.add_theme_font_override("font", TmcShellStyle.bold(0.8))
 	box.add_child(_title)
 
 	_tip = Label.new()
 	_tip.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_tip.modulate = Color(1, 1, 1, 0.85)
+	_tip.add_theme_color_override("font_color", TmcShellStyle.MUTED)
 	box.add_child(_tip)
 
 	_status = Label.new()
@@ -972,10 +980,12 @@ func _build_view() -> void:
 	_bar = ProgressBar.new()
 	_bar.show_percentage = false
 	_bar.custom_minimum_size = Vector2(0.0, 6.0)
+	_bar.add_theme_stylebox_override("fill", TmcShellStyle.flame_fill())
+	_bar.add_theme_stylebox_override("background", TmcShellStyle.track())
 	box.add_child(_bar)
 
 	_detail = Label.new()
-	_detail.modulate = Color(1, 1, 1, 0.7)
+	_detail.add_theme_color_override("font_color", Color(TmcShellStyle.MUTED, 0.8))
 	box.add_child(_detail)
 
 	_hint = Label.new()
@@ -992,6 +1002,7 @@ func _build_view() -> void:
 
 	# Which client this is, for a bug report that says "the loading screen" and nothing else.
 	_version = TmcShellVersion.add_corner_label(_root)
+	_powered_by = TmcPoweredBy.add_to(_root, site_url)
 
 	_music = AudioStreamPlayer.new()
 	_music.name = "Music"
@@ -1043,4 +1054,5 @@ func describe() -> Dictionary:
 		"last_refusal": last_refusal,
 		"image": _image.texture != null if _image != null else false,
 		"shell_version": _version.text if _version != null else "",
+		"powered_by": _powered_by.describe() if _powered_by != null else {},
 	}

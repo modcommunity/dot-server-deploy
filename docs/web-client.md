@@ -60,6 +60,16 @@ A mounted pack cannot be unmounted, so a client holding something wrong (a cache
 - `clear_pending()` runs first thing in `_ready`, before anything mounts: dot-cloud's `DotCloudStore.clear_all()` and the other cache directories.
 - Restart by capability (`DotPlatform.can_self_restart`). A browser reloads through `DotWeb.get_global("location").reload()` a second after asking IndexedDB to flush; **call `reload()` as a method, not `.call("reload")`**, which asks JavaScript for a method named `call`. A desktop build uses `OS.set_restart_on_exit(true, OS.get_cmdline_args())`; `--headless` is not passed on, so testing the relaunch needs a display.
 
+## The shell's look
+
+The shell's own screens (the menu, the loading screen, its dialogs, the standalone page `web/embed.html`) wear GameSpice's look: `client/tmc_shell_style.gd` (`TmcShellStyle`) holds the site's tokens (the `#f2542d` accent, the flame gradient, the warm near-black ground, glass panels with a hairline) and builds the Theme on top of dot-ui's `DotUiTheme`, which it does not change. Views that draw over a game (the admin menu, notices, ballots) take the same theme and plates, nothing more: no backdrop and no corner pill over play.
+
+- **Powered by TMC** is a small glass pill in the bottom-right of the menu, the loading screen and the standalone page (`client/tmc_powered_by.gd`). A press opens the site the build signs in against, `client/auth.json`'s `backbone_url`; no host is written in code. Only `http(s)` is opened, so an unset or odd URL leaves plain text. It takes no keyboard or gamepad focus. `tmc/shell/powered_by=false` in the project turns it off. The standalone page gets the URL at export: `stamp_tmc_site` in `./server export-web` writes it over `/*TMC_SITE*/""` after checking it against `^https?://[A-Za-z0-9.:/-]+$`, and warns and leaves the pill unlinked when it does not match.
+- **Phone fit.** While the menu shows, `_fit_menu` sets the window's aspect to `expand` and scales the canvas (`TmcShellStyle.fit_factor`) so the card fills a portrait phone's width and a landscape phone's height; the moment the menu hides it puts back what the project had, so a game never runs under it. Knobs on the shell: `menu_card_width`, `menu_fit` (off keeps the letterbox), `menu_fit_margin`, `menu_text_scale`, `dialog_width` (a confirmation narrows to the window, and its text wraps). **Clear the saved values before restoring them**: setting the aspect emits `size_changed`, which calls `_fit_menu` again inside itself.
+- **Focus.** The menu's fields and buttons are chained (`_chain_focus`: up/down and Tab), so a keyboard or a gamepad's d-pad walks name, server, Connect, Play solo and Clear without a mouse. Focus shows as an accent ring.
+- **Frames.** `tools/progress_shot.gd --stage menu|loading|clear --size WxH` draws them under `xvfb-run` (1280x720, 390x844, 844x390 are the sizes to check). The loading screen is not fitted: it can cover a starting game, so on a portrait phone it is still letterboxed.
+- Tests: `examples/admin_loading_selftest` (`_test_shell_style`).
+
 ## Layout traps the shell has hit
 
 - **`set_anchors_preset` does not set offsets.** A `Control` built in code keeps the zero size it was created with until something resizes it, so a whole interface can be invisible while correctly configured.
@@ -85,7 +95,7 @@ The game listens on `net_port` (6064 in the template) with `net_transport: dual`
 
 ## Which shell a player is running
 
-The shell's menu, the loading screen and the standalone page each carry a small dim line in the bottom-right corner: `shell 20261016-0230 · c09533b`. The commit is stamped by `export-web` and `export-native` into `client/build_stamp.gd` (generated, git-ignored; `-dirty` when the tree had changes). The build id cannot be stamped, because it is chosen at upload after the export: on the web it is read back from the page's path (`/game/<app>/<id>/`, `/godot/<id>/`) and only an exact `YYYYMMDD-HHMM` segment is accepted. Native builds show the commit alone, and a run from source shows nothing. See `client/shell_version.gd`.
+The shell's menu, the loading screen and the standalone page each carry a small dim line in the bottom-left corner (the bottom-right is [Powered by TMC](#the-shells-look)): `shell 20261016-0230 · c09533b`. The commit is stamped by `export-web` and `export-native` into `client/build_stamp.gd` (generated, git-ignored; `-dirty` when the tree had changes). The build id cannot be stamped, because it is chosen at upload after the export: on the web it is read back from the page's path (`/game/<app>/<id>/`, `/godot/<id>/`) and only an exact `YYYYMMDD-HHMM` segment is accepted. Native builds show the commit alone, and a run from source shows nothing. See `client/shell_version.gd`.
 
 The shell fills the resource cache with `DotCloudSliceLoader` (dot-cloud) before it `load()`s a game's client scene in the browser, so compiling a pack's scripts is spread over frames and the loading cover's bar moves instead of freezing for one long frame. Native builds skip it. It needs a dot-cloud that has the loader: `addons.lock` must be bumped to the tag that carries it.
 

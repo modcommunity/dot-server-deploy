@@ -15,6 +15,16 @@ func _init() -> void:
 			out = args[i + 1]
 		if args[i] == "--stage" and i + 1 < args.size():
 			stage = args[i + 1]
+		if args[i] == "--size" and i + 1 < args.size():
+			# WxH, e.g. 390x844 for a phone held upright: the window the menu fits itself to.
+			var wh: PackedStringArray = args[i + 1].split("x")
+			if wh.size() != 2 or not wh[0].is_valid_int() or not wh[1].is_valid_int():
+				printerr("--size wants WxH, got ", args[i + 1])
+				quit(2)
+				return
+			var size := Vector2i(int(wh[0]), int(wh[1]))
+			DisplayServer.window_set_size(size)
+			root.size = size
 
 	var packed: PackedScene = load(SHELL)
 	if packed == null:
@@ -31,6 +41,10 @@ func _init() -> void:
 	await process_frame
 
 	match stage:
+		"menu":
+			# The menu as a player first sees it: nothing to do but wait for the fit.
+			for i in 10:
+				await process_frame
 		"downloading":
 			shell.call("_on_cloud_phase", 4, "Downloading game content…")
 			shell.call("_on_cloud_progress_detail", {

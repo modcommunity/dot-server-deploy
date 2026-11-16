@@ -61,9 +61,10 @@ static func label_text() -> String:
 	return "shell " + " · ".join(parts)
 
 
-## A small, dim label in the bottom-right corner of [param parent]. Added last by the caller
-## so it is drawn over the backdrop; ignores the mouse so it never takes a click. Returns
-## null when there is nothing to say, so an unstamped run shows no label at all.
+## A small, dim label in the bottom-left corner of [param parent] (the bottom-right is
+## Powered by TMC's, [TmcPoweredBy]). Added last by the caller so it is drawn over the
+## backdrop; ignores the mouse so it never takes a click. Returns null when there is nothing
+## to say, so an unstamped run shows no label at all.
 static func add_corner_label(parent: Control) -> Label:
 	var text := label_text()
 
@@ -74,15 +75,15 @@ static func add_corner_label(parent: Control) -> Label:
 	label.name = "ShellVersion"
 	label.text = text
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	label.add_theme_font_size_override("font_size", 12)
-	label.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 0.45))
+	label.add_theme_font_size_override("font_size", 11)
+	label.add_theme_color_override("font_color", Color(TmcShellStyle.MUTED, 0.5))
 	# Anchored to the corner rather than placed by a size, so a narrow panel moves it
 	# instead of clipping it.
-	label.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
-	label.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	label.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	label.grow_horizontal = Control.GROW_DIRECTION_END
 	label.grow_vertical = Control.GROW_DIRECTION_BEGIN
-	label.offset_right = -10.0
-	label.offset_bottom = -6.0
+	label.offset_left = 12.0
+	label.offset_bottom = -12.0
 	parent.add_child(label)
 
 	return label

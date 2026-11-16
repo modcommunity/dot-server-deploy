@@ -2,24 +2,30 @@
 class_name MenuBackdrop
 extends Control
 
-## The sky behind the shell's menu.
+## The backdrop behind the shell's menu: GameSpice's dark, warmed by two slow glows in the
+## flame's colours, with embers rising through it. All drawn here, a handful of rects a
+## frame and no textures beyond three gradients, and only while the menu shows.
 
-## How fast the field drifts, in world units per second. Slow on purpose: fast enough to
-## see if you look, slow enough that it never pulls the eye off the button.
-const DRIFT := Vector2(9.0, -3.5)
+## The base colour, below everything (the site's `--bg`).
+var space := TmcShellStyle.BG
 
-## The base colour, below everything.
-var space := Color(0.031, 0.035, 0.062)
+## The wash up from the bottom edge, fading out upwards: the fire the embers rise from.
+var wash_top := Color(TmcShellStyle.FLAME_DEEP, 0.38)
 
-## The wash across the top, fading out downwards.
-var wash_top := Color(0.13, 0.11, 0.30, 0.60)
+## The glow behind the card, which is what lifts it off the dark.
+var glow := Color(TmcShellStyle.ACCENT, 0.22)
 
-## The glow behind the panel, which is what lifts it off the sky.
-var glow := Color(0.22, 0.52, 0.95, 0.20)
+## The second glow, gold, drifting slowly around the upper left.
+var glow_hot := Color(TmcShellStyle.FLAME_HOT, 0.10)
 
-## How dark the corners go. A vignette is what keeps a field of bright dots from fighting
-## the text in front of it.
-var vignette := Color(0.0, 0.0, 0.012, 0.55)
+## How dark the corners go.
+var vignette := Color(0.0, 0.0, 0.0, 0.6)
+
+## How many embers rise at once. 0 draws none.
+var embers := 46
+
+## How fast an ember rises, in canvas pixels per second, before its own variation.
+var ember_speed := 26.0
 
 var _time := 0.0
 var _wash: GradientTexture2D = null
@@ -53,23 +59,56 @@ func _draw() -> void:
 
 	draw_rect(rect, space)
 
-	# Behind the stars: the wash, then the clouds. Order is the whole of the depth here.
-	draw_texture_rect(_wash, Rect2(rect.position, Vector2(rect.size.x, rect.size.y * 0.72)), false, wash_top)
+	# The wash, flipped so it rises from the bottom edge.
+	var wash_height := rect.size.y * 0.6
+	draw_set_transform(Vector2(0.0, rect.size.y), 0.0, Vector2(1.0, -1.0))
+	draw_texture_rect(_wash, Rect2(Vector2.ZERO, Vector2(rect.size.x, wash_height)), false, wash_top)
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
-	var anchor := DRIFT * _time
+	# The gold glow wanders on a slow ellipse; the accent sits behind the card. Sized from
+	# the window, so a phone gets the same picture smaller rather than a crop of it.
+	var reach := maxf(rect.size.x, rect.size.y)
+	var hot_centre := rect.size * Vector2(0.24 + 0.05 * sin(_time * 0.11), 0.22 + 0.04 * cos(_time * 0.13))
+	var hot := Vector2(reach, reach) * 0.75
+	draw_texture_rect(_radial, Rect2(hot_centre - hot * 0.5, hot), false, glow_hot)
 
-	DotStarfield.draw_nebula(self, rect, anchor, 1.35)
-	DotStarfield.draw_into(self, rect, anchor, _time)
-
-	# The glow sits where the panel does — centred, and wider than it is tall so a wide
-	# window does not put a circle behind a narrow card.
 	var centre := rect.size * 0.5
-	var halo := Vector2(minf(rect.size.x * 0.85, 900.0), minf(rect.size.y * 1.1, 620.0))
-	draw_texture_rect(_radial, Rect2(centre - halo * 0.5, halo), false, glow)
+	var halo := Vector2(rect.size.x * 0.9, rect.size.y * 1.15)
+	var breathe := 1.0 + 0.04 * sin(_time * 0.5)
+	draw_texture_rect(_radial, Rect2(centre - halo * 0.5 * breathe, halo * breathe), false, glow)
 
-	# Vignette last, over everything, drawn as four edge gradients would be four textures;
-	# one inverted radial over the whole rect is one.
+	_draw_embers(rect)
+
+	# Vignette last, over everything: one inverted radial over the whole rect.
 	draw_texture_rect(_vignette_texture(), rect, false, vignette)
+
+
+## Embers: each a small square on its own column, rising and swaying, fading in at the
+## bottom and out near the top. Placed by a hash of its index, not stored, so there is no
+## list to keep and the field is the same every time the menu opens.
+func _draw_embers(rect: Rect2) -> void:
+	for i in range(maxi(embers, 0)):
+		var seed_a := _hash(i * 3 + 1)
+		var seed_b := _hash(i * 3 + 2)
+		var seed_c := _hash(i * 3 + 3)
+		var speed := ember_speed * (0.55 + seed_b)
+		var travel := rect.size.y + 40.0
+		var risen := fposmod(_time * speed + seed_c * travel, travel)
+		var life := risen / travel
+		var x := seed_a * rect.size.x + sin(_time * (0.4 + seed_b) + seed_c * TAU) * 18.0
+		var y := rect.size.y + 20.0 - risen
+		var fade := minf(life * 6.0, 1.0) * (1.0 - life) * (1.0 - life)
+		var colour := TmcShellStyle.FLAME_HOT.lerp(TmcShellStyle.ACCENT, seed_b)
+		var side := 1.5 + seed_c * 2.0
+		draw_rect(Rect2(x - side * 2.0, y - side * 2.0, side * 4.0, side * 4.0), Color(colour, 0.08 * fade))
+		draw_rect(Rect2(x - side * 0.5, y - side * 0.5, side, side), Color(colour, 0.85 * fade))
+
+
+## A number in [0, 1) from an integer, stable across runs.
+static func _hash(n: int) -> float:
+	var h := (n * 374761393 + 668265263) & 0x7fffffff
+	h = ((h ^ (h >> 13)) * 1274126177) & 0x7fffffff
+	return float(h % 10007) / 10007.0
 
 
 ## Top-down fade, white to transparent. Tinted by the `modulate` passed at draw time, so

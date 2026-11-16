@@ -366,7 +366,7 @@ func _build_view() -> void:
 	root.name = "AdminMenu"
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	root.theme = DotUiTheme.space().build()
+	root.theme = TmcShellStyle.theme()
 	add_child(root)
 
 	# Left and middle: the right-hand side is where ballots go, and the middle is where the
@@ -382,9 +382,7 @@ func _build_view() -> void:
 	_panel.offset_top = -190.0
 	_panel.offset_bottom = 190.0
 	_panel.grow_vertical = Control.GROW_DIRECTION_BOTH
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.03, 0.04, 0.09, 0.88)
-	style.set_corner_radius_all(10)
+	var style := TmcShellStyle.plate(0.88)
 	style.content_margin_left = 14
 	style.content_margin_right = 14
 	style.content_margin_top = 10
