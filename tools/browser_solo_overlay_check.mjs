@@ -1,7 +1,7 @@
 // A solo game that needs addons the shell does not carry, in a real headless browser, from a tab in one of three states.
 //
 //   node tools/browser_solo_overlay_check.mjs --url <embed.html?solo=...> --state fresh|counter2|failed \
-//       [--serve <web export dir> --port 8098 --content https://dotgames.org] [--lock addons.lock | --fp HEX] \
+//       [--serve <web export dir> --port 8098 --content https://content.gamespice.net] [--lock addons.lock | --fp HEX] \
 //       [--addons arena_weapons@1.4.46,zee_weapons@0.1.62] [--expect started,blocked] [--secs 240] [--shot out.png]
 //       [--map <slug>] [--linger <secs>] [--map-loaded <regex>] [--max-loads N] [--threads 1|0]
 //
@@ -56,7 +56,7 @@ const opt = (name, fallback) => {
 const state = opt('state', 'fresh');
 const serve = opt('serve', '');
 const port = +opt('port', '8098');
-const upstream = opt('content', 'https://dotgames.org').replace(/\/$/, '');
+const upstream = opt('content', 'https://content.gamespice.net').replace(/\/$/, '');
 const addonsArg = opt('addons', 'arena_weapons@1.4.46,zee_weapons@0.1.62');
 const expect = opt('expect', 'started,blocked').split(',');
 const secs = +opt('secs', '240');

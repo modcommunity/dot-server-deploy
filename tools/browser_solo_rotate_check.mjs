@@ -4,7 +4,7 @@
 //
 //   gpu.sh cdp-run -- node tools/browser_solo_rotate_check.mjs --url <embed.html?solo=owner/repo> \
 //       [--maps welcometomexicov6,dm-industrial-gamma,surf_xiv_v2a,welcometomexicov6] [--secs 240] [--per-map 150] \
-//       [--serve <web export dir> --port 8099 --content https://dotgames.org]   (a local export, /content proxied to the live origin)
+//       [--serve <web export dir> --port 8099 --content https://content.gamespice.net]   (a local export, /content proxied to the live origin)
 //       [--loaded 'map change map:{map} to playable'] [--cmd solo_map] [--max-growth-mb 400]
 //
 // Every map is typed into the game's local console as `solo_map <id>` once the match is live (backtick opens it; FC's
@@ -37,7 +37,7 @@ const serve = opt('serve', '');  // a local web export (web/build) served as /go
 const serveBuild = (new URL(url0).pathname.match(/\/(\d{8}-\d{4})\//) || [])[1] || '';
 let srv = null, url1 = url0;
 if (serve) {
-  try { ({ srv, url: url1 } = await serveShell({ dir: serve, port: +opt('port', '8099'), buildId: serveBuild, upstream: opt('content', 'https://dotgames.org'), givenUrl: url0 })); }
+  try { ({ srv, url: url1 } = await serveShell({ dir: serve, port: +opt('port', '8099'), buildId: serveBuild, upstream: opt('content', 'https://content.gamespice.net'), givenUrl: url0 })); }
   catch (e) { console.error(String(e.message)); process.exit(2); }
 }
 const u = new URL(url1); u.searchParams.delete('map');

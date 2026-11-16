@@ -62,7 +62,7 @@
             "name": "Content origin",
             "description": "Where games are installed from, comma-separated for mirrors, tried in order. The default is the public origin. A LAN or an air-gapped deployment points this at its own copy; the clients that connect are told the same address, so they download the game from wherever this says rather than from somewhere a second setting mentions.",
             "env_variable": "TMC_CONTENT_URL",
-            "default_value": "https://dotgames.org/content",
+            "default_value": "https://content.gamespice.net/content",
             "user_viewable": true,
             "user_editable": true,
             "rules": "nullable|string|max:512",

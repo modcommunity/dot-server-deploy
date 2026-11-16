@@ -6,7 +6,7 @@
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
 FAM="$(cd "$HERE/.." && pwd)"
-base=https://dotgames.org/content version=0.1.14 port=8791
+base=https://content.gamespice.net/content version=0.1.14 port=8791
 while [ $# -gt 0 ]; do case $1 in
     --content-url) base=${2:?}; shift 2 ;;
     --version) version=${2:?}; shift 2 ;;

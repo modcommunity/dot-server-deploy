@@ -1,7 +1,7 @@
 // The addon update-and-restart path, in a real browser, signed in as a member.
 //
 //   node tools/browser_update_check.mjs --build <dir> --server ws://127.0.0.1:6064 \
-//       [--port 8099] [--content https://dotgames.org] [--secs 150]
+//       [--port 8099] [--content https://content.gamespice.net] [--secs 150]
 //
 // <dir> is a web export of the shell made from an OLDER addons.lock than the server's
 // (doctor the lock, export the Web preset into a scratch directory, put the lock back),
@@ -39,7 +39,7 @@ const opt = (name, fallback) => {
 const build = opt('build', '');
 const server = opt('server', 'ws://127.0.0.1:6064');
 const port = +opt('port', '8099');
-const upstream = opt('content', 'https://dotgames.org').replace(/\/$/, '');
+const upstream = opt('content', 'https://content.gamespice.net').replace(/\/$/, '');
 const secs = +opt('secs', '150');
 const shot = opt('shot', path.join(os.tmpdir(), 'browser_update_check.png'));
 

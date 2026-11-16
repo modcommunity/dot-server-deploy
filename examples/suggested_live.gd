@@ -35,7 +35,7 @@ func _run() -> void:
 	shell.call("_ensure_cloud")
 	var cloud: DotCloudClient = shell.get("_cloud")
 	cloud.config.cache_dir = WORK.path_join("cache")
-	cloud.http_base_urls = PackedStringArray([_arg("--content-url", "https://dotgames.org/content")])
+	cloud.http_base_urls = PackedStringArray([_arg("--content-url", "https://content.gamespice.net/content")])
 	var ws: DotCloudWorkshop = shell.call("_ensure_workshop")
 	ws.config_file = ""
 	ws.cache_dir = WORK.path_join("workshop")

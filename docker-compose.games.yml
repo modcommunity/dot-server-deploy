@@ -32,7 +32,7 @@ services:
       # Change these. The rest of the deployment is the base file's.
       TMC_GAMES: 'g2gfast'
       TMC_GAME: 'g2gfast'
-      TMC_CONTENT_URL: 'https://dotgames.org/content'
+      TMC_CONTENT_URL: 'https://content.gamespice.net/content'
 
       # What happens to a game that is installed and is no longer in TMC_GAMES.
       #

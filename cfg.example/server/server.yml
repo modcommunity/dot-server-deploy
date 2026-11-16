@@ -180,7 +180,7 @@ query_bind_ip: "*"
 # data/content.json whatever the source, so adding a URL here is not by itself a way
 # to be handed somebody else's scripts.
 content_urls:
-  - "https://dotgames.org/content"
+  - "https://content.gamespice.net/content"
 
 # Network (was net.yml)
 # -----------------------------------------

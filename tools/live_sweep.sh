@@ -28,7 +28,7 @@ set -u
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 GPU=${GPU_SH:-$HERE/../dot-bootstrap/tools/gpu.sh}
 [ -x "$GPU" ] || GPU=/home/gamedev/godot/dot-bootstrap/tools/gpu.sh
-ORIGIN=${CONTENT_ORIGIN:-https://dotgames.org}
+ORIGIN=${CONTENT_ORIGIN:-https://content.gamespice.net}
 OWNER=${CONTENT_OWNER:-gamemann}
 # What a game logs once its map is up: the check's own default plus the wording the map games use (zz "world drawn", "map began"; dd "the mountain is ready").
 MAPRE=${MAP_LOADED:-'world built|world drawn|map changed|map loaded|map began|round began|round begun|mountain is ready'}

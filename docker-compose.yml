@@ -104,7 +104,7 @@ services:
       # an image that carries no game and installs every one of them, or use the
       # docker-compose.games.yml overlay, which sets both.
       # TMC_GAMES: "g2gfast,fatalcontact"
-      # TMC_CONTENT_URL: "https://dotgames.org/content"
+      # TMC_CONTENT_URL: "https://content.gamespice.net/content"
       # TMC_GAMES_MODE: "hide"
 
       # --- The other three ports -----------------------------------------------
