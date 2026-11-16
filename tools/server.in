@@ -174,7 +174,7 @@ usage() {
     config              Print the resolved configuration and exit.
     games               List what is in the content directory and exit.
     pack <id> [--source DIR]
-                        Publish content/<id> as a signed dot-cloud pack, into
+                        Publish content/<id> as a signed Gamespice pack, into
                         dist/<id>. Any content directory, not only a game:
                         an avatar set, a prop pack or a texture set is
                         published exactly the same way. --all does every one.

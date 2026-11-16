@@ -84,7 +84,7 @@ function Show-Usage {
                         net.yml into server\server.yml, content.yml's games: into
                         cfg\server\game\<game>\server.yml. Copies go to cfg.bak\.
                         --dry-run lists the moves.
-    pack <id>           Publish content\<id> as a signed dot-cloud pack.
+    pack <id>           Publish content\<id> as a signed Gamespice pack.
     export-web          Build the browser client into web\build, plus the
                         loader website-city uploads. Takes --base.
     export-native       Build the native client the desktop app installs, into

@@ -13,18 +13,18 @@ extends RefCounted
 const DOT_SIM_SCRIPT := "res://addons/dot_sim/dot_sim.gd"
 
 
-## "dot-sim native: bots=yes motor=yes snapshot=no", or a line saying dot-sim is absent.
+## "GS sim native: bots=yes motor=yes snapshot=no", or a line saying the GS sim (dot-sim) is absent.
 static func line() -> String:
 	if not ResourceLoader.exists(DOT_SIM_SCRIPT):
-		return "dot-sim native: no (dot-sim is not in this build)"
+		return "GS sim native: no (dot-sim is not in this build)"
 
 	var script := load(DOT_SIM_SCRIPT) as Script
 	if script == null:
-		return "dot-sim native: no (%s did not load)" % DOT_SIM_SCRIPT
+		return "GS sim native: no (%s did not load)" % DOT_SIM_SCRIPT
 
 	var modules: Variant = script.get_script_constant_map().get("MODULES", {})
 	if not (modules is Dictionary) or (modules as Dictionary).is_empty():
-		return "dot-sim native: unknown (DotSim names no MODULES)"
+		return "GS sim native: unknown (DotSim names no MODULES)"
 
 	return describe(modules as Dictionary)
 
@@ -41,4 +41,4 @@ static func describe(modules: Dictionary) -> String:
 		var value: Variant = modules.get(module_name, modules.get(StringName(module_name)))
 		var native := ClassDB.class_exists(StringName(str(value)))
 		parts.append("%s=%s" % [module_name, "yes" if native else "no"])
-	return "dot-sim native: " + " ".join(parts)
+	return "GS sim native: " + " ".join(parts)

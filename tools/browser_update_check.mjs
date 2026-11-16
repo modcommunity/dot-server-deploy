@@ -183,7 +183,7 @@ try {
   const checks = [
     ['load 1 found newer addons and updated', has(1, 'updating before joining') && built !== ''],
     ['exactly two loads', load === 2],
-    ['load 2 mounted the overlay at boot', has(2, '[dot_cloud boot] mounted the addon overlay')],
+    ['load 2 mounted the overlay at boot', (has(2, '[gs_cloud boot] mounted the addon overlay') || has(2, '[dot_cloud boot] mounted the addon overlay'))],
     [`load 2 booted on what load 1 built (${booted || 'nothing'})`, booted !== '' && booted === built],
     [`load 2 downloaded no addon pack (load 1 fetched ${addonPacks.length})`, addonPacks.length > 0 && again.length === 0],
     [`signed in as the same member on both loads (${who1 || '-'} / ${who2 || '-'})`, who1 === `backbone:${MEMBER.id}` && who2 === who1],

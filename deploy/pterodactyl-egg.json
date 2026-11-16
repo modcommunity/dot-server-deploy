@@ -1,13 +1,13 @@
 {
-    "_comment": "A Pterodactyl egg for one dot-server. Import under Nests > a nest > Import Egg. Every setting is an environment variable because ./server takes all of them that way -- see deploy/env.example. GAMES is the one to understand first: a game is a signed pack on the content origin plus a game.yml that says how to start it, and this fetches both at startup, so the install below carries no game content and a server offers exactly what its panel says. rcon_password is deliberately NOT a variable here: it is a secret, and Pterodactyl both displays variables in the panel and puts them in the container environment, where any process in the container can read them. It goes in cfg/server/addon/dot_console/rcon.yml, which is a file with a mode on it. The Godot runtime is not a variable either, and for a different reason: it is pinned with its checksum in tools/fetch-godot.sh, so it travels with DEPLOY_BRANCH rather than being restated here where it would drift.",
+    "_comment": "A Pterodactyl egg for one Gamespice server. Import under Nests > a nest > Import Egg. Every setting is an environment variable because ./server takes all of them that way -- see deploy/env.example. GAMES is the one to understand first: a game is a signed pack on the content origin plus a game.yml that says how to start it, and this fetches both at startup, so the install below carries no game content and a server offers exactly what its panel says. rcon_password is deliberately NOT a variable here: it is a secret, and Pterodactyl both displays variables in the panel and puts them in the container environment, where any process in the container can read them. It goes in cfg/server/addon/dot_console/rcon.yml, which is a file with a mode on it. The Godot runtime is not a variable either, and for a different reason: it is pinned with its checksum in tools/fetch-godot.sh, so it travels with DEPLOY_BRANCH rather than being restated here where it would drift.",
     "meta": {
         "version": "PTDL_v2",
         "update_url": null
     },
     "exported_at": "2026-10-09T00:00:00+00:00",
-    "name": "dot-server",
+    "name": "Gamespice server",
     "author": "contact@moddingcommunity.com",
-    "description": "A dot-server that installs the games it is told to run. These variables only fill keys your cfg files leave unset: cfg/server/*.yml and cfg/content/games.yml always win, on every start, and the egg never writes into them. GAMES is a comma-separated list, fetched from the content origin at startup -- descriptors and signed packs alike -- so this ships no game and a new one needs no new build. TMC_GAME picks which of them boots, and it can be changed live over RCON without a restart.",
+    "description": "A Gamespice server that installs the games it is told to run. These variables only fill keys your cfg files leave unset: cfg/server/*.yml and cfg/content/games.yml always win, on every start, and the egg never writes into them. GAMES is a comma-separated list, fetched from the content origin at startup -- descriptors and signed packs alike -- so this ships no game and a new one needs no new build. TMC_GAME picks which of them boots, and it can be changed live over RCON without a restart.",
     "features": null,
     "docker_images": {
         "Debian 12": "ghcr.io/parkervcp/yolks:debian"
@@ -110,7 +110,7 @@
         },
         {
             "name": "A2S port",
-            "description": "Where A2S answers, over UDP. Empty derives THE GAME PORT ITSELF, and that is usually what you want: one allocation opens the number on TCP and UDP, and this server uses both halves of it. Browsers join over WebSocket on TCP; the TMC desktop client joins over ENet on the same number's UDP side; and A2S and the dot query protocol answer on that UDP port too, told apart from ENet's traffic by their first bytes. So one allocation serves every kind of player and every query, and it is also the only port a tracker will try. Set this only when something else on the node has taken that UDP port, and give the server an allocation for whatever you set: queries then move there, and ENet stays on the game port.",
+            "description": "Where A2S answers, over UDP. Empty derives THE GAME PORT ITSELF, and that is usually what you want: one allocation opens the number on TCP and UDP, and this server uses both halves of it. Browsers join over WebSocket on TCP; the TMC desktop client joins over ENet on the same number's UDP side; and A2S and the GS query protocol answer on that UDP port too, told apart from ENet's traffic by their first bytes. So one allocation serves every kind of player and every query, and it is also the only port a tracker will try. Set this only when something else on the node has taken that UDP port, and give the server an allocation for whatever you set: queries then move there, and ENet stays on the game port.",
             "env_variable": "TMC_A2S_PORT",
             "default_value": "",
             "user_viewable": true,
@@ -120,7 +120,7 @@
         },
         {
             "name": "Query port (DQP)",
-            "description": "Where the dot query protocol answers, over UDP. Empty derives the A2S port above, so the two share ONE socket -- they are told apart by their first four bytes, which means a tracker that found this server over A2S can be pointed at the better protocol without being given a second address. Set this only to split them onto separate ports, and allocate the port you set.",
+            "description": "Where the GS query protocol answers, over UDP. Empty derives the A2S port above, so the two share ONE socket -- they are told apart by their first four bytes, which means a tracker that found this server over A2S can be pointed at the better protocol without being given a second address. Set this only to split them onto separate ports, and allocate the port you set.",
             "env_variable": "TMC_QUERY_PORT",
             "default_value": "",
             "user_viewable": true,
@@ -220,7 +220,7 @@
         },
         {
             "name": "Update addons automatically",
-            "description": "when-needed (default): if a game this server installs needs newer dot-* addons than it has, or the deploy branch (channel) has a new commit, lock or web shell, the server updates this checkout and moves its addons to the matching release before starting -- what a reinstall does, without one. always: do that on every start. never: keep the game on the version that runs and say so in the log.",
+            "description": "when-needed (default): if a game this server installs needs newer Gamespice (dot-*) addons than it has, or the deploy branch (channel) has a new commit, lock or web shell, the server updates this checkout and moves its addons to the matching release before starting -- what a reinstall does, without one. always: do that on every start. never: keep the game on the version that runs and say so in the log.",
             "env_variable": "TMC_AUTO_UPDATE",
             "default_value": "when-needed",
             "user_viewable": true,
