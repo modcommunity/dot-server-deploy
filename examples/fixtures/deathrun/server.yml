@@ -3,7 +3,7 @@
 # whether a DELIVERED game serves a real socket, not about switching to one.
 sv_name: "Deathrun Fixture"
 sv_maxplayers: 8
-sv_game: "deathrun"
+game: "deathrun"
 
 # Off, because nobody is typing. dot-server's stdin reader is a thread blocked in a read
 # the engine cannot cancel, so shutting the server down while stdin is still open leaves it

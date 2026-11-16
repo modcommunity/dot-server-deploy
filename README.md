@@ -70,7 +70,7 @@ Options include `--port`, `--bind`, `--name`, `--max-players`, `--game`, `--map`
 | "Save that" clips and evidence with every ban | `cfg/addon/dot_replay/replay.yml` |
 | Shared radio (off by default; add `- repo: dot-radio` to `cfg/content/addons.yml`) | `cfg/addon/dot_radio/radio.yml` |
 | Matchmaking queue (off by default) | `cfg/addon/dot_matchmaking/matchmaking.yml` |
-| Games swapped at runtime with players connected | `sv_game` and `sv_map` in `cfg/server/server.yml`, or `--game` and `--map` |
+| Games swapped at runtime with players connected | `game` and `map` in `cfg/server/server.yml` (`sv_game` and `sv_map` still work), or `--game` and `--map` |
 
 ## Known limits
 

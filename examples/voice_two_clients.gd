@@ -5,7 +5,7 @@ extends Node
 const ServerWorld := preload("res://examples/server_world.gd")
 const CONTENT := "res://content"
 
-## game id (sv_game) -> the packs it needs in dist/.
+## game id (game) -> the packs it needs in dist/.
 const PACKS := {
 	"fatalcontact": ["tmc/arena"],
 	"buses": ["tmc/buses"],
@@ -109,10 +109,10 @@ func _write_config() -> void:
 			if name == "server.yml":
 				var lines := PackedStringArray()
 				for line in text.split("\n"):
-					if line.begins_with("sv_game:") or line.begins_with("sv_map:") or line.begins_with("sv_tickrate:"):
+					if line.begins_with("game:") or line.begins_with("sv_game:") or line.begins_with("sv_map:") or line.begins_with("map:") or line.begins_with("sv_tickrate:"):
 						continue
 					lines.append(line)
-				lines.append("sv_game: \"%s\"" % _game)
+				lines.append("game: \"%s\"" % _game)
 				lines.append("sv_stdin_console: false")
 				# Awake: server and clients share one process here, and a hibernating server slows the
 				# physics clock the first client then builds its netcode on.

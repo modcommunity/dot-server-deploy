@@ -35,6 +35,7 @@ func _run() -> void:
 	_test_yaml_structure()
 	_test_yaml_refusals()
 	_test_config()
+	_test_aliases()
 	_test_admins()
 	_test_layered_cfg()
 	_test_content_lists()
@@ -251,6 +252,67 @@ func _test_yaml_refusals() -> void:
 	_done()
 
 
+func _alias_cfg(label: String, server_yml: String, alias_yml: String) -> String:
+	var dir := ProjectSettings.globalize_path("user://alias_test_%s" % label)
+	DirAccess.make_dir_recursive_absolute(dir + "/server")
+	var f := FileAccess.open(dir + "/server/server.yml", FileAccess.WRITE)
+	f.store_string(server_yml)
+	f.close()
+	var path := dir + "/server/alias.yml"
+	if alias_yml != "":
+		var g := FileAccess.open(path, FileAccess.WRITE)
+		g.store_string(alias_yml)
+		g.close()
+	elif FileAccess.file_exists(path):
+		DirAccess.remove_absolute(path)
+	return dir
+
+
+func _test_aliases() -> void:
+	_section("aliases: game, sv_game, sv_games, alias.yml")
+
+	var c1 := TmcConfig.load_dir(_alias_cfg("new", "game: \"smash\"\nsv_name: \"a\"\n", ""))
+	_check(c1.ok and (c1.value as TmcConfig).initial_game == "smash", "`game:` names the boot game")
+
+	var c2 := TmcConfig.load_dir(_alias_cfg("old", "sv_game: \"deathrun\"\nsv_games: [smash, deathrun]\n", ""))
+	var cfg2: TmcConfig = c2.value if c2.ok else null
+	_check(cfg2 != null and cfg2.initial_game == "deathrun", "`sv_game:` is a built-in alias of `game` with no alias.yml")
+	_check(cfg2 != null and cfg2.games_allow.size() == 2, "`sv_games:` is a built-in alias of `games` (%s)" % str(cfg2.games_allow if cfg2 else []))
+	_check(cfg2 != null and not cfg2.console_lines.has("sv_game deathrun"), "and is not queued as a console line")
+
+	var c3 := TmcConfig.load_dir(_alias_cfg("both", "sv_game: \"deathrun\"\ngame: \"smash\"\n", ""))
+	_check(c3.ok and (c3.value as TmcConfig).initial_game == "smash", "`game:` wins over `sv_game:` whatever the order")
+	var c3b := TmcConfig.load_dir(_alias_cfg("both2", "game: \"smash\"\nsv_game: \"deathrun\"\n", ""))
+	_check(c3b.ok and (c3b.value as TmcConfig).initial_game == "smash", "and in the other order")
+
+	var c4 := TmcConfig.load_dir(_alias_cfg("user", "mygame: \"smash\"\nmymap: \"m1\"\n", "# mine\nmygame: game   # one word\n\"mymap\": map\nrestart: changelevel smash\n"))
+	var cfg4: TmcConfig = c4.value if c4.ok else null
+	_check(cfg4 != null and cfg4.initial_game == "smash" and cfg4.initial_map == "m1", "alias.yml aliases work as config keys, quoting and comments included (%s)" % str(c4.error if not c4.ok else ""))
+	_check(cfg4 != null and cfg4.aliases.has("restart"), "an alias with arguments is kept for the console")
+
+	var bad := {
+		"line": ["not a mapping line", "name: target"],
+		"twice": ["a: game\na: games", "defined twice"],
+		"self": ["foo: foo", "points at itself"],
+		"chain": ["foo: game\nbar: foo", "alias `foo`"],
+		"shadow": ["game: games", "shadow"],
+		"name": ["bad name: game", "not a usable alias name"],
+		"empty": ["foo:", "no target"],
+	}
+	for label in bad:
+		var r := TmcConfig.load_dir(_alias_cfg("bad_" + label, "sv_name: \"a\"\n", bad[label][0]))
+		_check(not r.ok and str(r.error).contains(bad[label][1]) and str(r.error).contains("alias.yml:"),
+			"alias.yml '%s' fails loudly naming file and line (%s)" % [label, str(r.error).replace("\n", " | ")])
+
+	# No cap: a few hundred entries load.
+	var many := ""
+	for i in 500:
+		many += "alias_%d: game\n" % i
+	var big := TmcConfig.load_dir(_alias_cfg("many", "sv_name: \"a\"\n", many))
+	_check(big.ok and (big.value as TmcConfig).aliases.size() >= 500, "no cap on the number of aliases")
+	_done()
+
+
 func _test_config() -> void:
 	_section("the configuration")
 
@@ -329,7 +391,7 @@ func _test_config() -> void:
 	_check(near.has("net_interest_radius"), "an unknown setting is offered its nearest known name (%s)" % str(near))
 	_check(config.nearest_names("zzzz_nothing").is_empty(), "and nothing when nothing is near")
 	_check(config.public_address == "203.0.113.7", "net_public_ip is kept for the join line")
-	_check(config.initial_game == "buses", "sv_game names the boot game")
+	_check(config.initial_game == "buses", "`game:` names the boot game")
 	# [b]Its own key, and not a console line.[/b] `sv_map` has no cvar and no command behind it at this
 	# level — the `map` command belongs to whichever game is loaded, and at read time that is none of
 	# them.

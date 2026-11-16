@@ -534,7 +534,7 @@ yield_to_file OPT_PORT sv_port --port TMC_PORT "$(cfg_key_file net_port)"
 yield_to_file OPT_BIND net_bind_ip --bind TMC_BIND
 yield_to_file OPT_NAME sv_name --name TMC_NAME
 yield_to_file OPT_MAX_PLAYERS sv_maxplayers --max-players TMC_MAX_PLAYERS
-yield_to_file OPT_GAME sv_game --game TMC_GAME
+yield_to_file OPT_GAME game --game TMC_GAME "$(cfg_key_file sv_game)"
 yield_to_file OPT_CONTENT_URL content_urls --content-url TMC_CONTENT_URL
 yield_to_file OPT_RCON_PORT rcon_port --rcon-port TMC_RCON_PORT "$([ -n "$(rcon_cfg_value rcon_port)" ] && echo rcon.yml)"
 yield_to_file OPT_GAMES games --games TMC_GAMES "$(cfg_lists games)"

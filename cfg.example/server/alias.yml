@@ -1,0 +1,10 @@
+# Your own names for settings and console commands. One `alias_name: target` per line.
+# `sv_game: game` and `sv_games: games` are built in and need no line here.
+#
+# A one-word target also works as a key in any cfg/ file and as a console alias;
+# a target with arguments is a console alias only. Chains, loops, a name that shadows
+# a real setting or command, and a target that does not exist stop the boot with an
+# error naming this file and the line.
+#
+#sv_map_name: map
+#restart: changelevel fatalcontact

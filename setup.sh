@@ -583,7 +583,7 @@ if [ "$DO_FULL" -eq 1 ]; then
     done
     [ -n "$installed_games" ] && printf '    %sgames here now:%s%s\n' "$DIM" "$OFF" "$installed_games" >&2
 
-    FULL_GAME="$(ask       "Game to boot" "$(cfg_or "$(server_yml)" sv_game fatalcontact)")"
+    FULL_GAME="$(ask       "Game to boot" "$(cfg_or "$(server_yml)" game "$(cfg_or "$(server_yml)" sv_game fatalcontact)")")"
     FULL_MAXPLAYERS="$(ask "Player slots" "$(cfg_or "$(server_yml)" sv_maxplayers 64)")"
     FULL_TICKRATE="$(ask   "Tickrate" "$(cfg_or "$(server_yml)" sv_tickrate "$(game_tickrate "$FULL_GAME")")")"
     FULL_PORT="$(ask       "Port the server listens on" "$(cfg_or "$(net_cfg_file)" net_port 6064)")"
@@ -1187,7 +1187,7 @@ fi
 # a name is checked against is this one, and this is where it is. A typo costs the run
 # steps 1 to 3 -- a runtime that was going to be downloaded anyway and clones that are
 # idempotent -- and buys a message naming every game this build actually has, which is
-# what somebody who just mistyped one needs. The same trade is made for sv_game at the
+# what somebody who just mistyped one needs. The same trade is made for `game` at the
 # end of --full, for the same reason.
 # [b]`${repo#*-}`, not `${repo#game-}`, and that one character is the whole of a rule.[/b]
 # A game repository is named `<kind>-<what it is>`: `game-` for the five, `mg-` for the
@@ -2495,7 +2495,7 @@ if [ "$DO_FULL" -eq 1 ]; then
         [ "$current" = "$shown" ] && return 0
         # A panel's TMC_* variable only applies while no cfg file sets the key (tools/server.in).
         case "$key" in
-            sv_name) _egg="${TMC_NAME:-}" ;; sv_game) _egg="${TMC_GAME:-}" ;;
+            sv_name) _egg="${TMC_NAME:-}" ;; game) _egg="${TMC_GAME:-}" ;;
             sv_maxplayers) _egg="${TMC_MAX_PLAYERS:-}" ;; *) _egg="" ;;
         esac
         [ -n "$_egg" ] && [ -z "$current" ] && return 0
@@ -2508,7 +2508,7 @@ if [ "$DO_FULL" -eq 1 ]; then
     }
 
     set_and_say "$(server_yml)" sv_name       "\"$FULL_NAME\""    "$FULL_NAME"
-    set_and_say "$(server_yml)" sv_game       "\"$FULL_GAME\""    "$FULL_GAME"
+    set_and_say "$(server_yml)" game          "\"$FULL_GAME\""    "$FULL_GAME"
     set_and_say "$(server_yml)" sv_maxplayers "$FULL_MAXPLAYERS"  "$FULL_MAXPLAYERS"
     set_and_say "$(server_yml)" sv_tickrate   "$FULL_TICKRATE"    "$FULL_TICKRATE"
     set_and_say "$(net_cfg_file)" net_port      "$FULL_PORT"        "$FULL_PORT"
@@ -2525,7 +2525,7 @@ if [ "$DO_FULL" -eq 1 ]; then
     [ "$cfg_changed" -eq 0 ] && ok "cfg/ already said all of that"
 
     # The game list is real now -- step 3 copied them -- so the answer given before
-    # any of that existed can finally be checked. A server whose sv_game names
+    # any of that existed can finally be checked. A server whose `game` names
     # nothing boots into the default game and says so in one line of a log nobody has opened
     # yet, which looks like the setting being ignored.
     # A renamed game lists its old id under former_ids, and the server still boots it by that id.
@@ -2538,7 +2538,7 @@ if [ "$DO_FULL" -eq 1 ]; then
         done
         warn "no content/$FULL_GAME/game.yml, so the server will fall back to the default game.
        This build has:$have
-       Fix it with: sed -i 's/^sv_game:.*/sv_game: \"<one of those>\"/' $(server_yml)"
+       Fix it with: sed -i 's/^\(sv_\)\?game:.*/game: \"<one of those>\"/' $(server_yml)"
     fi
 fi
 

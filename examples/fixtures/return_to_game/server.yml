@@ -2,6 +2,6 @@
 # docs/testing.md), and no hibernation, so a game runs between one client leaving and the next.
 sv_name: "Return To Game Fixture"
 sv_maxplayers: 8
-sv_game: "smash"
+game: "smash"
 sv_stdin_console: false
 sv_hibernate_when_empty: false

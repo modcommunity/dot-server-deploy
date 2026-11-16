@@ -17,7 +17,7 @@ const FILES := [
 ## The operator's base directory under `cfg/`: `server.yml` and any other flat server file. Never touched by an update.
 const SERVER_DIR := "server"
 ## Files in it that another loader reads.
-const SERVER_DIR_OWNED := ["content.yml"]
+const SERVER_DIR_OWNED := ["content.yml", "alias.yml"]
 
 ## Operator-facing name -> boot config property, for what the console cannot reach. Two vocabularies are paid for deliberately:
 ## an operator writes `net_port`, dot-server calls it `port`, and the alternative is renaming a published cvar.
@@ -150,6 +150,13 @@ const LEGACY_KEYS := {
 
 ## Keys that exist and are handled somewhere other than a config object, listed so they are not reported as unknown (a key silently ignored and not reported looks like it took effect).
 ## `net_public_ip` is here, not in [constant BOOT_KEYS], because dot-server should have no such setting: what a server binds to and what a player types differ, and only the second is behind NAT.
+## Old spellings that stay accepted silently, by default, through the same mechanism as `cfg/server/alias.yml`. `game` and `games` are the names (like the `map` command).
+const BUILTIN_ALIASES := {"sv_game": "game", "sv_games": "games"}
+## The settings this file reads itself, as named in `server.yml`, i.e. the config keys that exist without a console cvar behind them.
+const HOST_KEYS := ["game", "games", "map", "sv_map", "sv_query_app", "sv_web_loader", "sv_web_build", "content_urls", "net_public_ip", "sv_tags", "chat_command_prefixes", "log_router"]
+## The alias file, under `cfg/server/`. Read before every other file so a key in any of them can use an alias.
+const ALIAS_FILE := "alias.yml"
+
 const HANDLED_ELSEWHERE := ["sv_content_dir"]
 
 ## The boot configuration, after every file has been applied.
@@ -289,6 +296,13 @@ var vote_exclude: PackedStringArray = PackedStringArray()
 ## The game to load at boot, or "" for whatever the content directory says is first.
 var initial_game: String = ""
 
+## Aliases, `alias name -> {"target": String, "source": String, "builtin": bool}`: the built-ins in [constant BUILTIN_ALIASES] plus `cfg/server/alias.yml`.
+## One mechanism for both uses: a key in a config file written under an alias name is read as its target (when the target is one word), and the same table is
+## registered on the console so `sv_games` typed at a prompt or in RCON runs `games`. An alias is never a chain: its target is a real name, validated after boot ([method check_aliases]).
+var aliases: Dictionary = {}
+## Config keys that were written under their own name, so an alias to them written in another file cannot override them.
+var _written_keys: Dictionary = {}
+
 ## The site's web loader version this server's browser players should get, or "" for the site's default. Reported as the NOTIFY cvar `sv_web_loader` (see `TmcHost._register_web_loader`).
 ## A host field and not a console line, as `sv_game` is: the cvar is registered after dot-server boots, and the YAML's console lines run during that boot, so it would be dropped as unknown.
 ## Like `sv_web_build`, it is the operator's pin for a server deliberately behind the site's default.
@@ -332,6 +346,10 @@ static func load_dir(directory: String) -> DotResult:
 	var config := TmcConfig.new()
 	var base := directory.rstrip("/")
 	DotAddonConfig.config_root = base
+
+	var alias_read := config._load_aliases("%s/%s/%s" % [base, SERVER_DIR, ALIAS_FILE])
+	if not alias_read.ok:
+		return alias_read
 
 	for name in FILES:
 		if LAYERED.has(name):
@@ -903,11 +921,108 @@ static func _truthy(value: Variant) -> bool:
 	return str(value).strip_edges().to_lower() in ["1", "true", "yes", "on"]
 
 
+## Reads `cfg/server/alias.yml`: one `alias_name: target` per line (`#` starts a comment), on top of [constant BUILTIN_ALIASES]. No limit on the number of entries.
+## A file that cannot be understood is a failed boot naming `path:line`, not a skipped line: an alias that silently did not exist is a setting that silently did nothing.
+func _load_aliases(path: String) -> DotResult:
+	for alias_name: String in BUILTIN_ALIASES:
+		aliases[alias_name] = {"target": BUILTIN_ALIASES[alias_name], "source": "built-in", "builtin": true}
+	if not FileAccess.file_exists(path):
+		return DotResult.success(null)
+	files_read.append("%s/%s" % [SERVER_DIR, ALIAS_FILE])
+	var errors := PackedStringArray()
+	var seen := {}
+	var number := 0
+	for raw in FileAccess.get_file_as_string(path).split("\n"):
+		number += 1
+		var line := raw.strip_edges()
+		var hash_at := line.find(" #")
+		if line.begins_with("#"):
+			line = ""
+		elif hash_at >= 0:
+			line = line.substr(0, hash_at).strip_edges()
+		if line == "":
+			continue
+		var colon := line.find(":")
+		if colon <= 0:
+			errors.append("%s:%d: expected `alias_name: target`, got `%s`" % [path, number, line])
+			continue
+		var alias_name := line.substr(0, colon).strip_edges().trim_prefix("\"").trim_suffix("\"")
+		var target := line.substr(colon + 1).strip_edges().trim_prefix("\"").trim_suffix("\"").strip_edges()
+		var word_re := RegEx.create_from_string("^[A-Za-z_][A-Za-z0-9_.]*$")
+		if word_re.search(alias_name) == null:
+			errors.append("%s:%d: `%s` is not a usable alias name (letters, digits, _ and . only)" % [path, number, alias_name])
+			continue
+		if target == "":
+			errors.append("%s:%d: alias `%s` has no target" % [path, number, alias_name])
+			continue
+		if seen.has(alias_name):
+			errors.append("%s:%d: alias `%s` is defined twice (first on line %d)" % [path, number, alias_name, seen[alias_name]])
+			continue
+		seen[alias_name] = number
+		aliases[alias_name] = {"target": target, "source": "%s:%d" % [path, number], "builtin": false}
+	# Shape checks that need nothing but this file: no alias to itself, no chain to another alias, none shadowing a setting this file reads itself.
+	for alias_name: String in aliases:
+		var entry: Dictionary = aliases[alias_name]
+		if entry["builtin"]:
+			continue
+		var first := String(entry["target"]).split(" ")[0]
+		if first == alias_name:
+			errors.append("%s: alias `%s` points at itself" % [entry["source"], alias_name])
+		elif aliases.has(first):
+			errors.append("%s: alias `%s` points at the alias `%s`; name the real target (chains and loops are refused)" % [entry["source"], alias_name, first])
+		if alias_name in HOST_KEYS:
+			errors.append("%s: alias `%s` would shadow the setting of that name" % [entry["source"], alias_name])
+	if not errors.is_empty():
+		for message in errors:
+			DotLog.error(CHANNEL, message)
+		return DotResult.fail(DotError.CODE_INVALID, "%s is not usable:\n  %s" % [path, "\n  ".join(errors)])
+	return DotResult.success(null)
+
+
+## After the console is up: every alias target must be a real setting, command or cvar, and no alias may shadow one. Failures are ERR lines naming the file and line, and entries in [member unknown].
+## The valid ones are registered on the console too, so the alias works at a prompt and over RCON as well as in a file. Returns the number of failures.
+func check_aliases(console: DotConsole) -> int:
+	var failures := 0
+	for alias_name: String in aliases:
+		var entry: Dictionary = aliases[alias_name]
+		var first := String(entry["target"]).split(" ")[0]
+		var problem := ""
+		if console.find_cvar(alias_name) != null or console.find_command(alias_name) != null:
+			problem = "alias `%s` shadows the console name of the same name" % alias_name
+		elif not (first in HOST_KEYS or LOG_KEYS.has(first) or BOOT_KEYS.has(first) or NET_KEYS.has(first)
+				or console.find_cvar(first) != null or console.find_command(first) != null):
+			problem = "alias `%s` points at `%s`, which is not a setting, cvar or command this server has" % [alias_name, first]
+		if problem != "":
+			DotLog.error(CHANNEL, "%s: %s" % [entry["source"], problem])
+			unknown.append("%s: %s" % [entry["source"], problem])
+			failures += 1
+			continue
+		if console.has_method("set_alias") and (console.find_command(first) != null or console.find_cvar(first) != null):
+			console.set_alias(alias_name, String(entry["target"]))
+	return failures
+
+
 ## `server.yml` and `net.yml`: flat keys, three possible destinations.
 func _apply_settings(file: String, tree: Dictionary) -> DotResult:
 	for key in tree.keys():
 		var name := String(key)
 		var value: Variant = tree[key]
+
+		var via_alias := false
+		if aliases.has(name):
+			var target := String((aliases[name] as Dictionary)["target"]).strip_edges()
+			if target.contains(" "):
+				unknown.append("%s: %s is an alias of `%s`, which has arguments, so it cannot be a setting" % [file, name, target])
+				continue
+			name = target
+			via_alias = true
+		if via_alias and _written_keys.has(name):
+			# Silent when the two agree; the canonical key wins when they do not, and that is worth one line.
+			if str(_written_keys[name]) != str(value):
+				DotLog.warn(CHANNEL, "%s: `%s` and its alias disagree (%s vs %s); `%s` wins" % [file, name, str(_written_keys[name]), str(value), name])
+			continue
+		if not via_alias:
+			_written_keys[name] = value
 
 		if value is Dictionary or value is Array and name not in [
 			"sv_tags", "rcon_allowed", "chat_command_prefixes"
@@ -918,10 +1033,6 @@ func _apply_settings(file: String, tree: Dictionary) -> DotResult:
 				unknown.append("%s: %s (nested blocks are not settings)" % [file, name])
 				continue
 
-		if name == "sv_game":
-			initial_game = String(value)
-			continue
-
 		if name == "sv_web_loader":
 			web_loader = str(value).strip_edges()
 			continue
@@ -930,7 +1041,11 @@ func _apply_settings(file: String, tree: Dictionary) -> DotResult:
 			web_build = str(value).strip_edges()
 			continue
 
-		if name == "sv_map":
+		if name == "game":
+			initial_game = String(value)
+			continue
+
+		if name == "sv_map" or name == "map":
 			# Not passed through as a console line, like `sv_query_app`: there is no `map` cvar at this level; the one that exists belongs to whichever game is loaded, which is none when the startup config runs.
 			initial_map = String(value)
 			continue
@@ -1163,6 +1278,7 @@ func write_cfg(path: String) -> DotResult:
 
 ## Reports what dot-server made of the generated config, after boot. A line the console refused is a warning, for [member unknown]'s reason, but one that names the line.
 func note_console_result(console: DotConsole) -> void:
+	check_aliases(console)
 	for line in console_lines:
 		var name := line.split(" ")[0]
 

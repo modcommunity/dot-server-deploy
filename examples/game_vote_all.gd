@@ -29,7 +29,7 @@ const ORDER := [
 const PER_GAME := 17
 
 ## The games this run plays: [constant ORDER], or `-- --order=fatalcontact,smash,wipeout`. The first
-## is always ORDER's first, because the fixture boots into it (`sv_game`); an order without it
+## is always ORDER's first, because the fixture boots into it (`game`); an order without it
 ## has it put in front.
 var _order: Array = ORDER.duplicate()
 

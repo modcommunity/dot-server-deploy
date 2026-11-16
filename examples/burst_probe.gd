@@ -30,7 +30,7 @@ const BOARD_SECONDS := 3.0
 ## with thirty maps would take minutes.
 const MAX_MAPS := 6
 
-## game id (sv_game) -> the packs it needs in dist/. As examples/enet_relay.gd has it.
+## game id (game) -> the packs it needs in dist/. As examples/enet_relay.gd has it.
 const PACKS := {
 	"fatalcontact": ["tmc/arena"],
 	"buses": ["tmc/buses"],
@@ -233,10 +233,10 @@ func _write_config() -> void:
 		if name == "server.yml":
 			var lines := PackedStringArray()
 			for line in text.split("\n"):
-				if line.begins_with("sv_game:") or line.begins_with("sv_map:") or line.begins_with("sv_tickrate:"):
+				if line.begins_with("game:") or line.begins_with("sv_game:") or line.begins_with("sv_map:") or line.begins_with("map:") or line.begins_with("sv_tickrate:"):
 					continue
 				lines.append(line)
-			lines.append("sv_game: \"%s\"" % _game)
+			lines.append("game: \"%s\"" % _game)
 			lines.append("sv_stdin_console: false")
 			lines.append("sv_hibernate_when_empty: false")
 			text = "\n".join(lines)

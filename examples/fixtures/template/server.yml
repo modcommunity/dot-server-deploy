@@ -4,7 +4,7 @@
 # directory and the trusted key itself, beside a copy of these files.
 sv_name: "Template Fixture"
 sv_maxplayers: 8
-sv_game: "dot-game-template"
+game: "dot-game-template"
 
 # Off, because nobody is typing: a stdin reader left open at shutdown is one unjoined-thread
 # warning at the end of a run that passed. See smash/server.yml.

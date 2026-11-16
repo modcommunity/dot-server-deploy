@@ -87,9 +87,9 @@ sv_tickrate: 66
 # it here to pin a box to one game regardless of what is dropped in beside it.
 #
 # `./server --game <id>` and TMC_GAME both override this, and a running server is
-# moved with `changegame <id>` over RCON without a restart. `./server games` lists
+# moved with `game <id>` over RCON without a restart. `./server games` lists
 # what this content directory actually has.
-sv_game: ""
+game: ""   # `sv_game` is an accepted old spelling
 
 # Which map that game starts on.
 #
@@ -107,7 +107,7 @@ sv_game: ""
 # and neither does a game whose catalogue has never heard of this id. Both are a line
 # in the log and not a refusal to boot -- an operator's typo should not cost a server
 # that is already full of people.
-sv_map: ""
+map: ""
 
 # The app's URL segment on the website, reported in a query as the game's name.
 #
@@ -157,7 +157,7 @@ query_bind_ip: "*"
 # and this narrows it once, before any of them see it.
 #
 # Empty means everything, which is what a development checkout and a hand-run server want.
-# `sv_game` must name one of these; a game that is asked for and is not installed is
+# `game` must name one of these; a game that is asked for and is not installed is
 # reported at boot and is not fatal.
 #
 #games:
