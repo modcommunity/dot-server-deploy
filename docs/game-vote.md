@@ -64,6 +64,10 @@ The ballot, countdown and result reach chat through `announce_fn`, and also go o
 
 `DotVoteBallotFeed` sends the open ballot as a notice's `data` under `TmcVote.BALLOT_TOPIC` (`game_ballot`) per playing session (each copy carries that session's voter id as `you`), and to a late joiner. Every game's map vote does the same under `map_ballot`. The overlay draws one dot-ui `DotBallotPanel` per topic: number keys, F3 to free the mouse and click, or both (`ballot_input`, the server's choice), with voters' avatars. A choice goes back as `/<command> <n>` through `link.send_chat`, so nothing new is on the wire. The two ballots are never open together (see above); if a shell ever met both, the number keys would belong to the one opened last. `game_vote_all -- --shot=<dir>` under `xvfb-run` saves the game ballot and each game's own ballot over every game it plays (`--order` narrows it; see [testing](testing.md#server-side-suites)). A shell older than this ignores `data` and still has the HUD line.
 
+## A voted game's addons arrive when the vote passes
+
+With `addons_announce: game` a joining player fetches only the current game's addons. When a vote picks a game that needs others, the host announces them to every client before the change reaches it, and each shell fetches them and rejoins into the new game ([addon-packs.md](addon-packs.md#only-the-current-games-addons)). With the default `all` every installed game's addons are fetched at join and nothing happens at the vote.
+
 ## Template changes do not reach existing deployments
 
 `cfg.example/addons/dot_vote/vote.yml` ships `vote_warning_sec: 10`, `runoff_warning_sec: 5` and the four cue ids. `cfg/` is never overwritten, so a deployment whose `vote.yml` predates them has the ballot line and no countdown or sound until those keys are uncommented there.

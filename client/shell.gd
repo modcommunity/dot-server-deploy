@@ -1272,6 +1272,8 @@ func _connect_to(address: String) -> void:
 		link.transport_preference = preference
 	# Declared before the connect so the credentials advertise them. See TmcAdminMenuPanel.KIND.
 	link.envelope.register(TmcAdminMenuPanel.KIND)
+	# The host's addons for a game a vote picked mid-session. See TmcAddonGroups.ANNOUNCE_KIND.
+	link.envelope.register(TmcAddonGroups.ANNOUNCE_KIND, _on_addons_announced.bind(target))
 	trail_link.attach(link)
 	# Where the server's game scene is put. The shell never names a scene itself.
 	link.game_root_ref = DotNodeRef.of_path(_game_root.get_path())
@@ -1375,6 +1377,20 @@ func _on_server_info(_challenge: Dictionary, target: String) -> void:
 	_update_addons.call_deferred(addons, wanted, target, attempt)
 
 
+## The host's addons for the game a vote picked (see [constant TmcAddonGroups.ANNOUNCE_KIND]): taken as a fresh challenge, so what this shell lacks is fetched before the game change lands.
+func _on_addons_announced(_peer: int, payload: Variant, target: String) -> void:
+	if link == null or not (payload is Dictionary) or not ((payload as Dictionary).get("addons") is Array):
+		return
+
+	var announced: Dictionary = payload
+	link.server_addons = (announced["addons"] as Array).duplicate(true)
+	DotLog.info(CHANNEL, "the server announced addons for its next game", {
+		"server": target, "game": str(announced.get("game", "")), "addons": link.server_addons.size(),
+	})
+	loading.begin(TmcLoadingScreen.REASON_GAME)
+	_on_server_info({}, target)
+
+
 ## The running overlay's addons again when this server's game needs download groups that overlay was built without, else nothing.
 ## A deferred group cannot be fetched into a mounted overlay, so the overlay is rebuilt at the same versions with the union (a restart, bounded like an update's).
 func _groups_top_up(running: Dictionary, target: String) -> Dictionary:
@@ -1405,6 +1421,8 @@ func _update_addons(addons: DotCloudAddonSet, wanted: Dictionary, target: String
 	# Quietly: `_drop_link` closes without a reason, so no "Disconnected" is said about a server we rejoin at once.
 	# A release build logs one harmless engine line here (`Attempt to disconnect a nonexistent connection from 'Server'`), the same with the drop deferred.
 	_drop_link()
+	# Mid-session (an announce for a voted game) the old game is still up; without its link it is a world nobody drives. A no-op before a first join.
+	_clear_game()
 	_set_busy(true)
 	_indeterminate(true)
 	_say(_text("shell.addons.updating", {}, "Updating the game for this server…"))

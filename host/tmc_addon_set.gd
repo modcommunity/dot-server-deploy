@@ -22,6 +22,55 @@ static func with_groups(entries: Array, groups: Dictionary) -> Array:
 	return out
 
 
+## [param entries] narrowed to what a game needs, for `addons_announce: game`: every framework addon (a `dot-*` repository, which the shell carries anyway) and of
+## the game addons (fc-weapons, natural-disasters and the rest) only those whose dir [param needs] names. [param needs] is `{dir: level}` (requires.json) or
+## null when the game's needs are not known, which returns [param entries] whole: announcing too much costs a download, too little a game that cannot load.
+static func scoped(entries: Array, needs: Variant) -> Array:
+	if not (needs is Dictionary):
+		return entries.duplicate(true)
+
+	var out: Array = []
+
+	for entry: Dictionary in entries:
+		var dir := str(entry.get("dir", ""))
+
+		if addon_repo(dir).begins_with("dot-") or (needs as Dictionary).has(dir):
+			out.append(entry.duplicate(true))
+
+	return out
+
+
+## The `{dir: level}` union of [param needs] (each a Dictionary or null), or null when any is null: one game whose needs are unknown makes the union unknown.
+static func union_needs(needs: Array) -> Variant:
+	var out := {}
+
+	for one: Variant in needs:
+		if not (one is Dictionary):
+			return null
+
+		for dir: Variant in one:
+			out[str(dir)] = maxi(int(out.get(str(dir), 0)), int(one[dir]))
+
+	return out
+
+
+## The entries of [param after] a client told [param before] does not have at that version: what it would have to fetch. Compared on dir and version.
+static func added(before: Array, after: Array) -> Array:
+	var had := {}
+
+	for entry: Variant in before:
+		if entry is Dictionary:
+			had["%s@%s" % [str(entry.get("dir", "")), str(entry.get("version", ""))]] = true
+
+	var out: Array = []
+
+	for entry: Variant in after:
+		if entry is Dictionary and not had.has("%s@%s" % [str(entry.get("dir", "")), str(entry.get("version", ""))]):
+			out.append(entry)
+
+	return out
+
+
 ## The module's `addon_groups()` as `{dir: [group, ...]}` of strings, or nothing. Duck-typed, because a game's module is not this shell's class;
 ## anything malformed for a dir drops that dir (its clients then take the whole pack) rather than the game.
 static func sanitize_groups(raw: Variant) -> Dictionary:

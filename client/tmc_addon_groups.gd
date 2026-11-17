@@ -14,6 +14,12 @@ extends RefCounted
 
 const ALL := "*"
 
+## The host's mid-session addon announce (`addons_announce: game`): when a vote picks a game whose addons this client was not told about,
+## the host sends `{"addons": <addon_set>, "game": <content key>}` under this kind before the game change reaches the client.
+## The shell treats it as a fresh challenge: it plans, builds the overlay (in place when it can, else a restart) and rejoins.
+## A shell that does not know the kind is kicked with a reason instead, so it rejoins and reads the new set from the challenge.
+const ANNOUNCE_KIND := &"tmc.addons"
+
 
 ## The groups to build [param wanted] (`plan_for`'s dir -> entry) with, from the [param server]'s `addon_set` and the running [param plan]'s groups.
 ## [param plan] is the plan whose overlay is mounted, or an empty Dictionary when none is.

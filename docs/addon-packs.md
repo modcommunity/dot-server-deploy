@@ -22,6 +22,16 @@ The shell builds the overlay with the union of what the wanted entries name (`Tm
 - **A group the mounted overlay lacks is a rebuild**, not a top-up: a deferred group cannot be fetched into a mounted overlay. If a server's game needs groups the running overlay was built without (same versions), the shell rebuilds it with the union and restarts, under the same two-restart bound as an update.
 - A dot-cloud without groups (0.1.47 and older) has no `groups` property; the shell then sets nothing and takes everything. Solo play builds with everything.
 
+## Only the current game's addons
+
+`addons_announce` (server.yml, `--addons-announce`, `TMC_ADDONS_ANNOUNCE`; `TmcConfig.check_addons_announce` refuses anything but `all` or `game` at boot):
+
+- **`all`** (default, the old behaviour): `addon_set` lists every installed addon, so a joining browser fetches every installed game's packs (fc-weapons ~30 MB, zed ~19 MB, zee 2.5 MB, natural-disasters 0.3 MB) whatever is being played.
+- **`game`**: `addon_set` lists the framework's (`dot-*`) addons and the game addons the current game's pack names in its `requires.json` (`TmcAddonSet.scoped`). A built-in game needs none; a game whose `requires.json` is not known yet is announced everything, because too much costs a download and too little a game that cannot load. An addon a game reaches only behind a presence check is optional, is not in `requires.json` and so is not fetched.
+- **A game change (a game vote or `game <id>`)** is announced before its content reaches the clients: `TmcHost._announce_change` runs at `game_changing`, or at the next pack's `content_ready` when its `requires.json` was not known yet, and widens `addon_set` to the union of the current and the next game. Every active client that was told less is sent the new set on the `tmc.addons` envelope kind (`TmcAddonGroups.ANNOUNCE_KIND`); the shell takes it as a fresh challenge (`_on_addons_announced`), drops the link, builds the overlay (in place when nothing it replaces is mounted, else the restart above) and rejoins into the new game. A shell that does not know the kind is kicked with a reason saying to rejoin, which then reads the new set from the challenge. After the swap `addon_set` narrows to the new game. A failed load (`game_load_failed`) narrows it back.
+- **`sv_pack_pins` keeps every installed addon** in either mode, so the content sweep never removes a pack the next vote may need.
+- A second mid-session addition when an overlay is already mounted goes through a restart (a mounted overlay is never replaced in place); mounting a superset in place is a dot-cloud follow-up.
+
 ## Rules
 
 - **A desktop relaunch passes both halves of the command line.** `OS.get_cmdline_args()` stops at the bare `--`, and everything this shell reads is after it ([native-client.md](native-client.md#the-launch-arguments-need-the-bare---)).

@@ -722,7 +722,30 @@ func _test_addon_announce() -> void:
 	_check(pins is Dictionary and pins.get("gamespice-platform/core") == "0.1.30" and not pins.has("gamespice-platform/fc-weapons"), "sv_pack_pins also pins a dot-* addon's version under its new id")
 	_check(TmcAddonSet.pack_pins_json([], {}) == "", "nothing pinned reports nothing")
 	_addon_download_groups(out)
+	_addon_announce_scope(out)
 	_done()
+
+
+## `addons_announce: game`: the framework's addons plus what the game's requires.json names; unknown needs announce everything.
+func _addon_announce_scope(out: Array) -> void:
+	var only := TmcAddonSet.scoped(out, {"arena_weapons": 1})
+	_check(only.size() == 2 and only[0]["dir"] == "arena_weapons" and only[1]["dir"] == "dot_core", "a game that needs fc-weapons is announced it and the framework")
+	var bare := TmcAddonSet.scoped(out, {})
+	_check(bare.size() == 1 and bare[0]["dir"] == "dot_core", "a game that needs no game addon is announced the framework only")
+	_check(TmcAddonSet.scoped(out, null).size() == out.size(), "a game whose needs are not known is announced everything, the old behaviour")
+	only[0]["version"] = "x"
+	_check(out[0]["version"] == "1.4.10", "the scoped set is a copy")
+	_check(TmcAddonSet.union_needs([{"a": 1}, {"a": 2, "b": 1}]) == {"a": 2, "b": 1}, "the needs of the current and the next game are unioned at the higher level")
+	_check(TmcAddonSet.union_needs([{"a": 1}, null]) == null, "one game with unknown needs makes the union unknown")
+	var told := [{"dir": "dot_core", "version": "0.1.30"}]
+	var next := [{"dir": "dot_core", "version": "0.1.30"}, {"dir": "zed_weapons", "version": "0.2.0"}]
+	var fresh := TmcAddonSet.added(told, next)
+	_check(fresh.size() == 1 and fresh[0]["dir"] == "zed_weapons", "a client is sent only what it was not told")
+	_check(TmcAddonSet.added(next, told).is_empty() and TmcAddonSet.added(told, [{"dir": "dot_core", "version": "0.1.31"}]).size() == 1, "a narrower set adds nothing; a new version of a told addon does")
+	_check(TmcConfig.check_addons_announce("all").ok and TmcConfig.check_addons_announce("game").ok, "addons_announce takes all and game")
+	_check(not TmcConfig.check_addons_announce("gam").ok and not TmcConfig.check_addons_announce("").ok, "any other addons_announce refuses boot")
+	_check(TmcConfig.HOST_KEYS.has("addons_announce") and TmcConfig.new().addons_announce == TmcConfig.ADDONS_ANNOUNCE_ALL, "addons_announce is a server.yml host key, all by default")
+	_check(TmcAddonGroups.ANNOUNCE_KIND == &"tmc.addons", "the mid-session announce has its envelope kind")
 
 
 ## Download groups: the game names them per dir, the shell unions what it is about to build.

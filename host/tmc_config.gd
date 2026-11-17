@@ -23,7 +23,7 @@ const SERVER_DIR_OWNED := ["content.yml", "alias.yml"]
 ## Keys that exist and are handled somewhere other than a config object, listed so they are not reported as unknown (a key silently ignored and not reported looks like it took effect).
 ## `net_public_ip` is here, not in [constant BOOT_KEYS], because dot-server should have no such setting: what a server binds to and what a player types differ, and only the second is behind NAT.
 ## The settings this file reads itself, as named in `server.yml`, i.e. the config keys that exist without a console cvar behind them.
-const HOST_KEYS := ["game", "games", "map", "sv_map", "sv_query_app", "sv_web_loader", "sv_web_build", "content_urls", "addons", "games_mode", "no_install", "auto_update", "channel", "verbose", "net_public_ip", "sv_tags", "chat_command_prefixes", "log_router"]
+const HOST_KEYS := ["game", "games", "map", "sv_map", "sv_query_app", "sv_web_loader", "sv_web_build", "content_urls", "addons", "addons_announce", "games_mode", "no_install", "auto_update", "channel", "verbose", "net_public_ip", "sv_tags", "chat_command_prefixes", "log_router"]
 ## The alias file, under `cfg/server/`. Read before every other file so a key in any of them can use an alias.
 const ALIAS_FILE := "alias.yml"
 
@@ -193,6 +193,15 @@ var initial_map: String = ""
 ## A filter, not an installer (`tools/install_games.gd` puts descriptors on disk): the `games` listing, `changelevel`, the vote menu and the boot game all read the scanned set,
 ## so the scan is where it must apply or the other three offer a game this server was told not to run. Empty means everything, not none; an id not on disk is reported, not fatal (the pack may still be downloading).
 var games_allow: PackedStringArray = PackedStringArray()
+
+## Which addons joining clients are told about: `addons_announce` in server.yml, `--addons-announce`, TMC_ADDONS_ANNOUNCE. One of [constant ADDONS_ANNOUNCE_MODES]; anything else refuses boot
+## ([method check_addons_announce]). `all`, the default and the old behaviour, announces every installed game's addons; `game` announces the framework's and the
+## current game's, and a game change announces the next game's before its content is sent (see `TmcHost._announce_change`). [url=docs/addon-packs.md]addon packs[/url]
+var addons_announce: String = ADDONS_ANNOUNCE_ALL
+
+const ADDONS_ANNOUNCE_ALL := "all"
+const ADDONS_ANNOUNCE_GAME := "game"
+const ADDONS_ANNOUNCE_MODES := [ADDONS_ANNOUNCE_ALL, ADDONS_ANNOUNCE_GAME]
 
 ## `addons:` in server.yml, as written (`owner/repo` or `owner/repo@version`): the addons this server installs and announces by id, the way `games:` names games.
 ## Shape and the trusted-owner rule are checked when read; whether the directory is installed is checked by [TmcHost] when it announces.
@@ -885,6 +894,11 @@ func _apply_settings(file: String, tree: Dictionary) -> DotResult:
 			web_build = str(value).strip_edges()
 			continue
 
+		if name == "addons_announce":
+			# Kept as written: [method check_addons_announce] refuses a value it does not know at boot, after the command line has had its say.
+			addons_announce = str(value).strip_edges().to_lower()
+			continue
+
 		if name == "game":
 			initial_game = String(value)
 			continue
@@ -1208,6 +1222,18 @@ static func _string_list(value: Variant) -> PackedStringArray:
 	return out
 
 
+## Refuses an `addons_announce` this build does not know, naming the ones it does. A typo would otherwise fall back to one of the two without anybody noticing which.
+static func check_addons_announce(value: String) -> DotResult:
+	if value in ADDONS_ANNOUNCE_MODES:
+		return DotResult.success(value)
+
+	return DotResult.fail(
+		DotError.CODE_INVALID,
+		"addons_announce is %s, not '%s'" % [" or ".join(PackedStringArray(ADDONS_ANNOUNCE_MODES)), value],
+		"server.yml addons_announce, --addons-announce or TMC_ADDONS_ANNOUNCE"
+	)
+
+
 func describe_lines() -> PackedStringArray:
 	var out := PackedStringArray()
 
@@ -1233,6 +1259,7 @@ func describe_lines() -> PackedStringArray:
 		", ".join(games_allow) if not games_allow.is_empty() else "(everything in content/)"))
 	out.append("addons   : %s" % (
 		", ".join(addons_listed) if not addons_listed.is_empty() else "(the lock's)"))
+	out.append("announce : %s" % addons_announce)
 	out.append("content  : %s" % (
 		", ".join(content_urls) if not content_urls.is_empty() else "(local only)"))
 	out.append("rcon     : %s" % ("on, port %d" % server.effective_rcon_port() if server.rcon_password != "" else "off"))

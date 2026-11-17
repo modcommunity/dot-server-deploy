@@ -253,3 +253,8 @@ net_max_update_rate: 0
 # addons:
 #   - gamemann/dot-trail
 #   - gamemann/dot-radio
+
+# Which addons joining players are told to fetch: all (default, every installed game's) or game (the framework's
+# plus the current game's requires.json; a voted game's are announced when the vote passes). Anything else refuses
+# boot. --addons-announce or TMC_ADDONS_ANNOUNCE do the same. See docs/addon-packs.md.
+# addons_announce: all

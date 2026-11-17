@@ -133,6 +133,7 @@ The key may also be written under any alias (`hostname:` for `sv_name`, `sv_game
 | `TMC_WEB_LOADER` | `sv_web_loader:` | yes: `sv_web_loader` | |
 | `TMC_AUTO_UPDATE` | `auto_update:` when-needed, always, never (`sv_auto_update`) | no (launcher, before boot) | |
 | `TMC_CHANNEL` | `channel:` latest, stable (`sv_channel`) | no (launcher, before boot) | |
+| `TMC_ADDONS_ANNOUNCE` | `addons_announce:` all, game (`--addons-announce`) | no (read at boot) | `game` announces only the current game's addons; anything else refuses boot ([addon-packs.md](addon-packs.md#only-the-current-games-addons)) |
 | `TMC_VERBOSE` | `verbose:` true/false (`sv_verbose`) | no (log level is fixed at start; `log_level:` in the file sets the default) | |
 | `DEPLOY_REPO`, `DEPLOY_BRANCH` | none | no | [b]Install-time only.[/b] The egg's install script reads them to clone this repository, which is what contains `server.yml`'s reader, so no file of ours can exist yet on the first install. A reinstall or an auto-update keeps following the checkout's own `origin`, which is the value the install wrote. |
 

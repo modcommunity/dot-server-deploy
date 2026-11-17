@@ -111,6 +111,7 @@ OPT_GAME="${TMC_GAME:-}"
 OPT_MAP="${TMC_MAP:-}"
 OPT_WEB_LOADER="${TMC_WEB_LOADER:-}"
 OPT_WEB_BUILD="${TMC_WEB_BUILD:-}"
+OPT_ADDONS_ANNOUNCE="${TMC_ADDONS_ANNOUNCE:-}"
 AUTO_UPDATE="${TMC_AUTO_UPDATE:-when-needed}"
 CHANNEL="${TMC_CHANNEL:-latest}"
 
@@ -258,6 +259,10 @@ usage() {
     --web-build ID      Pin this server's players to one web shell build the site
                         lists (reported as sv_web_build). Empty, the default, is
                         the site's newest compatible shell, with no restart needed.
+    --addons-announce all|game
+                        Which addons joining clients are told to fetch: all (the
+                        default) is every installed game's; game is the current
+                        game's, and a game change announces the next one's.
     --web-loader LABEL  Ask the site for this version of the web game loader
                         for this server's players (reported as sv_web_loader).
                         For a server on older addons than the site's default.
@@ -352,7 +357,7 @@ usage() {
     TMC_ALLOW_WEB       +sv_allow_web         TMC_ALLOW_DESKTOP +sv_allow_desktop
     TMC_ALLOW_MOBILE    +sv_allow_mobile      (1 admits, 0 refuses; empty = the YAML)
     TMC_WEB_LOADER      --web-loader          TMC_AUTO_UPDATE   --auto-update
-    TMC_WEB_BUILD       --web-build
+    TMC_WEB_BUILD       --web-build           TMC_ADDONS_ANNOUNCE --addons-announce
     TMC_CHANNEL         --channel             (latest = the branch head, stable = newest v* release)
 
   So a TMC_PORT left in an environment file never hides an edit to the YAML: the
@@ -409,6 +414,7 @@ while [ $# -gt 0 ]; do
         --map)         [ $# -ge 2 ] || die "$1 needs a value"; OPT_MAP="$2";         shift 2 ;;
         --web-loader)  [ $# -ge 2 ] || die "$1 needs a value"; OPT_WEB_LOADER="$2";  shift 2 ;;
         --web-build)   [ $# -ge 2 ] || die "$1 needs a value"; OPT_WEB_BUILD="$2";   shift 2 ;;
+        --addons-announce) [ $# -ge 2 ] || die "$1 needs a value"; OPT_ADDONS_ANNOUNCE="$2"; shift 2 ;;
         --auto-update) [ $# -ge 2 ] || die "$1 needs a value"; AUTO_UPDATE="$2";     shift 2 ;;
         --channel)     [ $# -ge 2 ] || die "$1 needs a value"; CHANNEL="$2";         shift 2 ;;
         --base)    ENGINE_BASE="${2:-}"; shift 2 ;;
@@ -639,6 +645,7 @@ yield_to_file OPT_A2S_PORT a2s_port --a2s-port TMC_A2S_PORT
 yield_to_file OPT_QUERY_BIND query_bind_ip --query-bind TMC_QUERY_BIND
 yield_to_file OPT_WEB_LOADER sv_web_loader --web-loader TMC_WEB_LOADER
 yield_to_file OPT_WEB_BUILD sv_web_build --web-build TMC_WEB_BUILD
+yield_to_file OPT_ADDONS_ANNOUNCE addons_announce --addons-announce TMC_ADDONS_ANNOUNCE
 file_setting GAMES_MODE games_mode --games-mode TMC_GAMES_MODE
 file_setting AUTO_UPDATE auto_update --auto-update TMC_AUTO_UPDATE
 file_setting CHANNEL channel --channel TMC_CHANNEL
@@ -697,6 +704,7 @@ fi
 [ -n "$OPT_MAP" ]         && OVERRIDES+=(--map "$OPT_MAP")
 [ -n "$OPT_WEB_LOADER" ]  && OVERRIDES+=(--web-loader "$OPT_WEB_LOADER")
 [ -n "$OPT_WEB_BUILD" ]   && OVERRIDES+=(--web-build "$OPT_WEB_BUILD")
+[ -n "$OPT_ADDONS_ANNOUNCE" ] && OVERRIDES+=(--addons-announce "$OPT_ADDONS_ANNOUNCE")
 [ -n "$OPT_CONTENT_URL" ] && OVERRIDES+=(--content-url "$OPT_CONTENT_URL")
 
 # [b]The list reaches the SERVER too, and not only the installer.[/b] Installing the two

@@ -108,6 +108,8 @@ The game origin's CSP is `script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' b
 
 ## The shell carries the dot-* addons only
 
+A server with `addons_announce: game` announces only its current game's addons, which is about 22 MB less at a Fast 4G join when FC is not the game; a voted game's addons are sent mid-session on `tmc.addons` ([addon-packs.md](addon-packs.md#only-the-current-games-addons)).
+
 Every preset (Web and desktop) excludes every addon that is not a dot-* addon: `addons/fc_weapons/*` and the legacy `addons/arena_weapons/*` (fc-weapons up to v1.4.51), `addons/zee_weapons/*`, `addons/zed_weapons/*`, `addons/natural_disasters/*`. A game's own addons reach a player as dot-cloud overlay packs when a server announces them (see [addon-packs.md](addon-packs.md)). Servers and `setup.sh` still install all of them from `addons.lock`. The reason is fc-weapons (then arena-weapons) v1.4.28 (commit 0e24447). It switched its models to `gltf/embedded_image_handling=2`, which puts BasisU textures inside each `.scn` (about 5 MB per weapon). `tools/web_shrink.gd` only converts `.ctex` files and cannot see them, so the Web pck grew from 44 MB to 147 MB and the upload was refused (413).
 
 `./server export-web` and `export-native` enforce this rule in four steps:
