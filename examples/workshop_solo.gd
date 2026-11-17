@@ -242,7 +242,7 @@ func _test_guest() -> void:
 
 	_token = ""
 	_items = [_item("ws_map")]
-	await _shell.call("_start_solo", GAME, "1.0.0")
+	await _shell._solo_flow.call("_start_solo", GAME, "1.0.0")
 
 	var session := _session()
 	_check(session != null, "the game started")
@@ -264,7 +264,7 @@ func _test_solo_with_subscription() -> void:
 	_token = "tok-alice"
 	_items = [_item("ws_map"), _item("ws_prop")]
 	var asked := _requests()
-	await _shell.call("_start_solo", GAME, "1.0.0")
+	await _shell._solo_flow.call("_start_solo", GAME, "1.0.0")
 
 	var session := _session()
 	_check(session != null and _game_node() != null, "the game started")
@@ -386,7 +386,7 @@ func _test_suggested_after_start() -> void:
 	var at_ready: Array[int] = [-1]
 	Engine.set_meta(&"ws_ready_probe", func() -> void:
 		at_ready[0] = _ws.suggested.size())
-	await _shell.call("_start_solo", GAME2, "1.0.0")
+	await _shell._solo_flow.call("_start_solo", GAME2, "1.0.0")
 	Engine.remove_meta(&"ws_ready_probe")
 
 	_check(_session() != null and _game_node() != null, "the game started")
@@ -480,7 +480,7 @@ func _test_code_pack_restarts_first() -> void:
 
 	_token = "tok-alice"
 	_items = [_item("ws_code")]
-	await _shell.call("_start_solo", GAME, "1.0.0")
+	await _shell._solo_flow.call("_start_solo", GAME, "1.0.0")
 	_check(_ws.requires_restart_before_online(), "a mounted code pack asks for a restart")
 	var session := _session()
 	_check(session != null and (session.workshop_summary.get("mounted", []) as Array).size() == 1, "and it was mounted for solo play")
@@ -516,7 +516,7 @@ func _test_subscribed_addon() -> void:
 	_items = [_item("ws_quake")]
 	DotCloudAddonSet.forget()
 	_restarts[0] = 0
-	await _shell.call("_start_solo", ADDON_GAME, "1.0.0")
+	await _shell._solo_flow.call("_start_solo", ADDON_GAME, "1.0.0")
 
 	_check(_restarts[0] == 1, "the solo start restarted into an overlay with the addon", str(_restarts[0]))
 	var plan := DotCloudAddonSet.read_plan()
@@ -525,7 +525,7 @@ func _test_subscribed_addon() -> void:
 		and str((held as Dictionary).get("source", "")) == "subscription",
 		"the plan holds the addon, marked as a subscription", str(plan.get("addons", {})))
 	var shell_script: Script = _shell.get_script()
-	_check(shell_script.call("plan_holds_subscription", plan), "so the plan holds a subscription")
+	_check(TmcShellSolo.plan_holds_subscription(plan), "so the plan holds a subscription")
 	var resume: Variant = plan.get("resume", {})
 	_check(resume is Dictionary and str((resume as Dictionary).get("solo", "")) == ADDON_GAME,
 		"and the restart comes back into the same game", str(resume))
@@ -540,7 +540,7 @@ func _test_subscribed_addon() -> void:
 	await get_tree().process_frame
 	_check(_restarts[0] == 1 and _shell.get("link") == null, "the join restarted instead of joining", str(_restarts[0]))
 	plan = DotCloudAddonSet.read_plan()
-	_check(str(plan.get("state", "")) == "dropped" and not plan.has("addons") and not shell_script.call("plan_holds_subscription", plan),
+	_check(str(plan.get("state", "")) == "dropped" and not plan.has("addons") and not TmcShellSolo.plan_holds_subscription(plan),
 		"the plan is dropped: the next start boots on the build alone", str(plan))
 	resume = plan.get("resume", {})
 	_check(resume is Dictionary and str((resume as Dictionary).get("server", "")) == "10.9.8.7:6064",
@@ -559,7 +559,7 @@ func _test_addon_refused_without_opt_in() -> void:
 	_items = [_item("ws_quake"), _item("ws_map")]
 	DotCloudAddonSet.forget()
 	_restarts[0] = 0
-	await _shell.call("_start_solo", GAME, "1.0.0")
+	await _shell._solo_flow.call("_start_solo", GAME, "1.0.0")
 
 	_check(_restarts[0] == 0, "no restart", str(_restarts[0]))
 	var session := _session()
@@ -571,7 +571,7 @@ func _test_addon_refused_without_opt_in() -> void:
 	_check(refused, "the addon pack is refused as forbidden",
 		str(session.workshop_summary.get("failed", [])) if session != null else "")
 	var shell_script: Script = _shell.get_script()
-	_check(not shell_script.call("plan_holds_subscription", DotCloudAddonSet.read_plan()), "and no overlay holds it")
+	_check(not TmcShellSolo.plan_holds_subscription(DotCloudAddonSet.read_plan()), "and no overlay holds it")
 
 	_done()
 
@@ -581,10 +581,10 @@ func _test_subscription_marks() -> void:
 
 	var shell_script: Script = _shell.get_script()
 	var wanted := {"a": {"id": "x/a"}, "b": {"id": "y/b"}}
-	shell_script.call("mark_subscribed", wanted, {"a": "x/a", "b": "z/b"})
+	TmcShellSolo.mark_subscribed(wanted, {"a": "x/a", "b": "z/b"})
 	_check(str(wanted["a"].get("source", "")) == "subscription", "an entry the subscription named is marked")
 	_check(not (wanted["b"] as Dictionary).has("source"), "one whose id differs (the game's own requirement) is not")
-	_check(not shell_script.call("plan_holds_subscription", {}) and not shell_script.call("plan_holds_subscription", {"addons": wanted["b"]}),
+	_check(not TmcShellSolo.plan_holds_subscription({}) and not TmcShellSolo.plan_holds_subscription({"addons": wanted["b"]}),
 		"an empty or unmarked plan holds none")
 
 	_done()

@@ -100,16 +100,8 @@ static func load_from(config_dir: String, data_dir: String) -> DotResult:
 	return DotResult.success(out)
 
 
-## Takes a parsed `content/addons.yml` apart, refusing what it would otherwise have to guess at.
-func read(tree: Dictionary) -> DotResult:
-	for key: String in tree:
-		if not key in ["defaults", "games", "namespaces", "overlays", "entries", "merge", "remove"]:
-			return DotResult.fail(
-				DotError.CODE_INVALID,
-				"Unknown top-level key '%s'." % key,
-				"expected defaults: and games:; see cfg.example/%s" % FILE
-			)
-
+## The `defaults:` section: only `add:`, which becomes [member defaults_add].
+func _read_defaults(tree: Dictionary) -> DotResult:
 	var defaults: Variant = tree.get("defaults", {})
 
 	if defaults != null and not (defaults is String and str(defaults) == ""):
@@ -129,6 +121,24 @@ func read(tree: Dictionary) -> DotResult:
 			return added
 
 		defaults_add = added.value
+
+	return DotResult.success(null)
+
+
+## Takes a parsed `content/addons.yml` apart, refusing what it would otherwise have to guess at.
+func read(tree: Dictionary) -> DotResult:
+	for key: String in tree:
+		if not key in ["defaults", "games", "namespaces", "overlays", "entries", "merge", "remove"]:
+			return DotResult.fail(
+				DotError.CODE_INVALID,
+				"Unknown top-level key '%s'." % key,
+				"expected defaults: and games:; see cfg.example/%s" % FILE
+			)
+
+	var read_defaults := _read_defaults(tree)
+
+	if not read_defaults.ok:
+		return read_defaults
 
 	var spaces := _read_namespaces(tree.get("namespaces", []))
 
@@ -151,6 +161,11 @@ func read(tree: Dictionary) -> DotResult:
 			)
 
 	overlays = over.value
+	return _read_games(tree)
+
+
+## The `games:` section: each game's `add:` and `remove:` lists, into [member games].
+func _read_games(tree: Dictionary) -> DotResult:
 	var listed: Variant = tree.get("games", {})
 
 	if listed == null or (listed is String and str(listed) == ""):

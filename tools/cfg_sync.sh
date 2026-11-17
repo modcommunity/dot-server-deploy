@@ -8,7 +8,7 @@ CFG="${2:-$ROOT/cfg}"
 n=0
 # A game renamed since the directory was made keeps what is in it: the old directory is renamed when the current
 # one does not exist yet, before the shipped default is written there. (The host merges the rest on boot;
-# TmcGameConfig.RETIRED_DIRS is the same list, and the selftest compares them.)
+# TmcGameCfgDirs.RETIRED_DIRS is the same list, and the selftest compares them.)
 for tier in game; do
     for pair in game-arena:game-fatal-contact game-final-contact:game-fatal-contact arena:game-fatal-contact \
         game-g2gfast:game-airdrift game-g2gfast01:game-airdrift g2gfast:game-airdrift \

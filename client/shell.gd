@@ -6,6 +6,10 @@ extends Node
 
 const CHANNEL := "tmc.shell"
 
+var _menu_ui := TmcShellMenu.new(self)
+var _solo_flow := TmcShellSolo.new(self)
+var _solo_packs := TmcShellSoloPacks.new(self)
+
 ## Where the game scene is added. Named so the server's scene and this shell's own UI
 ## cannot collide.
 const GAME_ROOT := &"Game"
@@ -57,8 +61,6 @@ var _solo_button: Button = null
 ## The restart count Retry forgets ([method _attempt_key]), set when [method _solo_overlay] would not start a game without its addons; "" otherwise.
 var _solo_retry: String = ""
 
-## What [method _solo_overlay] did: nothing was missing, a restart into the addons is under way, or they are missing and cannot be had now.
-enum SoloOverlay { NONE, RESTARTING, BLOCKED }
 ## What [method _mount_in_place] did: the overlay runs; the engine refused it (restart onto it instead); or it is mounted but an
 ## addon still runs a compiled copy (blocked, as a failed boot is).
 enum InPlace { RUNNING, REFUSED, STALE }
@@ -196,43 +198,18 @@ func _ready() -> void:
 
 	# A solo game's own server process: no menu, no sign-in, nothing on screen.
 	if TmcSolo.is_sim_child():
-		await _start_sim_child()
+		await _solo_flow._start_sim_child()
 		return
 
 	_build_locale()
-	_build_menu()
+	_menu_ui._build_menu()
 
 	# Before anything can be mounted: once a pack is mounted its files cannot be released
 	# in this process, and on Windows cannot even be deleted. See [method request_clear].
 	if FileAccess.file_exists(CLEAR_PENDING):
 		await clear_pending()
 
-	notices = TmcNoticeOverlay.new()
-	notices.name = "Notices"
-	# A drawn ballot's choice, sent as the command a player could type. Read through
-	# `link` at the moment of the click, because the link is rebuilt on every connection.
-	notices.vote_fn = func(line: String) -> void:
-		if link != null:
-			link.send_chat(line)
-	add_child(notices)
-
-	admin_menu = TmcAdminMenuPanel.new()
-	admin_menu.name = "AdminMenu"
-	# Read through `link` at the moment of the choice, as the ballot's is. The menu's own
-	# kind first; the typed command for a server that does not know it, which costs a
-	# chat line per choice against chat's flood limit -- see `host/tmc_admin_menu.gd`.
-	admin_menu.send_fn = func(path: String) -> void:
-		if link == null:
-			return
-		if not link.send_kind(TmcAdminMenuPanel.KIND, {"path": path}, DotEnvelope.Lane.EVENT):
-			link.send_chat("/%s %s" % [TmcAdminMenuPanel.NAV_COMMAND, path])
-	# An admin who opened a menu meant the number keys for it, not for a ballot.
-	admin_menu.opened.connect(func() -> void:
-		for panel in notices.ballots():
-			panel.take_numbers = false
-	)
-	admin_menu.closed.connect(notices.restore_numbers)
-	add_child(admin_menu)
+	_build_notice_panels()
 
 	loading = TmcLoadingScreen.new()
 	loading.name = "Loading"
@@ -241,7 +218,7 @@ func _ready() -> void:
 		return _joining or (_has_spawned and _menu != null and not _menu.visible)
 	add_child(loading)
 	# A portrait phone sees the cover fitted, not letterboxed; it is handed back as the game takes over.
-	loading.cover_changed.connect(func(_up: bool) -> void: _fit_menu())
+	loading.cover_changed.connect(func(_up: bool) -> void: _menu_ui._fit_menu())
 
 	radio_link = TmcRadioLink.new()
 	radio_link.name = "RadioLink"
@@ -310,7 +287,7 @@ func _ready() -> void:
 		_say("'%s' is not a game this client can start." % str(solo["refused"]))
 
 	if str(solo["id"]) != "":
-		_start_solo(str(solo["id"]), str(solo["version"]), str(solo.get("map", "")))
+		_solo_flow._start_solo(str(solo["id"]), str(solo["version"]), str(solo.get("map", "")))
 		return
 
 	var wanted := _requested_server()
@@ -325,6 +302,36 @@ func _ready() -> void:
 		# The box shows what we ACTUALLY dialled: a hardcoded default made a failed auto-connect show an address that was not the one that failed.
 		_address.text = wanted
 		_connect_to(wanted)
+
+
+## The notice overlay (ballots) and the admin menu, wired to send through `link`.
+func _build_notice_panels() -> void:
+	notices = TmcNoticeOverlay.new()
+	notices.name = "Notices"
+	# A drawn ballot's choice, sent as the command a player could type. Read through
+	# `link` at the moment of the click, because the link is rebuilt on every connection.
+	notices.vote_fn = func(line: String) -> void:
+		if link != null:
+			link.send_chat(line)
+	add_child(notices)
+
+	admin_menu = TmcAdminMenuPanel.new()
+	admin_menu.name = "AdminMenu"
+	# Read through `link` at the moment of the choice, as the ballot's is. The menu's own
+	# kind first; the typed command for a server that does not know it, which costs a
+	# chat line per choice against chat's flood limit -- see `host/tmc_admin_menu.gd`.
+	admin_menu.send_fn = func(path: String) -> void:
+		if link == null:
+			return
+		if not link.send_kind(TmcAdminMenuPanel.KIND, {"path": path}, DotEnvelope.Lane.EVENT):
+			link.send_chat("/%s %s" % [TmcAdminMenuPanel.NAV_COMMAND, path])
+	# An admin who opened a menu meant the number keys for it, not for a ballot.
+	admin_menu.opened.connect(func() -> void:
+		for panel in notices.ballots():
+			panel.take_numbers = false
+	)
+	admin_menu.closed.connect(notices.restore_numbers)
+	add_child(admin_menu)
 
 
 ## Where to connect: the command line, or the page's query string (a browser player followed a link that already named a server).
@@ -557,11 +564,6 @@ func _notification(what: int) -> void:
 		_quit_after_offline()
 
 
-## Where downloads go when the player keeps none. Separate from the normal cache so a
-## player switching the setting off does not have their kept games deleted, and back on
-## finds them still there.
-const SLICE_EXTENSIONS := ["tscn", "scn", "tres", "res"]
-
 ## Frames the last [method _slice_load] yielded across; the selftest reads it.
 var slice_frames_yielded: int = 0
 
@@ -762,237 +764,6 @@ func _claim_party() -> void:
 const ACCENT := TmcShellStyle.ACCENT_TEXT
 
 
-func _build_menu() -> void:
-	var layer := CanvasLayer.new()
-	layer.name = "Menu"
-	add_child(layer)
-
-	_menu = Control.new()
-	_menu.name = "Shell"
-	_menu.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_menu.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_menu.theme = TmcShellStyle.theme()
-	layer.add_child(_menu)
-
-	_menu.add_child(MenuBackdrop.new())
-
-	# CENTRED BY A CONTAINER, not an offset from the middle: an offset is centred at one window size and hangs off a short one.
-	var centre := CenterContainer.new()
-	centre.set_anchors_preset(Control.PRESET_FULL_RECT)
-	centre.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_menu.add_child(centre)
-
-	# The glass card. Its width is a minimum, not a size: on a phone the window is scaled up
-	# around it ([method _fit_menu]) rather than the card squeezed into a column of 8 px text.
-	_menu_card = PanelContainer.new()
-	_menu_card.name = "Card"
-	_menu_card.custom_minimum_size = Vector2(menu_card_width, 0.0)
-	centre.add_child(_menu_card)
-
-	var stack := VBoxContainer.new()
-	stack.add_theme_constant_override("separation", 0)
-	_menu_card.add_child(stack)
-
-	# The flame along the card's top edge: the brand's gradient, the one place it is used.
-	stack.add_child(_flame_strip())
-
-	var pad := MarginContainer.new()
-	pad.add_theme_constant_override("margin_left", 18)
-	pad.add_theme_constant_override("margin_right", 18)
-	pad.add_theme_constant_override("margin_top", 18)
-	pad.add_theme_constant_override("margin_bottom", 8)
-	stack.add_child(pad)
-
-	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 10)
-	pad.add_child(box)
-
-	box.add_child(TmcShellStyle.eyebrow("GameSpice"))
-
-	var title := Label.new()
-	title.name = "Title"
-	title.text = "Ready to play"
-	# Sized here rather than through the palette's heading size: this is the screen's one
-	# headline, and raising `heading_size` to fit it would inflate every heading in a game.
-	title.add_theme_font_size_override("font_size", 32)
-	title.add_theme_font_override("font", TmcShellStyle.bold(0.8))
-	box.add_child(title)
-
-	_blurb = Label.new()
-	_blurb.theme_type_variation = &"DotDim"
-	_blurb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	box.add_child(_blurb)
-
-	box.add_child(_gap(8))
-
-	_name_caption = _caption("Display name")
-	box.add_child(_name_caption)
-
-	_name = LineEdit.new()
-	_name.placeholder_text = "Your name"
-	_name.text = "Guest %d" % (randi() % 900 + 100)
-	_name.max_length = 32
-	_name.custom_minimum_size = Vector2(0.0, 44.0)
-	box.add_child(_name)
-
-	# Its own line rather than the status label: a status is the last thing that happened and the two fought
-	# ("Signed in as X" was replaced by "Connecting…" a frame later, which read as signed out).
-	_identity = Label.new()
-	_identity.visible = false
-	_identity.add_theme_color_override("font_color", ACCENT)
-	_identity.add_theme_font_size_override("font_size", 13)
-	box.add_child(_identity)
-
-	# The party, when there is one. A standing fact like the line above, so its own line.
-	_party_line = Label.new()
-	_party_line.visible = false
-	_party_line.theme_type_variation = &"DotDim"
-	_party_line.add_theme_font_size_override("font_size", 13)
-	box.add_child(_party_line)
-
-	# Friends who are online, and a Join beside the ones that can be followed. Filled by
-	# [method _render_friends]; hidden for a guest, who has no friends list to show.
-	_friends_box = VBoxContainer.new()
-	_friends_box.visible = false
-	_friends_box.add_theme_constant_override("separation", 2)
-	box.add_child(_friends_box)
-
-	box.add_child(_gap(4))
-
-	_address_caption = _caption("Server")
-	box.add_child(_address_caption)
-
-	_address = LineEdit.new()
-	_address.placeholder_text = "host:port"
-	_address.text = "127.0.0.1:6064"
-	_address.custom_minimum_size = Vector2(0.0, 44.0)
-	box.add_child(_address)
-
-	box.add_child(_gap(6))
-
-	_join = Button.new()
-	_join.name = "Connect"
-	_join.text = "Connect"
-	_join.custom_minimum_size = Vector2(0.0, 50.0)
-	_join.pressed.connect(func() -> void: _connect_to(_address.text))
-	_primary(_join)
-	box.add_child(_join)
-
-	# Play the game this shell was opened for, here, with no server. Hidden until there is
-	# one: a solo launch names its game, and a shell opened cold has no way to know which
-	# games exist. After Leave it is how the player goes again without reloading the page.
-	_solo_button = Button.new()
-	_solo_button.text = "Play solo"
-	_solo_button.custom_minimum_size = Vector2(0.0, 50.0)
-	_solo_button.visible = false
-	TmcShellStyle.ghost(_solo_button)
-	_solo_button.pressed.connect(_on_solo_pressed)
-	box.add_child(_solo_button)
-
-	# The player's say over the maps pack a solo game fetches before it starts. On by
-	# default; shown with the solo button, because it only means something to a solo game.
-	_solo_maps_check = CheckBox.new()
-	_solo_maps_check.text = "Download this game's maps"
-	_solo_maps_check.tooltip_text = "Off: solo play starts with only the maps built into the game."
-	_solo_maps_check.button_pressed = true
-	_solo_maps_check.visible = false
-	_solo_maps_check.toggled.connect(func(on: bool) -> void: TmcSolo.set_skip_maps(_solo_id, not on))
-	box.add_child(_solo_maps_check)
-
-	# THE LOADING BAR. Hidden until something is actually loading, because a bar sitting at
-	# zero on a menu is a progress indicator for nothing.
-	_progress = ProgressBar.new()
-	_progress.show_percentage = false
-	_progress.custom_minimum_size = Vector2(0.0, 4.0)
-	_progress.add_theme_stylebox_override("fill", TmcShellStyle.flame_fill())
-	_progress.add_theme_stylebox_override("background", TmcShellStyle.track())
-	_progress.visible = false
-	box.add_child(_progress)
-
-	_status = Label.new()
-	_status.theme_type_variation = &"DotDim"
-	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	box.add_child(_status)
-
-	# The second line is the one a waiting player reads: file, bytes, rate and estimate answer "how much longer" and "of what"; empty rather than stale.
-	_detail = Label.new()
-	_detail.theme_type_variation = &"DotDim"
-	_detail.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_detail.modulate = Color(1.0, 1.0, 1.0, 0.62)
-	_detail.visible = false
-	box.add_child(_detail)
-
-	# The card's footer, under a hairline: the quiet things a player reaches for when
-	# something went wrong, kept apart from the one button that matters.
-	var rule := HSeparator.new()
-	rule.add_theme_stylebox_override("separator", TmcShellStyle.hairline())
-	stack.add_child(rule)
-
-	var foot := MarginContainer.new()
-	foot.add_theme_constant_override("margin_left", 10)
-	foot.add_theme_constant_override("margin_right", 10)
-	foot.add_theme_constant_override("margin_top", 4)
-	foot.add_theme_constant_override("margin_bottom", 6)
-	stack.add_child(foot)
-
-	var foot_box := VBoxContainer.new()
-	foot_box.add_theme_constant_override("separation", 2)
-	foot.add_child(foot_box)
-
-	# The way out of a client that holds the wrong thing: a mounted pack cannot be unmounted, so a game or map that will not load is fixed by deleting the downloads.
-	# Always here, under the status line, because that is when a player needs it (this shell has no settings screen).
-	_clear = Button.new()
-	_clear.name = "ClearContent"
-	_clear.text = "Clear downloaded content\u2026"
-	_clear.flat = true
-	_clear.focus_mode = Control.FOCUS_ALL
-	_clear.alignment = HORIZONTAL_ALIGNMENT_LEFT
-	_clear.add_theme_font_size_override("font_size", 13)
-	_clear.add_theme_color_override("font_color", TmcShellStyle.MUTED)
-	_clear.add_theme_color_override("font_hover_color", TmcShellStyle.ACCENT_TEXT)
-	_clear.add_theme_color_override("font_focus_color", TmcShellStyle.ACCENT_TEXT)
-	_clear.pressed.connect(_ask_clear)
-	foot_box.add_child(_clear)
-
-	# No Host button: a browser tab cannot listen, and offering a control that fails on
-	# the platform this shell exists for is worse than not offering it.
-	if DotPlatform.is_web():
-		var note := Label.new()
-		note.text = "A browser tab cannot host. Follow a link to somebody's server."
-		note.theme_type_variation = &"DotDim"
-		note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		note.add_theme_font_size_override("font_size", 12)
-		note.modulate = Color(1.0, 1.0, 1.0, 0.7)
-		var note_pad := MarginContainer.new()
-		note_pad.add_theme_constant_override("margin_left", 8)
-		note_pad.add_theme_constant_override("margin_right", 8)
-		note_pad.add_theme_constant_override("margin_bottom", 4)
-		note_pad.add_child(note)
-		foot_box.add_child(note_pad)
-
-	# The corners, added last so they draw over the backdrop: which client this is
-	# (bottom-left) and Powered by TMC (bottom-right), linked to the site this build signs
-	# in against. Both live in the menu, so neither is on screen during a game.
-	TmcShellVersion.add_corner_label(_menu)
-	_powered_by = TmcPoweredBy.add_to(_menu, _workshop_site())
-
-	# Up and down walk the card in order with a keyboard or a gamepad's d-pad, including
-	# from a text field, where the engine's own guess skips past the field below.
-	_chain_focus([_name, _address, _join, _solo_button, _solo_maps_check, _clear])
-
-	# A phone's window is scaled up around the card while the menu shows (see the method).
-	# Guarded so a suite can build the menu on a shell it never adds to the tree.
-	_menu.visibility_changed.connect(_fit_menu)
-	if is_inside_tree():
-		get_viewport().size_changed.connect(_fit_menu)
-	_fit_menu.call_deferred()
-
-	# Focused after it is in the tree: grab_focus out of the tree is an engine error, and a shell told to join at once has taken the panel down by the time the deferred call runs.
-	# A solo launch never shows the form: the site sent the player to play one game, not to type a name and address.
-	_show_connect_form(str(TmcSolo.requested()["id"]) == "")
-	_focus_when_shown(_join)
-
-
 ## The connect form (name, server, Connect) or, for a shell opened to play one game with no
 ## server, only that game. Not given back after a solo game's Leave: Play solo is the way on,
 ## and a server the player follows from there (a friend's Join) fills the address itself.
@@ -1026,101 +797,10 @@ func _focus_when_shown(control: Control) -> void:
 	).call_deferred()
 
 
-## A small label over a field. Two words each, and they are what stops the panel reading as
-## a form somebody forgot to label.
-func _caption(text: String) -> Label:
-	var label := Label.new()
-	label.text = text
-	label.theme_type_variation = &"DotDim"
-	label.add_theme_font_size_override("font_size", 12)
-	return label
-
-
-func _gap(height: float) -> Control:
-	var spacer := Control.new()
-	spacer.custom_minimum_size = Vector2(0.0, height)
-	return spacer
-
-
 ## Makes a button read as the one thing on screen to press: the site's accent button
 ## ([method TmcShellStyle.primary]). On the instance, so every other button stays quiet.
 func _primary(button: Button) -> void:
 	TmcShellStyle.primary(button)
-
-
-## The brand's flame as a thin strip, full width, along the top of the menu's card.
-func _flame_strip() -> Control:
-	var strip := TextureRect.new()
-	strip.name = "Flame"
-	strip.texture = TmcShellStyle.flame_texture()
-	strip.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	strip.stretch_mode = TextureRect.STRETCH_SCALE
-	strip.custom_minimum_size = Vector2(0.0, 3.0)
-	strip.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	return strip
-
-
-## Links [param controls] top to bottom for ui_up and ui_down, skipping none: a hidden one
-## is passed over by the engine's own focus walk, so the chain holds when the solo button
-## or the connect form is hidden.
-func _chain_focus(controls: Array) -> void:
-	var live: Array[Control] = []
-	for c: Variant in controls:
-		if c is Control:
-			live.append(c as Control)
-	for i in range(live.size()):
-		var here := live[i]
-		if i > 0:
-			here.focus_neighbor_top = here.get_path_to(live[i - 1])
-			here.focus_previous = here.focus_neighbor_top
-		if i < live.size() - 1:
-			here.focus_neighbor_bottom = here.get_path_to(live[i + 1])
-			here.focus_next = here.focus_neighbor_bottom
-
-
-## While the menu or the loading cover shows, lets the window grow its canvas to the screen's shape and
-## scales the canvas so the card reads at a phone's size ([method TmcShellStyle.fit_factor]). Put back
-## as the project had it the moment both are down: a game starting under the cover sees the change only
-## as a resize. Off with [member menu_fit] (a suite, or a build that wants the letterbox).
-func _fit_menu() -> void:
-	if _menu == null or not is_inside_tree():
-		return
-	var window := get_window()
-	if window == null:
-		return
-	var card := _fit_card()
-	if not menu_fit or card == Vector2.ZERO:
-		if not _fit_saved.is_empty():
-			# Cleared before restoring: setting the aspect emits size_changed, which calls
-			# this again re-entrantly (a frame caught the second call reading an empty dict).
-			var saved := _fit_saved
-			_fit_saved = {}
-			window.content_scale_aspect = saved["aspect"]
-			window.content_scale_factor = saved["factor"]
-		return
-	# Kept on the way in, not once: a game may have changed them while the menu was hidden.
-	if _fit_saved.is_empty():
-		_fit_saved = {"aspect": window.content_scale_aspect, "factor": window.content_scale_factor}
-	var base := Vector2(window.content_scale_size)
-	if base.x <= 0.0 or base.y <= 0.0:
-		base = Vector2(
-			float(ProjectSettings.get_setting("display/window/size/viewport_width", 1280)),
-			float(ProjectSettings.get_setting("display/window/size/viewport_height", 720)))
-	var factor := TmcShellStyle.fit_factor(
-		Vector2(window.size), DisplayServer.screen_get_scale(window.current_screen),
-		base, card, menu_fit_margin, menu_text_scale)
-	var scale := factor * float(_fit_saved["factor"])
-	window.content_scale_aspect = Window.CONTENT_SCALE_ASPECT_EXPAND
-	window.content_scale_factor = scale
-
-
-## What [method _fit_menu] fits around: the menu's card over the cover's words; zero when neither shows.
-func _fit_card() -> Vector2:
-	if _menu.visible and _menu_card != null:
-		return _menu_card.get_combined_minimum_size()
-	if loading != null and loading.is_showing():
-		return loading.fit_card()
-	return Vector2.ZERO
 
 
 ## Puts the menu into or out of "something is happening" state. One place, because every way a connection ends must undo the same two things, and a Connect button left disabled is a dead end.
@@ -1543,7 +1223,7 @@ func _connect_to(address: String) -> void:
 	# Online never sees a subscription: the index's session filters every catalogue and the cloud client's tag stamps a mount, so both go to `online` before anything is fetched.
 	# A pack that runs code stays resident after its game is freed, so a process that mounted one restarts first.
 	# So does one whose overlay holds a subscribed addon: the restart drops that overlay.
-	if (_workshop != null and _workshop.requires_restart_before_online()) or plan_holds_subscription(DotCloudAddonSet.read_plan()):
+	if (_workshop != null and _workshop.requires_restart_before_online()) or TmcShellSolo.plan_holds_subscription(DotCloudAddonSet.read_plan()):
 		_restart_for_online(target)
 		return
 
@@ -2003,508 +1683,6 @@ func _restart(keep: PackedStringArray = PackedStringArray()) -> bool:
 const BUILTIN_CLIENTS := {}
 
 
-## Runs [param content_id] here, with no server: fetch, verify and mount it as a join does,
-## then start its client scene, which finds no link and plays offline. See [TmcSolo].
-func _start_solo(content_id: String, version: String = "", map: String = "") -> void:
-	if content_id == "" or not TmcSolo.valid_id(content_id):
-		return
-
-	_drop_link()
-	_end_solo_session()
-	_clear_game()
-	_leave_game_ui()
-
-	_solo_id = content_id
-	_solo_version = version
-	_solo_map = map if TmcSolo.valid_map(map) else ""
-	_solo_retry = ""
-	_refresh_solo_maps_check()
-	_set_busy(true)
-	_join.text = "Connect"
-	_show_connect_form(false)
-	if _solo_button != null:
-		_solo_button.disabled = true
-	_say("Finding %s…" % content_id)
-
-	_ensure_cloud()
-	# The solo game's server runs here as well: it needs the server-only files (API 8).
-	_cloud.config.side = "both"
-	_adopt_content_url_arg()
-	_enter_solo_session()
-
-	var started := await _load_solo(content_id, version)
-
-	if _solo_button != null:
-		_solo_button.disabled = false
-
-	if not started.ok:
-		_end_solo_session()
-		_fail(_text("shell.solo.failed", {"reason": _explain(started.error)},
-			"Could not start %s: %s" % [content_id, _explain(started.error)]))
-		if _solo_retry != "" and _solo_button != null:
-			_solo_button.text = _text("shell.solo.retry", {}, "Retry")
-			_solo_button.visible = true
-			_primary(_solo_button)
-		return
-
-
-## The solo button: Retry after [method _solo_overlay] was blocked, which forgets that set's restarts and a failed mark first, so the overlay is built again.
-func _on_solo_pressed() -> void:
-	_forget_solo_retry()
-	_start_solo(_solo_id, _solo_version, _solo_map)
-
-
-## What Retry clears: the blocked set's restarts and a failed mark, so [method _overlay_blocked] lets the overlay be built again.
-func _forget_solo_retry() -> void:
-	if _solo_retry == "":
-		return
-	DotLog.info(CHANNEL, "retrying this solo game's addons", {"attempt": _solo_retry})
-	_forget_update_attempt(_solo_retry)
-	if DotValue.same(DotCloudAddonSet.read_plan().get("state", ""), DotCloudAddonSet.STATE_FAILED):
-		DotCloudAddonSet.forget()
-	_solo_retry = ""
-
-
-## Everything [method _start_solo] does that can fail, so it has one way out.
-func _load_solo(content_id: String, version: String) -> DotResult:
-	_cloud.begin_job("launch")
-	_launch_job = true
-	_solo_key_cache = {}
-	_solo_map_packs_memo = null
-	_deferred_workshop = false
-	var res: DotResult = await _load_solo_inner(content_id, version)
-	_launch_job = false
-	_job = {}
-	_solo_pack_label = ""
-	_cloud.end_job()
-	return res
-
-
-func _load_solo_inner(content_id: String, version: String) -> DotResult:
-	var wanted := version
-
-	if wanted == "":
-		var latest: DotResult = await TmcSolo.resolve_latest(self, content_id, _cloud.http_base_urls)
-		if not latest.ok:
-			return latest
-		# A retired id resolves to the one it moved to; use that from here on.
-		content_id = str(latest.value["id"])
-		wanted = str(latest.value["version"])
-
-	elif not (await _cloud.resolve_manifest(StringName(content_id), wanted)).ok:
-		# The site pins the newest READY upload; the CDN may only hold a later one.
-		var newest: DotResult = await TmcSolo.resolve_latest(self, content_id, _cloud.http_base_urls)
-		if newest.ok and TmcSolo.falls_back(wanted, str(newest.value["version"])):
-			DotLog.warn(CHANNEL, "pinned solo version has no manifest; using the newest published",
-				{"content": content_id, "pinned": wanted, "using": newest.value["version"]})
-			content_id = str(newest.value["id"])
-			wanted = str(newest.value["version"])
-
-	_solo_id = content_id
-	_solo_version = wanted
-	DotLog.info(CHANNEL, "starting solo", {"content": content_id, "version": wanted})
-
-	# The game addons its pack requires (zee_weapons for Prop Hunt, fc_weapons for Fatal Contact; arena_weapons up to fc-weapons v1.4.51)
-	# are not in this shell: fetched as the overlay a server would announce, then a restart into it.
-	# Asked of the store before the pack is fetched, because the pack's own requirement check refuses
-	# it while one is missing. Returns only when nothing is missing or it cannot be had.
-	# Subscriptions are asked first (their downloads only registered): a game that accepts addon packs gets the
-	# subscribed ones in the same overlay, so one restart covers both.
-	var subscribed: Array = await _solo_workshop_plan(content_id, wanted)
-	var overlay: int = await _solo_overlay(content_id, await _solo_needs(content_id, wanted), subscribed)
-	if overlay == SoloOverlay.RESTARTING:
-		return DotResult.success(null)
-	if overlay == SoloOverlay.BLOCKED:
-		return DotResult.fail(DotError.CODE_STATE, _text("shell.solo.addons_blocked", {},
-			"this game's addons did not start in this tab, so it was not started without them. Retry fetches them again."))
-
-	# Everything is registered and fetched first, so the total is fixed before a byte moves; mounting follows.
-	await _prefetch_solo(content_id, wanted)
-	_cloud.job_begin_unpack()
-
-	# "*" asks for every download group (dot-cloud 22): a solo host serves any map. Older dot-cloud reads it as
-	# a group no file has, which is what an empty list already fetched there.
-	var got: DotResult = await _cloud.ensure(StringName(content_id), wanted, PackedStringArray(["*"]))
-	if not got.ok:
-		return got
-
-	var mount := DotCloudClient.mount_prefix_for(StringName(content_id), wanted)
-	var read := TmcSolo.read_descriptor(mount)
-	if not read.ok:
-		return read
-
-	var desc: Dictionary = read.value
-	var scene_rel := str(desc.get("client_scene", ""))
-
-	if scene_rel == "":
-		return DotResult.fail(DotError.CODE_INVALID,
-			"This game names no client scene, so it cannot be played here.", mount)
-
-	var safe := DotPaths.safe_relative(scene_rel)
-	if not safe.ok:
-		return DotResult.fail(DotError.CODE_INVALID, "This game's client scene is not a safe path.", scene_rel)
-
-	# The packs the game needs beside its own, by the rule a join fetches them: a key with
-	# no version is not one a server would send, and here it is resolved to the newest
-	# rather than refused, because nobody pinned it.
-	var dep_keys := PackedStringArray()
-	for key in (desc["dependencies"] as PackedStringArray) + (desc["server_dependencies"] as PackedStringArray):
-		var dep := await _ensure_solo_pack(key)
-		if not dep.ok:
-			return DotResult.fail(dep.error.code,
-				"This game needs %s, which could not be downloaded." % key, str(dep.error))
-		dep_keys.append(str(dep.value))
-
-	var session := TmcSoloSession.new()
-	session.name = "Solo"
-	session.content_id = content_id
-	session.version = wanted
-	session.mount_root = mount
-	session.display_name = str(desc.get("name", ""))
-	session.start_map = StringName(_solo_map)
-	session.leave_fn = _leave_solo
-	session.pack_keys = dep_keys
-	session.cache_dir = _cloud.config.cache_dir
-	session.content_url = _user_arg("--content-url").strip_edges()
-
-	# The map packs a server owner would name, from the stock list. One that will not
-	# fetch is a map nobody can change to, not a game that will not start.
-	var skip_maps := TmcSolo.skip_maps(content_id)
-	if skip_maps:
-		DotLog.info(CHANNEL, "the player skips this game's maps pack", {"content": content_id})
-
-	var slice_keys: Array[String] = [DotCloudClient.content_key_for(StringName(content_id), wanted)]
-	for key in (desc["dependencies"] as PackedStringArray) + (desc["server_dependencies"] as PackedStringArray):
-		var parts := TmcSolo.split_key(key)
-		if str(parts["version"]) != "":
-			slice_keys.append(DotCloudClient.content_key_for(StringName(parts["id"]), str(parts["version"])))
-
-	for key in (PackedStringArray() if skip_maps else await _solo_map_packs(content_id)):
-		var maps := await _ensure_solo_pack(key, true, TmcSolo.map_groups(DotPlatform.is_web(), _solo_map))
-		if not maps.ok:
-			DotLog.warn(CHANNEL, "a solo map pack could not be fetched", {
-				"pack": key, "why": str(maps.error),
-			})
-			continue
-		session.map_keys.append(str(maps.value))
-		var parts := TmcSolo.split_key(str(maps.value))
-		session.map_roots.append(DotCloudClient.mount_prefix_for(StringName(parts["id"]), parts["version"]))
-
-	_solo_pack_label = ""
-
-	# Subscribed packs, after the game's own and before its scene exists, so the scene's
-	# catalogues find every entry already in the index. A game that states no `accepts`
-	# takes none and is not asked about them.
-	session.takes_subscriptions = not _game_accepts(mount).is_empty()
-	if session.takes_subscriptions:
-		if _deferred_workshop:
-			var mounted: DotResult = await _ensure_workshop().mount_pending()
-			session.workshop_summary = mounted.value as Dictionary if mounted.ok and mounted.value is Dictionary else {}
-		else:
-			# Subscribed content only: the suggested map packs are fetched after the scene is up.
-			session.workshop_summary = await _sync_workshop(content_id)
-
-	var path := mount.path_join(safe.value)
-	_warm_hold = await _warm_pack(slice_keys)
-	var packed: Variant = load(path)
-
-	if not (packed is PackedScene):
-		return DotResult.fail(DotError.CODE_IO, "The game's client scene would not load.", path)
-
-	add_child(session)
-	_solo_session = session
-	DotRegistry.register(TmcSolo.MAPS_SERVICE, session)
-
-	if not get_tree().node_added.is_connected(_on_solo_node_added):
-		get_tree().node_added.connect(_on_solo_node_added)
-
-	var instance := (packed as PackedScene).instantiate()
-
-	# A client that announces Leave rather than acting on it (`leave_requested`: "what leave
-	# means belongs to whatever loaded this client") is answered here, as a server's game is
-	# answered by its disconnect.
-	if instance.has_signal(&"leave_requested"):
-		instance.connect(&"leave_requested", _leave_solo, CONNECT_DEFERRED)
-
-	_game_root.add_child(instance)
-
-	_set_busy(false)
-	_menu.visible = false
-	_has_spawned = true
-	loading.end(TmcLoadingScreen.REASON_GAME)
-	loading.end(TmcLoadingScreen.REASON_CONTENT)
-	_say("")
-	_watch_game_ready()
-	if session.takes_subscriptions:
-		_sync_suggested_later(content_id, desc["suggested"] as PackedStringArray)
-
-	var shown := session.display_name if session.display_name != "" else content_id
-	if _solo_button != null:
-		_solo_button.text = "Play %s solo" % shown
-	if _friends != null:
-		_friends.on_game_changed(shown, "")
-
-	DotLog.info(CHANNEL, "solo game started", {
-		"content": "%s@%s" % [content_id, wanted], "scene": path, "maps": session.map_keys.size(),
-	})
-	return DotResult.success(instance)
-
-
-## The server process a solo game started for itself ([method TmcSoloSession.sim_child_args]):
-## the packs the shell that started it mounted, from the same cache, the session registered as
-## that shell registers it, and the game's client scene, which hands over to its server. A
-## failure quits with 1, and the game that started it plays in-process.
-func _start_sim_child() -> void:
-	# The overlay mounted at boot is the parent's: an unconfirmed boot would count against it.
-	DotCloudAddonSet.confirm_boot()
-	var started := await _load_sim_child()
-	if not started.ok:
-		DotLog.error(CHANNEL, "the solo server process could not start its game", {"why": str(started.error)})
-		get_tree().quit(1)
-
-
-func _load_sim_child() -> DotResult:
-	var asked := TmcSolo.requested()
-	var content_id := str(asked["id"])
-	var version := str(asked["version"])
-	if content_id == "" or version == "":
-		return DotResult.fail(DotError.CODE_INVALID, "A solo server process needs --solo and --solo-version.")
-
-	_cloud = _new_cloud()
-	_cloud.config.side = "both"
-	add_child(_cloud)
-	_adopt_content_url_arg()
-
-	var got: DotResult = await _cloud.ensure(StringName(content_id), version, PackedStringArray(["*"]))
-	if not got.ok:
-		return got
-
-	var session := TmcSoloSession.new()
-	session.name = "Solo"
-	session.content_id = content_id
-	session.version = version
-	session.mount_root = DotCloudClient.mount_prefix_for(StringName(content_id), version)
-	session.cache_dir = _cloud.config.cache_dir
-	session.start_map = StringName(str(asked.get("map", "")))
-
-	for flag in [TmcSolo.PACKS_FLAG, TmcSolo.MAPS_FLAG]:
-		for key in TmcSolo.child_keys(str(flag)):
-			var parts := TmcSolo.split_key(key)
-			if str(parts["version"]) == "" or not TmcSolo.valid_id(str(parts["id"])) or not TmcSolo.valid_version(str(parts["version"])):
-				return DotResult.fail(DotError.CODE_INVALID, "Not a pinned pack key.", key)
-			var pack: DotResult = await _cloud.ensure(StringName(parts["id"]), str(parts["version"]), PackedStringArray(["*"]))
-			if not pack.ok:
-				return pack
-			if str(flag) == TmcSolo.MAPS_FLAG:
-				session.map_keys.append(key)
-				session.map_roots.append(DotCloudClient.mount_prefix_for(StringName(parts["id"]), str(parts["version"])))
-			else:
-				session.pack_keys.append(key)
-
-	var read := TmcSolo.read_descriptor(session.mount_root)
-	if not read.ok:
-		return read
-	var desc: Dictionary = read.value
-	session.display_name = str(desc.get("name", ""))
-	var safe := DotPaths.safe_relative(str(desc.get("client_scene", "")))
-	if not safe.ok:
-		return DotResult.fail(DotError.CODE_INVALID, "This game names no usable client scene.", session.mount_root)
-	var path := session.mount_root.path_join(safe.value)
-	var packed: Variant = load(path)
-	if not (packed is PackedScene):
-		return DotResult.fail(DotError.CODE_IO, "The game's client scene would not load.", path)
-
-	add_child(session)
-	_solo_session = session
-	DotRegistry.register(TmcSolo.MAPS_SERVICE, session)
-	_game_root.add_child((packed as PackedScene).instantiate())
-	DotLog.info(CHANNEL, "solo server process started its game", {
-		"content": "%s@%s" % [content_id, version], "packs": session.pack_keys.size(), "maps": session.map_keys.size(),
-	})
-	return DotResult.success(null)
-
-
-## The addons a game's pack names (`addons` in its `requires.json` and `requires.floor.json`),
-## read from the store before the pack is fetched: dir -> level. Empty when the pack has neither.
-func _solo_needs(content_id: String, version: String) -> Dictionary:
-	var needs := {}
-	var game: DotResult = await _cloud.resolve_manifest(StringName(content_id), version)
-	if not game.ok:
-		return needs
-	for file in SOLO_REQUIRE_FILES:
-		var read: DotResult = await _cloud.read_pack_file(game.value as DotCloudManifest, file)
-		if read.ok:
-			needs.merge(solo_addons_in((read.value as PackedByteArray).get_string_from_utf8()))
-	return needs
-
-
-## The `addons` map of a requires file's text (dir -> level); empty for anything else.
-static func solo_addons_in(text: String) -> Dictionary:
-	var json := JSON.new()
-	var out := {}
-	if json.parse(text) != OK or not (json.data is Dictionary):
-		return out
-	var addons: Variant = (json.data as Dictionary).get("addons", {})
-	if addons is Dictionary:
-		for dir: Variant in addons:
-			if dir is String and str(dir).is_valid_filename() and not str(dir).contains("."):
-				out[dir] = addons[dir]
-	return out
-
-
-## The addons in [param needs] (from [method _solo_needs]) that this shell neither carries nor
-## has mounted, fetched as the overlay a server would announce. When it only adds addons to this process (a first visit, a new shell
-## build) it is mounted here and the game starts ([method _mount_in_place]); otherwise it is restarted into, as
-## [method _update_addons] does for a join. [constant SoloOverlay.RESTARTING] when a restart is under way (the caller stops
-## there); [constant SoloOverlay.NONE] when nothing is missing or it is mounted here; [constant SoloOverlay.BLOCKED] when the addons are missing and
-## cannot be had now: after a failed start on the same overlay in this shell build, after [constant MAX_UPDATE_RESTARTS] restarts for it,
-## or when building it failed. Blocked never plays on: the game's scripts do not parse without its addons, which is the black screen
-## PLAYLOT showed on 2026-11-13. The caller fails the start and the solo button becomes Retry ([member _solo_retry]).
-##
-## [param subscribed] are the Workshop's `summary.addons` (dot-cloud 28): approved addon packs of a game whose
-## `accepts.kinds` has `addon`, already checked against the build's own addons. They join the overlay under
-## their exact ids and are marked `source: "subscription"` in the plan, which [method _restart_for_online] drops.
-func _solo_overlay(content_id: String, needs: Dictionary, subscribed: Array = []) -> SoloOverlay:
-	var announce: Array = []
-	var from_subscription := {}
-	for entry: Variant in subscribed:
-		if not (entry is Dictionary):
-			continue
-		var dir := str(entry.get("dir", ""))
-		if dir == "" or bool(entry.get("running", false)) or DirAccess.dir_exists_absolute("res://addons/%s" % dir):
-			continue
-		from_subscription[dir] = str(entry.get("id", ""))
-		announce.append({"dir": dir, "repo": str(entry.get("repo", "")), "id": from_subscription[dir],
-			"version": str(entry.get("version", ""))})
-	for dir: String in needs:
-		if from_subscription.has(dir):
-			# The game needs what the player subscribed to; the subscription's checked version serves both.
-			continue
-		if DirAccess.dir_exists_absolute("res://addons/%s" % dir):
-			continue
-		var pack := TmcAddonNamespaces.pack_for(dir)
-		var latest: DotResult = await TmcSolo.resolve_latest(self, str(pack["id"]), _cloud.http_base_urls)
-		if not latest.ok and str(pack["old_id"]) != "":
-			# Before the site renamed the organisation's packs only the old id is published.
-			latest = await TmcSolo.resolve_latest(self, str(pack["old_id"]), _cloud.http_base_urls)
-		if not latest.ok:
-			DotLog.warn(CHANNEL, "a game addon this solo game needs is not published", {
-				"content": content_id, "dir": dir, "id": pack["id"], "why": str(latest.error),
-			})
-			continue
-		# A retired id resolves to the one it moved to, whose name is the repo [DotCloudAddonSet] checks.
-		var id := str(latest.value["id"])
-		announce.append({"dir": dir, "repo": id.get_file(), "id": id, "version": str(latest.value["version"])})
-
-	if announce.is_empty():
-		return SoloOverlay.NONE
-
-	var addons := DotCloudAddonSet.new(_cloud)
-	addons.namespaces = TmcAddonNamespaces.load_shell()
-	for dir: String in from_subscription:
-		# The site approved this exact pack for this player; that, not a namespace, is why it is taken.
-		addons.namespaces.append(str(from_subscription[dir]))
-	var decided := addons.plan_for(announce)
-	var wanted: Dictionary = decided["wanted"]
-	mark_subscribed(wanted, from_subscription)
-
-	if not (decided["refused"] as Dictionary).is_empty():
-		DotLog.warn(CHANNEL, "solo game addons not taken", {"content": content_id, "refused": decided["refused"]})
-
-	var target := "solo:%s" % content_id
-
-	if wanted.is_empty():
-		_clear_update_attempts(target)
-		return SoloOverlay.NONE
-
-	var attempt := _attempt_key(target, wanted)
-	if _overlay_blocked(attempt, wanted):
-		DotLog.warn(CHANNEL, "this solo game's addons did not start here; not starting it without them", {
-			"content": content_id, "addons": wanted.keys(), "failed": _overlay_failed_here(wanted),
-			"restarts": _update_attempts(attempt),
-		})
-		_solo_retry = attempt
-		return SoloOverlay.BLOCKED
-
-	DotLog.info(CHANNEL, "this solo game needs addons the shell does not carry; fetching them", {
-		"content": content_id, "addons": wanted.keys(),
-	})
-	_say(_text("shell.addons.updating_solo", {}, "Adding this game's addons…"))
-	loading.set_progress(-1.0, _text("shell.addons.updating_solo", {}, "Adding this game's addons…"))
-
-	# Where to come back to: the page's `?solo=` names the game too, but a menu launch has no address.
-	var resume := {"solo": content_id, "solo_version": _solo_version, "solo_map": _solo_map}
-	if _auth != null and _auth.is_signed_in() and _auth.identity() != null:
-		resume["member"] = _auth.identity().uid
-
-	var built: DotResult = await addons.build(wanted, resume)
-	if not built.ok:
-		DotLog.error(CHANNEL, "could not fetch this solo game's addons", {"content": content_id, "why": str(built.error)})
-		_solo_retry = attempt
-		return SoloOverlay.BLOCKED
-
-	_stamp_plan()
-
-	# A first visit, or the first start on a new shell build, has none of these addons in this process: mount them here and play on,
-	# rather than reload the page and fetch the shell again (the "update" restart a fresh PLAYLOT visit showed on 2026-11-14).
-	# A restart stays for an overlay that would replace a mounted addon: a compiled script is never read again. It also stays
-	# for a workshop subscription (never on a first visit): an online join drops that overlay, and only a restart unmounts it.
-	if _overlay_additive(built.value) and not plan_holds_subscription(built.value) \
-			and not plan_holds_subscription({"addons": wanted}):
-		match _mount_in_place():
-			InPlace.RUNNING:
-				_clear_update_attempts(target)
-				return SoloOverlay.NONE
-			InPlace.STALE:
-				_solo_retry = attempt
-				return SoloOverlay.BLOCKED
-
-	_note_update_attempt(attempt)
-
-	var keep := DotCloudAddonSet.plan_files(built.value)
-	if resume.has("member"):
-		var tokens := _auth.config.token_store_path
-		for token in [tokens, tokens + ".salt"]:
-			if FileAccess.file_exists(token):
-				keep.append(token)
-
-	_say(_text("shell.addons.restarting", {}, "Restarting to finish the update…"))
-	if await _restart(keep):
-		return SoloOverlay.RESTARTING
-	# Without its addons the game's scripts do not parse: say so rather than start a grey screen.
-	# A browser that cannot store the overlay (a full quota; before dot-cloud 0.1.47 any overlay over 127 MiB) stops here.
-	loading.set_progress(-1.0, _text("shell.addons.unsaved_solo", {}, "This browser could not keep the addons this game needs, so it cannot start here yet."))
-	return SoloOverlay.RESTARTING
-
-
-## Marks each entry of a [method DotCloudAddonSet.plan_for] `wanted` that came from a subscription ([param from_subscription]:
-## dir -> id) with `source: "subscription"`, which [method DotCloudAddonSet.build] keeps in the plan.
-static func mark_subscribed(wanted: Dictionary, from_subscription: Dictionary) -> void:
-	for dir: Variant in wanted:
-		var entry: Variant = wanted[dir]
-		if entry is Dictionary and from_subscription.get(dir, "") == str((entry as Dictionary).get("id", "")) and str(from_subscription.get(dir, "")) != "":
-			(entry as Dictionary)["source"] = SUBSCRIPTION_SOURCE
-
-
-## Whether an overlay plan holds an addon a player's subscription put there: such a plan never boots into an online session.
-static func plan_holds_subscription(plan: Dictionary) -> bool:
-	var addons: Variant = plan.get("addons", {})
-	if addons is Dictionary:
-		for dir: Variant in addons:
-			var entry: Variant = (addons as Dictionary)[dir]
-			if entry is Dictionary and str((entry as Dictionary).get("source", "")) == SUBSCRIPTION_SOURCE:
-				return true
-	return false
-
-
-const SUBSCRIPTION_SOURCE := "subscription"
-
-
-## Where a game's pack names the addons it needs (and their API floors): the hard requirements
-## dot-cloud checks before mounting, and the floors it was built against.
-const SOLO_REQUIRE_FILES: PackedStringArray = ["requires.json", "requires.floor.json"]
-
-
 ## This process is playing alone: packs mounted from here on are `solo`, and the index offers
 ## solo entries to the catalogues that follow it.
 func _enter_solo_session() -> void:
@@ -2708,7 +1886,7 @@ func _restart_for_online(target: String) -> void:
 		resume["member"] = _auth.identity().uid
 
 	var plan := DotCloudAddonSet.read_plan()
-	if plan_holds_subscription(plan):
+	if TmcShellSolo.plan_holds_subscription(plan):
 		# A state the boot does not mount: the next start comes up on the build alone and resumes the join,
 		# whose own addon update builds the server's overlay if it announces one.
 		plan = {"format": int(plan.get("format", 1)), "build": plan.get("build", ""), "state": "dropped"}
@@ -2730,261 +1908,6 @@ func _restart_for_online(target: String) -> void:
 	})
 	_status.text = _text("workshop.restart_by_hand", {},
 		"Close and reopen the game to join a server: a subscribed pack that runs code is loaded.")
-
-
-## The newest version of a pack named without one, resolved once per launch so the prefetch and the mount pass agree.
-func _resolve_solo_key(key: String) -> DotResult:
-	if _solo_key_cache.has(key):
-		return DotResult.success(_solo_key_cache[key])
-	var latest: DotResult = await TmcSolo.resolve_latest(self, str(TmcSolo.split_key(key)["id"]), _cloud.http_base_urls)
-	if latest.ok:
-		_solo_key_cache[key] = latest.value
-	return latest
-
-
-## The map packs this launch fetches: `client/solo.json`'s, except that a start map with a one-map
-## pack of its own ([method TmcSolo.per_map_key]) fetches only that, not the whole set.
-func _solo_map_packs(content_id: String) -> PackedStringArray:
-	if _solo_map_packs_memo is PackedStringArray:
-		return _solo_map_packs_memo
-	var out := PackedStringArray()
-	for key in TmcSolo.map_packs(content_id):
-		var one := TmcSolo.per_map_key(key, _solo_map)
-		if one != "" and (await _resolve_solo_key(one)).ok:
-			DotLog.info(CHANNEL, "fetching only the start map's pack", {"map": _solo_map, "pack": one, "instead_of": key})
-			out.append(one)
-		else:
-			out.append(key)
-	_solo_map_packs_memo = out
-	return out
-
-
-## The Workshop sync for a solo launch, before its overlay is decided: a game whose `provides.json` states `accepts`
-## has its subscribed packs planned and registered with the launch job (mounted after [method _prefetch_solo]
-## downloads them, by [method DotCloudWorkshop.mount_pending]). The value is the summary's `addons` (dot-cloud 28),
-## the subscribed addon packs for [method _solo_overlay]; empty for any other game.
-func _solo_workshop_plan(content_id: String, version: String) -> Array:
-	var game: DotResult = await _cloud.resolve_manifest(StringName(content_id), version)
-	if not game.ok:
-		return []
-	var provides: DotResult = await _cloud.read_pack_file(game.value as DotCloudManifest, "provides.json")
-	if not provides.ok or _accepts_from_text((provides.value as PackedByteArray).get_string_from_utf8()).is_empty():
-		return []
-	var workshop := _ensure_workshop()
-	workshop.defer_mount = true
-	var summary := await _sync_workshop(content_id)
-	workshop.defer_mount = false
-	_deferred_workshop = true
-	var addons: Variant = summary.get("addons", [])
-	return addons if addons is Array else []
-
-
-## Registers the game, its dependencies and map packs with the launch job (subscribed packs were registered by
-## [method _solo_workshop_plan]) and downloads them all, mounting none.
-## Nothing here is fatal: a pack that cannot be fetched now is reported by the mount pass that follows, as it was before.
-func _prefetch_solo(content_id: String, version: String) -> void:
-	var game: DotResult = await _cloud.resolve_manifest(StringName(content_id), version)
-	if not game.ok:
-		return
-	var manifest := game.value as DotCloudManifest
-	var all_groups := PackedStringArray(["*"]) # solo has no server to say which map, so total every group
-	var takes_groups := DotAddonApi.build_level("dot_cloud") >= 23
-	if takes_groups:
-		await _cloud.job_register_manifest(manifest, all_groups)
-	else:
-		await _cloud.job_register_manifest(manifest)
-
-	var keys := PackedStringArray()
-	var map_keys := PackedStringArray()
-	var yml: DotResult = await _cloud.read_pack_file(manifest, "game.yml")
-	if yml.ok:
-		var desc := TmcSolo.parse_descriptor((yml.value as PackedByteArray).get_string_from_utf8())
-		keys.append_array(desc["dependencies"] as PackedStringArray)
-		keys.append_array(desc["server_dependencies"] as PackedStringArray)
-		if not TmcSolo.skip_maps(content_id):
-			map_keys = await _solo_map_packs(content_id)
-
-	# Map packs take the groups the mount pass will ask for (TmcSolo.map_groups), so the total is what moves.
-	var passes: Array = [[await _solo_refs(keys), all_groups],
-		[await _solo_refs(map_keys), TmcSolo.map_groups(DotPlatform.is_web(), _solo_map)]]
-	for pass_refs: Array in passes:
-		var refs: Array = pass_refs[0]
-		if refs.is_empty():
-			continue
-		if takes_groups:
-			await _cloud.job_register(refs, pass_refs[1] as PackedStringArray)
-		else:
-			await _cloud.job_register(refs)
-
-	await _cloud.job_download()
-
-
-## `{id, version}` for each valid key of [param keys], a missing version resolved to the newest; a key that will not resolve is left out.
-func _solo_refs(keys: PackedStringArray) -> Array:
-	var refs: Array = []
-	for key in keys:
-		var parts := TmcSolo.split_key(key)
-		if not TmcSolo.valid_id(str(parts["id"])) or not TmcSolo.valid_version(str(parts["version"])):
-			continue
-		var id := str(parts["id"])
-		var ver := str(parts["version"])
-		if ver == "":
-			var latest: DotResult = await _resolve_solo_key(key)
-			if not latest.ok:
-				continue
-			id = str(latest.value["id"])
-			ver = str(latest.value["version"])
-		refs.append({"id": id, "version": ver})
-	return refs
-
-
-## Fetches and mounts one pack by `<id>[@<version>]`, resolving a missing version to the newest; returns the `<id>@<version>` mounted.
-## [param announce] names what is fetched and its size in the status line, so a download the player did not ask for is named.
-## [param groups] are the download groups asked: every one by default, a map pack's from [method TmcSolo.map_groups].
-func _ensure_solo_pack(key: String, announce: bool = false, groups: PackedStringArray = PackedStringArray(["*"])) -> DotResult:
-	var parts := TmcSolo.split_key(key)
-	var id := str(parts["id"])
-	var version := str(parts["version"])
-
-	if not TmcSolo.valid_id(id) or not TmcSolo.valid_version(version):
-		return DotResult.fail(DotError.CODE_INVALID, "Not a pack id.", key)
-
-	if version == "":
-		var latest: DotResult = await _resolve_solo_key(key)
-		if not latest.ok:
-			return latest
-		id = str(latest.value["id"])
-		version = str(latest.value["version"])
-
-	if announce and not _launch_job:
-		_solo_pack_label = await _describe_solo_pack(id, version, groups)
-		_say(_solo_pack_label)
-
-	var got: DotResult = await _cloud.ensure(StringName(id), version, groups)
-	if not got.ok:
-		_solo_pack_label = ""
-		return got
-
-	return DotResult.success("%s@%s" % [id, version])
-
-
-## "Fetching maps: <name> (<size>)…". The size is what is still to download (a pack already
-## on the disk is "already downloaded"), from the manifest alone. A manifest that will not
-## resolve here only costs the size: [method DotCloudClient.ensure] reports the real failure.
-func _describe_solo_pack(id: String, version: String, groups: PackedStringArray = PackedStringArray(["*"])) -> String:
-	var pack_name := id.get_slice("/", 1)
-	var resolved: DotResult = await _cloud.resolve_manifest(StringName(id), version)
-	if not resolved.ok:
-		return _text("shell.solo.fetching", {"name": pack_name}, "Fetching maps: %s…" % pack_name)
-
-	var manifest := resolved.value as DotCloudManifest
-	if manifest.display_name != "":
-		pack_name = manifest.display_name
-
-	var plan := _cloud.plan_for(manifest, groups)
-	if int(plan.get("missing_bytes", 0)) <= 0:
-		return _text("shell.solo.have", {"name": pack_name}, "Maps: %s (already downloaded)" % pack_name)
-	var size := _size_text(int(plan["missing_bytes"]))
-	return _text("shell.solo.fetching_size", {"name": pack_name, "size": size}, "Fetching maps: %s (%s)…" % [pack_name, size])
-
-
-## Code and scenes of the mounted packs [param keys], in the order that lets a scene find its
-## scripts already cached.
-func _pack_script_paths(keys: Array[String]) -> PackedStringArray:
-	var scripts := PackedStringArray()
-	var others := PackedStringArray()
-
-	for key in keys:
-		var manifest := _cloud.manifest_for(key)
-		if manifest == null:
-			continue
-
-		for file in manifest.files:
-			# Tooling scenes (tools/, examples/, tests/, ci/) are never played and their scripts preload paths a pack does not ship.
-			if _in_tooling_dir(file.path):
-				continue
-			var res_path := manifest.resource_path(file)
-			var ext := res_path.get_extension()
-			if ext == "gd":
-				scripts.append(res_path)
-			elif ext in SLICE_EXTENSIONS:
-				others.append(res_path)
-
-	return scripts + others
-
-
-## True for a file under a directory the warm-up skips at any depth (the list dot-cloud's script warm uses).
-static func _in_tooling_dir(path: String) -> bool:
-	var parts := path.split("/")
-	for i in parts.size() - 1:
-		if DotCloudClient.WARM_SKIP_DIRS.has(parts[i]):
-			return true
-	return false
-
-
-## Compiles a delivered pack's scripts a slice per frame with dot-cloud's warm_content, then
-## slice-loads its scenes and resources. An addon without warm_content falls back to
-## [method _slice_load] for everything. Both are no-ops natively. On the web they run on the main thread even on the threaded
-## engine: a [method ResourceLoader.load_threaded_request] there never finished (FC's 326 scripts at 0 % for minutes, no frame
-## drawn; web-mt-shell-unpack-hang-1), so warm_content is forced past its own "threads exist" skip.
-func _warm_pack(keys: Array[String]) -> Variant:
-	if _cloud == null or not _cloud.has_method("warm_content") or not DotPlatform.is_web():
-		await _slice_load(_pack_script_paths(keys))
-		return null
-
-	if loading != null:
-		loading.set_progress(0.0, _text("shell.loading.scripts", {}, "Preparing the game…"))
-	var on_progress := func(done: int, total: int) -> void:
-		var fraction := float(done) / float(maxi(total, 1))
-		if _progress != null:
-			_progress.visible = true
-			_progress.value = fraction * 100.0
-		if loading != null:
-			loading.set_progress(fraction, _text("shell.loading.scripts", {}, "Preparing the game…"))
-	var warmed: Variant = await _cloud.call("warm_content", get_tree(), PackedStringArray(keys), true, on_progress)
-	if warmed != null:
-		slice_frames_yielded = warmed.frames_yielded
-
-	var rest := PackedStringArray()
-	for res_path in _pack_script_paths(keys):
-		if res_path.get_extension() != "gd":
-			rest.append(res_path)
-	await _slice_load(rest)
-	return warmed
-
-
-## What a scene in this build pulls in, scripts first.
-static func _scene_dependency_paths(path: String) -> PackedStringArray:
-	var out := PackedStringArray()
-	for dep in ResourceLoader.get_dependencies(path):
-		var dep_path := dep.get_slice("::", 2) if "::" in dep else dep
-		if dep_path.get_extension() in SLICE_EXTENSIONS or dep_path.get_extension() == "gd":
-			out.append(dep_path)
-	out.sort()
-	return out
-
-
-## Fills the resource cache across frames so the following [code]load()[/code] is a hit and the cover keeps animating (a browser without threads compiles every script in one frame).
-## Native builds skip it unless [param force]; a failure only means the plain load() does the work.
-func _slice_load(paths: PackedStringArray, force: bool = false) -> void:
-	if paths.is_empty() or not (force or DotPlatform.is_web()):
-		return
-
-	var loader := DotCloudSliceLoader.new()
-	loader.progress.connect(func(done: int, total: int, _path: String) -> void:
-		var fraction := float(done) / float(maxi(total, 1))
-		if _progress != null:
-			_progress.visible = true
-			_progress.value = fraction * 100.0
-		if loading != null:
-			loading.set_progress(fraction, _text("shell.loading.scripts", {}, "Preparing the game…")))
-
-	# Never threaded on the web: see [method _warm_pack].
-	var res: DotResult = await loader.load_all(get_tree(), paths, not DotPlatform.is_web())
-	slice_frames_yielded = loader.frames_yielded
-
-	if not res.ok:
-		DotLog.warn(CHANNEL, "slice preload stopped early", {"why": str(res.error)})
 
 
 ## `--content-url <base>` on a desktop launch: one more place to ask for packs, after `content.json`'s. Only an address (every manifest still verifies against this build's key), never read from the page.
@@ -3120,7 +2043,7 @@ func _on_spawned() -> void:
 		return
 
 	var path := String(BUILTIN_CLIENTS[content_id])
-	await _slice_load(_scene_dependency_paths(path))
+	await _solo_packs._slice_load(TmcShellSoloPacks._scene_dependency_paths(path))
 	var packed: Variant = load(path)
 
 	if packed == null:

@@ -57,7 +57,7 @@ var send_fn: Callable = Callable()
 var reload_fn: Callable = Callable()
 
 ## `func() -> Object`: the loaded game's map session, or null. The host's own finder,
-## handed in rather than repeated -- see `TmcHost._find_map_session`.
+## handed in rather than repeated -- see `TmcMapGame.session_in`.
 var map_session_fn: Callable = Callable()
 
 var _map_session: Object = null

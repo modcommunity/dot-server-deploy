@@ -913,11 +913,7 @@ static func _be32(b: PackedByteArray, at: int) -> int:
 func _build_view() -> void:
 	_root = Control.new()
 	_root.name = "LoadingScreen"
-	_root.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_root.offset_left = 0.0
-	_root.offset_top = 0.0
-	_root.offset_right = 0.0
-	_root.offset_bottom = 0.0
+	_root.set_anchors_preset(Control.PRESET_FULL_RECT)  # offsets of a new Control are already 0
 	# Takes the mouse while it is up: a click on a screen that says "loading" is not a shot.
 	_root.mouse_filter = Control.MOUSE_FILTER_STOP
 	_root.theme = TmcShellStyle.theme()
@@ -935,32 +931,13 @@ func _build_view() -> void:
 	_full(_image)
 	_root.add_child(_image)
 
-	# Darker toward the bottom, where the text is: a bright screenshot behind white text is
-	# white text nobody can read, and the owner's picture is not ours to choose.
-	var shade := TextureRect.new()
-	var gradient := Gradient.new()
-	gradient.set_color(0, Color(TmcShellStyle.BG, 0.05))
-	gradient.set_color(1, Color(TmcShellStyle.BG, 0.92))
-	var texture := GradientTexture2D.new()
-	texture.gradient = gradient
-	texture.fill_from = Vector2(0, 0.35)
-	texture.fill_to = Vector2(0, 1)
-	shade.texture = texture
-	shade.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	shade.stretch_mode = TextureRect.STRETCH_SCALE
-	shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_full(shade)
-	_root.add_child(shade)
+	_root.add_child(_bottom_shade())
 
 	var bottom := MarginContainer.new()
-	bottom.anchor_left = 0.0
 	bottom.anchor_right = 1.0
 	bottom.anchor_top = 1.0
 	bottom.anchor_bottom = 1.0
-	bottom.offset_left = 0.0
-	bottom.offset_right = 0.0
 	bottom.offset_top = -170.0
-	bottom.offset_bottom = 0.0
 	bottom.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	for side in ["left", "right"]:
 		bottom.add_theme_constant_override("margin_" + side, 40)
@@ -1017,7 +994,30 @@ func _build_view() -> void:
 	# Which client this is, for a bug report that says "the loading screen" and nothing else.
 	_version = TmcShellVersion.add_corner_label(_root)
 	_powered_by = TmcPoweredBy.add_to(_root, site_url)
+	_build_audio()
 
+
+## The gradient over the picture that darkens it toward the text.
+func _bottom_shade() -> TextureRect:
+	# Darker toward the bottom, where the text is: a bright screenshot behind white text is
+	# white text nobody can read, and the owner's picture is not ours to choose.
+	var shade := TextureRect.new()
+	var gradient := Gradient.new()
+	gradient.set_color(0, Color(TmcShellStyle.BG, 0.05))
+	gradient.set_color(1, Color(TmcShellStyle.BG, 0.92))
+	var texture := GradientTexture2D.new()
+	texture.gradient = gradient
+	texture.fill_from = Vector2(0, 0.35)
+	texture.fill_to = Vector2(0, 1)
+	shade.texture = texture
+	shade.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	shade.stretch_mode = TextureRect.STRETCH_SCALE
+	shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_full(shade)
+	return shade
+
+
+func _build_audio() -> void:
 	_music = AudioStreamPlayer.new()
 	_music.name = "Music"
 	_music.bus = &"Master"

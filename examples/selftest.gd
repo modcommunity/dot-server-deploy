@@ -13,6 +13,11 @@ const Host := preload("res://host/tmc_host.gd")
 
 const CHECKS := 600
 
+## Where the replay section writes. Emptied at the start of every run, so a clip left by the
+## last one cannot satisfy a check about this one (docs/testing.md, "a suite that writes to
+## user://").
+const REPLAY_DIR := "user://tmc_selftest_replay"
+
 var _passed := 0
 var _failed := 0
 var _failures := PackedStringArray()
@@ -31,36 +36,36 @@ func _ready() -> void:
 func _run() -> void:
 	print("dot-server-deploy")
 
-	_test_yaml_scalars()
-	_test_yaml_structure()
-	_test_yaml_refusals()
+	SelftestYaml.new(self)._test_yaml_scalars()
+	SelftestYaml.new(self)._test_yaml_structure()
+	SelftestYaml.new(self)._test_yaml_refusals()
 	_test_config()
 	_test_aliases()
 	_test_admins()
 	_test_layered_cfg()
-	_test_content_lists()
+	SelftestContentLists.new(self)._test_content_lists()
 	_test_content()
-	_test_former_game_id()
+	SelftestContentLists.new(self)._test_former_game_id()
 	_test_owner_maps()
 	await _test_map_collections()
 	_test_game_refs()
 	_test_vote()
-	_test_vote_layers_reach_a_ballot()
+	SelftestVoteBallot.new(self)._test_vote_layers_reach_a_ballot()
 	_test_vote_rounds_without_a_match()
-	_test_vote_limit_waits_for_a_change()
+	SelftestVoteBallot.new(self)._test_vote_limit_waits_for_a_change()
 	_test_game_rotation()
 	_test_vote_notices()
 	_test_auth()
 	_test_logging()
-	_test_security()
-	_test_party()
-	_test_bot_record()
+	SelftestServerFeatures.new(self)._test_security()
+	SelftestServerFeatures.new(self)._test_party()
+	SelftestServerFeatures.new(self)._test_bot_record()
 	await _test_replay()
 	await _test_friends()
 	_test_game_cfg_dirs()
-	_test_radio()
+	SelftestServerFeatures.new(self)._test_radio()
 	_test_addon_announce()
-	_test_startup_checks()
+	SelftestServerFeatures.new(self)._test_startup_checks()
 
 	print("")
 	_check(
@@ -111,147 +116,6 @@ func _check(condition: bool, what: String, detail: String = "") -> bool:
 func _parse(text: String) -> Dictionary:
 	var result := TmcYaml.parse(text, "<test>")
 	return result.value as Dictionary if result.ok else {}
-
-
-
-func _test_yaml_scalars() -> void:
-	_section("YAML scalars")
-
-	var tree := _parse("""
-# a comment
-name: "TMC Test Server"
-bare: a bare string
-players: 64
-ratio: 0.75
-on_flag: true
-off_flag: no
-empty:
-url: http://localhost:8000
-hashed: "Bob's #1 server"   # a trailing comment
-""")
-
-	_check(String(tree.get("name", "")) == "TMC Test Server", "a quoted string")
-	_check(String(tree.get("bare", "")) == "a bare string", "a bare string with spaces")
-	_check(tree.get("players") is int and int(tree["players"]) == 64, "an integer stays one")
-	_check(tree.get("ratio") is float, "and a float stays a float")
-	_check(tree.get("on_flag") == true, "true is a bool")
-	_check(tree.get("off_flag") == false, "and so is 'no'")
-	_check(String(tree.get("empty", "x")) == "", "a key with nothing after it is empty")
-
-	# The rule that makes a URL parse: a colon separates a key only when a space or the
-	# end of the line follows it. Without it `http://localhost:8000` is a key called
-	# `url: http` with an unparseable value.
-	_check(
-		String(tree.get("url", "")) == "http://localhost:8000",
-		"a URL keeps its colons (%s)" % tree.get("url", "")
-	)
-
-	# A `#` inside quotes is data. Without this, a server named "Bob's #1" is named
-	# "Bob's — which is a name nobody typed and no error anywhere.
-	_check(
-		String(tree.get("hashed", "")) == "Bob's #1 server",
-		"a # inside quotes is not a comment (%s)" % tree.get("hashed", "")
-	)
-	_done()
-
-
-func _test_yaml_structure() -> void:
-	_section("YAML structure")
-
-	var tree := _parse("""
-backend:
-  type: rest
-  verify:
-    type: jwt
-    key: secret
-tags:
-  - pvp
-  - modded
-flow: [kick, ban, mute]
-groups:
-  admin:
-    permissions:
-      - kick
-      - ban
-  moderator:
-    permissions: [kick]
-""")
-
-	_check(
-		String(TmcYaml.at(tree, "backend.type", "")) == "rest",
-		"a nested map, by dotted path"
-	)
-	_check(
-		String(TmcYaml.at(tree, "backend.verify.type", "")) == "jwt",
-		"nested twice"
-	)
-	_check(
-		TmcYaml.at(tree, "backend.missing.deep", "fallback") == "fallback",
-		"and a missing path is the fallback, not a crash"
-	)
-
-	var tags: Variant = tree.get("tags")
-	_check(tags is Array and (tags as Array).size() == 2, "a block sequence")
-	_check(tags is Array and String((tags as Array)[0]) == "pvp", "with its values")
-
-	var flow: Variant = tree.get("flow")
-	_check(flow is Array and (flow as Array).size() == 3, "a flow sequence on one line")
-
-	var permissions: Variant = TmcYaml.at(tree, "groups.admin.permissions")
-	_check(
-		permissions is Array and (permissions as Array).size() == 2,
-		"a sequence two levels down"
-	)
-	_check(
-		(TmcYaml.at(tree, "groups.moderator.permissions") as Array).size() == 1,
-		"and a flow sequence beside a block one"
-	)
-	_done()
-
-
-## What it refuses, and that it says which line. Every one of these is either a mistake or a feature
-## this format does not have, and both are better as an error at boot than as a value nobody
-## intended.
-func _test_yaml_refusals() -> void:
-	_section("YAML refusals")
-
-	for entry in [
-		["tabs", "a:\n\tb: 1", "tab"],
-		["a duplicate key", "a: 1\na: 2", "duplicate"],
-		["an anchor", "a: &anchor 1", "anchor"],
-		["an alias", "a: *anchor", "anchor"],
-		["a tag", "a: !!str 1", "anchor"],
-		["a block scalar", "a: |", "anchor"],
-		["an unclosed flow mapping", "a: {b: 1", "same line"],
-		["a flow mapping entry with no colon", "a: {b}", "flow mapping"],
-		["a duplicate key in a flow mapping", "a: {b: 1, b: 2}", "duplicate"],
-		["a document marker", "---\na: 1", "document marker"],
-		["an unclosed flow sequence", "a: [1, 2", "same line"],
-		["a key with no colon", "just a line", "expected 'key: value'"],
-	]:
-		var result := TmcYaml.parse(String(entry[1]), "<test>")
-		var message := str(result.error) if not result.ok else ""
-
-		_check(
-			not result.ok and message.contains(String(entry[2])),
-			"%s is refused" % entry[0],
-			"got: %s" % (message if message != "" else "accepted")
-		)
-
-	# dot-core v0.1.46 reads one-line flow mappings, so an inline mapping is a value, not a refusal.
-	var flow := TmcYaml.parse("a: {map: x, mode: ctf}", "<test>")
-	_check(
-		flow.ok and TmcYaml.at(flow.value, "a.map") == "x" and TmcYaml.at(flow.value, "a.mode") == "ctf",
-		"an inline mapping is read as a mapping",
-		str(flow.error) if not flow.ok else ""
-	)
-
-	var located := TmcYaml.parse("a: 1\nb: 2\n\tc: 3", "cfg/server.yml")
-	_check(
-		not located.ok and str(located.error).contains("cfg/server.yml:3"),
-		"and the refusal names the file and the line (%s)" % str(located.error)
-	)
-	_done()
 
 
 func _alias_cfg(label: String, server_yml: String, alias_yml: String) -> String:
@@ -320,7 +184,12 @@ func _test_aliases() -> void:
 		var r := TmcConfig.load_dir(_alias_cfg("bad_" + label, "sv_name: \"a\"\n", bad[label][0]))
 		_check(not r.ok and str(r.error).contains(bad[label][1]) and str(r.error).contains("alias.yml:"),
 			"alias.yml '%s' fails loudly naming file and line (%s)" % [label, str(r.error).replace("\n", " | ")])
+	_alias_layers()
+	_done()
 
+
+## Alias layers: addon defaults, the game and the server, later wins; and no cap on the count.
+func _alias_layers() -> void:
 	# Layers: addon defaults (host/aliases.yml), then game, then server; later wins; each can add, remove or remap.
 	var cfg_l := TmcConfig.new()
 	cfg_l._load_default_aliases()
@@ -353,7 +222,6 @@ func _test_aliases() -> void:
 		many += "alias_%d: game\n" % i
 	var big := TmcConfig.load_dir(_alias_cfg("many", "sv_name: \"a\"\n", many))
 	_check(big.ok and (big.value as TmcConfig).aliases.size() >= 500, "no cap on the number of aliases")
-	_done()
 
 
 func _test_config() -> void:
@@ -569,136 +437,6 @@ func _test_logging() -> void:
 	_done()
 
 
-## The guard, which was also in the dependency list and instantiated nowhere.
-func _test_party() -> void:
-	_section("parties and matchmaking")
-
-	var loaded := TmcConfig.load_dir(CFG)
-	var config := loaded.value as TmcConfig
-
-	_check(config.files_read.has("party.yml"), "party.yml is read")
-	_check(config.files_read.has("matchmaking.yml"), "and matchmaking.yml")
-	_check(config.party_enabled and config.party_chat, "the two switches reach the host")
-	_check(config.party_server_id == 42, "party_server_id reaches the booking keeper")
-	# By prefix, onto the addon's own config: the table this file does not keep.
-	_check(config.party.seat_hold_sec == 120.0, "party_seat_hold_sec reaches DotPartyConfig")
-	_check(config.party.state_report_sec == 20.0, "and the roster report interval")
-	_check(config.party_policy.enabled, "party_reserve_enabled reaches the owner's terms")
-	# Written by NAME, as an operator writes it, and read as the enum.
-	_check(
-		config.party_policy.lobbies == DotPartyReservePolicy.Lobbies.PUBLIC_AND_PRIVATE,
-		"a booking shape written by name is read as the enum (%d)" % config.party_policy.lobbies
-	)
-	_check(not config.party_policy.empty_only, "a bool reaches the terms")
-	_check(
-		config.party_policy.days.size() == 2 and config.party_policy.days[0] == 5
-			and config.party_policy.days[1] == 6,
-		"a list of days stays a typed list (%s)" % [config.party_policy.days]
-	)
-	# 22:00 to 02:00: the wrapped window the site's own rules have.
-	_check(
-		config.party_policy.window_open(1790463600),
-		"a window crossing midnight is open late on a booking day"
-	)
-
-	_check(config.mm_enabled, "mm_enabled reaches the host")
-	_check(config.mm_region == "eu", "and the region tickets are filed under")
-	_check(is_equal_approx(config.matchmaking.tau, 0.6), "mm_tau reaches DotMatchmakingConfig")
-	_check(config.mm_playlists.size() == 2, "two playlists, one per key (%d)" % config.mm_playlists.size())
-
-	var duel: DotMmPlaylist = config.mm_playlists[0] if config.mm_playlists.size() > 0 else null
-	_check(
-		duel != null and duel.id == &"duel" and duel.team_size == 1 and duel.accept_timeout_sec == 15.0,
-		"a playlist's settings reach it by their own names"
-	)
-	_check(config.mm_servers.has("eu1"), "mm_servers is kept for the allocator")
-
-	var party_unknown := PackedStringArray()
-
-	for entry in config.unknown:
-		var text := String(entry)
-		if text.contains("party") or text.contains("mm_") or text.contains("matchmaking"):
-			party_unknown.append(text)
-
-	_check(
-		party_unknown.is_empty(),
-		"and not one of them fell through as unknown",
-		" / ".join(Array(party_unknown))
-	)
-
-	# The shipped defaults, restated because they are the decision: a booking is the
-	# owner's opt-in, and a queue nobody configured is not running.
-	var shipped := TmcConfig.new()
-	_check(
-		shipped.party_enabled and not shipped.party_policy.enabled and not shipped.mm_enabled,
-		"shipped: parties on, bookings by parties off, matchmaking off"
-	)
-
-	_done()
-
-
-## Where the replay section writes. Emptied at the start of every run, so a clip left by the
-## last one cannot satisfy a check about this one (docs/testing.md, "a suite that writes to
-## user://").
-const REPLAY_DIR := "user://tmc_selftest_replay"
-
-
-static func _rm_tree(dir: String) -> void:
-	var da := DirAccess.open(dir)
-	if da == null:
-		return
-	for sub in da.get_directories():
-		_rm_tree(dir.path_join(sub))
-	for f in da.get_files():
-		DirAccess.remove_absolute(dir.path_join(f))
-	DirAccess.remove_absolute(dir)
-
-
-static func _count_replays(dir: String) -> int:
-	var da := DirAccess.open(dir)
-	var n := 0
-	if da != null:
-		for f in da.get_files():
-			if f.ends_with(".dreplay"):
-				n += 1
-	return n
-
-
-## dot-replay was linked here and built nowhere. What this asserts: the ring is built by default and
-## bounded, `replay save` writes a file dot-replay's own reader calls complete, and a ban or a kick
-## carries the hash of a clip that is really on disk.
-func _test_bot_record() -> void:
-	_section("the bot demonstration recorder")
-	var config := TmcConfig.load_dir(CFG).value as TmcConfig
-	_check(config.files_read.has("bot_record.yml"), "bot_record.yml is read")
-	_check(
-		not config.bot_record.record and config.bot_record.rate == 8.0 and config.bot_record.cap == 50
-			and config.bot_record.store == "memory" and config.bot_record.kinds == "ride",
-		"bot_record, bot_record_rate, _cap, _store and _kinds reach DotBotDemoConfig"
-	)
-	var stray := PackedStringArray()
-	for entry in config.unknown:
-		if String(entry).contains("bot_record"):
-			stray.append(String(entry))
-	_check(stray.is_empty(), "and none fell through as unknown", " / ".join(Array(stray)))
-	var shipped := TmcConfig.new()
-	_check(shipped.bot_record.record and shipped.bot_record.validate().ok, "shipped: on, and valid")
-	# The shipped template parses to the shipped defaults.
-	var tpl := TmcYaml.parse_file("res://cfg.example/addon/dot_bot_record/bot_record.yml")
-	_check(tpl.ok and (tpl.value as Dictionary).has("bot_record_token"), "the template documents every key")
-	if tpl.ok:
-		var probe := TmcConfig.new()
-		var applied := probe._apply_bot_record(tpl.value as Dictionary)
-		_check(applied.ok and probe.unknown.is_empty(), "and the template is accepted whole", str(probe.unknown))
-		var missing := PackedStringArray()
-		for k in probe.bot_record.config_keys():
-			var key := "bot_record" if k == "record" else "bot_record_" + k
-			if not (tpl.value as Dictionary).has(key):
-				missing.append(key)
-		_check(missing.is_empty(), "no DotBotDemoConfig property is missing from it", ", ".join(missing))
-	_done()
-
-
 func _test_replay() -> void:
 	_section("the replay ring")
 
@@ -737,7 +475,7 @@ func _test_replay() -> void:
 		"a compression the addon does not have refuses replay.yml"
 	)
 
-	_rm_tree(REPLAY_DIR)
+	SelftestFiles.remove_tree(REPLAY_DIR)
 
 	# A clock the suite moves. 30 ticks a second, the fixture's own sv_tickrate.
 	var now: Array = [1000]
@@ -822,7 +560,7 @@ func _test_replay() -> void:
 	# bytes and hash alike, so a hash comparison passes with the cooldown taken out.
 	_check(
 		first.ok and second.ok and str((first.value as Dictionary).get("replay")) == str((second.value as Dictionary).get("replay"))
-			and _count_replays(replay.directory.path_join("evidence")) == 1,
+			and SelftestFiles.count_replays(replay.directory.path_join("evidence")) == 1,
 		"a ban and its own kick share one evidence clip, one file"
 	)
 	_check(str((first.value as Dictionary).get("replay", "")).contains("/evidence/"), "and it goes under evidence/, apart from manual clips")
@@ -876,8 +614,8 @@ func _test_replay() -> void:
 	for i in range(5):
 		replay.save_clip(0.0, "burst %d" % i)
 	_check(
-		_count_replays(replay.directory.path_join("clips")) <= 3,
-		"clips/ keeps replay_keep_files and no more (%d)" % _count_replays(replay.directory.path_join("clips"))
+		SelftestFiles.count_replays(replay.directory.path_join("clips")) <= 3,
+		"clips/ keeps replay_keep_files and no more (%d)" % SelftestFiles.count_replays(replay.directory.path_join("clips"))
 	)
 
 	# A game change finishes the match file and starts the next.
@@ -902,16 +640,16 @@ func _test_replay() -> void:
 func _test_addon_announce() -> void:
 	_section("the addon set a server announces")
 	var lock := "arena-weapons\tv1.4.10\ndot-core\tv0.1.30\n"
-	var out := Host.addon_set_from(lock, PackedStringArray(["arena_weapons", "dot_core"]))
+	var out := TmcAddonSet.addon_set_from(lock, PackedStringArray(["arena_weapons", "dot_core"]))
 	_check(out.size() == 2 and out[0]["id"] == "gamemann/fc-weapons" and out[0]["repo"] == "fc-weapons" and out[0]["version"] == "1.4.10", "a game addon's pack is announced under its author and published name, at the lock's version")
-	var renamed := Host.addon_set_from("fc-weapons\tv1.4.11\n", PackedStringArray(["arena_weapons"]))
+	var renamed := TmcAddonSet.addon_set_from("fc-weapons\tv1.4.11\n", PackedStringArray(["arena_weapons"]))
 	_check(renamed.size() == 1 and renamed[0]["id"] == "gamemann/fc-weapons" and renamed[0]["version"] == "1.4.11", "a lock under the renamed repository's name announces the same pack")
 	_check(TmcAddonNamespaces.lock_repo("arena_weapons") == "fc-weapons" and TmcAddonNamespaces.lock_repo("fc_weapons") == "fc-weapons", "fc_weapons and its legacy arena_weapons are both locked as fc-weapons")
 	_check(TmcAddonNamespaces.dir_for("fc-weapons") == "fc_weapons" and TmcAddonNamespaces.dir_for("arena-weapons") == "fc_weapons", "fc-weapons, by either repository name, installs to fc_weapons")
 	_check(TmcAddonNamespaces.dir_for("fc-weapons", "1.4.51") == "arena_weapons" and TmcAddonNamespaces.dir_for("arena-weapons", "v1.4.10") == "arena_weapons", "a version up to the last legacy tag (1.4.51) holds the legacy arena_weapons")
 	_check(TmcAddonNamespaces.dir_for("fc-weapons", "1.4.52") == "fc_weapons" and TmcAddonNamespaces.dir_for("fc-weapons", "1.5.0") == "fc_weapons", "a newer version holds fc_weapons")
 	_check(TmcAddonNamespaces._warned.has("arena_weapons@fc-weapons@1.4.51") and not TmcAddonNamespaces._warned.has("fc_weapons@fc-weapons@1.5.0"), "the legacy dir is warned about, naming the ref; the current one is not")
-	var current := Host.addon_set_from("fc-weapons\tv1.5.0\n", PackedStringArray(["fc_weapons"]))
+	var current := TmcAddonSet.addon_set_from("fc-weapons\tv1.5.0\n", PackedStringArray(["fc_weapons"]))
 	_check(current.size() == 1 and current[0]["dir"] == "fc_weapons" and current[0]["id"] == "gamemann/fc-weapons" and current[0]["version"] == "1.5.0", "an installed fc_weapons is announced as fc-weapons")
 	_check(TmcAddonNamespaces._warned.has("arena_weapons@fc-weapons@1.4.11"), "an installed legacy arena_weapons is announced with a warning naming the locked ref")
 	_check(out[1]["id"] == "modcommunity/dot-core" and out[1]["repo"] == "dot-core" and out[1]["version"] == "0.1.30", "a dot-* addon is announced under its old id, which every shell takes, at the lock's version")
@@ -919,14 +657,14 @@ func _test_addon_announce() -> void:
 	_check(core["id"] == "gamespice-platform/core" and core["repo"] == "core" and core["old_id"] == "modcommunity/dot-core", "a dot-* addon's pack is gamespice-platform/<name>, with the modcommunity alias as its old id")
 	_check(TmcAddonNamespaces.dir_for_id("gamespice-platform/core") == "dot_core" and TmcAddonNamespaces.dir_for_id("modcommunity/dot-core") == "dot_core" and TmcAddonNamespaces.dir_for_id("gamemann/fc-weapons") == "fc_weapons" and TmcAddonNamespaces.dir_for_id("gamemann/fc-weapons", "1.4.40") == "arena_weapons", "both of an addon's ids find its dir, a renamed one's by version")
 	_check(TmcAddonNamespaces.covers(TmcAddonNamespaces.DEFAULTS, "gamespice-platform/core") and TmcAddonNamespaces.covers(TmcAddonNamespaces.DEFAULTS, "modcommunity/dot-core"), "the shell takes the organisation's packs under the new and the old id")
-	_check(Host.addon_set_from(lock, PackedStringArray(["natural_disasters"])).is_empty(), "an addon the lock does not name is not announced")
+	_check(TmcAddonSet.addon_set_from(lock, PackedStringArray(["natural_disasters"])).is_empty(), "an addon the lock does not name is not announced")
 
 	var cfg := TmcAddonsConfig.new()
 	var bad := cfg.read({"overlays": ["alice/dot-x@1.0.0"]})
 	_check(not bad.ok, "an overlay whose owner is not under namespaces: is refused")
 	cfg = TmcAddonsConfig.new()
 	_check(cfg.read({"namespaces": ["alice/"], "overlays": ["alice/dot-x@v1.0.0"]}).ok, "a trusted owner's overlay is read")
-	var mixed := Host.merge_overlays(out, cfg.overlay_set())
+	var mixed := TmcAddonSet.merge_overlays(out, cfg.overlay_set())
 	_check(mixed.size() == 3 and mixed[2]["dir"] == "dot_x" and mixed[2]["id"] == "alice/dot-x" and mixed[2]["version"] == "1.0.0", "the overlay is announced beside the lock's set")
 	cfg = TmcAddonsConfig.new()
 	_check(cfg.read({"overlays": ["gamemann/zee-dot-weapons@0.1.63", "gamemann/fc-weapons@1.4.40"]}).ok, "a default owner's game-addon overlay is read")
@@ -934,7 +672,7 @@ func _test_addon_announce() -> void:
 	_check(games[0]["dir"] == "zee_weapons" and games[1]["dir"] == "arena_weapons" and games[1]["repo"] == "fc-weapons", "a game-addon overlay names the dir its pack carries, not its repository's (fc-weapons 1.4.40: the legacy one)")
 	cfg = TmcAddonsConfig.new()
 	_check(cfg.read({"overlays": ["gamemann/fc-weapons@1.5.0"]}).ok and cfg.overlay_set()[0]["dir"] == "fc_weapons", "an fc-weapons overlay past the rename names fc_weapons")
-	var swapped := Host.merge_overlays(out, games)
+	var swapped := TmcAddonSet.merge_overlays(out, games)
 	_check(swapped.size() == 3 and swapped[1]["dir"] == "zee_weapons" and swapped[2]["version"] == "1.4.40", "a game-addon overlay replaces the lock's entry for its dir")
 	_check(not TmcAddonsConfig.new().read({"namespaces": ["*"]}).ok and not TmcAddonsConfig.new().read({"namespaces": ["alice"]}).ok, "a wildcard or a bare name is not a namespace")
 
@@ -949,7 +687,7 @@ func _test_addon_announce() -> void:
 	_check(not TmcAddonsConfig.addon_ref("gamemann/dot-radio", spaces0).ok, "an addons: entry with no version anywhere is refused")
 	_check(not TmcAddonsConfig.addon_ref("mallory/dot-radio@1.0.0", spaces0).ok, "an addons: entry from an untrusted owner is refused")
 	_check(TmcAddonsConfig.addon_ref("gamemann/fc-weapons", spaces0, {"fc-weapons": "v1.4.51"}).value["dir"] == "arena_weapons" and TmcAddonsConfig.addon_ref("gamemann/fc-weapons@1.5.0", spaces0).value["dir"] == "fc_weapons", "an addons: fc-weapons entry takes the dir its version holds (legacy arena_weapons up to 1.4.51)")
-	var listed := Host.addons_from_list(PackedStringArray(["gamemann/dot-trail@0.1.5", "gamemann/dot-radio@0.1.4", "mallory/x@1.0.0", "gamemann/dot-radio"]), spaces0, "", PackedStringArray(["dot_trail"]))
+	var listed := TmcAddonSet.addons_from_list(PackedStringArray(["gamemann/dot-trail@0.1.5", "gamemann/dot-radio@0.1.4", "mallory/x@1.0.0", "gamemann/dot-radio"]), spaces0, "", PackedStringArray(["dot_trail"]))
 	_check(listed["entries"].size() == 1 and listed["errors"].size() == 3, "addons_from_list announces the installed trusted ones and reports each of the rest")
 	var hc := TmcConfig.new()
 	_check(hc != null and TmcConfig.HOST_KEYS.has("addons"), "addons is a server.yml host key")
@@ -964,13 +702,18 @@ func _test_addon_announce() -> void:
 		_check(TmcAddonNamespaces.dir_for(id.get_file()) == dir and TmcAddonNamespaces.dir_for(TmcAddonNamespaces.lock_repo(dir)) == dir, "%s round-trips through its pack and lock names" % dir)
 		_check(TmcAddonNamespaces.covers(TmcAddonNamespaces.DEFAULTS, id), "the shell takes %s's overlay (%s), since it does not carry it" % [dir, id])
 
-	var pins: Variant = JSON.parse_string(Host.pack_pins_json(out, {"modcommunity/dot-core": "9.9.9", "ow/map_a": "1.0.0"}))
+	var pins: Variant = JSON.parse_string(TmcAddonSet.pack_pins_json(out, {"modcommunity/dot-core": "9.9.9", "ow/map_a": "1.0.0"}))
 	_check(pins is Dictionary and pins.get("ow/map_a") == "1.0.0" and pins.get("modcommunity/dot-core") == "9.9.9", "sv_pack_pins lists mounted packs, and what is mounted wins over the lock")
 	_check(pins is Dictionary and pins.get("gamespice-platform/core") == "0.1.30" and not pins.has("gamespice-platform/fc-weapons"), "sv_pack_pins also pins a dot-* addon's version under its new id")
-	_check(Host.pack_pins_json([], {}) == "", "nothing pinned reports nothing")
+	_check(TmcAddonSet.pack_pins_json([], {}) == "", "nothing pinned reports nothing")
+	_addon_download_groups(out)
+	_done()
 
+
+## Download groups: the game names them per dir, the shell unions what it is about to build.
+func _addon_download_groups(out: Array) -> void:
 	# Download groups: the game names them per dir, the shell unions what it is about to build.
-	var named := Host.with_groups(out, Host.sanitize_groups({"arena_weapons": PackedStringArray(["weapon-b", "weapon-a"]), "dot_nowhere": ["x"], "dot_core": [3]}))
+	var named := TmcAddonSet.with_groups(out, TmcAddonSet.sanitize_groups({"arena_weapons": PackedStringArray(["weapon-b", "weapon-a"]), "dot_nowhere": ["x"], "dot_core": [3]}))
 	_check(named[0]["groups"] == ["weapon-b", "weapon-a"] and not named[1].has("groups") and not out[0].has("groups"), "the game's groups ride its dir's entry only, on a copy; a malformed list is dropped")
 	var server := [
 		{"dir": "arena_weapons", "groups": ["weapon-rifle", "weapon-awp"]}, {"dir": "dot_ui"}, {"dir": "zee_weapons", "groups": ["weapon-awp", "weapon-x"]},
@@ -981,7 +724,6 @@ func _test_addon_announce() -> void:
 	_check(TmcAddonGroups.wanted_groups(server, {"arena_weapons": {}, "zee_weapons": {}}, {"groups": ["weapon-knife"]}) == PackedStringArray(["weapon-awp", "weapon-knife", "weapon-rifle", "weapon-x"]), "never narrower than the running overlay")
 	_check(TmcAddonGroups.wanted_groups(server, {"arena_weapons": {}}, {"addons": {}}) == PackedStringArray(["*"]), "a plan from before groups took everything, and keeps it")
 	_check(TmcAddonGroups.covers(PackedStringArray(["a", "b"]), PackedStringArray(["b"])) and not TmcAddonGroups.covers(PackedStringArray(["a"]), PackedStringArray(["a", "b"])) and not TmcAddonGroups.covers(PackedStringArray(["a"]), PackedStringArray(["*"])) and TmcAddonGroups.covers(PackedStringArray(["*"]), PackedStringArray(["z"])), "an overlay covers a server only with every group it needs")
-	_done()
 
 
 ## `cfg/game/<game>/`: the current id, the migration from a retired one, and a base file for every game.
@@ -1007,7 +749,7 @@ func _test_game_cfg_dirs() -> void:
 		"Fatal Contact's config directory is game-fatal-contact", str(names.keys()))
 	_check(names.size() == content.games.size(), "no two games share a config directory", "%d dirs for %d games" % [names.size(), content.games.size()])
 
-	var written := TmcGameConfig.write_base_configs(root, content)
+	var written := TmcGameCfgDirs.write_base_configs(root, content)
 	var missing := PackedStringArray()
 
 	for descriptor in content.games:
@@ -1040,10 +782,15 @@ func _test_game_cfg_dirs() -> void:
 	var marker := FileAccess.open("%s/game/game-fatal-contact/server.yml" % root, FileAccess.WRITE)
 	marker.store_string("max_players: 7\n")
 	marker.close()
-	_check(TmcGameConfig.write_base_configs(root, content).is_empty()
+	_check(TmcGameCfgDirs.write_base_configs(root, content).is_empty()
 		and FileAccess.get_file_as_string("%s/game/game-fatal-contact/server.yml" % root) == "max_players: 7\n",
 		"a second run writes nothing and keeps an owner's file")
+	_retired_cfg_dirs(content, root)
+	_done()
 
+
+## A retired directory moves whole and is still the game's settings; the shell migration names the same ones.
+func _retired_cfg_dirs(content: TmcContent, root: String) -> void:
 	# A retired directory moves, whole, and is still the game's settings.
 	var old := ProjectSettings.globalize_path("user://selftest_game_cfg_old")
 	DotPaths.remove_tree(old)
@@ -1055,7 +802,7 @@ func _test_game_cfg_dirs() -> void:
 	_put(old + "/game/game-fatal-contact/server.yml", "max_players: 5\n")
 	_put(old + "/server/game/game-final-contact/server.yml", "max_players: 11\n")
 	_put(old + "/server/game/game-final-contact/sub/a.yml", "a: 1\n")
-	var lines := TmcGameConfig.migrate_retired_dirs(old)
+	var lines := TmcGameCfgDirs.migrate_retired_dirs(old)
 	_check(lines.size() == 2, "one line per migrated directory", str(lines))
 	_check(not DirAccess.dir_exists_absolute(old + "/game/game-arena")
 		and FileAccess.get_file_as_string(old + "/game/game-fatal-contact/extra.yml") == "kept: 1\n",
@@ -1066,7 +813,7 @@ func _test_game_cfg_dirs() -> void:
 	_check(FileAccess.get_file_as_string(old + "/server/game/game-fatal-contact/server.yml") == "max_players: 11\n"
 		and FileAccess.file_exists(old + "/server/game/game-fatal-contact/sub/a.yml"),
 		"an operator directory with no successor is renamed whole, subdirectories too")
-	_check(TmcGameConfig.migrate_retired_dirs(old).is_empty(), "a second run has nothing to do")
+	_check(TmcGameCfgDirs.migrate_retired_dirs(old).is_empty(), "a second run has nothing to do")
 
 	# Until migrated, the old name still reaches the game.
 	var cvars := TmcGameConfig.new()
@@ -1081,56 +828,13 @@ func _test_game_cfg_dirs() -> void:
 	var sync := FileAccess.get_file_as_string("res://tools/cfg_sync.sh")
 	var drift := PackedStringArray()
 
-	for retired: String in TmcGameConfig.RETIRED_DIRS:
-		if not sync.contains("%s:%s" % [retired, TmcGameConfig.RETIRED_DIRS[retired]]):
+	for retired: String in TmcGameCfgDirs.RETIRED_DIRS:
+		if not sync.contains("%s:%s" % [retired, TmcGameCfgDirs.RETIRED_DIRS[retired]]):
 			drift.append(retired)
 
 	_check(drift.is_empty(), "tools/cfg_sync.sh renames every retired directory the host does", str(drift))
 	DotPaths.remove_tree(root)
 	DotPaths.remove_tree(old)
-	_done()
-
-
-func _test_radio() -> void:
-	_section("dot-radio, optional")
-	var root := "user://selftest_radio_cfg"
-	DotPaths.remove_tree(root)
-	DotCfgLegacy.reset()
-	var template := TmcYaml.parse_file("res://cfg.example/addon/dot_radio/radio.yml")
-	_check(template.ok and template.value is Dictionary, "the shipped radio.yml parses")
-	var shipped: Dictionary = template.value if template.ok else {}
-	var keys_known := true
-	for k in shipped:
-		keys_known = keys_known and TmcConfig.RADIO_KEYS.has(String(k))
-	_check(keys_known and shipped.get("radio_enabled", true) == false, "every shipped key is known and the radio is off")
-	_check(not TmcConfig.new().radio_enabled, "no radio.yml means no radio")
-	_put(root + "/radio.yml", "radio_enabled: true\nradio_port: 9911\nradio_token_file: t.token\nradio_typo: 1\n")
-	var cfg: TmcConfig = TmcConfig.load_dir(root).value
-	_check(cfg.radio_enabled and int(cfg.radio.get("radio_port", 0)) == 9911, "radio.yml turns it on and carries its keys")
-	_check("\n".join(cfg.unknown).contains("radio_typo"), "an unknown radio_ key is reported")
-	var present := TmcRadio.available()
-	var host := Node.new()
-	var off := TmcRadio.install(host, null, TmcConfig.new(), root)
-	_check(off == null and host.get_child_count() == 0, "disabled builds nothing")
-	var absent: TmcRadio = null if present else TmcRadio.install(host, null, cfg, root)
-	_check(present or (absent == null and host.get_child_count() == 0), "enabled without the addon is a warning, not a crash")
-	var link := TmcRadioLink.new()
-	_check(not link.adopt({}) and link.radio == null, "the shell ignores a notice with no url")
-	_check(present or not link.adopt({"url": "http://x"}), "and without the addon in the shell build builds no client")
-	var live := false
-	if present:
-		_put(root + "/t.token", "secret-token\n")
-		cfg.radio["radio_token_file"] = ProjectSettings.globalize_path(root + "/t.token")
-		cfg.radio["radio_port"] = 0
-		cfg.radio["radio_dir"] = ProjectSettings.globalize_path(root + "/lib")
-		var on := TmcRadio.install(host, null, cfg, ProjectSettings.globalize_path(root))
-		live = on != null and DotRegistry.get_service(TmcRadio.SERVICE) != null and on.api.authenticate("secret-token").ok
-		if on != null:
-			on.free()
-	_check(not present or live, "with the addon: the station starts, registers, and the token file is the admin token")
-	host.free()
-	link.free()
-	_done()
 
 
 func _test_friends() -> void:
@@ -1235,49 +939,6 @@ func _test_friends() -> void:
 	_done()
 
 
-func _test_security() -> void:
-	_section("the guard")
-
-	var loaded := TmcConfig.load_dir(CFG)
-	var config := loaded.value as TmcConfig
-
-	_check(config.security.enabled, "sec_enabled reaches the guard")
-	# [b]The two dry runs are separate on purpose and the fixture sets them apart.[/b] An operator
-	# commonly trusts the chat rules long before a movement threshold they have not measured on their
-	# own maps, and a single switch for both would make that unsayable — so the fixture says.
-	_check(config.security.dry_run, "sec_dryrun reaches the guard's own dry run")
-	_check(not config.anticheat.dry_run, "and the detectors keep a separate one")
-	_check(config.security.caps_ratio == 0.8, "a float reaches the chat detection")
-	_check(config.security.duplicate_depth == 7, "an int reaches it too")
-	_check(config.security.ledger_size == 128, "sec_ledger_size reaches the ledger")
-	_check(
-		Array(config.security.link_allow) == ["example.test"],
-		"and a list stays a list (%s)" % [config.security.link_allow]
-	)
-	_check(config.anticheat.max_horizontal_speed == 420.0, "ac_max_speed reaches the detector")
-	_check(config.anticheat.max_time_ratio == 1.02, "and the timing tolerance")
-
-	var sec_unknown := PackedStringArray()
-
-	for entry in config.unknown:
-		var text := String(entry)
-		if text.contains("sec_") or text.contains("ac_"):
-			sec_unknown.append(text)
-
-	_check(
-		sec_unknown.is_empty(),
-		"and not one of them fell through as unknown",
-		" / ".join(Array(sec_unknown))
-	)
-
-	# The shipped default, restated here because it is the decision rather than the value:
-	# an addon that starts punishing an existing community the moment it is installed is
-	# one that gets turned off after the first false positive.
-	_check(DotSecurityConfig.new().dry_run, "a guard nobody configured is in dry run")
-
-	_done()
-
-
 func _test_layered_cfg() -> void:
 	_section("party, groups and security through the addons' layered loaders")
 	var root := "user://selftest_layered_cfg"
@@ -1378,67 +1039,6 @@ func _test_layered_cfg() -> void:
 
 	DotPaths.remove_tree(root)
 	DotAddonConfig.config_root = ""
-	_done()
-
-
-func _test_content_lists() -> void:
-	_section("content lists: shipped default, operator replace or merge, bad entry, pin")
-	var root := "user://selftest_content_lists"
-	DotPaths.remove_tree(root)
-	var shipped := TmcContentLists.load_list("addons", root)
-	_check(shipped.ok and (shipped.value as Array).size() > 40, "the shipped addons list loads")
-	_check(TmcContentLists.pin_for(shipped.value, "dot-core") != "", "and carries the pins of addons.lock")
-	var games := TmcContentLists.load_list("games", root)
-	_check(games.ok and (games.value as Array).size() > 10 and games.value[0]["content"] != "", "the shipped games list loads with its content directories")
-	_put(root + "/content/addons.yml", "entries:\n  - dot-core@v9\n  - pack: gamemann/surf_mesa@1.2.0\n")
-	var own := TmcContentLists.load_list("addons", root)
-	_check(own.ok and (own.value as Array).size() == 2, "the operator's file replaces the default")
-	_check(TmcContentLists.pin_for(own.value, "dot-core") == "v9" and TmcContentLists.pin_for(own.value, "gamemann/surf_mesa") == "1.2.0", "pins are respected, in both spellings")
-	_check(own.value[1]["kind"] == "pack", "a pack id is told from a repository")
-	_put(root + "/content/addons.yml", "merge: true\nremove: [dot-voice]\nentries:\n  - repo: dot-extra\n  - repo: dot-core\n    pin: v9\n")
-	var merged := TmcContentLists.load_list("addons", root)
-	var ids: Array = (merged.value as Array).map(func(e: Dictionary) -> String: return e["id"])
-	_check(merged.ok and ids.has("dot-extra") and not ids.has("dot-voice") and ids.count("dot-core") == 1, "merge: true adds, removes, and replaces by id")
-	_check(TmcContentLists.pin_for(merged.value, "dot-core") == "v9", "a merged entry's pin wins")
-	_put(root + "/server/content/addons.yml", "entries:\n  - dot-only\n")
-	var srv := TmcContentLists.load_list("addons", root)
-	_check(srv.ok and (srv.value as Array).size() == 1, "the server tier overrides the operator's file")
-	_put(root + "/server/content/addons.yml", "entries:\n  - repo: a\n    pack: b/c\n")
-	var bad := TmcContentLists.load_list("addons", root)
-	_check(not bad.ok and bad.error.code == DotError.CODE_INVALID and bad.error.message.contains("entry 1"), "a bad entry fails with CODE_INVALID naming it")
-	_put(root + "/server/content/addons.yml", "entries:\n  - dot-x@bad pin!\n")
-	_check(TmcContentLists.load_list("addons", root).error.code == DotError.CODE_INVALID, "a pin with odd characters is refused")
-	_put(root + "/server/content/addons.yml", "entries: [\n")
-	_check(not TmcContentLists.load_list("addons", root).ok, "a file that is not yml fails")
-	_check(TmcContentLists.load_list("nope", root).error.code == DotError.CODE_INVALID, "an unknown list is refused")
-	_put(root + "/server/content/addons.yml", "entries:\n  - repo: a\n    maps: [x]\n")
-	_check(not TmcContentLists.load_list("addons", root).ok, "maps: in addons.yml is refused")
-	DotPaths.remove_tree(root)
-	_put(root + "/content/games.yml", "entries:\n  - repo: g1\n    content: one\n    maps: [b, a]\n    rotation: random\n  - repo: g2\n    content: two\n  - repo: g3\n")
-	var gl := TmcContentLists.load_list("games", root)
-	_check(gl.ok and gl.value[0]["maps"] == PackedStringArray(["b", "a"]) and gl.value[0]["rotation"] == "random", "games.yml entries carry maps: and rotation:")
-	var order := TmcContentLists.game_order(gl.value, PackedStringArray(["g3", "zz", "two", "one"]))
-	_check(order.ok and order.value == PackedStringArray(["one", "two", "g3", "zz"]), "game_order follows games.yml, then installed games it does not name sorted")
-	_check(not TmcContentLists.game_order(gl.value, PackedStringArray(["one"]), PackedStringArray(["nope"])).ok, "game_order names an unknown game")
-	var mr := TmcContentLists.map_rotation(gl.value, "one", PackedStringArray(["a", "b", "c"]))
-	_check(mr.ok and mr.value["maps"] == PackedStringArray(["b", "a"]) and mr.value["rotation"] == "random", "map_rotation: maps: is the order")
-	mr = TmcContentLists.map_rotation(gl.value, "two", PackedStringArray(["z", "y"]))
-	_check(mr.ok and mr.value["maps"] == PackedStringArray(["y", "z"]) and mr.value["rotation"] == "sequential", "map_rotation: no maps: is installed sorted, sequential")
-	var bm := TmcContentLists.map_rotation(gl.value, "one", PackedStringArray(["a"]))
-	_check(not bm.ok and bm.error.message.contains("'b'"), "map_rotation names an uninstalled map")
-	_check(not TmcContentLists.map_rotation(gl.value, "nope", PackedStringArray()).ok, "map_rotation refuses an unknown game")
-	_put(root + "/content/games.yml", "entries:\n  - repo: g1\n    content: one\n    maps:\n      - a\n      - id: b\n        time_limit: 600\n  - repo: g2\n")
-	var tl := TmcContentLists.load_list("games", root)
-	var tr := TmcContentLists.map_rotation(tl.value, "one", PackedStringArray(["a", "b"])) if tl.ok else tl
-	_check(tr.ok and tr.value["maps"] == PackedStringArray(["a", "b"]) and tr.value["time_limits"] == {"b": 600.0}, "a maps: item may carry its own time_limit")
-	_check(TmcContentLists.map_rotation(tl.value, "g2", PackedStringArray(["x"])).value["time_limits"].is_empty(), "no time_limit means none set")
-	_put(root + "/content/games.yml", "entries:\n  - repo: g1\n    maps:\n      - id: a\n        time_limit: -5\n")
-	_check(not TmcContentLists.load_list("games", root).ok, "a non-positive time_limit is refused")
-	_put(root + "/content/games.yml", "entries:\n  - repo: g1\n    rotation: fast\n")
-	_check(not TmcContentLists.load_list("games", root).ok, "an unknown rotation mode is refused")
-	var cyc := TmcGameRotation.from_order(PackedStringArray(["bee", "ay"]))
-	_check(cyc.is_cycle() and cyc.rotation_names() == PackedStringArray(["main"]), "the zero-config game order is a cycle")
-	DotPaths.remove_tree(root)
 	_done()
 
 
@@ -1556,6 +1156,18 @@ func _identity(name: String) -> Object:
 ## `TMC_GAMES` entries: the release-tag spelling, and two owners with one name.
 func _test_game_refs() -> void:
 	_section("games list entries")
+	_game_ref_entries()
+	var installer := preload("res://tools/install_games.gd")
+	var base := {"kind": "pack", "scene": "scenes/server.tscn", "content_id": "gamemann/demo", "version": "1.0.0"}
+	_game_ref_dependencies(installer, base)
+	await _game_ref_pointers(installer)
+	_game_ref_moved_pointers(installer)
+	_game_ref_maps(installer, base)
+	_done()
+
+
+## Games list entries: spellings, retired ids and same-named games of two owners.
+func _game_ref_entries() -> void:
 
 	_check(TmcGameRef.parse("gamemann/mg-buses@v0.1.2")["version"] == "0.1.2",
 		"@v0.1.2 asks for the pack version 0.1.2, not a v0.1.2/ directory")
@@ -1608,8 +1220,9 @@ func _test_game_refs() -> void:
 		"a name only one owner has still works on its own (TMC_GAME=game-g2gfast)")
 	DotPaths.remove_tree(root)
 
-	# Dependencies: pinned by the installer, read by the host, never resolved per join.
-	var installer := preload("res://tools/install_games.gd")
+
+## Dependencies pinned by the installer and read into the descriptor.
+func _game_ref_dependencies(installer: Variant, base: Dictionary) -> void:
 	var yml := "name: X\ndependencies:\n  - gamemann/surf_mesa@latest\n# kept\nscene: s.tscn\n"
 	var stamped: DotResult = installer.stamp_dependencies(yml, PackedStringArray(["gamemann/surf_mesa@1.2.0"]))
 	_check(stamped.ok and str(stamped.value).contains("  - gamemann/surf_mesa@1.2.0\n# kept\nscene: s.tscn"),
@@ -1642,7 +1255,6 @@ func _test_game_refs() -> void:
 		"a kept pack that ships code without declaring runs_code is named unusable; declared, data-only and pre-provides packs are not",
 		str(installer.refused_at_mount(stale)))
 
-	var base := {"kind": "pack", "scene": "scenes/server.tscn", "content_id": "gamemann/demo", "version": "1.0.0"}
 	var pinned := base.duplicate()
 	pinned["dependencies"] = ["gamemann/surf_mesa@1.2.0", "modcommunity/dot-ui@v0.1.2"]
 	var built: DotResult = TmcContent.new()._build("demo", pinned)
@@ -1659,6 +1271,9 @@ func _test_game_refs() -> void:
 	_check(not TmcContent.new()._build("demo", bare).ok,
 		"a dependency with no owner is refused")
 
+
+## The latest.json pointer, through the pack API and the CDN, and after a restart.
+func _game_ref_pointers(installer: Variant) -> void:
 	# Pack API first, latest.json after: a fake transport that records what was asked.
 	var asked := []
 	var api_up := {"v": "2.0.0"}
@@ -1721,6 +1336,9 @@ func _test_game_refs() -> void:
 			and installer.pointer_hint("a/b", "connection refused") == "",
 		"a forbidden or missing latest.json says the id may be misspelled; an outage does not")
 
+
+## A renamed repository: exactly one moved_to hop is followed.
+func _game_ref_moved_pointers(installer: Variant) -> void:
 	# A renamed repository's old latest.json carries moved_to; exactly one hop is followed.
 	var plain: DotResult = installer.follow_pointer("a/old", {"version": "1.0.0"}, 0)
 	_check(plain.ok and plain.value["version"] == "1.0.0" and plain.value["moved_to"] == "",
@@ -1740,6 +1358,9 @@ func _test_game_refs() -> void:
 	var bad_target: DotResult = installer.follow_pointer("a/old", {"moved_to": "nonsense"}, 0)
 	_check(not bad_target.ok, "a moved_to that is not <owner>/<name> is refused", str(bad_target))
 
+
+## Server-only packs and delivered maps: the same pinning, their own fields.
+func _game_ref_maps(installer: Variant, base: Dictionary) -> void:
 	# The server-only packs and the delivered maps: the same pinning, their own fields.
 	var maps_yml := "name: X\nmaps:\n  - gamemann/surf_mesa\n  - gamemann/bhop_aztec@latest\nscene: s.tscn\n"
 	var maps_stamped: DotResult = installer.stamp_dependencies(maps_yml,
@@ -1764,7 +1385,6 @@ func _test_game_refs() -> void:
 	loose_map["maps"] = ["gamemann/surf_mesa"]
 	_check(not TmcContent.new()._build("demo", loose_map).ok,
 		"an unpinned map is refused, like an unpinned dependency")
-	_done()
 
 
 func _game_config(text: String) -> TmcGameConfig:
@@ -2132,64 +1752,6 @@ func _content_of(game: DotGameDescriptor) -> TmcContent:
 	return content
 
 
-## playground was renamed playlot. A deployment's server.yml, games list, cfg/game.yml section
-## and vote_exclude written for the old id must still reach the game.
-func _test_former_game_id() -> void:
-	_section("a renamed game answers to its former id")
-
-	var all := TmcContent.scan("res://content")
-
-	if not _check(all.ok, "the shipped content scans", str(all.error)):
-		_check(false, "(skipped)"); _check(false, "(skipped)"); _check(false, "(skipped)")
-		_check(false, "(skipped)"); _check(false, "(skipped)"); _check(false, "(skipped)")
-		_check(false, "(skipped)"); _check(false, "(skipped)")
-		_check(false, "(skipped)"); _check(false, "(skipped)")
-		_done()
-		return
-
-	var content := all.value as TmcContent
-	var found := content.find("playground")
-	_check(found != null and found.game_id == "playlot", "find(\"playground\") is playlot",
-		found.game_id if found != null else "null")
-	_check(content.find("playlot") == found, "and find(\"playlot\") is the same game")
-
-	var narrowed := TmcContent.scan("res://content", PackedStringArray(["playground"]))
-	var kept := narrowed.value as TmcContent if narrowed.ok else null
-	_check(kept != null and kept.ids() == PackedStringArray(["playlot"]) and kept.missing.is_empty(),
-		"a games list naming playground keeps playlot and reports nothing missing",
-		str(kept.ids()) + " missing " + str(kept.missing) if kept != null else str(narrowed.error))
-
-	var section := TmcGameConfig.section_in({"playground": {"marker": 1}}, found) if found != null else {}
-	_check(section.get("marker", 0) == 1, "a cfg section keyed playground applies to playlot", str(section))
-	_check(TmcGameConfig.section_in({"playground": {"marker": 1}, "playlot": {"marker": 2}}, found).get("marker", 0) == 2
-		if found != null else false, "and a section under the new id wins over the old")
-	_check(TmcVote._current_id(content.games, "playground") == "playlot",
-		"vote_exclude: [playground] keeps playlot off the ballot")
-
-	# arena was renamed fatalcontact the same way, and it is the default game besides.
-	var dm := content.find("arena")
-	_check(dm != null and dm.game_id == "fatalcontact" and content.default_game == "fatalcontact",
-		"find(\"arena\") is fatalcontact, still the default game",
-		(dm.game_id if dm != null else "null") + " default " + content.default_game)
-	var dm_only := TmcContent.scan("res://content", PackedStringArray(["arena"]))
-	var dm_kept := dm_only.value as TmcContent if dm_only.ok else null
-	_check(dm_kept != null and dm_kept.ids() == PackedStringArray(["fatalcontact"]) and dm_kept.missing.is_empty(),
-		"a games list naming arena keeps fatalcontact and reports nothing missing",
-		str(dm_kept.ids()) + " missing " + str(dm_kept.missing) if dm_kept != null else str(dm_only.error))
-
-	# g2gfast was renamed airdrift; its pack id stays tmc/g2gfast until a re-publish.
-	var timer := content.find("g2gfast")
-	_check(timer != null and timer.game_id == "airdrift", "find(\"g2gfast\") is airdrift",
-		timer.game_id if timer != null else "null")
-	var timer_only := TmcContent.scan("res://content", PackedStringArray(["g2gfast"]))
-	var timer_kept := timer_only.value as TmcContent if timer_only.ok else null
-	_check(timer_kept != null and timer_kept.ids() == PackedStringArray(["airdrift"]) and timer_kept.missing.is_empty(),
-		"a games list naming g2gfast keeps airdrift and reports nothing missing",
-		str(timer_kept.ids()) + " missing " + str(timer_kept.missing) if timer_kept != null else str(timer_only.error))
-
-	_done()
-
-
 func _test_content() -> void:
 	_section("the content index")
 
@@ -2264,126 +1826,7 @@ func _test_content() -> void:
 		"a server with no content is legitimate; a missing directory is a typo"
 	)
 
-	_test_deployed_map_clocks()
-	_done()
-
-
-## A deployed game whose map runs until it is voted out says so twice, and the two must agree:
-## `<game>_map_seconds: "0"` stops the MAP session's timer, and the vote has a clock of its own.
-func _test_deployed_map_clocks() -> void:
-	var scanned := TmcContent.scan("res://content")
-
-	if not _check(scanned.ok, "the shipped content scans", str(scanned.error)):
-		return
-
-	var content := scanned.value as TmcContent
-	var untimed := PackedStringArray()
-	var disagree := PackedStringArray()
-
-	for descriptor in content.games:
-		var stopped := false
-
-		for name: Variant in descriptor.cvars:
-			if str(name).ends_with("_map_seconds") and str(descriptor.cvars[name]).strip_edges() == "0":
-				stopped = true
-
-		if not stopped:
-			continue
-
-		untimed.append(descriptor.game_id)
-
-		var overlay: Variant = descriptor.metadata.get("map_vote", {})
-		var rules := DotVoteRules.new()
-		var layered := rules.layer_over_defaults(
-			"", overlay as Dictionary if overlay is Dictionary else {}
-		)
-
-		if (
-			not layered.ok or not rules.validate().ok
-			or rules.duration_sec > 0.0
-			or rules.trigger != DotVoteRules.Trigger.RTV_ONLY
-		):
-			disagree.append("%s (trigger %s, duration %.0f)" % [
-				descriptor.game_id, rules.enum_name("trigger"), rules.duration_sec
-			])
-
-	_check(
-		untimed.has("playlot"),
-		"the playlot ships with its map clock stopped (%s)" % ", ".join(untimed),
-		"the check below is about nothing if no shipped game stops its map clock"
-	)
-	_check(
-		disagree.is_empty(),
-		"and every game that stops its map clock stops its vote's clock too: rtv_only, no duration",
-		", ".join(disagree)
-	)
-
-
-## `end_vote`, `include_extend` and `extend_seconds` through `DOT_GAME_VOTE_*` and `--game-vote-*`,
-## each in a child process, change what the server vote's ballot does. `_test_vote` checks one of
-## the six as a parsed value; this asks the ballot.
-func _test_vote_layers_reach_a_ballot() -> void:
-	_section("the server vote's own layers reach a running ballot")
-
-	var project := ProjectSettings.globalize_path("res://")
-
-	var probe := func(extra: PackedStringArray, env: Dictionary) -> Dictionary:
-		for key: String in env:
-			OS.set_environment(key, env[key])
-		var args := PackedStringArray([
-			"--headless", "--path", project, "--script", "res://examples/vote_layer_probe.gd", "--",
-		])
-		args.append_array(extra)
-		var out := []
-		var _code := OS.execute(OS.get_executable_path(), args, out, true)
-		for key: String in env:
-			OS.unset_environment(key)
-		var found := {}
-		for line: String in "\n".join(PackedStringArray(out)).split("\n"):
-			var trimmed := line.strip_edges()
-			if trimmed.begins_with("{"):
-				var parsed: Variant = JSON.parse_string(trimmed)
-				if parsed is Dictionary:
-					found = parsed
-		return found
-
-	var control: Dictionary = probe.call(PackedStringArray(), {})
-	_check(
-		control.get("opened") == true and control.get("extend_offered") == true
-			and is_equal_approx(float(control.get("extended_by", -1.0)), 600.0),
-		"with neither layer, the fixture's ballot opens, offers Extend, and adds 600 s",
-		str(control)
-	)
-
-	var cases := [
-		["end_vote", "false", "opened", false],
-		["include_extend", "false", "extend_offered", false],
-		["extend_seconds", "90", "extended_by", 90.0],
-	]
-
-	for case: Array in cases:
-		var key: String = case[0]
-
-		for layer in ["DOT_GAME_VOTE_*", "--game-vote-*"]:
-			var extra := PackedStringArray()
-			var env := {}
-
-			if layer == "DOT_GAME_VOTE_*":
-				env["DOT_GAME_VOTE_" + key.to_upper()] = case[1]
-			else:
-				extra.append("--game-vote-%s=%s" % [key, case[1]])
-
-			var got: Dictionary = probe.call(extra, env)
-			var seen: Variant = got.get(case[2])
-			var want: Variant = case[3]
-			var same: bool = is_equal_approx(float(seen), float(want)) \
-				if want is float else seen == want
-			_check(
-				got.get("layered") == true and same,
-				"%s from %s: the ballot's %s is %s" % [key, layer, case[2], str(want)],
-				str(got)
-			)
-
+	SelftestContentLists.new(self)._test_deployed_map_clocks()
 	_done()
 
 
@@ -2746,67 +2189,6 @@ func _test_game_rotation() -> void:
 	_done()
 
 
-
-func _test_vote_limit_waits_for_a_change() -> void:
-	_section("the game vote's limit waits for a change under way")
-
-	var rules := DotVoteRules.new()
-	rules.enabled = true
-	rules.duration_sec = 10.0
-	rules.empty_choice = DotVoteRules.EmptyChoice.RANDOM
-
-	var votes := TmcVote.new()
-	votes.name = "LimitVotes"
-	votes.director = DotVoteDirector.new()
-	votes.director.name = "Director"
-	votes.director.rules = rules
-	votes.director.source = DotVoteListSource.of_ids(["standin", "next"])
-	votes.director.register_service = false
-	votes.director.begin_on_apply = false
-	votes.director.auto_apply = false
-	votes._wire()
-	# After _wire, which points the count at the server there is not.
-	votes.director.player_count_fn = func() -> int: return 0
-	votes.director.busy_fn = func() -> bool: return false
-	votes.set_physics_process(false)
-	add_child(votes)
-	votes.add_child(votes.director)
-
-	var under_way := [true]
-	votes.change_under_way_fn = func() -> bool: return under_way[0]
-
-	var due: Array[StringName] = []
-	votes.director.change_due.connect(
-		func(id: StringName, _choice: DotVoteChoice) -> void: due.append(id)
-	)
-
-	votes.director.begin(&"standin")
-
-	for i in 120:
-		votes._advance_director(1.0 / 6.0)
-
-	_check(
-		due.is_empty() and not votes.director.clock.is_expired(),
-		"twenty seconds of a ten second limit pass with a change under way and nothing is drawn (%s)" % [due],
-		"the limit fired on an empty server mid-change and changed the game away from the one elected"
-	)
-
-	under_way[0] = false
-
-	for i in 120:
-		votes._advance_director(1.0 / 6.0)
-
-	_check(
-		due.size() == 1,
-		"and once it has landed the limit is the limit again (%s)" % [due]
-	)
-
-	votes.free()
-	_done()
-
-
-## The game vote's HUD: what the template asks the shell to play, and what the shell does with a
-## notice.
 func _test_vote_notices() -> void:
 	_section("the game vote on the shell's HUD")
 
@@ -3171,35 +2553,3 @@ func _test_auth() -> void:
 	DotPaths.remove_tree(work)
 	_done()
 
-
-## A game older than the list asks for, and a `map:` for a game without a DotMapSession: both used to end in a yellow warning nobody read.
-func _test_startup_checks() -> void:
-	_section("startup: an old game and a map path of the game's own")
-
-	var state_path := OS.get_user_data_dir().path_join("selftest-behind-state.json")
-	var f := FileAccess.open(state_path, FileAccess.WRITE)
-	f.store_string(JSON.stringify({"installed": {}, "behind": {"game-zombie-zone": {"wanted": "latest", "why": "needs dot_core 40"}}}))
-	f.close()
-	var entry := Host.behind_entry(state_path, "game-zombie-zone")
-	_check(str(entry.get("wanted", "")) == "latest" and str(entry.get("why", "")) == "needs dot_core 40",
-		"a game the installer kept older than asked is read back as behind (%s)" % entry)
-	_check(Host.behind_entry(state_path, "buses").is_empty(), "and a game that is current is not")
-	DirAccess.remove_absolute(state_path)
-
-	var root := Node.new()
-	var holder := Node.new()
-	root.add_child(holder)
-	var starter := _MapStarter.new()
-	holder.add_child(starter)
-	_check(Host._find_map_starter(root) == starter, "a game that answers start_on_map is found for `map:` (Zombie Zone has no map session)")
-	holder.remove_child(starter)
-	starter.free()
-	_check(Host._find_map_starter(root) == null, "and a game with neither is not, so the host logs an ERROR instead")
-	root.free()
-
-	_done()
-
-
-class _MapStarter extends Node:
-	func start_on_map(_id: StringName) -> DotResult:
-		return DotResult.success(null)

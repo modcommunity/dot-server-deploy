@@ -48,10 +48,10 @@ func _run() -> void:
 	_test_shell_version()
 	_test_shell_style()
 	await _test_loading_fetch()
-	await _test_cover_gate()
-	await _test_cover_draw_budget()
-	await _test_cover_contract()
-	await _test_cover_fallback()
+	await AdminLoadingCover.new(self)._test_cover_gate()
+	await AdminLoadingCover.new(self)._test_cover_draw_budget()
+	await AdminLoadingCover.new(self)._test_cover_contract()
+	await AdminLoadingCover.new(self)._test_cover_fallback()
 	await _test_slice_preload()
 
 	print("")
@@ -983,7 +983,12 @@ func _test_loading_client() -> void:
 		"the server's hint can put it up itself, naming the game")
 	screen.reset()
 	_check(not screen.is_showing() and not screen.has_document(), "a new connection forgets the old server's screen")
+	_loading_media_guards(screen)
+	_done()
 
+
+## What the loading screen refuses to fetch or decode, and the music it keeps muted.
+func _loading_media_guards(screen: TmcLoadingScreen) -> void:
 	for bad in ["res://icon.svg", "user://x.png", "file:///etc/passwd", "javascript:alert(1)", "http:///x", "https://a b", ""]:
 		if TmcLoadingScreen.is_safe_url(bad):
 			_check(false, "%s is refused" % bad)
@@ -1026,7 +1031,6 @@ func _test_loading_client() -> void:
 	again.free()
 
 	screen.free()
-	_done()
 
 
 ## The corner line naming the client. The id is only ever read from a URL path, so what
@@ -1035,7 +1039,7 @@ func _test_loading_client() -> void:
 func _test_slice_preload() -> void:
 	_section("slice preload before a scene load")
 
-	var deps: PackedStringArray = (load("res://client/shell.gd") as GDScript)._scene_dependency_paths("res://client/boot.tscn")
+	var deps: PackedStringArray = (load("res://client/tmc_shell_solo_packs.gd") as GDScript)._scene_dependency_paths("res://client/boot.tscn")
 	_check(not deps.is_empty(), "a scene's dependencies are listed", str(deps))
 
 	var loader := DotCloudSliceLoader.new()
@@ -1084,25 +1088,8 @@ func _test_shell_version() -> void:
 func _test_shell_style() -> void:
 	_section("the shell's GameSpice look and Powered by TMC")
 
-	_check(TmcShellStyle.ACCENT.to_html(false) == "f2542d" and TmcShellStyle.palette().accent == TmcShellStyle.ACCENT,
-		"the palette's accent is GameSpice's", TmcShellStyle.ACCENT.to_html(false))
-	_check(TmcShellStyle.theme().has_stylebox("focus", "Button"), "buttons have a focus ring for a keyboard or a pad")
-
 	var site := "https://site.example/"
-	var screen := TmcLoadingScreen.new()
-	screen.site_url = site
-	add_child(screen)
-	var badge: Dictionary = screen.describe().get("powered_by", {})
-	_check(str(badge.get("text", "")) == "Powered by TMC" and str(badge.get("url", "")) == site and bool(badge.get("pressable", false)),
-		"the loading screen shows Powered by TMC, linked to the site it was given", str(badge))
-	var pill := screen.find_child("PoweredByTmc", true, false) as TmcPoweredBy
-	_check(pill != null and pill.anchor_left == 1.0 and pill.anchor_top == 1.0 and pill.offset_right < 0.0 and pill.offset_bottom < 0.0,
-		"in the bottom-right corner, inset from the edge")
-	_check(pill != null and pill.focus_mode == Control.FOCUS_NONE, "and never takes a keyboard or pad's focus")
-	var version := screen.find_child("ShellVersion", true, false) as Label
-	_check(version == null or (version.anchor_left == 0.0 and version.anchor_top == 1.0),
-		"the version line, when there is one, has moved to the bottom-left")
-	screen.free()
+	_shell_pill_on_loading_screen(site)
 
 	var opened: Array[String] = []
 	var bare := TmcPoweredBy.new()
@@ -1126,7 +1113,7 @@ func _test_shell_style() -> void:
 	# The menu, built on a shell that never enters the tree (its _ready connects to servers).
 	var shell: Node = (load("res://client/shell.gd") as GDScript).new()
 	shell.set("workshop_backbone_url", site)
-	shell.call("_build_menu")
+	shell._menu_ui.call("_build_menu")
 	var menu := shell.get("_menu") as Control
 	var card := menu.find_child("Card", true, false) as PanelContainer
 	_check(card != null and card.custom_minimum_size.x == float(shell.get("menu_card_width")),
@@ -1152,16 +1139,43 @@ func _test_shell_style() -> void:
 	shell.set("loading", cover)
 	cover.begin(TmcLoadingScreen.REASON_GAME, "g", "Game")
 	menu.visible = false
-	var fitted: Vector2 = shell.call("_fit_card")
+	var fitted: Vector2 = shell._menu_ui.call("_fit_card")
 	_check(fitted != Vector2.ZERO and fitted == cover.fit_card(), "with the menu down, a portrait phone is fitted round the loading cover", str(fitted))
 	cover.end(TmcLoadingScreen.REASON_GAME)
-	_check(shell.call("_fit_card") == Vector2.ZERO, "and handed back when the cover lifts for the game")
+	_check(shell._menu_ui.call("_fit_card") == Vector2.ZERO, "and handed back when the cover lifts for the game")
 	shell.set("loading", null)
 	cover.free()
 	menu.visible = true
 	# Deferred, after the menu's own deferred focus and fit calls, which hold the shell.
 	shell.call_deferred("free")
+	_shell_phone_fit()
+	_done()
 
+
+## The loading screen's palette, buttons and Powered by TMC pill: where it sits and what it links to.
+func _shell_pill_on_loading_screen(site: String) -> void:
+	_check(TmcShellStyle.ACCENT.to_html(false) == "f2542d" and TmcShellStyle.palette().accent == TmcShellStyle.ACCENT,
+		"the palette's accent is GameSpice's", TmcShellStyle.ACCENT.to_html(false))
+	_check(TmcShellStyle.theme().has_stylebox("focus", "Button"), "buttons have a focus ring for a keyboard or a pad")
+
+	var screen := TmcLoadingScreen.new()
+	screen.site_url = site
+	add_child(screen)
+	var badge: Dictionary = screen.describe().get("powered_by", {})
+	_check(str(badge.get("text", "")) == "Powered by TMC" and str(badge.get("url", "")) == site and bool(badge.get("pressable", false)),
+		"the loading screen shows Powered by TMC, linked to the site it was given", str(badge))
+	var pill := screen.find_child("PoweredByTmc", true, false) as TmcPoweredBy
+	_check(pill != null and pill.anchor_left == 1.0 and pill.anchor_top == 1.0 and pill.offset_right < 0.0 and pill.offset_bottom < 0.0,
+		"in the bottom-right corner, inset from the edge")
+	_check(pill != null and pill.focus_mode == Control.FOCUS_NONE, "and never takes a keyboard or pad's focus")
+	var version := screen.find_child("ShellVersion", true, false) as Label
+	_check(version == null or (version.anchor_left == 0.0 and version.anchor_top == 1.0),
+		"the version line, when there is one, has moved to the bottom-left")
+	screen.free()
+
+
+## The phone fit of the menu card, and the dialogs a phone-width window narrows.
+func _shell_phone_fit() -> void:
 	# The phone fit. Desktop keeps its layout; a portrait phone is scaled until the card fills
 	# its width; a small or landscape window stops where the card stops fitting.
 	var base := Vector2(1280.0, 720.0)
@@ -1184,7 +1198,6 @@ func _test_shell_style() -> void:
 	_check(ask.get_label().autowrap_mode == TextServer.AUTOWRAP_WORD_SMART and ask.theme != null,
 		"a dressed confirmation wraps its message and carries the shell's theme")
 	ask.free()
-	_done()
 
 
 ## One real fetch: a socket this suite serves a PNG from, the screen's own HTTPRequest,
@@ -1281,195 +1294,3 @@ func _until_frames(condition: Callable, frames: int) -> void:
 		if bool(condition.call()):
 			return
 		await get_tree().process_frame
-
-
-
-## A loading screen, a cover that claims a game root, and the root, as the shell builds them.
-func _cover_rig() -> Array:
-	var screen := TmcLoadingScreen.new()
-	screen.in_game_fn = func() -> bool: return true
-	add_child(screen)
-	var root := Node.new()
-	root.name = "CoverGames"
-	var cover := TmcGameCover.new()
-	cover.loading = screen
-	cover.claim(root)
-	add_child(cover)
-	add_child(root)
-	return [screen, cover, root]
-
-
-func _cover_free(rig: Array) -> void:
-	for n: Node in rig:
-		n.free()
-
-
-func _until_ms(condition: Callable, ms: int) -> int:
-	var t0 := Time.get_ticks_msec()
-	while not bool(condition.call()) and Time.get_ticks_msec() - t0 < ms:
-		await get_tree().process_frame
-	return Time.get_ticks_msec() - t0
-
-
-func _test_cover_gate() -> void:
-	_section("a game's load gate drives the loading screen")
-	var rig := _cover_rig()
-	var screen: TmcLoadingScreen = rig[0]
-	var cover: TmcGameCover = rig[1]
-	var root: Node = rig[2]
-	_check(TmcGameCover.HOST_META == DotLoadGate.HOST_META and TmcGameCover.GATE_META == DotLoadGate.META,
-		"the cover spells the gate's metadata as dot-core does")
-
-	var game := Node3D.new()
-	var gate := DotLoadGate.new()
-	gate.require_camera = false
-	gate.register_service = false
-	gate.hold(&"map", "Loading the map")
-	game.add_child(gate)
-	root.add_child(game)
-	_check(gate.is_hosted() and not gate.is_cover_showing(), "a gate made under the claimed root is hosted, with no cover of its own")
-	cover.watch()
-	_check(screen.is_showing() and cover.mode_of(game) == "gate", "the loading screen is up over it at once", cover.mode_of(game))
-	_check(screen._status.text == "Loading the map", "with the gate's line", screen._status.text)
-	gate.set_progress(0.4, "Building the level")
-	_check(is_equal_approx(screen._bar.value, 40.0) and screen._status.text == "Building the level",
-		"and the gate's progress", "%s %s" % [screen._bar.value, screen._status.text])
-
-	var cam := Camera3D.new()
-	game.add_child(cam)
-	cam.make_current()
-	var at_open: Array = []
-	gate.opened.connect(func() -> void: at_open.append(screen.is_showing()))
-	gate.release(&"map")
-	await _until_ms(func() -> bool: return gate.is_open(), 8000)
-	_check(gate.is_open() and at_open == [false], "released: warmed here, screen down, then the gate opens", str(at_open))
-	_check(not cam.has_node("Warmup") or cam.get_node("Warmup").is_queued_for_deletion(), "the shell's warm-up ran on the camera and went")
-
-	gate.hold(&"map", "Changing map")
-	_check(screen.is_showing() and screen._status.text == "Changing map", "a second hold puts the screen back with its line")
-	gate.release(&"map")
-	await _until_ms(func() -> bool: return gate.is_open(), 8000)
-	_check(gate.is_open() and not screen.is_showing(), "and it lifts again")
-
-	# The gate opened by its own host time-out while the shell's warm-up hung: the screen goes.
-	screen.begin(TmcLoadingScreen.REASON_WARM, "", "", true)
-	_check(screen.is_showing(), "the screen is up as a hung warm-up leaves it")
-	gate.opened.emit()
-	_check(not screen.is_showing(), "an opened gate drops a screen its warm-up never lifted")
-
-	gate.hold(&"map")
-	_check(screen.is_showing(), "held once more")
-	root.remove_child(game)
-	game.free()
-	_check(not screen.is_showing(), "a game freed under its own gate takes the screen with it")
-
-	# A gate made before the root was claimed is found and hosted by watch().
-	var root2 := Node.new()
-	add_child(root2)
-	var game2 := Node3D.new()
-	var gate2 := DotLoadGate.new()
-	gate2.require_camera = false
-	gate2.register_service = false
-	gate2.hold(&"x")
-	game2.add_child(gate2)
-	root2.add_child(game2)
-	_check(not gate2.is_hosted() and gate2.is_cover_showing(), "unclaimed, a gate covers by itself")
-	cover.claim(root2)
-	cover.watch()
-	_check(gate2.is_hosted() and not gate2.is_cover_showing() and screen.is_showing(),
-		"watch() finds it by its metadata and takes the job over")
-	root2.free()
-	_cover_free(rig)
-	_done()
-
-
-## The shell's warm-up goes up in budgeted rounds, so its time-out can cut it between frames. Unbudgeted, PLAYLOT's
-## 184 items went up in one round: one 12 s frame of shader compiles that no time-out could cut (2026-11-15).
-func _test_cover_draw_budget() -> void:
-	_section("the shell's warm-up is budgeted, and its time-out is a setting")
-	var rig := _cover_rig()
-	var cover: TmcGameCover = rig[1]
-	var root: Node = rig[2]
-	_check(cover.draw_budget_msec > 0.0, "the warm-up is budgeted by default", str(cover.draw_budget_msec))
-	var cam := Camera3D.new()
-	root.add_child(cam)
-	cam.make_current()
-	var budgets: Array = []
-	cam.child_entered_tree.connect(func(n: Node) -> void:
-		if n is DotRenderWarmup:
-			budgets.append((n as DotRenderWarmup).budget_msec))
-	var mats: Array = []
-	for i in 3:
-		mats.append(StandardMaterial3D.new())
-	cover.draw_budget_msec = 25.0
-	cover.draw_max_sec = 0.0
-	await cover._draw_once(mats)
-	_check(budgets == [25.0], "the warm-up gets the cover's budget", str(budgets))
-	_check(not cam.has_node("Warmup") or cam.get_node("Warmup").is_queued_for_deletion(), "with no time-out (0) it still ends when the warm-up does")
-
-	# Headless draws no frame, so a warm-up only ends at its own 5 s: a 0.2 s limit must end it first.
-	cover.draw_max_sec = 0.2
-	var t0 := Time.get_ticks_msec()
-	await cover._draw_once(mats)
-	var took := Time.get_ticks_msec() - t0
-	_check(took < 2000, "a time-out lifts the screen between frames", "%d ms" % took)
-	# What it did not reach is deferred, not skipped: the warm-up keeps drawing in play.
-	var left := cam.get_node_or_null("Warmup") as DotRenderWarmup
-	_check(left != null and not left.is_queued_for_deletion(), "and leaves the warm-up drawing the rest in play")
-	if left != null:
-		left.queue_free()
-		await get_tree().process_frame
-	_cover_free(rig)
-	_done()
-
-
-func _test_cover_contract() -> void:
-	_section("a game on the older root contract")
-	var rig := _cover_rig()
-	var screen: TmcLoadingScreen = rig[0]
-	var cover: TmcGameCover = rig[1]
-	var root: Node = rig[2]
-	var game: Node3D = preload("res://examples/game_cover_contract_game.gd").new()
-	root.add_child(game)
-	cover.watch()
-	_check(screen.is_showing() and cover.mode_of(game) == "contract", "covered until it says it is ready", cover.mode_of(game))
-	game.ready_now = true
-	game.ready_to_show.emit()
-	await _until_ms(func() -> bool: return not screen.is_showing(), 2000)
-	_check(not screen.is_showing(), "and shown when it does")
-	_cover_free(rig)
-	_done()
-
-
-func _test_cover_fallback() -> void:
-	_section("a game with no gate and no contract is covered anyway")
-	var rig := _cover_rig()
-	var screen: TmcLoadingScreen = rig[0]
-	var cover: TmcGameCover = rig[1]
-	var root: Node = rig[2]
-	var game := Node3D.new()
-	root.add_child(game)
-	cover.watch()
-	_check(screen.is_showing() and cover.mode_of(game) == "fallback", "covered at spawn", cover.mode_of(game))
-	for i in 20:
-		await get_tree().physics_frame
-	_check(screen.is_showing(), "still covered with no camera after 20 physics frames")
-	var cam := Camera3D.new()
-	game.add_child(cam)
-	cam.make_current()
-	var took := await _until_ms(func() -> bool: return not screen.is_showing(), 4000)
-	_check(not screen.is_showing() and took < int(TmcGameCover.FALLBACK_MAX_SEC * 1000.0) - 500,
-		"shown once its camera has settled, well before the cap", "%d ms" % took)
-	_check(cover.mode_of(game) == "", "and no longer on the fallback")
-
-	var bare := Node.new()
-	root.add_child(bare)
-	var t0 := Time.get_ticks_msec()
-	cover.watch()
-	_check(screen.is_showing(), "a game that never makes a camera is covered too")
-	await _until_ms(func() -> bool: return not screen.is_showing(), 9000)
-	var waited := Time.get_ticks_msec() - t0
-	_check(not screen.is_showing() and waited >= int(TmcGameCover.FALLBACK_MAX_SEC * 1000.0) - 100,
-		"and shown at the cap, never held for ever", "%d ms" % waited)
-	_cover_free(rig)
-	_done()

@@ -171,7 +171,7 @@ func _test_finds_a_map_session() -> void:
 	_section("`+map` finds the thing it has to talk to")
 
 	# [b]The whole of `sv_map` rests on one duck-typed lookup, and a duck-typed lookup that stops
-	# matching returns null rather than failing.[/b] `_find_map_session` walks the loaded game looking
+	# matching returns null rather than failing.[/b] `TmcMapGame.session_in` walks the loaded game looking
 	# for something that answers `change_to` and `change_to_map`.
 	var probe := Node.new()
 	probe.name = "MapProbe"
@@ -181,7 +181,7 @@ func _test_finds_a_map_session() -> void:
 	add_child(probe)
 
 	_check(
-		_host.call("_find_map_session", probe) == session,
+		TmcMapGame.session_in(probe) == session,
 		"a real DotMapSession still answers the duck-typed predicate",
 		"if this fails, dot-map renamed a method and `--map` now does nothing at all"
 	)
@@ -197,7 +197,7 @@ func _test_finds_a_map_session() -> void:
 			% _server().games.current_content_id()
 	)
 	_check(
-		_host.call("_find_map_session", _server().games) == null,
+		TmcMapGame.session_in(_server().games) == null,
 		"and nothing in a game with no maps is mistaken for a map session"
 	)
 

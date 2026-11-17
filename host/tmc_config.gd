@@ -19,134 +19,6 @@ const SERVER_DIR := "server"
 ## Files in it that another loader reads.
 const SERVER_DIR_OWNED := ["content.yml", "alias.yml"]
 
-## Operator-facing name -> boot config property, for what the console cannot reach. Two vocabularies are paid for deliberately:
-## an operator writes `net_port`, dot-server calls it `port`, and the alternative is renaming a published cvar.
-const BOOT_KEYS := {
-	"net_port": "port",
-	"net_bind_ip": "bind_address",
-	# dual (WebSocket for browsers + ENet over UDP for native clients, one match),
-	# websocket, or enet. See DotServerConfig.transport_mode.
-	"net_transport": "transport_mode",
-	# ENet's UDP port; 0 is the game port's number, shared with A2S/DQP through a demux.
-	"net_enet_port": "enet_port",
-	# Empty follows query_bind_ip: behind nginx the UDP side must face the world itself.
-	"net_enet_bind_ip": "enet_bind_address",
-	"net_enet_share_udp": "enet_share_udp_port",
-	"sv_name": "hostname",
-	"sv_id": "server_id",
-	"sv_maxplayers": "max_players",
-	"sv_reserved_slots": "reserved_slots",
-	"sv_tickrate": "tickrate",
-	"sv_password": "password",
-	"rcon_password": "rcon_password",
-	"rcon_port": "rcon_port",
-	"rcon_allowed": "rcon_allowed_addresses",
-	"rcon_websocket": "rcon_websocket",
-	"query_enabled": "query_enabled",
-	"query_websocket": "query_websocket",
-	"query_port": "query_port",
-	# The one setting a reverse-proxied server cannot do without: nginx forwards the
-	# game's WebSocket and cannot forward UDP, so a query listener sharing
-	# `net_bind_ip` binds loopback and no tracker on earth can reach it.
-	"query_bind_ip": "query_bind_address",
-	"a2s_enabled": "a2s_enabled",
-	"a2s_port": "a2s_port",
-	"content_manifest_url": "content_manifest_url",
-	# dot-server documents this as the one stdin decision that is a real decision, and it was unreachable because YAML is this deployment's only surface.
-	# A server whose stdin carries something other than commands needs it, and so does anything running two servers in one process:
-	# [DotStdinConsole] is a thread blocked in a read the engine cannot cancel, so the second keeps the process alive.
-	"sv_stdin_console": "stdin_console_enabled",
-	# And whether a PIPE counts (dot-server 5f46687): off by default, because a reader blocked on a pipe whose writer never closes keeps the process from exiting.
-	# TMC's panel talks RCON and neither the Docker image nor the systemd unit gives the server a stdin, so the default stands.
-	"sv_stdin_console_pipes": "stdin_console_pipes",
-	# log.yml. The level is the one an operator changes most often and the one they most
-	# often cannot find: it is not a cvar, because it has to apply before the console
-	# exists in order to cover the boot it is being raised to diagnose.
-	"log_level": "log_level",
-	"log_channels": "log_channel_levels",
-	"log_mirror_level": "log_mirror_min_level",
-	"log_file": "log_file_enabled",
-	"log_dir": "log_directory",
-	"log_name": "log_basename",
-	"log_json": "log_json",
-	"log_max_bytes": "log_max_file_bytes",
-	"log_keep": "log_max_files",
-}
-
-## Operator-facing name -> netcode config property.
-const NET_KEYS := {
-	"net_max_bps": "per_client_budget",
-	"net_max_pps": "per_client_packet_rate",
-	"net_max_update_rate": "snapshot_rate",
-	"net_mtu": "mtu",
-	"net_interp_buffer": "interpolation_buffer",
-	"net_max_entities": "max_entities_per_snapshot",
-	# Relevance: who is sent what. The radius is a ceiling on the game's, the far pair replaces it.
-	"net_interest_radius": "interest_radius",
-	"net_far_every": "far_every",
-	"net_far_distance": "far_distance",
-	# Replaces the game's value (off unless written): peers spread over the ticks between snapshots.
-	"net_stagger_snapshots": "stagger_snapshots",
-}
-
-## Operator-facing name -> [code]DotLogConfig[/code] property, only what dot-log adds: the level, channels, mirror threshold and file settings are in [constant BOOT_KEYS]
-## already (a server without dot-log has them through dot-core's sink) and are copied across in [method build_log_router]; two lists for one fact is this tree's most repeated bug.
-## [code]log_router[/code] is NOT here: it decides whether the router is built, and is handled by name in [method _apply_settings].
-const LOG_KEYS := {
-	"log_ring": "memory_enabled",
-	"log_ring_size": "memory_capacity",
-	"log_service": "service",
-	"log_env": "env",
-	"log_instance": "instance",
-	"log_version": "version",
-	"log_syslog": "syslog_enabled",
-	"log_syslog_host": "syslog_host",
-	"log_syslog_port": "syslog_port",
-	"log_syslog_tcp": "syslog_tcp",
-	"log_syslog_app": "syslog_app",
-	"log_syslog_level": "syslog_level",
-	"log_remote": "remote_enabled",
-	"log_remote_format": "remote_format",
-	"log_remote_url": "remote_url",
-	"log_remote_token": "remote_token",
-	"log_remote_level": "remote_level",
-	"log_remote_batch": "remote_batch",
-	"log_remote_tags": "remote_tags",
-	"log_sentry_dsn": "sentry_dsn",
-	"log_redact": "redact_enabled",
-	"log_redact_ips": "redact_ips",
-	"log_redact_emails": "redact_emails",
-	"log_redact_keys": "redact_drop_keys",
-	"log_dedupe_sec": "dedupe_window_sec",
-	"log_rate_per_channel": "per_channel_rate",
-}
-
-## Each addon owns its key table, so this file keeps no second copy that goes stale.
-const LAYERED := {
-	"security.yml": "dot-server-security",
-	"party.yml": "dot-party",
-	"replay.yml": "dot-replay",
-	"bot_record.yml": "dot-bot-record",
-	"matchmaking.yml": "dot-matchmaking",
-	"groups.yml": "dot-server",
-	"permissions.yml": "dot-server",
-	"admin_menu.yml": "dot-menu",
-	"log.yml": "dot-log",
-	"rcon.yml": "dot-console",
-	"auth.yml": "dot-auth",
-	"vote.yml": "dot-vote",
-	"loading.yml": "dot-core",
-	"radio.yml": "dot-radio",
-	"trail.yml": "dot-trail",
-}
-
-## Key prefix in `server.yml` -> the addon folder that owns it now (`cfg/addons/<addon>/`). Still
-## applied from `server.yml` until DotCfgLegacy's cutoff, with one WARN naming the keys.
-## `rcon_password` stays where it is: a secret may live in `server.yml` or the addon's folder.
-const LEGACY_KEYS := {
-	"log_": "dot_log",
-	"rcon_": "dot_console",
-}
 
 ## Keys that exist and are handled somewhere other than a config object, listed so they are not reported as unknown (a key silently ignored and not reported looks like it took effect).
 ## `net_public_ip` is here, not in [constant BOOT_KEYS], because dot-server should have no such setting: what a server binds to and what a player types differ, and only the second is behind NAT.
@@ -356,7 +228,7 @@ static func load_dir(directory: String) -> DotResult:
 		return alias_read
 
 	for name in FILES:
-		if LAYERED.has(name):
+		if TmcConfigKeys.LAYERED.has(name):
 			var layered := config._load_layered(name, base)
 			if not layered.ok:
 				return layered
@@ -456,9 +328,9 @@ func _warn_legacy_keys(path: String, tree: Dictionary) -> void:
 		var name := String(key)
 		if name == "rcon_password":
 			continue
-		for prefix: String in LEGACY_KEYS:
+		for prefix: String in TmcConfigKeys.LEGACY_KEYS:
 			if name.begins_with(prefix):
-				moved.append("%s -> cfg/addons/%s/" % [name, LEGACY_KEYS[prefix]])
+				moved.append("%s -> cfg/addons/%s/" % [name, TmcConfigKeys.LEGACY_KEYS[prefix]])
 	if moved.is_empty() or DotCfgLegacy._warned.has(path + "#keys"):
 		return
 	DotCfgLegacy._warned[path + "#keys"] = true
@@ -540,7 +412,7 @@ func net_ceiling() -> Dictionary:
 
 ## One file in [constant LAYERED], read through its addon's loaders over every tier.
 func _load_layered(name: String, base: String) -> DotResult:
-	var addon: String = LAYERED[name]
+	var addon: String = TmcConfigKeys.LAYERED[name]
 	var found := true
 	match name:
 		"groups.yml":
@@ -933,95 +805,27 @@ static func _truthy(value: Variant) -> bool:
 	return str(value).strip_edges().to_lower() in ["1", "true", "yes", "on"]
 
 
-## One layer's text -> {"set": {alias: {"target", "line"}}, "remove": [{"name", "line"}], "errors": PackedStringArray}.
-## Syntax, the same in every layer: one `alias_name: target` per line (`#` starts a comment, quotes are optional), and the reserved `remove: name` or `remove: [a, b]` to drop an alias an earlier layer made.
-## Writing a name an earlier layer already has REMAPS it. A file that cannot be understood is reported with `path:line`, never skipped: an alias that silently did not exist is a setting that silently did nothing.
-static func parse_alias_text(text: String, path: String) -> Dictionary:
-	var out := {"set": {}, "remove": [], "errors": PackedStringArray()}
-	var errors: PackedStringArray = out["errors"]
-	var word_re := RegEx.create_from_string("^[A-Za-z_][A-Za-z0-9_.]*$")
-	var number := 0
-	for raw in text.split("\n"):
-		number += 1
-		var line := raw.strip_edges()
-		var hash_at := line.find(" #")
-		if line.begins_with("#"):
-			line = ""
-		elif hash_at >= 0:
-			line = line.substr(0, hash_at).strip_edges()
-		if line == "":
-			continue
-		var colon := line.find(":")
-		if colon <= 0:
-			errors.append("%s:%d: expected `alias_name: target`, got `%s`" % [path, number, line])
-			continue
-		var alias_name := line.substr(0, colon).strip_edges().trim_prefix("\"").trim_suffix("\"")
-		var target := line.substr(colon + 1).strip_edges().trim_prefix("\"").trim_suffix("\"").strip_edges()
-		if alias_name == "remove":
-			var inner := target.trim_prefix("[").trim_suffix("]")
-			for piece in inner.split(","):
-				var gone := piece.strip_edges().trim_prefix("\"").trim_suffix("\"")
-				if gone != "":
-					(out["remove"] as Array).append({"name": gone, "line": number})
-			continue
-		if word_re.search(alias_name) == null:
-			errors.append("%s:%d: `%s` is not a usable alias name (letters, digits, _ and . only)" % [path, number, alias_name])
-			continue
-		if target == "":
-			errors.append("%s:%d: alias `%s` has no target" % [path, number, alias_name])
-			continue
-		if (out["set"] as Dictionary).has(alias_name):
-			errors.append("%s:%d: alias `%s` is defined twice in this file (first on line %d)" % [path, number, alias_name, (out["set"][alias_name] as Dictionary)["line"]])
-			continue
-		(out["set"] as Dictionary)[alias_name] = {"target": target, "line": number}
-	return out
-
-
-## Merges one layer into [member aliases]: removals first, then additions and remaps. Layers are applied in order (addon defaults, game, server), so a later one overrides an earlier one.
-## Returns the errors of this layer, already logged as ERR lines naming file and line.
+## Merges one layer into [member aliases], see [method TmcAliases.merge_layer].
 func merge_alias_layer(layer: String, path: String, text: String) -> PackedStringArray:
-	var parsed := parse_alias_text(text, path)
-	var errors: PackedStringArray = parsed["errors"]
-	for removal: Dictionary in parsed["remove"]:
-		if aliases.has(removal["name"]):
-			aliases.erase(removal["name"])
-		else:
-			DotLog.warn(CHANNEL, "%s:%d: remove: `%s` is not an alias an earlier layer made" % [path, removal["line"], removal["name"]])
-	for alias_name: String in parsed["set"]:
-		var entry: Dictionary = parsed["set"][alias_name]
-		var first := String(entry["target"]).split(" ")[0]
-		if first == alias_name:
-			errors.append("%s:%d: alias `%s` points at itself" % [path, entry["line"], alias_name])
-			continue
-		if alias_name in HOST_KEYS:
-			errors.append("%s:%d: alias `%s` would shadow the setting of that name" % [path, entry["line"], alias_name])
-			continue
-		aliases[alias_name] = {"target": entry["target"], "source": "%s:%d" % [path, entry["line"]], "layer": layer}
-	# Chains and loops, over the table as it now stands: an alias must name a real target, never another alias.
-	for alias_name: String in aliases:
-		var entry2: Dictionary = aliases[alias_name]
-		var first2 := String(entry2["target"]).split(" ")[0]
-		if aliases.has(first2) and String(entry2["layer"]) == layer:
-			errors.append("%s: alias `%s` points at the alias `%s`; name the real target (chains and loops are refused)" % [entry2["source"], alias_name, first2])
-	for message in errors:
-		DotLog.error(CHANNEL, message)
-	return errors
+	return TmcAliases.merge_layer(aliases, layer, path, text)
 
 
-## Layer 1, the defaults that ship: `host/aliases.yml` and every `aliases.yml` an addon carries (`res://addons/*/aliases.yml`). Layer 3, the owner's `cfg/server/alias.yml`, is [method _load_aliases].
+## Layer 1, the defaults that ship: `host/aliases.yml` and every `aliases.yml` an addon carries. Layer 3, the owner's `cfg/server/alias.yml`, is [method _load_aliases].
 func _load_default_aliases() -> PackedStringArray:
-	var errors := PackedStringArray()
-	var paths: Array[String] = ["res://host/aliases.yml"]
-	var dir := DirAccess.open("res://addons")
-	if dir != null:
-		var names := Array(dir.get_directories())
-		names.sort()
-		for addon: String in names:
-			paths.append("res://addons/%s/aliases.yml" % addon)
-	for path in paths:
-		if FileAccess.file_exists(path):
-			errors.append_array(merge_alias_layer("addon", path, FileAccess.get_file_as_string(path)))
-	return errors
+	return TmcAliases.default_layers(aliases)
+
+
+## Effective aliases as lines, for the `aliases` command and the boot report.
+func alias_lines() -> PackedStringArray:
+	return TmcAliases.lines_of(aliases)
+
+
+## After the console is up: every alias target must be a real setting, command or cvar, see [method TmcAliases.check]. Returns the number of failures.
+func check_aliases(console: DotConsole) -> int:
+	var report := TmcAliases.check(aliases, console)
+	unknown.append_array(report["unknown"])
+	alias_failures = report["failures"]
+	return alias_failures
 
 
 ## Layer 2: the boot game's own `content/<game>/aliases.yml`, merged once the game is chosen. Not fatal, as a game pack should not be able to stop a server: its errors are ERR lines and its bad lines are skipped.
@@ -1040,42 +844,6 @@ func _load_aliases(path: String) -> DotResult:
 	if not errors.is_empty():
 		return DotResult.fail(DotError.CODE_INVALID, "alias files are not usable:\n  %s" % "\n  ".join(errors))
 	return DotResult.success(null)
-
-
-## Effective aliases as lines, `name -> target  [layer, source]`, for the `aliases` command and the boot report.
-func alias_lines() -> PackedStringArray:
-	var names := Array(aliases.keys())
-	names.sort()
-	var out := PackedStringArray()
-	for alias_name: String in names:
-		var entry: Dictionary = aliases[alias_name]
-		out.append("%-20s -> %s    [%s: %s]" % [alias_name, entry["target"], entry["layer"], entry["source"]])
-	return out
-
-
-## After the console is up: every alias target must be a real setting, command or cvar, and no alias may shadow one. Failures are ERR lines naming the file and line, and entries in [member unknown].
-## The valid ones are registered on the console too, so the alias works at a prompt and over RCON as well as in a file. Returns the number of failures.
-func check_aliases(console: DotConsole) -> int:
-	var failures := 0
-	for alias_name: String in aliases:
-		var entry: Dictionary = aliases[alias_name]
-		var first := String(entry["target"]).split(" ")[0]
-		var problem := ""
-		if console.find_cvar(alias_name) != null or console.find_command(alias_name) != null:
-			problem = "alias `%s` shadows the console name of the same name" % alias_name
-		elif not (first in HOST_KEYS or LOG_KEYS.has(first) or BOOT_KEYS.has(first) or NET_KEYS.has(first)
-				or console.find_cvar(first) != null or console.find_command(first) != null):
-			problem = "alias `%s` points at `%s`, which is not a setting, cvar or command this server has" % [alias_name, first]
-		if problem != "":
-			DotLog.error(CHANNEL, "%s: %s" % [entry["source"], problem])
-			unknown.append("%s: %s" % [entry["source"], problem])
-			if String(entry["layer"]) != "game":
-				failures += 1
-			continue
-		if console.has_method("set_alias") and (console.find_command(first) != null or console.find_cvar(first) != null):
-			console.set_alias(alias_name, String(entry["target"]))
-	alias_failures = failures
-	return failures
 
 
 ## `server.yml` and `net.yml`: flat keys, three possible destinations.
@@ -1127,69 +895,15 @@ func _apply_settings(file: String, tree: Dictionary) -> DotResult:
 			continue
 
 		if name == "games":
-			# A list, or one string, as `content_urls` below takes either (`games: fatalcontact` is what an operator with one game writes).
-			# Not a console line: dot-server has no cvar for the set of games a host offers; `sv_game` picks one OF these, so the two spellings are deliberately unalike.
-			# Each entry through TmcGameRef, as the command-line override is, so `gamemann/game-g2gfast01@1.2.0` in a file means the same directory as in a panel field.
-			# A game listed twice is one game: kept once, and ONE warning naming every repeat, never an error (a panel's list is edited by hand and copied around).
-			var repeats := PackedStringArray()
-			var entries: Array = (value as Array) if value is Array else [value]
-			for entry in entries:
-				for dir_name in TmcGameRef.dirs_in(String(entry)):
-					if dir_name in games_allow:
-						if not dir_name in repeats:
-							repeats.append(dir_name)
-					else:
-						games_allow.append(dir_name)
-
-			if not repeats.is_empty():
-				DotLog.warn(CHANNEL, "%s: games lists %s more than once; keeping one of each" % [file, ", ".join(repeats)])
-
+			_apply_games(file, value)
 			continue
 
 		if name == "addons":
-			# A list, or one string. Every entry is checked now, against the first-party owners; an owner the operator trusts through `namespaces:` in cfg/content/addons.yml is rechecked by the host, which reads that file.
-			var raw_entries: Array = (value as Array) if value is Array else [value]
-
-			for entry in raw_entries:
-				var text := String(entry).strip_edges()
-
-				if text == "":
-					continue
-
-				var known := TmcAddonsConfig.parse_entry(text)
-
-				if not known.ok:
-					unknown.append("%s: addons: %s" % [file, known.error.message])
-				elif not addons_listed.has(str(known.value)):
-					addons_listed.append(str(known.value))
-
+			_apply_addons(file, value)
 			continue
 
 		if name == "content_urls":
-			# A list, or one string for the common case of a single origin. Not passed
-			# through as a console line: this is dot-cloud's, and dot-server's console
-			# has no cvar for it.
-			if value is Array:
-				for entry in (value as Array):
-					var url := String(entry).strip_edges()
-					if url != "":
-						content_urls.append(url)
-			else:
-				var one := String(value).strip_edges()
-				if one != "":
-					content_urls.append(one)
-
-			# The same list to the clients, from the same line of YAML: the server downloads maps from these and the client must download them from somewhere, and a shipped build can only guess its page's origin, wrong for every CDN.
-			# Assigned only if this dot-server has the property: addons are separately cloned, so pulling one and not another is ordinary, and assigning a missing property is a FATAL script error
-			# that aborts `_apply_settings` mid-way and returns null into a caller that reads `.ok` off it. (A key from a NEWER file than the code is the opposite skew: never fatal.)
-			if "content_base_urls" in server:
-				server.content_base_urls = content_urls
-			else:
-				unknown.append(
-					"%s: content_urls was read, but this dot-server has no " % file
-					+ "content_base_urls to put it in -- clients will not be told "
-					+ "where the content is. Update the dot-server addon."
-				)
+			_apply_content_urls(file, value)
 			continue
 
 		if name == "sv_query_app":
@@ -1216,26 +930,11 @@ func _apply_settings(file: String, tree: Dictionary) -> DotResult:
 			continue
 
 		if name == "log_router":
-			# A bool is accepted because `on` and `off` ARE bools in this dialect (`TmcYaml` reads `on`/`yes`/`true` as true), and `log_router: on` is the natural spelling;
-			# reading only the three words would report it as an unknown key and leave the default in force.
-			var mode := ""
-
-			if value is bool:
-				mode = "on" if bool(value) else "off"
-			else:
-				mode = String(value).strip_edges().to_lower()
-
-			if mode not in ["auto", "on", "off"]:
-				unknown.append(
-					"%s: log_router must be auto, on or off (got '%s')" % [file, mode]
-				)
-			else:
-				log_router = mode
-
+			_apply_log_router(file, value)
 			continue
 
-		if LOG_KEYS.has(name):
-			var applied_log := _set_on(log, String(LOG_KEYS[name]), value)
+		if TmcConfigKeys.LOG_KEYS.has(name):
+			var applied_log := _set_on(log, String(TmcConfigKeys.LOG_KEYS[name]), value)
 
 			if not applied_log.ok:
 				return applied_log.wrap("%s: %s" % [file, name])
@@ -1248,22 +947,22 @@ func _apply_settings(file: String, tree: Dictionary) -> DotResult:
 				unknown.append("%s: %s (belongs in security.yml)" % [file, name])
 			continue
 
-		if BOOT_KEYS.has(name):
-			var applied := _set_on(server, String(BOOT_KEYS[name]), value)
+		if TmcConfigKeys.BOOT_KEYS.has(name):
+			var applied := _set_on(server, String(TmcConfigKeys.BOOT_KEYS[name]), value)
 
 			if not applied.ok:
 				return applied.wrap("%s: %s" % [file, name])
 
 			continue
 
-		if NET_KEYS.has(name):
-			var applied_net := _set_on(net, String(NET_KEYS[name]), value)
+		if TmcConfigKeys.NET_KEYS.has(name):
+			var applied_net := _set_on(net, String(TmcConfigKeys.NET_KEYS[name]), value)
 
 			if not applied_net.ok:
 				return applied_net.wrap("%s: %s" % [file, name])
 
-			if not _net_written.has(String(NET_KEYS[name])):
-				_net_written.append(String(NET_KEYS[name]))
+			if not _net_written.has(String(TmcConfigKeys.NET_KEYS[name])):
+				_net_written.append(String(TmcConfigKeys.NET_KEYS[name]))
 
 			continue
 
@@ -1275,6 +974,92 @@ func _apply_settings(file: String, tree: Dictionary) -> DotResult:
 		console_lines.append(_console_line(name, value))
 
 	return DotResult.success(null)
+
+
+## `games`: the directories a host offers, deduplicated.
+func _apply_games(file: String, value: Variant) -> void:
+	# A list, or one string, as `content_urls` below takes either (`games: fatalcontact` is what an operator with one game writes).
+	# Not a console line: dot-server has no cvar for the set of games a host offers; `sv_game` picks one OF these, so the two spellings are deliberately unalike.
+	# Each entry through TmcGameRef, as the command-line override is, so `gamemann/game-g2gfast01@1.2.0` in a file means the same directory as in a panel field.
+	# A game listed twice is one game: kept once, and ONE warning naming every repeat, never an error (a panel's list is edited by hand and copied around).
+	var repeats := PackedStringArray()
+	var entries: Array = (value as Array) if value is Array else [value]
+	for entry in entries:
+		for dir_name in TmcGameRef.dirs_in(String(entry)):
+			if dir_name in games_allow:
+				if not dir_name in repeats:
+					repeats.append(dir_name)
+			else:
+				games_allow.append(dir_name)
+
+	if not repeats.is_empty():
+		DotLog.warn(CHANNEL, "%s: games lists %s more than once; keeping one of each" % [file, ", ".join(repeats)])
+
+
+## `addons`: the addon entries the operator listed, each checked on read.
+func _apply_addons(file: String, value: Variant) -> void:
+	# A list, or one string. Every entry is checked now, against the first-party owners; an owner the operator trusts through `namespaces:` in cfg/content/addons.yml is rechecked by the host, which reads that file.
+	var raw_entries: Array = (value as Array) if value is Array else [value]
+
+	for entry in raw_entries:
+		var text := String(entry).strip_edges()
+
+		if text == "":
+			continue
+
+		var known := TmcAddonsConfig.parse_entry(text)
+
+		if not known.ok:
+			unknown.append("%s: addons: %s" % [file, known.error.message])
+		elif not addons_listed.has(str(known.value)):
+			addons_listed.append(str(known.value))
+
+
+## `content_urls`: where the server (and, through it, the clients) fetch content from.
+func _apply_content_urls(file: String, value: Variant) -> void:
+	# A list, or one string for the common case of a single origin. Not passed
+	# through as a console line: this is dot-cloud's, and dot-server's console
+	# has no cvar for it.
+	if value is Array:
+		for entry in (value as Array):
+			var url := String(entry).strip_edges()
+			if url != "":
+				content_urls.append(url)
+	else:
+		var one := String(value).strip_edges()
+		if one != "":
+			content_urls.append(one)
+
+	# The same list to the clients, from the same line of YAML: the server downloads maps from these and the client must download them from somewhere, and a shipped build can only guess its page's origin, wrong for every CDN.
+	# Assigned only if this dot-server has the property: addons are separately cloned, so pulling one and not another is ordinary, and assigning a missing property is a FATAL script error
+	# that aborts `_apply_settings` mid-way and returns null into a caller that reads `.ok` off it. (A key from a NEWER file than the code is the opposite skew: never fatal.)
+	if "content_base_urls" in server:
+		server.content_base_urls = content_urls
+	else:
+		unknown.append(
+			"%s: content_urls was read, but this dot-server has no " % file
+			+ "content_base_urls to put it in -- clients will not be told "
+			+ "where the content is. Update the dot-server addon."
+		)
+
+
+## `log_router`: auto, on or off.
+func _apply_log_router(file: String, value: Variant) -> void:
+	# A bool is accepted because `on` and `off` ARE bools in this dialect (`TmcYaml` reads `on`/`yes`/`true` as true), and `log_router: on` is the natural spelling;
+	# reading only the three words would report it as an unknown key and leave the default in force.
+	var mode := ""
+
+	if value is bool:
+		mode = "on" if bool(value) else "off"
+	else:
+		mode = String(value).strip_edges().to_lower()
+
+	if mode not in ["auto", "on", "off"]:
+		unknown.append(
+			"%s: log_router must be auto, on or off (got '%s')" % [file, mode]
+		)
+	else:
+		log_router = mode
 
 
 ## The sink layer this configuration describes, or null when it is switched off (the server then makes its own [code]DotLogSink[/code]).
@@ -1391,7 +1176,7 @@ func note_console_result(console: DotConsole) -> void:
 ## a typo like `net_intrest_radius` shares no useful prefix with the key it meant.
 func nearest_names(name: String, console: DotConsole = null) -> PackedStringArray:
 	var pool := PackedStringArray()
-	for keys: Dictionary in [BOOT_KEYS, NET_KEYS, LOG_KEYS]:
+	for keys: Dictionary in [TmcConfigKeys.BOOT_KEYS, TmcConfigKeys.NET_KEYS, TmcConfigKeys.LOG_KEYS]:
 		pool.append_array(PackedStringArray(keys.keys()))
 	if console != null:
 		pool.append_array(console.cvar_names())

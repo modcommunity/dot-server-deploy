@@ -198,7 +198,7 @@ func _run() -> void:
 		# Booted, listened, loaded a game and loaded a module — which is everything
 		# `./server --check` claims. Shutting down here rather than serving is what makes
 		# that claim checkable in CI without a client.
-		if not _selftest_operator_surface():
+		if not TmcHostSelftest.new(self).operator_surface():
 			server.shutdown("selftest failed")
 			get_tree().quit(EXIT_CONFIG)
 			return
@@ -206,7 +206,7 @@ func _run() -> void:
 		server.shutdown("selftest complete")
 
 		# After the shutdown, because tearing a game down runs its scripts too.
-		if not _selftest_scripts_loaded():
+		if not TmcHostSelftest.new(self).scripts_loaded():
 			get_tree().quit(EXIT_CONTENT)
 			return
 
@@ -215,148 +215,10 @@ func _run() -> void:
 		get_tree().quit(EXIT_OK)
 
 
-## Whether every script this boot touched compiled and loaded.
-## A script that fails to parse is logged and handed back uninstantiable, and every later step can still succeed, so "selftest ok" printed over a module that never compiled; the engine's log is the only record, so it is read.
-func _selftest_scripts_loaded() -> bool:
-	if _script_watch == null or _script_watch.count() == 0:
-		return true
-
-	printerr("")
-	printerr(
-		"selftest FAILED: %d script error(s) while booting; the first:"
-		% _script_watch.count()
-	)
-
-	for line in _script_watch.lines():
-		printerr("  %s" % line)
-
-	printerr("  A missing base class is usually an addon setup.sh did not link or vendor.")
-	return false
-
-
 func _exit_tree() -> void:
 	if _script_watch != null:
 		OS.remove_logger(_script_watch)
 		_script_watch = null
-
-
-## The operator's console, asserted on a REAL server rather than on a fixture.
-## These addons were installed and reached no console at all (dot-log's commands could not plug into a server console, the guard was instantiated nowhere), and an absent command reports nothing.
-## Checked here and not in `examples/selftest.tscn` because a fixture has no console.
-func _selftest_operator_surface() -> bool:
-	var expected := PackedStringArray(["status", "sec_status", "sec_why", "party_status", "mm_status"])
-
-	if log_router != null:
-		expected.append("log")
-
-	if config.replay_enabled:
-		expected.append("replay")
-
-	var missing := PackedStringArray()
-
-	for name in expected:
-		if server.console.find_command(name) == null:
-			missing.append(name)
-
-	if not missing.is_empty():
-		printerr(
-			"selftest FAILED: the console is missing %s"
-			% " ".join(Array(missing))
-		)
-		return false
-
-	if log_router != null and not log_router.is_started():
-		printerr("selftest FAILED: the log router was built and never started")
-		return false
-
-	# Registered ALWAYS, empty unless the operator pinned a shell, so rcon can set it and the query reports it (a cvar without NOTIFY is not in the rules).
-	var pinned := server.console.find_cvar("sv_web_build")
-
-	if pinned == null or not pinned.has_flag(DotConVar.FLAG_NOTIFY) \
-			or pinned.get_string() != _release_label(config.web_build):
-		printerr("selftest FAILED: sv_web_build is not a NOTIFY cvar reporting the configured pin (%s)" % config.web_build)
-		return false
-
-	print("sv_web_build: %s" % (pinned.get_string() if pinned.get_string() != "" else "(latest shell)"))
-
-	var requires := server.console.find_cvar("sv_web_requires")
-
-	if requires == null or not requires.has_flag(DotConVar.FLAG_NOTIFY):
-		printerr("selftest FAILED: sv_web_requires is not a NOTIFY cvar the query reports")
-		return false
-
-	var pack_pins := server.console.find_cvar("sv_pack_pins")
-
-	if pack_pins == null or not pack_pins.has_flag(DotConVar.FLAG_NOTIFY):
-		printerr("selftest FAILED: sv_pack_pins is not a NOTIFY cvar the query reports")
-		return false
-
-	# The addon versions a joining client is told about. Empty on a box with a lock means every player keeps the addons their shell was exported with, however old.
-	# Through `get`, not the property: a box's dot-server may predate it, and a typed access would stop this whole script compiling there.
-	var announced: Variant = server.get("addon_set")
-
-	if announced is Array and OS.get_environment("TMC_ADDONS_LOCK") != "off" \
-			and FileAccess.file_exists(ADDONS_LOCK):
-		if (announced as Array).is_empty():
-			printerr("selftest FAILED: %s names addons and none are advertised to clients" % ADDONS_LOCK)
-			return false
-
-		for entry in announced:
-			if str(entry.get("dir", "")) == "dot_server" \
-					and not (str(entry.get("id", "")) in ["modcommunity/dot-server", "gamespice-platform/server"]):
-				printerr("selftest FAILED: dot_server is advertised as %s" % str(entry.get("id", "")))
-				return false
-
-		print("addons advertised: %d" % (announced as Array).size())
-
-	# Registered ALWAYS, empty or not, so an operator can move a running server with rcon.
-	# A cvar that only exists when the config named a version is one `sv_web_loader x`
-	# answers "unknown command" to on every server that has not needed it yet.
-	var loader := server.console.find_cvar("sv_web_loader")
-
-	if loader == null or not loader.has_flag(DotConVar.FLAG_NOTIFY):
-		printerr("selftest FAILED: sv_web_loader is not a NOTIFY cvar the query reports")
-		return false
-
-	if loader.get_string() != _web_loader_value():
-		printerr("selftest FAILED: sv_web_loader reports %s, the configuration says %s" % [
-			loader.get_string(), _web_loader_value(),
-		])
-		return false
-
-	print("sv_web_loader: %s" % (loader.get_string() if loader.get_string() != "" else "(site default)"))
-
-	# Asked, not only looked up: a command that is registered and answers nothing is the same absent command one layer down.
-	# An Array rather than a PackedStringArray: a lambda captures by value, and only a container's contents survive the copy (docs/gdscript-hazards.md).
-	var answered: Array = []
-	var asking := DotCmdContext.internal("party_status", PackedStringArray())
-	asking.reply_sink = func(line: String) -> void: answered.append(line)
-
-	var said := server.console.execute("party_status", asking)
-
-	if not said.ok or answered.is_empty():
-		printerr("selftest FAILED: party_status did not answer (%s)" % str(said.error))
-		return false
-
-	if config.party_enabled and (parties == null or parties.reservations == null):
-		printerr("selftest FAILED: cfg/party.yml asked for parties and none were built")
-		return false
-
-	for line in answered:
-		print("party_status: %s" % line)
-
-	# [b]The ring, recording on the server that booted.[/b] dot-replay was the other addon
-	# linked here and built nowhere; an absent `replay` command is caught above, and a ring
-	# that was built and never started is the same failure one layer down.
-	if config.replay_enabled and (replay == null or not replay.recorder.is_recording()):
-		printerr("selftest FAILED: cfg/replay.yml asked for the replay ring and it is not recording")
-		return false
-
-	if replay != null:
-		for line in replay.describe_lines():
-			print("replay: %s" % line)
-
-	return true
 
 
 ## Reads the configuration and brings a server up, without touching the command line.
@@ -549,7 +411,7 @@ func _apply_game_config() -> DotResult:
 	var overrides := loaded.value as TmcGameConfig
 
 	# Before the settings are laid over the descriptors, so the file shows the game's own defaults.
-	for written in TmcGameConfig.write_base_configs(_config_dir, content):
+	for written in TmcGameCfgDirs.write_base_configs(_config_dir, content):
 		DotLog.info(CHANNEL, "wrote a base config for a game with none", {"file": "cfg/" + written})
 
 	overrides.apply_all(content)
@@ -586,6 +448,94 @@ func _apply_addons_config() -> DotResult:
 
 
 func _boot() -> bool:
+	if not _build_server_node():
+		return false
+
+	# A `kind: pack` game needs a cloud client on the SERVER too: `DotGameManager` fetches and mounts the new game's content itself before asking anybody else,
+	# because the scene it loads is a path inside the mount. Added before boot() so the registration is in place before the game manager runs its initial change.
+	_build_cloud()
+
+	# Before boot() too: the list rides the signon challenge, and the first client can
+	# arrive the moment the listener opens.
+	_advertise_addons()
+
+	# Before boot() for a second reason, the challenge: `DotServer` answers a connecting client with the strategy it wants by asking the registry for `dot_auth_server`,
+	# so one registered after the listener opens was reported to every client in flight as absent.
+	if not _build_auth():
+		return false
+
+	if not await _start_listener_and_admins():
+		return false
+
+	# After boot, because both of these want a console to register on and the guard wants
+	# a running server to attach to. Neither is fatal: a server with no guard is a server,
+	# and one whose log command failed to register still logs.
+	_register_log_commands()
+	_register_web_build()
+	_register_web_loader()
+	_register_pack_pins()
+	_build_security()
+
+	for descriptor in content.games:
+		server.games.add_game(descriptor)
+
+	var wanted := config.initial_game if config.initial_game != "" else content.default_game
+	config.load_game_aliases(_content_dir, wanted)
+
+	if wanted == "":
+		# Legitimate, and said out loud. dot-server supports a server with no game and a
+		# player who connects to one sees nothing, which is indistinguishable from a
+		# broken server unless somebody says so.
+		DotLog.warn(CHANNEL, "no game to load; the server will run empty", {
+			"content": _content_dir,
+		})
+		return true
+
+	# The same alias the installer applied to TMC_GAMES (TmcGameRef.RETIRED_IDS): a panel whose
+	# TMC_GAME still says game-final-contact boots the game installed as game-fatal-contact.
+	var current := TmcGameRef.current_id(wanted)
+
+	if current != wanted.strip_edges() and content.find(wanted) == null:
+		DotLog.warn(CHANNEL, "TMC_GAME names a retired game id; loading the current one, change it", {
+			"retired": wanted, "loading": current,
+		})
+		wanted = current
+
+	if content.find(wanted) == null:
+		_die(
+			EXIT_CONTENT,
+			"No game called '%s' in %s (have: %s)"
+				% [wanted, _content_dir, ", ".join(content.ids())]
+		)
+		return false
+
+	# Connected before the first change, so the boot load and every later `changelevel` take exactly the same path:
+	# a separate "load the module for the game we booted into" step is a path only the first game ever takes.
+	server.games.game_loaded.connect(_on_game_loaded)
+
+	await _enroll_and_report()
+
+	var loaded: DotResult = await server.games.change_game(wanted, "boot")
+
+	if not loaded.ok:
+		_die(EXIT_CONTENT, str(loaded.error))
+		return false
+
+	if _module_failed:
+		_die(EXIT_CONTENT, "The game loaded but its module did not. See the log above.")
+		return false
+
+	# Before the vote, because the vote's clock and its play history are about to be
+	# told what is running and this is what is running.
+	await _apply_initial_map()
+
+	_install_services()
+	return true
+
+
+## The DotServer and its query host, added to the tree but not booted, with the YAML's console lines compiled for its startup.
+## False once the boot has been given up on.
+func _build_server_node() -> bool:
 	# Everything the server writes goes under one directory. Set before `boot()` because
 	# dot-server reads them during it: the admin file is loaded, a template is written if
 	# there is none, and the audit log is opened.
@@ -639,19 +589,11 @@ func _boot() -> bool:
 
 	config.server.startup_config = generated
 
-	# A `kind: pack` game needs a cloud client on the SERVER too: `DotGameManager` fetches and mounts the new game's content itself before asking anybody else,
-	# because the scene it loads is a path inside the mount. Added before boot() so the registration is in place before the game manager runs its initial change.
-	_build_cloud()
+	return true
 
-	# Before boot() too: the list rides the signon challenge, and the first client can
-	# arrive the moment the listener opens.
-	_advertise_addons()
 
-	# Before boot() for a second reason, the challenge: `DotServer` answers a connecting client with the strategy it wants by asking the registry for `dot_auth_server`,
-	# so one registered after the listener opens was reported to every client in flight as absent.
-	if not _build_auth():
-		return false
-
+## Opens the listener and plugs the operator's admins in. False once the boot has been given up on.
+func _start_listener_and_admins() -> bool:
 	var booted: DotResult = await server.boot()
 
 	if not booted.ok:
@@ -688,52 +630,11 @@ func _boot() -> bool:
 		_die(EXIT_CONFIG, str(added.error))
 		return false
 
-	# After boot, because both of these want a console to register on and the guard wants
-	# a running server to attach to. Neither is fatal: a server with no guard is a server,
-	# and one whose log command failed to register still logs.
-	_register_log_commands()
-	_register_web_build()
-	_register_web_loader()
-	_register_pack_pins()
-	_build_security()
+	return true
 
-	for descriptor in content.games:
-		server.games.add_game(descriptor)
 
-	var wanted := config.initial_game if config.initial_game != "" else content.default_game
-	config.load_game_aliases(_content_dir, wanted)
-
-	if wanted == "":
-		# Legitimate, and said out loud. dot-server supports a server with no game and a
-		# player who connects to one sees nothing, which is indistinguishable from a
-		# broken server unless somebody says so.
-		DotLog.warn(CHANNEL, "no game to load; the server will run empty", {
-			"content": _content_dir,
-		})
-		return true
-
-	# The same alias the installer applied to TMC_GAMES (TmcGameRef.RETIRED_IDS): a panel whose
-	# TMC_GAME still says game-final-contact boots the game installed as game-fatal-contact.
-	var current := TmcGameRef.current_id(wanted)
-
-	if current != wanted.strip_edges() and content.find(wanted) == null:
-		DotLog.warn(CHANNEL, "TMC_GAME names a retired game id; loading the current one, change it", {
-			"retired": wanted, "loading": current,
-		})
-		wanted = current
-
-	if content.find(wanted) == null:
-		_die(
-			EXIT_CONTENT,
-			"No game called '%s' in %s (have: %s)"
-				% [wanted, _content_dir, ", ".join(content.ids())]
-		)
-		return false
-
-	# Connected before the first change, so the boot load and every later `changelevel` take exactly the same path:
-	# a separate "load the module for the game we booted into" step is a path only the first game ever takes.
-	server.games.game_loaded.connect(_on_game_loaded)
-
+## The backbone credential and the site listing, before the first game loads.
+func _enroll_and_report() -> void:
 	# Before the first game, because the game's identity layer needs the credential: `DotPlatformIdentity` finds `dot_backbone_client` while the module loads
 	# and reads avatars through it; built after, every booted game kept avatars in a local file the site never sees. Reports are on the client's timer, so nothing is reported early.
 	# The credential is asked for first when there is none: an unenrolled box proves it is the server at its listed address and is issued one (see [TmcEnroll]); awaited, bounded.
@@ -754,20 +655,9 @@ func _boot() -> bool:
 
 	_hand_backbone_to_auth()
 
-	var loaded: DotResult = await server.games.change_game(wanted, "boot")
 
-	if not loaded.ok:
-		_die(EXIT_CONTENT, str(loaded.error))
-		return false
-
-	if _module_failed:
-		_die(EXIT_CONTENT, "The game loaded but its module did not. See the log above.")
-		return false
-
-	# Before the vote, because the vote's clock and its play history are about to be
-	# told what is running and this is what is running.
-	await _apply_initial_map()
-
+## Everything that wants the first game already running: the vote, parties, the replay ring, radio, trail, the admin menu and the loading screen.
+func _install_services() -> void:
 	# After the first game is loaded, because the director has to be told what is running: a vote that starts on no game has no clock and offers the game everybody is playing on its first ballot.
 	# games.yml: no file is every game; an unreadable one is an ERROR and plays every game too, because a vote that cannot start is worse.
 	var rotation_read := TmcGameRotation.load_file(DotCfgLegacy.find(
@@ -805,7 +695,7 @@ func _boot() -> bool:
 	# commands -- though it looks again on every page, which is what keeps it right across
 	# a changelevel. `warn` is registered here only if nothing before it took the name.
 	var map_session := func() -> Object:
-		return _find_map_session(server.games)
+		return TmcMapGame.session_in(server.games)
 
 	admin_menu = TmcAdminMenu.install(self, server, config.admin_menu, map_session)
 
@@ -814,8 +704,6 @@ func _boot() -> bool:
 		return TmcConfig.merged_file("dot-core", "loading.yml", _config_dir)
 
 	loading = TmcLoading.install(self, server, config.loading, reread, map_session)
-
-	return true
 
 
 ## Builds the sink layer, when the configuration asks for one. Not fatal, ever: a collector that cannot be reached is a reason to look at the configuration,
@@ -898,78 +786,31 @@ func _advertise_addons() -> void:
 		return
 
 	var dirs := DirAccess.get_directories_at("res://addons")
-	var announced := addon_set_from(FileAccess.get_file_as_string(ADDONS_LOCK), dirs)
+	var announced := TmcAddonSet.addon_set_from(FileAccess.get_file_as_string(ADDONS_LOCK), dirs)
 	# An operator's `overlays:` ride beside the lock's; one for a dir the lock names replaces it.
 	var loaded := TmcAddonsConfig.load_from(_config_dir, _absolute(_data_dir))
 
 	if loaded.ok:
-		announced = merge_overlays(announced, (loaded.value as TmcAddonsConfig).overlay_set())
+		announced = TmcAddonSet.merge_overlays(announced, (loaded.value as TmcAddonsConfig).overlay_set())
 	else:
 		DotLog.warn(CHANNEL, "addons.yml overlays not announced: %s" % loaded.error.message)
 
 	# server.yml's `addons:` list: installed by setup.sh, announced here at the listed version (the lock's when it names none).
 	var spaces := TmcAddonNamespaces.resolve((loaded.value as TmcAddonsConfig).namespaces if loaded.ok else PackedStringArray())
-	var listed := addons_from_list(config.addons_listed, spaces, FileAccess.get_file_as_string(ADDONS_LOCK), dirs)
+	var listed := TmcAddonSet.addons_from_list(config.addons_listed, spaces, FileAccess.get_file_as_string(ADDONS_LOCK), dirs)
 
 	for problem in listed["errors"]:
 		DotLog.error(CHANNEL, "server.yml addons: not announced: %s" % problem)
 		push_error("TMC: server.yml addons: %s" % problem)
 
-	announced = merge_overlays(announced, listed["entries"])
+	announced = TmcAddonSet.merge_overlays(announced, listed["entries"])
 
 	_addon_announced = announced
-	server.set("addon_set", with_groups(announced, _addon_groups))
+	server.set("addon_set", TmcAddonSet.with_groups(announced, _addon_groups))
 
 	DotLog.info(CHANNEL, "the addon versions clients are told about", {
 		"addons": announced.size(), "lock": ADDONS_LOCK,
 	})
-
-
-## [param entries] with a `groups` list on each entry whose dir [param groups] names: the download groups (dot-cloud's `groups.json`) a client
-## needs of that pack for this game. An entry the game does not name gets no field, which a client reads as everything.
-static func with_groups(entries: Array, groups: Dictionary) -> Array:
-	var out: Array = []
-
-	for entry: Dictionary in entries:
-		var copy := entry.duplicate(true)
-		var dir := str(copy.get("dir", ""))
-
-		if groups.has(dir):
-			copy["groups"] = (groups[dir] as Array).duplicate()
-
-		out.append(copy)
-
-	return out
-
-
-## The module's `addon_groups()` as `{dir: [group, ...]}` of strings, or nothing. Duck-typed, because a game's module is not this shell's class;
-## anything malformed for a dir drops that dir (its clients then take the whole pack) rather than the game.
-static func sanitize_groups(raw: Variant) -> Dictionary:
-	var out := {}
-
-	if not (raw is Dictionary):
-		return out
-
-	for key: Variant in raw:
-		var value: Variant = raw[key]
-
-		if not (key is String or key is StringName) or not (value is Array or value is PackedStringArray):
-			continue
-
-		var names: Array = []
-		var ok := true
-
-		for group: Variant in value:
-			if not (group is String or group is StringName) or str(group) == "":
-				ok = false
-				break
-
-			names.append(str(group))
-
-		if ok and not names.is_empty():
-			out[str(key)] = names
-
-	return out
 
 
 ## Re-announces the addon set with the current game's download groups. After the module loads, because the module is what knows the game's weapons.
@@ -984,122 +825,17 @@ func _advertise_addon_groups() -> void:
 	if module != null and module.has_method("addon_groups"):
 		raw = module.call("addon_groups")
 
-	var groups := sanitize_groups(raw)
+	var groups := TmcAddonSet.sanitize_groups(raw)
 
 	if groups == _addon_groups:
 		return
 
 	_addon_groups = groups
-	server.set("addon_set", with_groups(_addon_announced, groups))
+	server.set("addon_set", TmcAddonSet.with_groups(_addon_announced, groups))
 
 	DotLog.info(CHANNEL, "the download groups clients are told about", {
 		"module": _module_name, "groups": groups,
 	})
-
-
-## The announcement for server.yml's `addons:` entries: `{entries: [{dir, repo, id, version}], errors: [String]}`. An id nothing on this box can install (unknown owner,
-## no version, a directory that is not under addons/) is an error line each, never silently dropped and never guessed at.
-static func addons_from_list(listed: PackedStringArray, namespaces: PackedStringArray, lock_text: String, dirs: PackedStringArray) -> Dictionary:
-	var versions := {}
-
-	for raw in lock_text.split("\n"):
-		var parts := raw.strip_edges().split("\t", false)
-
-		if parts.size() >= 2 and not parts[0].begins_with("#"):
-			versions[parts[0]] = parts[1]
-
-	var entries: Array = []
-	var errors := PackedStringArray()
-
-	for text in listed:
-		var one := TmcAddonsConfig.addon_ref(text, namespaces, versions)
-
-		if not one.ok:
-			errors.append("%s (%s)" % [one.error.message, str(one.error.detail)])
-		elif not dirs.has(str((one.value as Dictionary)["dir"])):
-			errors.append("%s: addons/%s is not installed; run ./setup.sh" % [text, (one.value as Dictionary)["dir"]])
-		else:
-			entries.append(one.value)
-
-	return {"entries": entries, "errors": errors}
-
-
-## [param base] with [param extra] laid over it by `dir`.
-static func merge_overlays(base: Array, extra: Array) -> Array:
-	var out: Array = []
-
-	for entry: Dictionary in base:
-		var replaced := false
-
-		for over: Dictionary in extra:
-			if over["dir"] == entry["dir"]:
-				replaced = true
-
-		if not replaced:
-			out.append(entry)
-
-	out.append_array(extra)
-	return out
-
-
-## One `{dir, repo, id, version}` per installed addon the lock names. A game addon's pack (fc-weapons, the zee/zed weapons) carries its code at
-## `addons/<dir>/`, which [DotCloudAddonSet] (dot-cloud 0.1.46+) overlays like a dot-* pack, so every one is announced.
-static func addon_set_from(lock_text: String, dirs: PackedStringArray) -> Array:
-	var versions := {}
-
-	for raw in lock_text.split("\n"):
-		var line := raw.strip_edges()
-
-		if line == "" or line.begins_with("#"):
-			continue
-
-		var parts := line.split("\t", false)
-
-		if parts.size() >= 2:
-			versions[parts[0].strip_edges()] = parts[1].strip_edges().trim_prefix("v")
-
-	var out: Array = []
-
-	for dir in dirs:
-		if dir.begins_with("."):
-			continue
-
-		var repo := addon_repo(dir)
-
-		# An older lock may still name a renamed repository by its old name (fc-weapons was arena-weapons).
-		for old: String in TmcAddonNamespaces.PUBLISHED_AS:
-			if TmcAddonNamespaces.PUBLISHED_AS[old] == repo and not versions.has(repo) and versions.has(old):
-				repo = old
-
-		if not versions.has(repo):
-			continue
-
-		# The directory is what the installed ref holds; the legacy one (arena_weapons) is announced as it is, and said so.
-		if TmcAddonNamespaces.is_legacy_dir(dir):
-			TmcAddonNamespaces.warn_legacy(dir, "%s@%s" % [repo, versions[repo]])
-
-		var pack := TmcAddonNamespaces.announced_pack_for(dir)
-
-		out.append({
-			"dir": dir,
-			"repo": pack["repo"],
-			"id": pack["id"],
-			"version": versions[repo],
-		})
-
-	return out
-
-
-## The repository an addon directory comes from. setup.sh's `addon_repo`, and the two
-## must agree: one exception, and otherwise underscores become dashes.
-static func addon_repo(dir: String) -> String:
-	return TmcAddonNamespaces.lock_repo(dir)
-
-
-## Whose namespace a repository's packs are published under. setup.sh's `repo_url`: the
-## `dot-*` addons are the organisation's, everything else (the weapons pack) Christian's.
-static func content_owner(repo: String) -> String:
-	return TmcAddonNamespaces.ORG if repo.begins_with("dot-") and not TmcAddonNamespaces.AUTHOR_DOT_ADDONS.has(repo) else "gamemann"
 
 
 ## Reports `sv_web_build`: the shell build this server's players are pinned to. EMPTY by default, which means the site's newest compatible shell, with no restart needed to move.
@@ -1204,37 +940,7 @@ func _publish_pack_pins() -> void:
 		return
 
 	var announced: Variant = server.get("addon_set")
-	cvar.set_value(pack_pins_json(announced if announced is Array else [], _mounted_versions))
-
-
-## `{content id: version}` as compact JSON, from the announced addon set (`addon_set_from` entries) and the mounted packs. Empty string when nothing is pinned.
-## A mounted pack wins over the addon entry for the same id: it is what is actually loaded. Keys are sorted, so the value only changes when a version does.
-static func pack_pins_json(addon_set: Array, mounted: Dictionary) -> String:
-	var pins := {}
-
-	for entry in addon_set:
-		var id := str(entry.get("id", ""))
-		var version := str(entry.get("version", ""))
-
-		if id != "" and version != "":
-			pins[id] = version
-
-			# Both trees hold the version, and the sweep must spare it in whichever one a client fetches.
-			var pack := TmcAddonNamespaces.pack_for(str(entry.get("dir", "")))
-
-			if id == str(pack["old_id"]):
-				pins[str(pack["id"])] = version
-
-	for id in mounted:
-		var version := str(mounted[id])
-
-		if str(id) != "" and version != "":
-			pins[str(id)] = version
-
-	if pins.is_empty():
-		return ""
-
-	return JSON.stringify(pins, "", true)
+	cvar.set_value(TmcAddonSet.pack_pins_json(announced if announced is Array else [], _mounted_versions))
 
 
 ## One path segment, as the site checks it (website-city `IsReleaseId`): it becomes part of
@@ -1620,11 +1326,11 @@ func _apply_initial_map() -> void:
 	if config.initial_map == "":
 		return
 
-	var session := _find_map_session(server.games)
+	var session := TmcMapGame.session_in(server.games)
 
 	if session == null:
 		# A game with its own map path (no DotMapSession) answers `start_on_map(id) -> DotResult`, the same change its `map` command makes.
-		var starter := _find_map_starter(server.games)
+		var starter := TmcMapGame.starter_in(server.games)
 
 		if starter != null:
 			await _ensure_map_content(StringName(config.initial_map), server.games)
@@ -1675,8 +1381,8 @@ func _ensure_map_content(id: StringName, root: Node = null) -> void:
 
 	# Through the game's own fetch when it has one, because mounting is only half: a delivered map has to be ADDED to the catalogue too, and a pack mounted a moment ago is not in it,
 	# so a `+map` map was downloaded, verified, mounted and then refused with "No such map in the catalogue" (hidden whenever the asked map was already the game's default).
-	# Duck-typed on the method, as `_find_map_session` explains: a game that answers `ensure_map_content` registers its own; otherwise the mount below is right for a complete catalogue.
-	var fetcher := _find_map_fetcher(root)
+	# Duck-typed on the method, as `TmcMapGame` explains: a game that answers `ensure_map_content` registers its own; otherwise the mount below is right for a complete catalogue.
+	var fetcher := TmcMapGame.fetcher_in(root)
 
 	if fetcher != null:
 		var registered: Variant = await fetcher.call("ensure_map_content", id)
@@ -1706,59 +1412,6 @@ func _ensure_map_content(id: StringName, root: Node = null) -> void:
 			"map": String(id),
 			"why": (got as DotResult).error.message,
 		})
-
-
-## The running game, if it fetches and registers its own map content. Duck-typed and walked like [method _find_map_session]: the game is a scene loaded from a pack, not a type this host may name.
-## `ensure_map_content` is the half `change_to` cannot do for itself, see [method _ensure_map_content].
-static func _find_map_fetcher(root: Node) -> Object:
-	if root == null:
-		return null
-
-	for child in root.get_children():
-		if child.has_method("ensure_map_content"):
-			return child
-
-		var found := _find_map_fetcher(child)
-
-		if found != null:
-			return found
-
-	return null
-
-
-## The loaded game's map session, or null. Duck-typed, like everything that crosses into a game: `has_method` and `call` rather than `is DotMapSession`,
-## because this host has no business requiring dot-map (dot-vote's map source uses the same contract).
-## The node under [param root] that answers `start_on_map(id) -> DotResult`: a game whose map change is its own rather than a DotMapSession's.
-static func _find_map_starter(root: Node) -> Object:
-	if root == null:
-		return null
-
-	for child in root.get_children():
-		if child.has_method("start_on_map"):
-			return child
-
-		var found := _find_map_starter(child)
-
-		if found != null:
-			return found
-
-	return null
-
-
-static func _find_map_session(root: Node) -> Object:
-	if root == null:
-		return null
-
-	for child in root.get_children():
-		if child.has_method("change_to") and child.has_method("change_to_map"):
-			return child
-
-		var found := _find_map_session(child)
-
-		if found != null:
-			return found
-
-	return null
 
 
 ## The lines an operator reads to find out whether it worked. Every address, including a LAN one: "it started and my friend cannot connect" is almost always a bind address or a firewall,

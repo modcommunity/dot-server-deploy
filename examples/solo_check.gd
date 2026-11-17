@@ -414,7 +414,7 @@ func _names(repo: String) -> PackedStringArray:
 ## requirement only in requires.json (Prop Hunt's zee_weapons) refuses the pack while missing.
 func _test_requires_reader() -> void:
 	_section("the addons a solo game's requires files name")
-	var shell := load("res://client/shell.gd") as GDScript
+	var shell := load("res://client/tmc_shell_solo.gd") as GDScript
 	_check(shell.SOLO_REQUIRE_FILES.has("requires.json") and shell.SOLO_REQUIRE_FILES.has("requires.floor.json"),
 		"both requires.json and requires.floor.json are read")
 	var got: Dictionary = shell.solo_addons_in('{"addons": {"zee_weapons": 6, "dot_ui": 13}}')
@@ -468,7 +468,7 @@ func _test_overlay_blocked() -> void:
 	_check(shell.call("_overlay_blocked", attempt, wanted), "after two restarts the game is blocked, not started without its addons")
 
 	shell.set("_solo_retry", attempt)
-	shell.call("_forget_solo_retry")
+	shell._solo_flow.call("_forget_solo_retry")
 	_check(not shell.call("_overlay_blocked", attempt, wanted) and str(shell.get("_solo_retry")) == "", "Retry clears the count and builds the overlay again")
 
 	shell.call("_note_update_attempt", attempt)
@@ -497,7 +497,7 @@ func _test_overlay_blocked() -> void:
 	_check(not shell.call("_overlay_blocked", attempt, wanted), "a failed mark from another shell build does not")
 	shell.set("shell_build", "20261114-0900")
 	shell.set("_solo_retry", attempt)
-	shell.call("_forget_solo_retry")
+	shell._solo_flow.call("_forget_solo_retry")
 	_check(DotCloudAddonSet.read_plan().is_empty() and not shell.call("_overlay_blocked", attempt, wanted), "Retry forgets the failed mark")
 
 	shell.free()
