@@ -119,7 +119,7 @@ function Show-Usage {
                         a boundary while the frame is cross-origin, and refuses
                         to start if this resolves to the page's own origin.
 
-    --platform TARGET   export-native only. linux, windows, macos, or all.
+    --platform TARGET   export-native only. linux, windows, macos, all, android or ios.
 
     --build-version V   export-native only. What the publisher calls this build.
                         Dotted numeric, because the desktop app COMPARES it to
@@ -251,13 +251,73 @@ function Test-ExcludedMaps([string]$Pack) {
 # `--` -- `client\shell.gd` reads the address from OS.get_cmdline_user_args(), which is
 # only what follows one, and Godot 4 ignores an unrecognised argument rather than
 # refusing to start, so the wrong spelling runs perfectly and connects to nothing.
+# A box's export_presets.cfg that predates a preset the tracked copy has gets that preset
+# appended from export_presets.example.cfg at the next free index; the file is never
+# overwritten, since the editor owns it.
+function Add-PresetFromExample([string]$cfg, [string]$name) {
+    $text = Get-Content -LiteralPath $cfg -Raw
+    if ($text -match "(?m)^name=`"$([regex]::Escape($name))`"\r?$") { return }
+    $ex = Get-Content -LiteralPath (Join-Path $Project 'export_presets.example.cfg') -Raw
+    $m = [regex]::Match($ex, "(?ms)^\[preset\.(\d+)\]\r?\n\r?\nname=`"$([regex]::Escape($name))`".*?(?=^\[preset\.\d+\]\r?$|\z)")
+    if (-not $m.Success) { Die "export_presets.cfg has no preset named `"$name`", and neither has export_presets.example.cfg." 5 }
+    $next = 0
+    foreach ($h in [regex]::Matches($text, '(?m)^\[preset\.(\d+)\]')) { $next = [math]::Max($next, [int]$h.Groups[1].Value + 1) }
+    $block = $m.Value -replace "\[preset\.$($m.Groups[1].Value)(\.options)?\]", "[preset.$next`$1]"
+    Add-Content -LiteralPath $cfg -Value ("`n" + $block.TrimEnd())
+    Write-Host "  export_presets.cfg now has the $name preset (copied from export_presets.example.cfg as preset.$next)"
+}
+
+# The bash SDK fetcher does not run here: an Android export on Windows needs JDK 17 and
+# the Android SDK (build-tools, platform-tools) installed and named by JAVA_HOME and
+# ANDROID_HOME. Godot reads those only when its editor settings have no such key, and
+# any editor that has saved its settings has them (empty ones too), so this writes both
+# into the editor settings of the Godot that exports, as the bash launcher does.
+function Assert-AndroidSdk {
+    $sdk = $env:ANDROID_HOME; $jdk = $env:JAVA_HOME
+    if (-not $sdk -or -not (Test-Path -LiteralPath (Join-Path $sdk 'platform-tools')) -or
+        -not (Test-Path -LiteralPath (Join-Path $sdk 'build-tools'))) {
+        Die "an Android export needs the Android SDK: set ANDROID_HOME to one with build-tools and platform-tools (tools/fetch-android-sdk.sh lists the pinned versions)." 3
+    }
+    if (-not $jdk -or -not (Test-Path -LiteralPath (Join-Path $jdk 'bin\keytool.exe'))) {
+        Die "an Android export needs JDK 17: set JAVA_HOME to it." 3
+    }
+
+    $ver = (& $Godot --version 2>$null | Select-Object -First 1)
+    if ("$ver" -notmatch '^(\d+\.\d+)') { Die "could not read a Godot version from $Godot --version" 3 }
+    $dir = Join-Path $env:APPDATA 'Godot'
+    $es = Join-Path $dir "editor_settings-$($Matches[1]).tres"
+    if (-not (Test-Path -LiteralPath $es)) {
+        New-Item -ItemType Directory -Force -Path $dir | Out-Null
+        Set-Content -LiteralPath $es -Value "[gd_resource type=`"EditorSettings`" format=3]`n`n[resource]"
+    }
+    $lines = @(Get-Content -LiteralPath $es | Where-Object { $_ -notmatch '^export/android/(android_sdk|java_sdk)_path *=' })
+    $at = [array]::IndexOf($lines, '[resource]')
+    if ($at -lt 0) { Die "$es has no [resource] section; not editing it" 3 }
+    $keys = @(
+        "export/android/android_sdk_path = `"$($sdk -replace '\\', '/')`"",
+        "export/android/java_sdk_path = `"$($jdk -replace '\\', '/')`""
+    )
+    $out = @($lines[0..$at]) + $keys
+    if ($at + 1 -lt $lines.Count) { $out += $lines[($at + 1)..($lines.Count - 1)] }
+    Set-Content -LiteralPath $es -Value $out
+    Write-Host "  wrote export/android/android_sdk_path and java_sdk_path into $es"
+}
+
 function Invoke-ExportNative {
     $targets = switch -Regex ($NativePlatform) {
         '^(all)$'                     { @('linux', 'windows', 'macos'); break }
         '^(linux|linux-x64)$'         { @('linux');   break }
         '^(windows|win|windows-x64)$' { @('windows'); break }
         '^(macos|mac|osx)$'           { @('macos');   break }
-        default { Die "--platform takes linux, windows, macos or all -- not $NativePlatform" }
+        '^(android|android-arm64)$'   { @('android'); break }
+        '^(ios|ios-arm64)$'           { @('ios');     break }
+        default { Die "--platform takes linux, windows, macos, all, android or ios -- not $NativePlatform" }
+    }
+
+    # iOS is built on a Mac or not at all: Godot writes an Xcode project and xcodebuild
+    # signs it. Refused before anything is fetched or written; see tools/server.in.
+    if ($targets[0] -eq 'ios' -and -not $IsMacOS) {
+        Die "an iOS export needs a Mac with Xcode. Run ./server export-native --platform ios on a Mac, with the developer account's team id in its export_presets.cfg (application/app_store_team_id)." 3
     }
 
     $presetFile = Join-Path $Project 'export_presets.cfg'
@@ -275,8 +335,10 @@ function Invoke-ExportNative {
             'linux'   { $natPlat += 'linux-x86_64' }
             'windows' { $natPlat += 'windows-x86_64' }
             'macos'   { $natPlat += 'macos-arm64'; $natPlat += 'macos-x86_64' }
+            'android' { $natPlat += 'android-arm64' }
         }
     }
+    if ($targets[0] -eq 'android') { Note "android: no native libraries are published for phones yet; the build runs GDScript" }
     $fetchNatives = Join-Path $Project 'tools\fetch-natives.ps1'
     if (Test-Path -LiteralPath $fetchNatives) {
         try { & $fetchNatives -Platform $natPlat }
@@ -298,6 +360,7 @@ function Invoke-ExportNative {
     if (Test-Path -LiteralPath $cache) { Remove-Item -Recurse -Force $cache }
 
     $published = @()
+    $phones = @()
 
     foreach ($target in $targets) {
         $spec = switch ($target) {
@@ -307,10 +370,16 @@ function Invoke-ExportNative {
                            Entry = 'tmc.exe';         Archive = 'build\tmc-windows-x64.zip'; Api = 'WINDOWS_X64' } }
             'macos'   { @{ Preset = 'macOS';          Dir = 'build\macos';       Binary = 'tmc.zip';
                            Entry = 'TMC.app/Contents/MacOS/TMC'; Archive = 'build\tmc-macos.zip'; Api = 'MACOS_UNIVERSAL' } }
+            'android' { @{ Preset = 'Android';        Dir = 'build\android';     Binary = 'tmc.apk';
+                           Entry = 'tmc.apk';         Archive = 'build\android\tmc.apk';    Api = '' } }
         }
 
-        if ((Get-Content -LiteralPath $presetFile -Raw).IndexOf("name=`"$($spec.Preset)`"") -lt 0) {
-            Die "export_presets.cfg has no preset named `"$($spec.Preset)`". export_presets.example.cfg is the tracked copy that does." 5
+        Add-PresetFromExample $presetFile $spec.Preset
+
+        $mode = '--export-release'
+        if ($target -eq 'android') {
+            Assert-AndroidSdk
+            if (-not $env:TMC_ANDROID_RELEASE) { $mode = '--export-debug' }
         }
 
         $outDir = Join-Path $Project $spec.Dir
@@ -321,7 +390,7 @@ function Invoke-ExportNative {
         Write-Host ""
         Write-Host "  exporting $($spec.Preset)" -ForegroundColor White
 
-        & $Godot --headless --path $Project --export-release $spec.Preset $binary
+        & $Godot --headless --path $Project $mode $spec.Preset $binary
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
         # Checked rather than trusted: an export can print an error and leave the exit
@@ -330,6 +399,14 @@ function Invoke-ExportNative {
         # the reason this project does not believe an exit code on its own.
         if (-not (Test-Path -LiteralPath $binary)) {
             Die "the $($spec.Preset) export produced no $($spec.Dir)\$($spec.Binary) -- export templates missing? .\setup.ps1 installs them" 3
+        }
+
+        if ($target -eq 'android') {
+            # The APK is the artifact; the publisher has no phone platform yet.
+            $size = [math]::Round((Get-Item -LiteralPath $binary).Length / 1MB)
+            Write-Host "  wrote $($spec.Archive) (${size} MB)"
+            $phones += $spec.Archive
+            continue
         }
 
         Test-ExcludedMaps $binary
@@ -356,6 +433,12 @@ function Invoke-ExportNative {
         $size = [math]::Round((Get-Item -LiteralPath $archive).Length / 1MB)
         Write-Host "  wrote $($spec.Archive) (${size} MB)"
         $published += ,@($spec.Api, $archive, $spec.Entry)
+    }
+
+    if ($phones.Count -gt 0) {
+        foreach ($apk in $phones) { Note "install it on a phone with USB debugging on: adb install -r $apk" }
+        Note "the publisher has no phone platform yet, so there is no publish command for it."
+        exit 0
     }
 
     Write-Host ""

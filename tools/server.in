@@ -277,10 +277,13 @@ usage() {
                         a boundary while the frame is cross-origin, and refuses
                         to start if this resolves to the page's own origin.
 
-    --platform TARGET   export-native only. linux, windows, macos, or all.
-                        The default is all three: a build published for one
-                        machine is a Library entry every other machine is told
-                        nothing about, and the exports are minutes, not hours.
+    --platform TARGET   export-native only. linux, windows, macos, all, android
+                        or ios. The default is all, the three desktop builds: a
+                        build published for one machine is a Library entry every
+                        other machine is told nothing about, and the exports are
+                        minutes, not hours. android (a debug APK; needs JDK 17,
+                        tools/fetch-android-sdk.sh installs the SDK) and ios (a
+                        Mac with Xcode only) are asked for by name.
 
     --build-version V   export-native only. What the publisher calls this build.
                         Dotted numeric, because the desktop app COMPARES it to
@@ -1758,6 +1761,62 @@ NATIVE_ZIP_PY
     fi
 }
 
+## [b]A box's export_presets.cfg predates a preset the tracked copy has.[/b] The editor
+## owns that file and it is never overwritten, so a preset export-native is asked for and
+## does not find is copied in from export_presets.example.cfg, at the next free index.
+ensure_preset_from_example() {
+    local name="$1" cfg="$PROJECT/export_presets.cfg" ex="$PROJECT/export_presets.example.cfg" idx next
+
+    grep -qxF "name=\"$name\"" "$cfg" && return 0
+    idx="$(awk -v want="name=\"$name\"" '/^\[preset\.[0-9]+\]$/ {split($0, a, /[].[]/); cur = a[3]}
+        $0 == want {print cur; exit}' "$ex" 2>/dev/null)"
+    [ -n "$idx" ] || die "export_presets.cfg has no preset named \"$name\", and neither has export_presets.example.cfg." 5
+    next="$(awk '/^\[preset\.[0-9]+\]$/ {split($0, a, /[].[]/); if (a[3] + 1 > n) n = a[3] + 1} END {print n + 0}' "$cfg")"
+
+    { printf '\n'
+      awk -v i="$idx" -v n="$next" '
+          /^\[/ { on = 0 }
+          /^\[preset\.[0-9]+(\.options)?\]$/ { split($0, a, /[].[]/); on = (a[3] == i); if (on) sub("preset\\." i, "preset." n) }
+          on { print }' "$ex"
+    } >> "$cfg" || die "could not add the $name preset to $cfg" 5
+
+    printf '  export_presets.cfg now has the %s preset (copied from export_presets.example.cfg as preset.%s)\n' "$name" "$next"
+}
+
+## JDK 17 and the pinned Android SDK: tools/fetch-android-sdk.sh installs a missing SDK and
+## writes both paths into this Godot's editor settings (export/android/android_sdk_path,
+## java_sdk_path): a saved key, even an empty one, beats ANDROID_HOME and JAVA_HOME.
+ensure_android_sdk() {
+    local fetch="$PROJECT/tools/fetch-android-sdk.sh" envl
+
+    [ -x "$fetch" ] || die "tools/fetch-android-sdk.sh is missing; an Android export needs the SDK it installs" 5
+    if ! "$fetch" --check >/dev/null 2>&1 && [ -n "${TMC_NO_DOWNLOAD:-}" ]; then
+        die "no Android SDK or no JDK 17, and TMC_NO_DOWNLOAD is set.
+
+    tools/fetch-android-sdk.sh --check says which; tools/fetch-android-sdk.sh installs the SDK." 3
+    fi
+    printf '\n  %sandroid sdk%s\n' "$BLD" "$OFF"
+    envl="$(TMC_GODOT_VERSION="$VERSION" "$fetch" --editor-settings)" || die "an Android export needs JDK 17 and the Android SDK: see above" 3
+    eval "$envl"
+}
+
+## The entry list of a zip artifact (APK, IPA), then the bytes of any pck inside it, so
+## the grep-based artifact checks read a phone build the way they read a desktop one.
+zip_contents() {
+    if command -v unzip >/dev/null 2>&1; then
+        unzip -Z1 "$1" || die "could not list $1" 3
+        unzip -Z1 "$1" | grep -E '\.pck$' | while IFS= read -r p; do unzip -p "$1" "$p"; done
+    elif command -v python3 >/dev/null 2>&1; then
+        python3 -c 'import sys, zipfile
+z = zipfile.ZipFile(sys.argv[1])
+for n in z.namelist(): print(n)
+for n in z.namelist():
+    if n.endswith(".pck"): sys.stdout.buffer.write(z.read(n))' "$1" || die "could not list $1" 3
+    else
+        die "need unzip or python3 to check $1" 3
+    fi
+}
+
 do_export_native() {
     local targets=()
 
@@ -1766,8 +1825,20 @@ do_export_native() {
         linux|linux-x64|LINUX_X64)  targets=(linux) ;;
         windows|win|WINDOWS_X64)    targets=(windows) ;;
         macos|mac|MACOS_UNIVERSAL)  targets=(macos) ;;
-        *) die "--platform takes linux, windows, macos or all -- not $NATIVE_PLATFORM" 2 ;;
+        android|android-arm64)      targets=(android) ;;
+        ios|ios-arm64)              targets=(ios) ;;
+        *) die "--platform takes linux, windows, macos, all, android or ios -- not $NATIVE_PLATFORM" 2 ;;
     esac
+
+    # [b]iOS is built on a Mac or not at all.[/b] Godot writes an Xcode project and
+    # xcodebuild signs and packs it; refused here, before anything is fetched or written.
+    if [ "${targets[0]}" = "ios" ] && [ "$(uname -s)" != "Darwin" ]; then
+        die "an iOS export needs a Mac with Xcode, and this is $(uname -s).
+
+  Godot writes an Xcode project and xcodebuild signs it; neither runs anywhere else.
+  Run ./server export-native --platform ios on a Mac, with the developer account's
+  team id in its export_presets.cfg (application/app_store_team_id)." 3
+    fi
 
     [ -f "$PROJECT/export_presets.cfg" ] || die "no export_presets.cfg
 
@@ -1786,8 +1857,15 @@ do_export_native() {
             linux)   nplat+=(--platform linux-x86_64) ;;
             windows) nplat+=(--platform windows-x86_64) ;;
             macos)   nplat+=(--platform macos-arm64 --platform macos-x86_64) ;;
+            android) nplat+=(--platform android-arm64) ;;
+            ios)     nplat+=(--platform ios-arm64) ;;
         esac
     done
+    # No dot-* addon publishes a phone library yet: the fetch warns, the phone presets
+    # exclude *.gdextension, and the build runs the GDScript twins.
+    case "${targets[0]}" in
+        android|ios) note "${targets[0]}: no native libraries are published for phones yet; the build runs GDScript" ;;
+    esac
     "$PROJECT/tools/fetch-natives.sh" "${nplat[@]}" || warn "native libraries: see above (the build runs GDScript)"
 
     [ -n "$BUILD_VERSION" ] || BUILD_VERSION="1.$(date -u +%Y%m%d).$(date -u +%H%M)"
@@ -1802,8 +1880,8 @@ do_export_native() {
     # the cache is cheap.
     rm -rf "$PROJECT/.godot/exported"
 
-    local target preset outdir binary entry archive api_platform row
-    local published=()
+    local target preset outdir binary entry archive api_platform row mode
+    local published=() phones=()
 
     for target in "${targets[@]}"; do
         case "$target" in
@@ -1824,10 +1902,17 @@ do_export_native() {
                 preset="macOS"; outdir="build/macos"; binary="tmc.zip"
                 entry="TMC.app/Contents/MacOS/TMC"; archive="build/tmc-macos.zip"
                 api_platform="MACOS_UNIVERSAL" ;;
+            android)
+                # A debug APK, signed with the editor's debug keystore. A store build
+                # is TMC_ANDROID_RELEASE=1 with GODOT_ANDROID_KEYSTORE_RELEASE_* set.
+                preset="Android"; outdir="build/android"; binary="tmc.apk"
+                entry="tmc.apk";  archive="build/android/tmc.apk"; api_platform="" ;;
+            ios)
+                preset="iOS"; outdir="build/ios"; binary="tmc.ipa"
+                entry="tmc.ipa"; archive="build/ios/tmc.ipa"; api_platform="" ;;
         esac
 
-        grep -qF "name=\"$preset\"" "$PROJECT/export_presets.cfg" \
-            || die "export_presets.cfg has no preset named \"$preset\". export_presets.example.cfg is the tracked copy that does." 5
+        ensure_preset_from_example "$preset"
 
         mkdir -p "$PROJECT/$outdir" || die "could not create $PROJECT/$outdir" 5
 
@@ -1836,6 +1921,20 @@ do_export_native() {
         ensure_shell_excludes
         stamp_shell_version
 
+        mode="--export-release"
+        case "$target" in
+            android)
+                ensure_android_sdk
+                [ -n "${TMC_ANDROID_RELEASE:-}" ] || mode="--export-debug" ;;
+            ios)
+                awk '/^\[preset\.[0-9]+\]$/ {p=0} /^name="iOS"$/ {p=1} /^\[preset\.[0-9]+\.options\]$/ {o=p}
+                     o && /^application\/app_store_team_id="[^"]+"$/ {f=1} END {exit !f}' "$PROJECT/export_presets.cfg" \
+                    || die "the iOS preset has no team id (application/app_store_team_id in export_presets.cfg).
+
+  It is the Apple developer account's, so the tracked preset leaves it empty; put
+  it in this box's export_presets.cfg." 5 ;;
+        esac
+
         printf '\n  %sexporting %s%s\n' "$BLD" "$preset" "$OFF"
 
         rm -f "$PROJECT/$outdir/$binary"
@@ -1843,7 +1942,7 @@ do_export_native() {
         # would make every export look like a dirty one.
         shell_lock_begin
         "$GODOT" --headless --path "$PROJECT" \
-            --export-release "$preset" "$PROJECT/$outdir/$binary" || exit $?
+            "$mode" "$preset" "$PROJECT/$outdir/$binary" || exit $?
         shell_lock_end
 
         # [b]Checked rather than trusted.[/b] `./server pack` named a scene that was
@@ -1857,6 +1956,20 @@ do_export_native() {
     Export templates for $VERSION are the usual cause, and
     tools/fetch-export-templates.sh installs them -- this command calls it, so if
     that is what happened it already said so above." 3
+
+        case "$target" in
+            android|ios)
+                # An APK or IPA is a zip: the checks read its entry list and any pck in it.
+                local scan="$PROJECT/$outdir/.contents"
+                zip_contents "$PROJECT/$outdir/$binary" > "$scan"
+                check_excluded_maps "$scan"
+                check_lock_exported "$scan"
+                check_shell_dot_only "$scan"
+                rm -f "$scan"
+                printf '  wrote %s (%s)\n' "$archive" "$(du -h "$PROJECT/$archive" | cut -f1)"
+                phones+=("$target|$archive")
+                continue ;;
+        esac
 
         check_excluded_maps "$PROJECT/$outdir/$binary"
         # The macOS artifact is a zip Godot wrote; the pack inside it is compressed.
@@ -1872,6 +1985,19 @@ do_export_native() {
         printf '  wrote %s (%s)\n' "$archive" "$(du -h "$PROJECT/$archive" | cut -f1)"
         published+=("$api_platform|$archive|$entry")
     done
+
+    # The site's publisher has no phone platform yet, so a phone build is installed by
+    # hand: adb for the APK, Xcode or TestFlight for the IPA.
+    if [ ${#phones[@]} -gt 0 ]; then
+        for row in "${phones[@]}"; do
+            case "${row%%|*}" in
+                android) note "install it on a phone with USB debugging on: adb install -r ${row#*|}" ;;
+                ios)     note "install it from Xcode (Devices) or upload it to TestFlight: ${row#*|}" ;;
+            esac
+        done
+        note "the publisher has no phone platform yet, so there is no publish command for it."
+        exit 0
+    fi
 
     # What to do with what was just built. The publisher lives in website-city, because
     # that is where the database and the CDN credentials are, and printing the command

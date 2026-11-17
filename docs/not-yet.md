@@ -7,3 +7,7 @@ What is not built, published or verified yet. Each is unfinished work, not a des
 - The PowerShell launcher lacks the bash `pack` and is untested on Windows. [setup](setup.md#windows)
 - Audio in a real browser is unheard; Ogg, MP3 and WebP loading-screen media never fed a real file. [admin](admin-menu.md#testing-it)
 - A native build cannot sign in (`app-native-auth`, found under `workshop-shell-1`). The shell's only sign-in is the browser handoff (`DotAuthWebHandoff.supported()` is web only), so a desktop build is always a guest: the Subscriptions page says "Sign in to use your subscriptions" and a solo start syncs nothing. It needs a native sign-in that fills `DotAuthClient.store`; the Workshop's `token_fn` already reads it. [web-client](web-client.md#solo-play)
+- The iOS export has never run: it needs a Mac with Xcode and a developer team id. [native-client](native-client.md#phones---platform-android-and---platform-ios)
+- No phone build has been installed on a real phone, and the site's publisher has no Android or iOS platform. [native-client](native-client.md#phones---platform-android-and---platform-ios)
+- `server.ps1 export-native --platform android` has only been parse-checked, never run on Windows. [native-client](native-client.md#phones---platform-android-and---platform-ios)
+- No dot-* addon publishes an android or ios native library, so phones run the GDScript twins. [native-client](native-client.md#phones---platform-android-and---platform-ios)

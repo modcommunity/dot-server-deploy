@@ -235,7 +235,9 @@ The YAML reader is a deliberately small subset and refuses everything else with 
 ./server import-defs --game-dir DIR [--dry-run]
                               post the game's deployment/*.json (stat, achievement, leaderboard defs, game listing) to the site
 ./server export-web           build the browser client
-./server export-native        build the native client, for every platform
+./server export-native        build the native client, for every desktop platform
+./server export-native --platform android
+                              a debug APK (JDK 17; installs the Android SDK); ios needs a Mac
 ./server --help               every option
 
 ./server --port 27015 --name "My server"
