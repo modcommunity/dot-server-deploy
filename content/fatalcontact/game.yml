@@ -61,7 +61,7 @@ module: game/arena_module.gd
 # whether a shot hit, and lag compensation does the work a higher rate would. The game sends
 # snapshots a whole number of ticks apart (30 a second at 60), since uneven spacing is jitter.
 cvars:
-  arena_scorelimit: "25"
+  fc_scorelimit: "25"
 
   # ONE, not the game's own default of two.
   #
@@ -73,10 +73,10 @@ cvars:
   #
   # At one they spawn, walk around a real map with real weapons, and the round starts
   # properly the moment somebody else arrives.
-  arena_minplayers: "1"
+  fc_minplayers: "1"
 
   # E launch is off unless a server turns it on.
-  arena_launch: "0"
+  fc_launch: "0"
 
 # The MAP vote inside this game — what the players pick between when a map ends, and
 # whether they may extend the one they are on. Its defaults are in the game's own
@@ -110,10 +110,10 @@ metadata:
   admin_menu:
     title: "Fatal Contact"
     items:
-      arena_restart:
+      fc_restart:
         label: "Restart the match"
-        command: "arena_restart"
+        command: "fc_restart"
         confirm: true
-      arena_vote:
+      fc_vote:
         label: "Start a map vote now"
-        command: "arena_vote"
+        command: "fc_vote"

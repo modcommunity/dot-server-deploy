@@ -695,7 +695,7 @@ func _install_services() -> void:
 	# commands -- though it looks again on every page, which is what keeps it right across
 	# a changelevel. `warn` is registered here only if nothing before it took the name.
 	var map_session := func() -> Object:
-		return TmcMapGame.session_in(server.games)
+		return TmcMapGame.session_in(TmcMapGame.roots_of(server))
 
 	admin_menu = TmcAdminMenu.install(self, server, config.admin_menu, map_session)
 
@@ -1326,14 +1326,14 @@ func _apply_initial_map() -> void:
 	if config.initial_map == "":
 		return
 
-	var session := TmcMapGame.session_in(server.games)
+	var session := TmcMapGame.session_in(TmcMapGame.roots_of(server))
 
 	if session == null:
 		# A game with its own map path (no DotMapSession) answers `start_on_map(id) -> DotResult`, the same change its `map` command makes.
-		var starter := TmcMapGame.starter_in(server.games)
+		var starter := TmcMapGame.starter_in(TmcMapGame.roots_of(server))
 
 		if starter != null:
-			await _ensure_map_content(StringName(config.initial_map), server.games)
+			await _ensure_map_content(StringName(config.initial_map), TmcMapGame.roots_of(server))
 			var started: Variant = await starter.call("start_on_map", StringName(config.initial_map))
 
 			if started is DotResult and not (started as DotResult).ok:
@@ -1357,7 +1357,7 @@ func _apply_initial_map() -> void:
 
 	# Fetch it before asking for it: `change_to` refuses an id the catalogue does not hold, and a catalogue only holds what is on disk,
 	# so a delivered map was refused here rather than downloaded and read as an operator's typo. A game that fetches its own content sees a mount already there and does nothing twice.
-	await _ensure_map_content(StringName(config.initial_map), server.games)
+	await _ensure_map_content(StringName(config.initial_map), TmcMapGame.roots_of(server))
 
 	var changed: Variant = await session.call("change_to", StringName(config.initial_map))
 
@@ -1375,7 +1375,7 @@ func _apply_initial_map() -> void:
 
 ## Download the content a map lives in, if this deployment can and does not have it. The map id IS the content id (the publisher's convention; a second registry would be a third place to keep in step).
 ## Every outcome is non-fatal: the refusal that follows from `change_to` is the better message anyway because it names the map.
-func _ensure_map_content(id: StringName, root: Node = null) -> void:
+func _ensure_map_content(id: StringName, root: Variant = null) -> void:
 	if id == &"":
 		return
 

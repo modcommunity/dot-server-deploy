@@ -242,6 +242,18 @@ func _test_startup_checks() -> void:
 	_check(TmcMapGame.starter_in(root) == null, "and a game with neither is not, so the host logs an ERROR instead")
 	root.free()
 
+	# A map director held by a module sits under the modules node, not the games node; the host searches both.
+	var games_node := Node.new()
+	var modules_node := Node.new()
+	var module_holder := Node.new()
+	modules_node.add_child(module_holder)
+	var module_starter := _MapStarter.new()
+	module_holder.add_child(module_starter)
+	_check(TmcMapGame.starter_in([games_node, modules_node]) == module_starter, "a map director held by a module is found when the games and modules are searched together")
+	_check(TmcMapGame.starter_in(games_node) == null, "and is not found under the games alone")
+	games_node.free()
+	modules_node.free()
+
 	_done()
 
 

@@ -768,7 +768,7 @@ func _test_game_cfg_dirs() -> void:
 	_check(written.size() == content.games.size(), "first boot writes one for each (%d)" % written.size(), str(written.size()))
 
 	var text := FileAccess.get_file_as_string("%s/game/game-fatal-contact/server.yml" % root)
-	_check(text.contains("# cvars:") and text.contains("arena_scorelimit") and not text.contains("\n  arena_"),
+	_check(text.contains("# cvars:") and text.contains("fc_scorelimit") and not text.contains("\n  fc_"),
 		"a base config lists the game's cvars, all commented out")
 	var live := PackedStringArray()
 
