@@ -4,7 +4,7 @@ extends Node
 
 const Pack := preload("res://tools/pack.gd")
 
-const CHECKS := 18
+const CHECKS := 22
 const GAME := "lookatme"
 const GAME_REPO := "mg-look-at-me"
 const FLOORED_REPO := "game-arena"
@@ -25,6 +25,7 @@ func _ready() -> void:
 	_test_floors()
 	_test_floor_above_shell()
 	_test_not_a_project()
+	_test_former_id()
 
 	DotPaths.remove_tree(SCRATCH)
 
@@ -180,6 +181,16 @@ func _test_not_a_project() -> void:
 	var res := Pack.derive_requires("res://content/avatars", SCRATCH.path_join("avatars.json"))
 	_check(res.ok and str(res.value) == "", "content/avatars publishes as it did", str(res.error) if not res.ok else str(res.value))
 	_check(not FileAccess.file_exists(SCRATCH.path_join("avatars.json")), "and nothing was derived for it")
+	_done()
+
+
+func _test_former_id() -> void:
+	_section("./server pack accepts the id a renamed game had before")
+
+	_check(Pack.resolve_id("playlot", "res://content") == "playlot", "the current id resolves to itself")
+	_check(Pack.resolve_id("playground", "res://content") == "playlot", "playground resolves to content/playlot")
+	_check(Pack.resolve_id("arena", "res://content") == "fatalcontact", "arena resolves to content/fatalcontact")
+	_check(Pack.resolve_id("no_such_game", "res://content") == "no_such_game", "an id nobody claims is left for the caller to fail on")
 	_done()
 
 

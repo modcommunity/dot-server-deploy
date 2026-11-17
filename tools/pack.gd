@@ -81,7 +81,7 @@ func _initialize() -> void:
 			quit(EXIT_FAILED)
 			return
 	elif opts.has("id"):
-		ids.append(str(opts["id"]))
+		ids.append(resolve_id(str(opts["id"]), content_dir))
 	else:
 		printerr("pack needs --id <id> or --all")
 		quit(EXIT_USAGE)
@@ -737,7 +737,35 @@ func _count_files(root: String) -> int:
 
 
 ## Every directory under `content/` that could be a pack.
-func _publishable(content_dir: String) -> PackedStringArray:
+## The content directory an id names. A renamed game keeps answering to its old ids (`metadata.former_ids` in its
+## `game.yml`, the same list the server's game index honours), so `./server pack playground` still reaches
+## content/playlot. A directory named exactly `id` always wins; an id nothing claims is returned unchanged so the
+## caller fails loudly with "no content at ...".
+static func resolve_id(id: String, content_dir: String) -> String:
+	if DirAccess.dir_exists_absolute(content_dir.path_join(id)):
+		return id
+
+	for name in _publishable(content_dir):
+		var yml := content_dir.path_join(name).path_join("game.yml")
+
+		if not FileAccess.file_exists(yml):
+			continue
+
+		var read := TmcYaml.parse_file(yml)
+
+		if not read.ok:
+			continue
+
+		var former: Variant = TmcYaml.at(read.value, "metadata.former_ids", [])
+
+		if former is Array and (former as Array).has(id):
+			print("  %s is the former id of %s, packing %s" % [id, name, name])
+			return name
+
+	return id
+
+
+static func _publishable(content_dir: String) -> PackedStringArray:
 	var out := PackedStringArray()
 	var dir := DirAccess.open(content_dir)
 
