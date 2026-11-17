@@ -1427,8 +1427,14 @@ func _update_addons(addons: DotCloudAddonSet, wanted: Dictionary, target: String
 		_connect_to(target)
 		return
 
-	_say(_text("shell.addons.restarting", {}, "Restarting to finish the update…"))
 	_stamp_plan()
+
+	if _join_in_place(built.value, target):
+		_addons_updating = false
+		_connect_to(target)
+		return
+
+	_say(_text("shell.addons.restarting", {}, "Restarting to finish the update…"))
 	_note_update_attempt(attempt)
 
 	# What the next start reads: the plan (where to come back to, who was signed in), the
@@ -1448,6 +1454,27 @@ func _update_addons(addons: DotCloudAddonSet, wanted: Dictionary, target: String
 		_say(_text("shell.addons.next_start", {},
 			"The update finishes the next time the game starts."))
 		_connect_to(target)
+
+
+## Whether a server's overlay just built ([param plan]) was taken without a restart, so the join goes on now: mounted in this
+## process ([method _clear_update_attempts]), or mounted but stale (the join goes on the build's own addons, as after a failed
+## restart). A first visit, or the first join on a new shell build, has none of these addons in this process; mounting them here
+## skips the IndexedDB wait, the page reload, the second fetch of the shell and the second engine boot (about 20 s of a Fast 4G
+## join measured on 2026-11-17). False leaves the restart: an overlay that would replace a mounted addon (a compiled script is
+## never read again), a workshop subscription (only a restart unmounts it), or a pack the engine refused, as on the solo path.
+func _join_in_place(plan: Dictionary, target: String) -> bool:
+	if not _overlay_additive(plan) or TmcShellSolo.plan_holds_subscription(plan):
+		return false
+
+	match _mount_in_place():
+		InPlace.RUNNING:
+			_clear_update_attempts(target)
+			return true
+		InPlace.STALE:
+			_addons_skipped[target] = true
+			return true
+
+	return false
 
 
 ## Restarts for one server's addons before giving up on them for the session.

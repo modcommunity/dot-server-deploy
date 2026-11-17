@@ -4,7 +4,7 @@ extends Node
 ## `game.yml` reader against the host's, the shell's map list against the stock server one, and the
 ## session a game reads its map packs from. godot --headless --path .
 
-const CHECKS := 92
+const CHECKS := 94
 
 ## Every game repository, beside this project or in games/: the repositories of cfg/content/games.yml (shipped content-lists/games.yml).
 
@@ -513,7 +513,7 @@ func _test_overlay_blocked() -> void:
 ## arena_weapons into an overlay, then reloaded and fetched the shell again). An overlay that only adds addons is mounted in this
 ## process and its classes resolve; one that would replace an addon, or come after another overlay, still restarts.
 func _test_overlay_in_place() -> void:
-	_section("a solo game's addons that only add to this process are mounted without a restart")
+	_section("a solo game's or a server's addons that only add to this process are mounted without a restart")
 
 	var dir := "solo_check_overlay"
 	var root := "res://addons/%s" % dir
@@ -561,8 +561,22 @@ func _test_overlay_in_place() -> void:
 	_check(shell.call("_overlay_additive", plan), "a first visit's overlay only adds addons")
 	_check(not shell.call("_overlay_additive", {"addons": {"dot_core": {}, dir: {}}}),
 		"an overlay that would replace an addon the shell carries is not mounted in place")
-	var in_place: int = shell.call("_mount_in_place")
-	_check(in_place == 0 and not restarted[0], "it is mounted in this process, with no restart", "got %d" % in_place)
+	# A server's join takes the same overlay the same way (a Fast 4G join on 2026-11-17 reloaded the page for it, about 20 s).
+	var storage := FakeStorage.new()
+	shell.set("attempt_storage", storage)
+	shell.set("shell_build", "20261117-0400")
+	var target := "wss://solo-check.invalid:6100"
+	shell.call("_note_update_attempt", target + "|" + dir + "@0.0.1")
+	shell.call("_note_update_attempt", "wss://other.invalid|x@1")
+	_check(not shell.call("_join_in_place", {"addons": {"dot_core": {}, dir: {}}}, target)
+		and str(DotCloudAddonSet.read_plan().get("state", "")) == DotCloudAddonSet.STATE_READY,
+		"a server overlay that would replace an addon the shell carries is left for a restart")
+	var joined: bool = shell.call("_join_in_place", plan, target)
+	_check(joined and not restarted[0], "it is mounted in this process, with no restart, and the join goes on")
+	_check(int(shell.call("_update_attempts", target + "|" + dir + "@0.0.1")) == 0
+		and int(shell.call("_update_attempts", "wss://other.invalid|x@1")) == 1
+		and not (shell.get("_addons_skipped") as Dictionary).has(target),
+		"the server's restart counts go, another server's stay, and its addons are not skipped")
 	var after := DotCloudAddonSet.read_plan()
 	_check(str(after.get("state", "")) == DotCloudAddonSet.STATE_OK and DotCloudAddonSet.mounted_this_boot(after),
 		"the plan says ok and names the mounted pack", str(after))
