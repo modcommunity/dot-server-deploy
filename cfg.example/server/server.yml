@@ -245,7 +245,7 @@ net_max_update_rate: 0
 
 # Physics engine: godot (default) or jolt. Read by ./server, which writes override.cfg before the engine
 # starts (the engine reads physics/3d/physics_engine once). Jolt passed the dot-player-controller, dot-physics,
-# dot-combat, game-arena and game-zombie-zone suites; see docs/operator-config.md. TMC_PHYSICS_ENGINE=jolt does the same.
+# dot-combat, game-fatal-contact and game-zombie-zone suites; see docs/operator-config.md. TMC_PHYSICS_ENGINE=jolt does the same.
 # sv_physics_engine: godot
 
 # Addons to install and announce, by id: owner/repo or owner/repo@version (no version = addons.lock's).

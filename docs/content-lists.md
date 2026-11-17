@@ -4,7 +4,7 @@
 
 ```bash
 mkdir -p cfg/content
-printf 'merge: true\nentries: [game-arena]\n' > cfg/content/games.yml
+printf 'merge: true\nentries: [game-fatal-contact]\n' > cfg/content/games.yml
 ./setup.sh && ./server
 ```
 
@@ -19,7 +19,7 @@ remove: [dot-voice]    # ids dropped after the lists below are merged in
 entries:
   - dot-core                      # a git repository
   - dot-vote@v0.2.1               # pinned to a tag or commit
-  - repo: game-arena
+  - repo: game-fatal-contact
     pin: v1.0.0
     content: fatalcontact         # games.yml only: the content directory
   - pack: gamemann/surf_mesa      # a dot-cloud pack id
@@ -36,7 +36,7 @@ A whole rotation is a few lines:
 
 ```yaml
 entries:
-  - repo: game-arena
+  - repo: game-fatal-contact
     rotation: random
     maps:
       - surf_a

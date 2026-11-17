@@ -18,14 +18,14 @@
 #     - gamemann/*
 #   rotations:
 #     main:                     if both `games:` and rotations: main are written, main wins
-#       games: [game-arena, mg-*, gamemann/game-g2gfast]
+#       games: [game-fatal-contact, mg-*, gamemann/game-g2gfast]
 #     party:
 #       mode: cycle
 #       games: [mg-wipeout, mg-deathrun, mg-smash-copter]
 #     testing:
 #       games: [game-murder-mystery]
 #
-# Entries, as content.yml names games: an id (owner/name), its name half (game-arena), `owner/*`
+# Entries, as content.yml names games: an id (owner/name), its name half (game-fatal-contact), `owner/*`
 # for every installed game of an owner, and name globs (`mg-*`, `"*"`; quote a glob that starts
 # with *). Matched against the games installed in content/. An entry that matches nothing logs
 # a WARN and is skipped; an empty rotation WARNs and offers every installed game. A game with

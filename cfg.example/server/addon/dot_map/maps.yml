@@ -40,7 +40,7 @@
 # section). Write entries in block form, the reader refuses `{...}`:
 #
 #   games:
-#     game-arena:
+#     game-fatal-contact:
 #       rotations:
 #         main:
 #           mode: cycle            the ORDER (cycle/random); the profile is `cfg:` here

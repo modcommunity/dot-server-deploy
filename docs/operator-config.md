@@ -56,7 +56,7 @@ maps: [dm_new_map]
 
 ```yaml
 entries:
-  - repo: game-arena
+  - repo: game-fatal-contact
     maps: [dm_one, dm_two]    # the rotation, in this order
 ```
 

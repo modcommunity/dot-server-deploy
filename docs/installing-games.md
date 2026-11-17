@@ -15,7 +15,7 @@ The pack is the game: scenes, scripts, art, signed, mounted at `res://dot_cloud/
 ## Names and ids
 
 - `TMC_GAMES=gamemann/game-g2gfast@1.2.0`, `@latest`, or no version. `tmc` is just the owner reserved for first-party content.
-- **A published game's id is `<owner>/<name>`, and so is its directory** (`content/gamemann/game-arena/`), so a fork and its original, or two people's games with one name, sit side by side. A bare name still works wherever it is unambiguous (`TmcContent.find`, dot-server's `find_game`); a built-in stays `content/<name>/`. An install from before the owner was part of the path is MOVED into its owner's directory by `install-games`, and the egg's prune keeps such a directory for that one run.
+- **A published game's id is `<owner>/<name>`, and so is its directory** (`content/gamemann/game-fatal-contact/`), so a fork and its original, or two people's games with one name, sit side by side. A bare name still works wherever it is unambiguous (`TmcContent.find`, dot-server's `find_game`); a built-in stays `content/<name>/`. An install from before the owner was part of the path is MOVED into its owner's directory by `install-games`, and the egg's prune keeps such a directory for that one run.
 - **`TmcGameRef` is the one parser.** `install-games` decides what to FETCH and `TmcHost` what to OFFER from the same `TMC_GAMES` string; two parsers would download a game and then fail to find it (and the prune would delete it on every restart).
 - **Descriptors are keyed by directory id, not content id.** Several hungario modes are descriptors over one `tmc/hungry`; keyed by content id they would overwrite each other. Prefetching iterates distinct content ids, or the origin is asked for the same pack once per mode.
 

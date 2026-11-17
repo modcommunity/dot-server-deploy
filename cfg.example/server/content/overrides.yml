@@ -111,7 +111,7 @@ games:
         - gamemann/bhop_supernova
         - gamemann/bhop_tesquo_v2
 
-  game-arena:
+  game-fatal-contact:
     maps:
       # The combat surf maps, one pack each, from github.com/zees-games/fc-surf-dm-maps.
       # Its three built-in maps need no pack.
