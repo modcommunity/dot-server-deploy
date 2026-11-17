@@ -2,8 +2,8 @@
 # Baselines only shrink: scripts/<gate> --update lowers or drops entries and refuses to add.
 client/loading_screen.gd	1072
 client/loading_screen.gd::_build_view	85
-client/shell.gd	2433
-client/shell.gd::_connect_to	105
+client/shell.gd	2431
+client/shell.gd::_connect_to	86
 client/shell.gd::_ready	124
 client/tmc_workshop_panel.gd::_item_card	101
 examples/addon_entry.gd::_mount_and_attach	86
@@ -19,7 +19,7 @@ examples/game_vote_rounds.gd::_test_game	103
 examples/multigame.gd::_test_vote_changes_the_game	235
 examples/prophunt_client.gd::_test_a_leant_prop_is_drawn_on_the_floor	105
 examples/return_to_game.gd::_probe	94
-examples/selftest.gd	2571
+examples/selftest.gd	2478
 examples/selftest.gd::_test_admins	94
 examples/selftest.gd::_test_auth	218
 examples/selftest.gd::_test_config	130
@@ -34,15 +34,14 @@ host/tmc_admin_menu.gd	1500
 host/tmc_admin_menu.gd::_rebuild	84
 host/tmc_admins.gd::from	93
 host/tmc_auth.gd::build	144
-host/tmc_config.gd	1267
-host/tmc_config.gd::_apply_settings	127
+host/tmc_config.gd	1218
+host/tmc_config.gd::_apply_settings	121
 host/tmc_content.gd::_build	133
 host/tmc_game_config.gd	907
 host/tmc_game_config.gd::_maps	96
-host/tmc_host.gd	1512
-host/tmc_host.gd::_apply_overrides	107
-host/tmc_host.gd::_boot	84
-host/tmc_host.gd::_run	101
+host/tmc_host.gd	1474
+host/tmc_host.gd::_apply_overrides	97
+host/tmc_host.gd::_run	90
 tools/cloud_fetch_probe.gd::_init	104
 tools/index.gd::_initialize	106
 tools/install_games.gd	1829

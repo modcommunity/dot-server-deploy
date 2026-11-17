@@ -231,7 +231,8 @@ func _physics_process(_delta: float) -> void:
 			_fallback.erase(gid)
 			DotLog.debug(CHANNEL, "a game with no load gate is shown", {
 				"ms": waited, "camera": int(entry["settled"]) > 0})
-			_warm_up(game, true)
+			# Deferred: a one-shot warm-up, not per-frame work (it draws and awaits frames of its own).
+			_warm_up.call_deferred(game, true)
 
 
 ## True when the viewport's current camera (3D, else 2D) is inside [param game].

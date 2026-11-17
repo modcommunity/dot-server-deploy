@@ -1279,29 +1279,8 @@ func _connect_to(address: String) -> void:
 	link.game_root_ref = DotNodeRef.of_path(_game_root.get_path())
 	add_child(link)
 
-	link.phase_changed.connect(func(phase: int, text: String) -> void:
-		_status.text = text
-		_mark_join(phase)
-		# A first join and a game change under a player who is already in: the link goes
-		# through connecting, downloading and loading, and the loading screen covers all.
-		if (_has_spawned or _joining) and phase in [
-				DotClientLink.Phase.CONNECTING, DotClientLink.Phase.AUTHENTICATING,
-				DotClientLink.Phase.DOWNLOADING, DotClientLink.Phase.LOADING]:
-			loading.begin(TmcLoadingScreen.REASON_GAME)
-			loading.set_progress(-1.0, text)
-	)
-	link.download_progress.connect(func(fraction: float, text: String) -> void:
-		if _joining:
-			# First and last progress report: the gap after the last is verifying and
-			# mounting, which the link awaits inside DOWNLOADING.
-			if not _join_marks.has("dl_first"):
-				_join_marks["dl_first"] = Time.get_ticks_usec()
-			_join_marks["dl_last"] = Time.get_ticks_usec()
-		_indeterminate(false)
-		_progress.value = clampf(fraction, 0.0, 1.0) * 100.0
-		_status.text = "%s  %d%%" % [text, int(fraction * 100.0)]
-		loading.set_progress(fraction, text)
-	)
+	link.phase_changed.connect(_on_link_phase)
+	link.download_progress.connect(_on_link_download)
 	link.game_changed.connect(_on_game_changed)
 	link.spawned.connect(_on_spawned)
 	link.disconnected.connect(_on_disconnected)
@@ -1320,6 +1299,30 @@ func _connect_to(address: String) -> void:
 			"Could not connect: %s" % _explain(connecting.error))
 		_set_busy(false)
 		_drop_link()
+
+
+## The link's phase: shows its text, and covers a first join and a game change under a player who is already in (connecting, downloading, loading) with the loading screen.
+func _on_link_phase(phase: int, text: String) -> void:
+	_status.text = text
+	_mark_join(phase)
+
+	if (_has_spawned or _joining) and phase in [
+			DotClientLink.Phase.CONNECTING, DotClientLink.Phase.AUTHENTICATING,
+			DotClientLink.Phase.DOWNLOADING, DotClientLink.Phase.LOADING]:
+		loading.begin(TmcLoadingScreen.REASON_GAME)
+		loading.set_progress(-1.0, text)
+
+
+func _on_link_download(fraction: float, text: String) -> void:
+	if _joining:
+		# First and last progress report: the gap after the last is verifying and mounting, which the link awaits inside DOWNLOADING.
+		if not _join_marks.has("dl_first"):
+			_join_marks["dl_first"] = Time.get_ticks_usec()
+		_join_marks["dl_last"] = Time.get_ticks_usec()
+	_indeterminate(false)
+	_progress.value = clampf(fraction, 0.0, 1.0) * 100.0
+	_status.text = "%s  %d%%" % [text, int(fraction * 100.0)]
+	loading.set_progress(fraction, text)
 
 
 ## The server's challenge: if it runs newer addons than this build, leave, fetch them, and restart into them.
@@ -2198,18 +2201,7 @@ func _mark_join(phase: int) -> void:
 func _log_join() -> void:
 	if not _joining or not _join_marks.has("start"):
 		return
-	var now := Time.get_ticks_usec()
-	var order := ["start", "CONNECTING", "AUTHENTICATING", "DOWNLOADING", "dl_first", "dl_last", "LOADING", "PLAYING"]
-	var stages := {}
-	var last: int = _join_marks["start"]
-	var last_name := "start"
-	for key in order.slice(1):
-		if _join_marks.has(key):
-			stages["%s>%s" % [last_name, key]] = int((int(_join_marks[key]) - last) / 1000.0)
-			last = _join_marks[key]
-			last_name = key
-	stages["%s>spawned" % last_name] = int((now - last) / 1000.0)
-	stages["total"] = int((now - int(_join_marks["start"])) / 1000.0)
+	var stages := TmcJoinTimings.stages(_join_marks, Time.get_ticks_usec())
 	DotLog.info(CHANNEL, "join timings (ms)", stages)
 	_join_marks = {}
 
@@ -2226,51 +2218,12 @@ func _say(text: String) -> void:
 ## back the way it found it.
 func show_content_failed(reason: String) -> void:
 	if _content_failed == null:
-		var layer := CanvasLayer.new()
-		layer.name = "ContentFailed"
-		layer.layer = 90
-		add_child(layer)
-		var centre := CenterContainer.new()
-		centre.set_anchors_preset(Control.PRESET_TOP_WIDE)
-		centre.offset_top = 24.0
-		centre.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		layer.add_child(centre)
-		_content_failed = PanelContainer.new()
-		_content_failed.theme = TmcShellStyle.theme()
-		_content_failed.add_theme_stylebox_override("panel", TmcShellStyle.card(16, Color(TmcShellStyle.PANEL, 0.96)))
-		_content_failed.custom_minimum_size = Vector2(420.0, 0.0)
-		centre.add_child(_content_failed)
-		var pad := MarginContainer.new()
-		for side in ["left", "right", "top", "bottom"]:
-			pad.add_theme_constant_override("margin_" + side, 14)
-		_content_failed.add_child(pad)
-		var box := VBoxContainer.new()
-		box.add_theme_constant_override("separation", 8)
-		pad.add_child(box)
-		var heading := TmcShellStyle.eyebrow("Content problem")
-		heading.add_theme_color_override("font_color", TmcShellStyle.DANGER)
-		box.add_child(heading)
-		_content_failed_text = Label.new()
-		_content_failed_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		_content_failed_text.custom_minimum_size = Vector2(392.0, 0.0)
-		box.add_child(_content_failed_text)
-		var row := HBoxContainer.new()
-		row.alignment = BoxContainer.ALIGNMENT_END
-		row.add_theme_constant_override("separation", 8)
-		box.add_child(row)
-		var dismiss := Button.new()
-		dismiss.text = "Dismiss"
-		dismiss.pressed.connect(_hide_content_failed)
-		TmcShellStyle.ghost(dismiss)
-		row.add_child(dismiss)
-		var clear := Button.new()
-		clear.name = "Clear"
-		clear.text = "Clear downloaded content\u2026"
-		clear.pressed.connect(func() -> void:
+		var built := TmcContentFailedPanel.build(self, _hide_content_failed, func() -> void:
 			_hide_content_failed()
 			_ask_clear())
-		_primary(clear)
-		row.add_child(clear)
+		_content_failed = built["panel"]
+		_content_failed_text = built["text"]
+		_primary(built["clear"])
 
 	_content_failed_text.text = "Could not load the content this server needs.\n%s" % reason
 	if not _content_failed.visible:

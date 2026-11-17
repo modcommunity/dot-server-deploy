@@ -209,7 +209,7 @@ func _publish_one(
 	# [b]A pack whose scripts declare `class_name` is dead before it is written.[/b] A mounted pack's
 	# globals are not registered in the host, so every cross-file type reference in it fails to compile
 	# -- and NOTHING says so at any point a person is looking: the pack publishes, uploads.
-	var globals := _class_names_in(source)
+	var globals := TmcPackScan.class_names_in(source)
 
 	if not globals.is_empty():
 		return DotResult.fail(
@@ -224,7 +224,7 @@ func _publish_one(
 
 	# An empty pack publishes a manifest that mounts and contains nothing, which is
 	# indistinguishable from one whose files failed to upload.
-	if _count_files(source) == 0:
+	if TmcPackScan.count_files(source) == 0:
 		return DotResult.fail(
 			DotError.CODE_INVALID,
 			"there is nothing to publish in %s" % source,
@@ -675,65 +675,6 @@ func _drop_matching(root: String, pattern: String) -> void:
 
 	dir.list_dir_end()
 
-
-
-## Every `class_name` declared under [param root], up to a handful worth naming. Text search rather
-## than a parse: this runs over a tree that is about to be published and the question is only
-## whether the declaration is there.
-func _class_names_in(root: String) -> PackedStringArray:
-	var out := PackedStringArray()
-
-	for rel in DotPaths.list_files_recursive(root):
-		if not rel.ends_with(".gd"):
-			continue
-		# The host's own addons legitimately declare globals; they are not in the pack.
-		if rel.begins_with("addons/") or rel.contains("/addons/"):
-			continue
-		# A linked git worktree inside the source (a `.git` file) is not part of the game.
-		if rel.contains("/") and FileAccess.file_exists(root.path_join(rel.get_slice("/", 0)).path_join(".git")):
-			continue
-
-		for line in FileAccess.get_file_as_string(root.path_join(rel)).split("\n"):
-			if not line.begins_with("class_name "):
-				continue
-
-			var name := line.substr(11).strip_edges().split(" ")[0]
-
-			if name != "" and not out.has(name):
-				out.append("%s (%s)" % [name, rel])
-
-			if out.size() >= 6:
-				return out
-
-	return out
-
-
-func _count_files(root: String) -> int:
-	var abs_root := ProjectSettings.globalize_path(root)
-	var dir := DirAccess.open(abs_root)
-
-	if dir == null:
-		return 0
-
-	var count := 0
-
-	dir.list_dir_begin()
-	var name := dir.get_next()
-
-	while name != "":
-		if name != "." and name != "..":
-			var child := root.path_join(name)
-
-			if DirAccess.dir_exists_absolute(ProjectSettings.globalize_path(child)):
-				count += _count_files(child)
-			else:
-				count += 1
-
-		name = dir.get_next()
-
-	dir.list_dir_end()
-
-	return count
 
 
 ## Every directory under `content/` that could be a pack.

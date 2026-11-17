@@ -424,7 +424,7 @@ func _hide(finished: bool) -> void:
 	_visible = false
 	cover_changed.emit(false)
 	var shown_ms := Time.get_ticks_msec() - _shown_msec
-	DotLog.info(CHANNEL, "[TMC] cover down: %d ms" % shown_ms, {
+	DotLog.info(CHANNEL, "[TMC] cover down", {
 		"ms": shown_ms, "finished": finished, "status": _status.text if _status != null else ""})
 	_reason_at.clear()
 	_next = {}

@@ -87,13 +87,8 @@ var _module_path := ""
 ## Whether the last game change failed to bring its module up.
 ## Fatal at boot and merely loud afterwards: a server running a game with no netcode is worse than one that refused to start, but refusing once players are on it drops them.
 var _module_failed := false
-## What `_advertise_addons` announced before any game named its download groups, and the groups the current game's module names (`addon_groups()`).
-var _addon_announced: Array = []
-var _addon_groups := {}
-## `addons_announce: game` only: the game a change is going to, between `game_changing` and its `game_loaded` or `game_load_failed`; its addons are announced beside the current game's.
-var _change_to: DotGameDescriptor = null
-## `addons_announce: game` only: the addon set each peer was last told (at its challenge, or by [constant TmcAddonGroups.ANNOUNCE_KIND]), so a change tells only those who lack something.
-var _addons_told := {}
+## What this server tells clients about its addons ([TmcAddonAnnounce]).
+var addons: TmcAddonAnnounce = TmcAddonAnnounce.new(self)
 
 
 func _ready() -> void:
@@ -204,26 +199,30 @@ func _run() -> void:
 
 	_announce()
 
-
 	if _selftest:
-		# Booted, listened, loaded a game and loaded a module — which is everything
-		# `./server --check` claims. Shutting down here rather than serving is what makes
-		# that claim checkable in CI without a client.
-		if not TmcHostSelftest.new(self).operator_surface():
-			server.shutdown("selftest failed")
-			get_tree().quit(EXIT_CONFIG)
-			return
+		_finish_selftest()
 
-		server.shutdown("selftest complete")
 
-		# After the shutdown, because tearing a game down runs its scripts too.
-		if not TmcHostSelftest.new(self).scripts_loaded():
-			get_tree().quit(EXIT_CONTENT)
-			return
+## The boot test's verdict, after a boot that listened, loaded a game and loaded a module: everything `./server --check` claims.
+func _finish_selftest() -> void:
+	# Booted, listened, loaded a game and loaded a module — which is everything
+	# `./server --check` claims. Shutting down here rather than serving is what makes
+	# that claim checkable in CI without a client.
+	if not TmcHostSelftest.new(self).operator_surface():
+		server.shutdown("selftest failed")
+		get_tree().quit(EXIT_CONFIG)
+		return
 
-		print("")
-		print("selftest ok")
-		get_tree().quit(EXIT_OK)
+	server.shutdown("selftest complete")
+
+	# After the shutdown, because tearing a game down runs its scripts too.
+	if not TmcHostSelftest.new(self).scripts_loaded():
+		get_tree().quit(EXIT_CONTENT)
+		return
+
+	print("")
+	print("selftest ok")
+	get_tree().quit(EXIT_OK)
 
 
 func _exit_tree() -> void:
@@ -391,6 +390,18 @@ func _apply_overrides(args: PackedStringArray) -> void:
 	if map_id != "":
 		config.initial_map = map_id
 
+	_apply_web_overrides(args)
+
+	for flag in ["--rcon-password", "--password"]:
+		if flag in args:
+			DotLog.warn(CHANNEL, "a secret on the command line is refused", {
+				"flag": flag,
+				"why": "argv is readable by other processes; put it in cfg/server.yml",
+			})
+
+
+## The web shell's loader and build pin and the addon announce mode, from the same `--` and `+` spellings as the rest of [method _apply_overrides].
+func _apply_web_overrides(args: PackedStringArray) -> void:
 	# Same two spellings as `--map`, for the same reason: `+sv_web_loader` would otherwise go
 	# to the console, which runs it before this host has registered the cvar.
 	var web_loader := _value(args, "--web-loader", _value(args, "+sv_web_loader", ""))
@@ -407,13 +418,6 @@ func _apply_overrides(args: PackedStringArray) -> void:
 
 	if announce != "":
 		config.addons_announce = announce.strip_edges().to_lower()
-
-	for flag in ["--rcon-password", "--password"]:
-		if flag in args:
-			DotLog.warn(CHANNEL, "a secret on the command line is refused", {
-				"flag": flag,
-				"why": "argv is readable by other processes; put it in cfg/server.yml",
-			})
 
 
 ## The owner's per-game settings from `cfg/server/content/overrides.yml` (cvars, metadata, player counts, maps), laid over each `game.yml` before any descriptor is read.
@@ -473,7 +477,7 @@ func _boot() -> bool:
 
 	# Before boot() too: the list rides the signon challenge, and the first client can
 	# arrive the moment the listener opens.
-	_advertise_addons()
+	addons.advertise()
 
 	# Before boot() for a second reason, the challenge: `DotServer` answers a connecting client with the strategy it wants by asking the registry for `dot_auth_server`,
 	# so one registered after the listener opens was reported to every client in flight as absent.
@@ -507,15 +511,7 @@ func _boot() -> bool:
 		})
 		return true
 
-	# The same alias the installer applied to TMC_GAMES (TmcGameRef.RETIRED_IDS): a panel whose
-	# TMC_GAME still says game-final-contact boots the game installed as game-fatal-contact.
-	var current := TmcGameRef.current_id(wanted)
-
-	if current != wanted.strip_edges() and content.find(wanted) == null:
-		DotLog.warn(CHANNEL, "TMC_GAME names a retired game id; loading the current one, change it", {
-			"retired": wanted, "loading": current,
-		})
-		wanted = current
+	wanted = _current_game_id(wanted)
 
 	if content.find(wanted) == null:
 		_die(
@@ -528,7 +524,7 @@ func _boot() -> bool:
 	# Connected before the first change, so the boot load and every later `changelevel` take exactly the same path:
 	# a separate "load the module for the game we booted into" step is a path only the first game ever takes.
 	server.games.game_loaded.connect(_on_game_loaded)
-	_wire_addon_announce()
+	addons.wire()
 
 	await _enroll_and_report()
 
@@ -548,6 +544,19 @@ func _boot() -> bool:
 
 	_install_services()
 	return true
+
+
+## [param wanted] under its current id: the same alias the installer applied to TMC_GAMES (TmcGameRef.RETIRED_IDS), so a panel whose TMC_GAME still says game-final-contact boots the game installed as game-fatal-contact.
+func _current_game_id(wanted: String) -> String:
+	var current := TmcGameRef.current_id(wanted)
+
+	if current != wanted.strip_edges() and content.find(wanted) == null:
+		DotLog.warn(CHANNEL, "TMC_GAME names a retired game id; loading the current one, change it", {
+			"retired": wanted, "loading": current,
+		})
+		wanted = current
+
+	return wanted
 
 
 ## The DotServer and its query host, added to the tree but not booted, with the YAML's console lines compiled for its startup.
@@ -782,222 +791,7 @@ func _on_enrolled_late(_token: String, listing_path: String) -> void:
 
 
 ## The addon refs this checkout installs. See setup.sh's "The addon lock".
-const ADDONS_LOCK := "res://addons.lock"
-
-
-## Tells every joining client which addon versions this server runs, so an addon release can skip the client build: an older shell fetches the newer addons as packs
-## (`modcommunity/dot-<name>@<version>`, the alias of `gamespice-platform/<name>`; [method TmcAddonNamespaces.announced_pack_for] says why), lays them over its own and restarts into them (dot-cloud's `DotCloudAddonSet`).
-## The lock, not a guess at the checkout: setup.sh puts every clone at the locked ref. `TMC_ADDONS_LOCK=off` advertises nothing, because then the lock is not true.
-func _advertise_addons() -> void:
-	if OS.get_environment("TMC_ADDONS_LOCK") == "off":
-		DotLog.info(CHANNEL, "addons are not at the lock (TMC_ADDONS_LOCK=off); none advertised")
-		return
-
-	# [b]A box runs the dot-server its lock names, which may predate the field.[/b] Assigning
-	# a property an older DotServer does not declare is a script error at boot, so the
-	# question is asked of the object rather than assumed.
-	if not ("addon_set" in server):
-		DotLog.info(CHANNEL, "this dot-server cannot announce addons; clients keep their own", {
-			"needs": "dot-server with DotServer.addon_set",
-		})
-		return
-
-	var dirs := DirAccess.get_directories_at("res://addons")
-	var announced := TmcAddonSet.addon_set_from(FileAccess.get_file_as_string(ADDONS_LOCK), dirs)
-	# An operator's `overlays:` ride beside the lock's; one for a dir the lock names replaces it.
-	var loaded := TmcAddonsConfig.load_from(_config_dir, _absolute(_data_dir))
-
-	if loaded.ok:
-		announced = TmcAddonSet.merge_overlays(announced, (loaded.value as TmcAddonsConfig).overlay_set())
-	else:
-		DotLog.warn(CHANNEL, "addons.yml overlays not announced: %s" % loaded.error.message)
-
-	# server.yml's `addons:` list: installed by setup.sh, announced here at the listed version (the lock's when it names none).
-	var spaces := TmcAddonNamespaces.resolve((loaded.value as TmcAddonsConfig).namespaces if loaded.ok else PackedStringArray())
-	var listed := TmcAddonSet.addons_from_list(config.addons_listed, spaces, FileAccess.get_file_as_string(ADDONS_LOCK), dirs)
-
-	for problem in listed["errors"]:
-		DotLog.error(CHANNEL, "server.yml addons: not announced: %s" % problem)
-		push_error("TMC: server.yml addons: %s" % problem)
-
-	announced = TmcAddonSet.merge_overlays(announced, listed["entries"])
-
-	_addon_announced = announced
-	_publish_addon_set()
-
-	DotLog.info(CHANNEL, "the addon versions clients are told about", {
-		"addons": announced.size(), "lock": ADDONS_LOCK, "announce": config.addons_announce,
-	})
-
-
-## Re-announces the addon set with the current game's download groups. After the module loads, because the module is what knows the game's weapons.
-## A failed or absent module names none, so clients take every group, which is always safe.
-func _advertise_addon_groups() -> void:
-	if server == null or not ("addon_set" in server) or _addon_announced.is_empty():
-		return
-
-	var raw: Variant = null
-	var module: Object = server.modules.get_module(_module_name) if _module_name != "" else null
-
-	if module != null and module.has_method("addon_groups"):
-		raw = module.call("addon_groups")
-
-	var groups := TmcAddonSet.sanitize_groups(raw)
-
-	if groups != _addon_groups:
-		_addon_groups = groups
-		DotLog.info(CHANNEL, "the download groups clients are told about", {
-			"module": _module_name, "groups": groups,
-		})
-
-	# Always, not only when the groups moved: under `addons_announce: game` the loaded game is what decides the set.
-	_publish_addon_set()
-
-
-## The entries clients are told about now. `all`: everything [method _advertise_addons] found. `game`: the framework's and what the current game needs,
-## plus the game a change is going to; the whole set while either game's needs are unknown (no requires.json read yet, or a game with no pack).
-func _announced_now() -> Array:
-	if config == null or config.addons_announce != TmcConfig.ADDONS_ANNOUNCE_GAME:
-		return _addon_announced
-
-	var games: Array = [server.games.current() if server.games != null else null]
-
-	if _change_to != null:
-		games.append(_change_to)
-
-	var needs: Array = []
-
-	for descriptor: Variant in games:
-		needs.append(_needs_of(descriptor))
-
-	return TmcAddonSet.scoped(_addon_announced, TmcAddonSet.union_needs(needs))
-
-
-## What a game's packs ask of the host's addons (`{dir: level}`, over its own pack and its dependencies), or null when not known: no game, a game with no
-## delivered pack, or a pack whose requires.json has not been read. A dependency without one adds nothing; the game's own pack is the one that must be known.
-func _needs_of(descriptor: DotGameDescriptor) -> Variant:
-	if descriptor == null:
-		return null
-
-	# The game manager's descriptor is the loaded one, whose content id may be empty; the content list's names the pack and its dependencies,
-	# as [method _publish_requires] reads them.
-	var listed: DotGameDescriptor = content.find(descriptor.game_id) if content != null else null
-	var source: DotGameDescriptor = listed if listed != null else descriptor
-	var id := source.effective_content_id().get_slice("@", 0)
-	var own: Variant = _pack_requires.get(id)
-
-	if not (own is Dictionary):
-		# A game inside the build (no pack mounted for it) runs on the build's addons and needs no game addon.
-		if not source.needs_delivered_content() and not _mounted_versions.has(id):
-			return {}
-
-		return null
-
-	var parts: Array = [own]
-
-	for key in source.dependencies + source.server_dependencies:
-		var needs: Variant = _pack_requires.get(String(key).get_slice("@", 0))
-
-		if needs is Dictionary:
-			parts.append(needs)
-
-	return TmcAddonSet.union_needs(parts)
-
-
-## Sets `server.addon_set` (what the next challenge carries) from [method _announced_now]; true when it changed.
-func _publish_addon_set() -> bool:
-	if server == null or not ("addon_set" in server) or _addon_announced.is_empty():
-		return false
-
-	var wanted := TmcAddonSet.with_groups(_announced_now(), _addon_groups)
-
-	if wanted == (server.get("addon_set") as Array):
-		return false
-
-	server.set("addon_set", wanted)
-
-	if config.addons_announce == TmcConfig.ADDONS_ANNOUNCE_GAME:
-		DotLog.info(CHANNEL, "the addons clients are told about (addons_announce: game)", {
-			"addons": wanted.size(), "of": _addon_announced.size(),
-			"game": server.games.current_content_id() if server.games != null else "",
-			"next": _change_to.content_id if _change_to != null else "",
-		})
-
-	return true
-
-
-## `addons_announce: game`: follows game changes so a client is told about the next game's addons before its content arrives. Nothing is wired under `all`.
-func _wire_addon_announce() -> void:
-	if config.addons_announce != TmcConfig.ADDONS_ANNOUNCE_GAME or not ("addon_set" in server):
-		return
-
-	# Send-only here; the shell registers the handler. A shell that does not know it is not sent it (DotEnvelope).
-	server.envelope.register(TmcAddonGroups.ANNOUNCE_KIND)
-	server.game_changing.connect(_on_game_changing)
-	server.games.game_load_failed.connect(_on_game_load_failed)
-	server.client_state_changed.connect(func(session: DotClientSession) -> void:
-		# The first state a session reports follows its challenge, which carried the set as it is now.
-		if session != null and not _addons_told.has(session.peer_id):
-			_addons_told[session.peer_id] = (server.get("addon_set") as Array).duplicate(true)
-	)
-	server.client_disconnected.connect(func(session: DotClientSession, _reason: String) -> void:
-		if session != null:
-			_addons_told.erase(session.peer_id)
-	)
-
-
-func _on_game_changing(_from_key: String, _to_key: String) -> void:
-	_change_to = server.games.pending()
-	_announce_change()
-
-
-func _on_game_load_failed(_content_key: String, _error: DotError) -> void:
-	_change_to = null
-	_publish_addon_set()
-
-
-## Announces the current and next games' addons, and tells every client in the game that lacks some of them ([constant TmcAddonGroups.ANNOUNCE_KIND]), before
-## the change sends its content: the shell fetches them, mounts them in place where it can (restarts where it cannot) and rejoins into the new game.
-## Run at `game_changing` and again as each pack of the change mounts here, because the next game's requires.json is only read when its pack is.
-## A client too old for the kind that lacks an addon is kicked, loudly, rather than left to fail loading a game whose scripts it cannot compile; its rejoin
-## gets the new set in the challenge.
-func _announce_change() -> void:
-	if _change_to == null:
-		return
-
-	# Not known until its pack mounts here: announcing the whole set meanwhile would send every client every addon. Its content_ready runs this again;
-	# a pack that mounted with no requires.json stays unknown, and then the whole set is the safe answer.
-	if _needs_of(_change_to) == null and not _mounted_versions.has(_change_to.effective_content_id().get_slice("@", 0)):
-		return
-
-	if not _publish_addon_set():
-		return
-
-	var wanted: Array = server.get("addon_set")
-
-	for session in server.sessions():
-		if session == null or not session.is_active():
-			continue
-
-		var missing := TmcAddonSet.added(_addons_told.get(session.peer_id, []), wanted)
-
-		if missing.is_empty():
-			continue
-
-		var dirs := PackedStringArray()
-
-		for entry: Dictionary in missing:
-			dirs.append(str(entry.get("dir", "")))
-
-		if server.send_kind(session.peer_id, TmcAddonGroups.ANNOUNCE_KIND, {"addons": wanted, "game": _change_to.content_key()}):
-			_addons_told[session.peer_id] = wanted.duplicate(true)
-			DotLog.info(CHANNEL, "told a client the next game's addons", {"user": session.label(), "addons": dirs})
-			continue
-
-		DotLog.warn(CHANNEL, "a client too old to be told the next game's addons is sent to rejoin", {
-			"user": session.label(), "addons": dirs,
-		})
-		server.kick(session, "The next game needs addons this client has not got. Rejoin to download them.")
+const ADDONS_LOCK := TmcAddonAnnounce.ADDONS_LOCK
 
 
 ## Reports `sv_web_build`: the shell build this server's players are pinned to. EMPTY by default, which means the site's newest compatible shell, with no restart needed to move.
@@ -1102,7 +896,7 @@ func _publish_pack_pins() -> void:
 		return
 
 	# Every installed addon, not only the ones announced now: under `addons_announce: game` a vote can move to any game, and the sweep must spare its addons.
-	var announced: Variant = _addon_announced if not _addon_announced.is_empty() else server.get("addon_set")
+	var announced: Variant = addons.announced_set if not addons.announced_set.is_empty() else server.get("addon_set")
 	cvar.set_value(TmcAddonSet.pack_pins_json(announced if announced is Array else [], _mounted_versions))
 
 
@@ -1347,8 +1141,8 @@ func _on_content_ready(manifest: DotCloudManifest, mount_prefix: String) -> void
 	_mounted_versions[manifest.content_id] = manifest.version
 
 	# A change's pack, mounted here before its content is sent to clients: now its needs are known.
-	if _change_to != null:
-		_announce_change()
+	if addons.change_to != null:
+		addons.announce_change()
 	_publish_pack_pins()
 
 	DotLog.info(CHANNEL, "content ready", {
@@ -1361,9 +1155,9 @@ func _on_game_loaded(_content_key: String) -> void:
 	if server == null or server.games == null:
 		return
 
-	_change_to = null
+	addons.change_to = null
 	await _load_game_module()
-	_advertise_addon_groups()
+	addons.advertise_groups()
 	_attach_addon_entries()
 	_publish_requires()
 	_report_behind_game(server.games.current_content_id())

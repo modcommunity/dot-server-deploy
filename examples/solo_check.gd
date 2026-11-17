@@ -525,34 +525,10 @@ func _test_overlay_in_place() -> void:
 		DirAccess.remove_absolute(path)
 	var setting_before: Variant = ProjectSettings.get_setting(setting, "")
 
-	# The overlay as DotCloudAddonSet assembles it: the addon's files and the build's class list with its class added.
-	var scratch := DotCloudAddonSet.DIR.path_join("solo_check_scratch")
-	DotPaths.ensure_dir(scratch)
-	var scripts := {
-		root.path_join("solo_check_overlay_probe.gd"): "class_name SoloCheckOverlayProbe\nextends RefCounted\n\nfunc answer() -> int:\n\treturn 42\n",
-		root.path_join("user.gd"): "extends RefCounted\n\nfunc answer() -> int:\n\treturn SoloCheckOverlayProbe.new().answer()\n",
-	}
-	var packer := PCKPacker.new()
-	var pack := DotCloudAddonSet.DIR.path_join("solo_check_overlay.pck")
-	packer.pck_start(pack)
-	var files := {root.path_join("plugin.cfg"): "[plugin]\nname=\"solo_check_overlay\"\n"}
-	files.merge(scripts)
-	var n := 0
-	for target: String in files:
-		var source := scratch.path_join("f%d" % n)
-		n += 1
-		DotPaths.write_text(source, str(files[target]), false)
-		packer.add_file(target, source)
-	DotCloudAddonSet._write_class_cache(scripts, PackedStringArray([root]), scratch)
-	packer.add_file(DotCloudScriptClass.CACHE_PATH, scratch.path_join("global_script_class_cache.cfg"))
-	packer.flush(false)
-
-	var plan := {
-		"format": DotCloudAddonSet.FORMAT, "build": DotCloudAddonSet.build_fingerprint(), "pack": pack,
-		"addons": {dir: {"repo": dir, "version": "0.0.1"}}, "uids": [], "probes": {},
-		"state": DotCloudAddonSet.STATE_READY, "resume": {"solo": "gamemann/game-playlot"},
-	}
-	DotCloudAddonSet.write_plan(plan)
+	var built := _build_probe_overlay(dir, root)
+	var plan: Dictionary = built["plan"]
+	var pack: String = built["pack"]
+	var scratch: String = built["scratch"]
 
 	var shell: Node = (load("res://client/shell.gd") as GDScript).new()
 	var restarted := [false]
@@ -600,6 +576,39 @@ func _test_overlay_in_place() -> void:
 	DotPaths.remove_tree(scratch)
 	DirAccess.remove_absolute(pack)
 	_done()
+
+
+## A pack as DotCloudAddonSet assembles it (an addon's files and the build's class list with its class added), with the READY plan that names it. Returns {plan, pack, scratch}.
+func _build_probe_overlay(dir: String, root: String) -> Dictionary:
+	# The overlay as DotCloudAddonSet assembles it: the addon's files and the build's class list with its class added.
+	var scratch := DotCloudAddonSet.DIR.path_join("solo_check_scratch")
+	DotPaths.ensure_dir(scratch)
+	var scripts := {
+		root.path_join("solo_check_overlay_probe.gd"): "class_name SoloCheckOverlayProbe\nextends RefCounted\n\nfunc answer() -> int:\n\treturn 42\n",
+		root.path_join("user.gd"): "extends RefCounted\n\nfunc answer() -> int:\n\treturn SoloCheckOverlayProbe.new().answer()\n",
+	}
+	var packer := PCKPacker.new()
+	var pack := DotCloudAddonSet.DIR.path_join("solo_check_overlay.pck")
+	packer.pck_start(pack)
+	var files := {root.path_join("plugin.cfg"): "[plugin]\nname=\"solo_check_overlay\"\n"}
+	files.merge(scripts)
+	var n := 0
+	for target: String in files:
+		var source := scratch.path_join("f%d" % n)
+		n += 1
+		DotPaths.write_text(source, str(files[target]), false)
+		packer.add_file(target, source)
+	DotCloudAddonSet._write_class_cache(scripts, PackedStringArray([root]), scratch)
+	packer.add_file(DotCloudScriptClass.CACHE_PATH, scratch.path_join("global_script_class_cache.cfg"))
+	packer.flush(false)
+
+	var plan := {
+		"format": DotCloudAddonSet.FORMAT, "build": DotCloudAddonSet.build_fingerprint(), "pack": pack,
+		"addons": {dir: {"repo": dir, "version": "0.0.1"}}, "uids": [], "probes": {},
+		"state": DotCloudAddonSet.STATE_READY, "resume": {"solo": "gamemann/game-playlot"},
+	}
+	DotCloudAddonSet.write_plan(plan)
+	return {"plan": plan, "pack": pack, "scratch": scratch}
 
 
 func _section(title: String) -> void:

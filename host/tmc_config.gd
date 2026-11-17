@@ -855,27 +855,37 @@ func _load_aliases(path: String) -> DotResult:
 	return DotResult.success(null)
 
 
+## The setting [param name] stands for: itself, or what its alias targets. Empty when the entry is to be skipped: an alias whose target has arguments, or one whose canonical key was already written.
+func _canonical_setting(file: String, name: String, value: Variant) -> String:
+	if not aliases.has(name):
+		_written_keys[name] = value
+		return name
+
+	var target := String((aliases[name] as Dictionary)["target"]).strip_edges()
+
+	if target.contains(" "):
+		unknown.append("%s: %s is an alias of `%s`, which has arguments, so it cannot be a setting" % [file, name, target])
+		return ""
+
+	if _written_keys.has(target):
+		# Silent when the two agree; the canonical key wins when they do not, and that is worth one line.
+		if str(_written_keys[target]) != str(value):
+			DotLog.warn(CHANNEL, "%s: `%s` and its alias disagree (%s vs %s); `%s` wins" % [file, target, str(_written_keys[target]), str(value), target])
+		return ""
+
+	return target
+
+
 ## `server.yml` and `net.yml`: flat keys, three possible destinations.
 func _apply_settings(file: String, tree: Dictionary) -> DotResult:
 	for key in tree.keys():
 		var name := String(key)
 		var value: Variant = tree[key]
 
-		var via_alias := false
-		if aliases.has(name):
-			var target := String((aliases[name] as Dictionary)["target"]).strip_edges()
-			if target.contains(" "):
-				unknown.append("%s: %s is an alias of `%s`, which has arguments, so it cannot be a setting" % [file, name, target])
-				continue
-			name = target
-			via_alias = true
-		if via_alias and _written_keys.has(name):
-			# Silent when the two agree; the canonical key wins when they do not, and that is worth one line.
-			if str(_written_keys[name]) != str(value):
-				DotLog.warn(CHANNEL, "%s: `%s` and its alias disagree (%s vs %s); `%s` wins" % [file, name, str(_written_keys[name]), str(value), name])
+		name = _canonical_setting(file, name, value)
+
+		if name == "":
 			continue
-		if not via_alias:
-			_written_keys[name] = value
 
 		if value is Dictionary or value is Array and name not in [
 			"sv_tags", "rcon_allowed", "chat_command_prefixes"
@@ -909,15 +919,15 @@ func _apply_settings(file: String, tree: Dictionary) -> DotResult:
 			continue
 
 		if name == "games":
-			_apply_games(file, value)
+			TmcConfigLists.apply_games(self, file, value)
 			continue
 
 		if name == "addons":
-			_apply_addons(file, value)
+			TmcConfigLists.apply_addons(self, file, value)
 			continue
 
 		if name == "content_urls":
-			_apply_content_urls(file, value)
+			TmcConfigLists.apply_content_urls(self, file, value)
 			continue
 
 		if name == "sv_query_app":
@@ -944,7 +954,7 @@ func _apply_settings(file: String, tree: Dictionary) -> DotResult:
 			continue
 
 		if name == "log_router":
-			_apply_log_router(file, value)
+			TmcConfigLists.apply_log_router(self, file, value)
 			continue
 
 		if TmcConfigKeys.LOG_KEYS.has(name):
@@ -988,92 +998,6 @@ func _apply_settings(file: String, tree: Dictionary) -> DotResult:
 		console_lines.append(_console_line(name, value))
 
 	return DotResult.success(null)
-
-
-## `games`: the directories a host offers, deduplicated.
-func _apply_games(file: String, value: Variant) -> void:
-	# A list, or one string, as `content_urls` below takes either (`games: fatalcontact` is what an operator with one game writes).
-	# Not a console line: dot-server has no cvar for the set of games a host offers; `sv_game` picks one OF these, so the two spellings are deliberately unalike.
-	# Each entry through TmcGameRef, as the command-line override is, so `gamemann/game-g2gfast01@1.2.0` in a file means the same directory as in a panel field.
-	# A game listed twice is one game: kept once, and ONE warning naming every repeat, never an error (a panel's list is edited by hand and copied around).
-	var repeats := PackedStringArray()
-	var entries: Array = (value as Array) if value is Array else [value]
-	for entry in entries:
-		for dir_name in TmcGameRef.dirs_in(String(entry)):
-			if dir_name in games_allow:
-				if not dir_name in repeats:
-					repeats.append(dir_name)
-			else:
-				games_allow.append(dir_name)
-
-	if not repeats.is_empty():
-		DotLog.warn(CHANNEL, "%s: games lists %s more than once; keeping one of each" % [file, ", ".join(repeats)])
-
-
-## `addons`: the addon entries the operator listed, each checked on read.
-func _apply_addons(file: String, value: Variant) -> void:
-	# A list, or one string. Every entry is checked now, against the first-party owners; an owner the operator trusts through `namespaces:` in cfg/content/addons.yml is rechecked by the host, which reads that file.
-	var raw_entries: Array = (value as Array) if value is Array else [value]
-
-	for entry in raw_entries:
-		var text := String(entry).strip_edges()
-
-		if text == "":
-			continue
-
-		var known := TmcAddonsConfig.parse_entry(text)
-
-		if not known.ok:
-			unknown.append("%s: addons: %s" % [file, known.error.message])
-		elif not addons_listed.has(str(known.value)):
-			addons_listed.append(str(known.value))
-
-
-## `content_urls`: where the server (and, through it, the clients) fetch content from.
-func _apply_content_urls(file: String, value: Variant) -> void:
-	# A list, or one string for the common case of a single origin. Not passed
-	# through as a console line: this is dot-cloud's, and dot-server's console
-	# has no cvar for it.
-	if value is Array:
-		for entry in (value as Array):
-			var url := String(entry).strip_edges()
-			if url != "":
-				content_urls.append(url)
-	else:
-		var one := String(value).strip_edges()
-		if one != "":
-			content_urls.append(one)
-
-	# The same list to the clients, from the same line of YAML: the server downloads maps from these and the client must download them from somewhere, and a shipped build can only guess its page's origin, wrong for every CDN.
-	# Assigned only if this dot-server has the property: addons are separately cloned, so pulling one and not another is ordinary, and assigning a missing property is a FATAL script error
-	# that aborts `_apply_settings` mid-way and returns null into a caller that reads `.ok` off it. (A key from a NEWER file than the code is the opposite skew: never fatal.)
-	if "content_base_urls" in server:
-		server.content_base_urls = content_urls
-	else:
-		unknown.append(
-			"%s: content_urls was read, but this dot-server has no " % file
-			+ "content_base_urls to put it in -- clients will not be told "
-			+ "where the content is. Update the dot-server addon."
-		)
-
-
-## `log_router`: auto, on or off.
-func _apply_log_router(file: String, value: Variant) -> void:
-	# A bool is accepted because `on` and `off` ARE bools in this dialect (`TmcYaml` reads `on`/`yes`/`true` as true), and `log_router: on` is the natural spelling;
-	# reading only the three words would report it as an unknown key and leave the default in force.
-	var mode := ""
-
-	if value is bool:
-		mode = "on" if bool(value) else "off"
-	else:
-		mode = String(value).strip_edges().to_lower()
-
-	if mode not in ["auto", "on", "off"]:
-		unknown.append(
-			"%s: log_router must be auto, on or off (got '%s')" % [file, mode]
-		)
-	else:
-		log_router = mode
 
 
 ## The sink layer this configuration describes, or null when it is switched off (the server then makes its own [code]DotLogSink[/code]).
