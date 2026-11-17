@@ -348,9 +348,13 @@
    * `?threads=0` forces the single-threaded one. web/README.md, "Threads".
    */
   var ENGINE_MT = /*ENGINE_MT*/null;
-  // A dlink build (NATIVE MODULES below) has no threaded twin: its pck needs the dlink engine.
-  var threaded = !!ENGINE_MT && !/*GDEXTENSION_LIBS*/[].length && self.crossOriginIsolated === true &&
-    typeof SharedArrayBuffer === "function" &&
+  // A dlink build (NATIVE MODULES below) has a threaded twin only when every side module has a
+  // pthread build (export-web lists them over GDEXTENSION_LIBS_MT): the threaded engine has shared
+  // memory and cannot link a single-threaded module. index-mt is then the dlink threads engine.
+  var NATIVE_LIBS = /*GDEXTENSION_LIBS*/[];
+  var NATIVE_LIBS_MT = /*GDEXTENSION_LIBS_MT*/[];
+  var threaded = !!ENGINE_MT && NATIVE_LIBS_MT.length === NATIVE_LIBS.length &&
+    self.crossOriginIsolated === true && typeof SharedArrayBuffer === "function" &&
     new URLSearchParams(location.search).get("threads") !== "0";
   // Read by the browser checks (tools/browser_check.mjs) and by anybody asking "which one?".
   window.__TMC_ENGINE__ = threaded ? "threads" : "single";
@@ -364,11 +368,12 @@
    * stays unloaded, and every module runs its GDScript twin (same bytes, slower). A start
    * that fails while they are on (a rejected start, or a side module that 404s or does not
    * compile; see nativeFailure below) is retried once that way, so a side module that does
-   * not load costs speed, not the game. window.__TMC_NATIVES__ says which one is running.
+   * not load costs speed, not the game. A threaded native start that fails is first retried
+   * single-threaded (?threads=0) with the same modules, then without them.
+   * window.__TMC_NATIVES__ says which one is running.
    */
-  var NATIVE_LIBS = /*GDEXTENSION_LIBS*/[];
   var nativesOff = new URLSearchParams(location.search).get("natives") === "0";
-  var nativeLibs = nativesOff ? [] : NATIVE_LIBS;
+  var nativeLibs = nativesOff ? [] : (threaded ? NATIVE_LIBS_MT : NATIVE_LIBS);
   window.__TMC_NATIVES__ = nativeLibs.length ? "native" : "script";
 
   var config = {
@@ -447,14 +452,20 @@
   });
   }
 
-  // Once, and only from a start that had native modules: ?natives=0 is the fallback.
+  // Once per step, and only from a start that had native modules: a threaded one goes to
+  // ?threads=0 (the single-threaded engine and its modules), a single-threaded one to ?natives=0.
   var started = false, retrying = false;
   function fallBack(error) {
     if (!nativeLibs.length || retrying) return false;
     retrying = true;
-    console.error("start failed with native modules (" + nativeLibs.join(", ") + "); retrying without them: " + error);
     var url = new URL(location.href);
-    url.searchParams.set("natives", "0");
+    if (threaded) {
+      console.error("threaded start failed with native modules (" + nativeLibs.join(", ") + "); retrying single-threaded: " + error);
+      url.searchParams.set("threads", "0");
+    } else {
+      console.error("start failed with native modules (" + nativeLibs.join(", ") + "); retrying without them: " + error);
+      url.searchParams.set("natives", "0");
+    }
     location.replace(url.href);
     return true;
   }

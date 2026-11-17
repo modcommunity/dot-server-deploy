@@ -315,6 +315,8 @@ engine_mt=0
 if [ -f "$work/build/index-mt.wasm" ] && grep -q '"index-mt";' "$work/build/embed.html" 2>/dev/null; then
     engine_mt=1
     ENGINE_FILES+=("${ENGINE_MT_FILES[@]}")
+    # The dlink threads twin's engine side module, fetched at <executable>.side.wasm like index.side.wasm.
+    [ -f "$work/build/index-mt.side.wasm" ] && ENGINE_FILES+=(index-mt.side.wasm)
 fi
 # A dlink build (dot-sim native on the web) adds the engine's side module: Godot fetches it
 # at <executable>.side.wasm, so it must sit beside the shared index.wasm. Its own natives
@@ -329,9 +331,10 @@ fi
 if [ -n "$engine_hash" ]; then
     eng="../engine/$engine_hash/index"
     sed -i -e "s#^\( *\)executable: \"index\",#\1executable: \"$eng\", mainPack: \"index.pck\",#" \
-        -e "s#\"index.wasm\":#\"$eng.wasm\":#" "$work/build/embed.html"
+        -e "s#\"index.wasm\":#\"$eng.wasm\":#" -e "s#\"index.side.wasm\":#\"$eng.side.wasm\":#" "$work/build/embed.html"
     if [ "$engine_mt" = 1 ]; then
-        sed -i -e "s#\"index-mt\";#\"$eng-mt\";#" -e "s#\"index-mt.wasm\":#\"$eng-mt.wasm\":#" "$work/build/embed.html"
+        sed -i -e "s#\"index-mt\";#\"$eng-mt\";#" -e "s#\"index-mt.wasm\":#\"$eng-mt.wasm\":#" \
+            -e "s#\"index-mt.side.wasm\":#\"$eng-mt.side.wasm\":#" "$work/build/embed.html"
     fi
     echo "engine  game/$APP/engine/$engine_hash/ (shared by every build with this template)"
     if [ "$DRY" = 0 ] && [ -n "$API" ]; then

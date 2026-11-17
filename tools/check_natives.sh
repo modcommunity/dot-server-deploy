@@ -29,6 +29,15 @@ grep -q 'addEventListener("unhandledrejection"' web/embed.html && grep -q 'nativ
 t "a side module that 404s or does not compile falls back to ?natives=0 (not only a rejected start)" $?
 grep -q 'ENGINE_FILES+=(index.side.wasm)' tools/publish-web-shell.sh
 t "publish-web-shell ships index.side.wasm beside the shared engine" $?
+# The dlink threads twin: dot-sim's pthread side module (web-wasm32-threads) on the dlink
+# threads engine, picked only where every module has one; a failed threaded start goes ?threads=0.
+grep -q 'fetch-natives.sh" --platform web-wasm32-threads' tools/server.in && grep -q 'web_dlink_release.zip' tools/server.in \
+    && grep -q 'GDEXTENSION_LIBS_MT' tools/server.in
+t "export-web installs the dlink threads twin with dot-sim's pthread side module" $?
+grep -q 'NATIVE_LIBS_MT.length === NATIVE_LIBS.length' web/embed.html && grep -q 'searchParams.set("threads", "0")' web/embed.html
+t "embed.html runs threaded natives only with every pthread module, falls back to ?threads=0" $?
+grep -q 'ENGINE_FILES+=(index-mt.side.wasm)' tools/publish-web-shell.sh
+t "publish-web-shell ships index-mt.side.wasm beside the shared engine" $?
 grep -q 'web_dlink_nothreads_release.zip' tools/fetch-export-templates.sh
 t "fetch-export-templates installs the dlink template" $?
 grep -qP '^dot-sim\tv' addons.lock;                      t "addons.lock pins dot-sim" $?
