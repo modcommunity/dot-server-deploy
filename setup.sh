@@ -117,6 +117,34 @@ export GIT_TERMINAL_PROMPT=0
 export GIT_ASKPASS="${GIT_ASKPASS:-/bin/echo}"
 export GIT_SSH_COMMAND="${GIT_SSH_COMMAND:-ssh -oBatchMode=yes -oStrictHostKeyChecking=accept-new}"
 
+# [b]Nor may one sit on a dead connection for ever.[/b] An egg install died this way: the
+# fc-weapons clone stopped at 53 MB with the socket still open, git waited, and the
+# install never finished. Below GIT_HTTP_LOW_SPEED_LIMIT bytes a second for
+# GIT_HTTP_LOW_SPEED_TIME seconds git gives up, and the clone is tried again
+# (TMC_GIT_CLONE_TRIES times in all, 0 = until it works). Either speed setting 0 turns
+# the stall check off; both are git's own variables, so a value set outside wins.
+export GIT_HTTP_LOW_SPEED_LIMIT="${GIT_HTTP_LOW_SPEED_LIMIT:-1000}"
+export GIT_HTTP_LOW_SPEED_TIME="${GIT_HTTP_LOW_SPEED_TIME:-60}"
+TMC_GIT_CLONE_TRIES="${TMC_GIT_CLONE_TRIES:-3}"
+case "$TMC_GIT_CLONE_TRIES" in
+    ''|*[!0-9]*) echo "setup.sh: TMC_GIT_CLONE_TRIES must be a whole number (0 = until it works), not '$TMC_GIT_CLONE_TRIES'" >&2; exit 2 ;;
+esac
+
+# One clone, tried again after a stall or a dropped connection. A partial directory is
+# removed between tries: git refuses to clone into one that is not empty.
+clone_retry() {
+    local dest="${*: -1}" try=1
+    while :; do
+        git clone "$@" && return 0
+        rm -rf -- "$dest"
+        if [ "$TMC_GIT_CLONE_TRIES" != "0" ] && [ "$try" -ge "$TMC_GIT_CLONE_TRIES" ]; then
+            return 1
+        fi
+        try=$((try + 1))
+        sleep 2
+    done
+}
+
 GODOT_ARG=""
 DO_IMPORT=1
 # A box with no network, or a policy that says binaries arrive one way and it is not
@@ -1097,7 +1125,7 @@ clone_repos() {
             at=(--branch "$ref")
         fi
 
-        if git clone --quiet "${depth[@]}" "${at[@]}" "$(repo_url "$repo")" "$dest/$repo" 2>/dev/null; then
+        if clone_retry --quiet "${depth[@]}" "${at[@]}" "$(repo_url "$repo")" "$dest/$repo" 2>/dev/null; then
             printf '    %s+%s    %s%s\n' "$GRN" "$OFF" "$repo" "${ref:+ @ $ref}"
         else
             # Collected rather than fatal. One repository that is not published yet --

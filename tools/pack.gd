@@ -406,7 +406,7 @@ static func derive_requires(source: String, out_path: String, pins: Dictionary =
 static func pinned_levels() -> Dictionary:
 	var here := ProjectSettings.globalize_path("res://")
 	var lock := here.path_join("addons.lock")
-	var roots: Array[String] = [DotConfig.gs_env("DOT_REPOS_ROOT"), here.path_join("..").simplify_path(), OS.get_environment("TMC_REPOS_DIR"), OS.get_environment("HOME").path_join("godot")]
+	var roots: Array[String] = [_gs_env("DOT_REPOS_ROOT"), here.path_join("..").simplify_path(), OS.get_environment("TMC_REPOS_DIR"), OS.get_environment("HOME").path_join("godot")]
 	var out := {}
 	for root in roots:
 		if root == "":
@@ -809,3 +809,13 @@ func _options() -> Dictionary:
 			i += 1
 
 	return out
+
+
+## [param name] (a DOT_ name) read as its GS_ spelling first, then as itself: what DotConfig.gs_env does,
+## written out because the dot-core addons.lock pins predates gs_env and a call to it does not compile there.
+static func _gs_env(name: String) -> String:
+	if name.begins_with("DOT_"):
+		var gs := "GS_" + name.substr(4)
+		if OS.has_environment(gs):
+			return OS.get_environment(gs)
+	return OS.get_environment(name)

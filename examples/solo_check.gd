@@ -389,7 +389,7 @@ func _names(repo: String) -> PackedStringArray:
 	var out := PackedStringArray([repo])
 	var tsv := ProjectSettings.globalize_path("res://").path_join("../dot-bootstrap/projects.tsv").simplify_path()
 	# A worktree under ~/wt has no sibling dot-bootstrap; tools/check.sh exports where it is.
-	var boot := DotConfig.gs_env("DOT_BOOTSTRAP")
+	var boot := _gs_env("DOT_BOOTSTRAP")
 	if not FileAccess.file_exists(tsv) and boot != "":
 		tsv = boot.path_join("projects.tsv")
 	if not FileAccess.file_exists(tsv) and _checkout_parent() != "":
@@ -606,3 +606,13 @@ func _check(ok: bool, what: String, detail: String = "") -> bool:
 		print("  FAIL  %s%s" % [what, ("\n        " + detail.replace("\n", "\n        ")) if detail != "" else ""])
 		_failures.append(what)
 	return ok
+
+
+## [param name] (a DOT_ name) read as its GS_ spelling first, then as itself: what DotConfig.gs_env does,
+## written out because the dot-core addons.lock pins predates gs_env and a call to it does not compile there.
+static func _gs_env(name: String) -> String:
+	if name.begins_with("DOT_"):
+		var gs := "GS_" + name.substr(4)
+		if OS.has_environment(gs):
+			return OS.get_environment(gs)
+	return OS.get_environment(name)

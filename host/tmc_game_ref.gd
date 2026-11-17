@@ -20,6 +20,12 @@ const RETIRED_IDS := {
 	"gamemann/game-g2gfast01": "gamemann/game-airdrift",
 	"gamemann/game-playground": "gamemann/game-playlot",
 	"gamemann/playground-maps": "gamemann/playlot-maps",
+	# PLAYLOT's published game.yml still names its maps by this id; the CDN moved it to playlot-maps.
+	"gamemann/game-playground-maps": "gamemann/playlot-maps",
+	# Published as game-deathrun now; the CDN's mg-deathrun says moved_to, and a server.yml that names it got "not installed".
+	"gamemann/mg-deathrun": "gamemann/game-deathrun",
+	# Never published under this name (the repository is mg-buses-from-hell), but a live server.yml says it.
+	"gamemann/mg-buses-of-hell": "gamemann/mg-buses-from-hell",
 }
 
 

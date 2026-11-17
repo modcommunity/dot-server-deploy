@@ -52,7 +52,7 @@ static func apply(auth_path: String) -> String:
 	var query := DotWeb.query_param("backbone") if DotPlatform.is_web() else ""
 	var url := resolve(
 		FileAccess.get_file_as_string(auth_path),
-		DotConfig.gs_env(ENV_KEY),
+		_gs_env(ENV_KEY),
 		OS.get_cmdline_user_args(),
 		query
 	)
@@ -63,3 +63,13 @@ static func apply(auth_path: String) -> String:
 		DotLog.info("tmc.shell", "server browsers list the site from client/auth.json", {"site": url})
 
 	return url
+
+
+## [param name] (a DOT_ name) read as its GS_ spelling first, then as itself: what DotConfig.gs_env does,
+## written out because the dot-core addons.lock pins predates gs_env and a call to it does not compile there.
+static func _gs_env(name: String) -> String:
+	if name.begins_with("DOT_"):
+		var gs := "GS_" + name.substr(4)
+		if OS.has_environment(gs):
+			return OS.get_environment(gs)
+	return OS.get_environment(name)
