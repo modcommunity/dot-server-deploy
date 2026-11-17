@@ -11,12 +11,16 @@
 # of converted geometry published as one pack per map, so a player downloads the map the
 # server is on rather than every map it could be on. `pack.json` excludes the directory.
 #
-# THE SCENE IS ALMOST EMPTY, ON PURPOSE. res://scenes/g2g_server.tscn is a G2GGame
-# under a plain Node, and G2GGame registers itself under `g2g_game` in _ready() --
-# which is what g2g_module.gd looks it up by. Nothing else is configured there:
-# the operator's surface is the cvars below and the movement cvars the module
-# registers, layered under G2G_* and --g2g-* like every DotConfig in the family. A
-# scene full of defaults would be a fourth copy of them.
+# THE SCENE IS ALMOST EMPTY, ON PURPOSE. res://scenes/airdrift_server.tscn is an AirdriftGame
+# under a plain Node, and AirdriftGame registers itself under `g2g_game` (a registry key that
+# keeps the old Airdrift name) in _ready() -- which is what airdrift_module.gd looks it up by.
+# Nothing else is configured there: the operator's surface is the cvars below and the movement
+# cvars the module registers, layered under AIRDRIFT_* and --airdrift-* (the old-name prefixes
+# are still read) like every DotConfig in the family. A scene full of defaults would be a
+# fourth copy of them.
+#
+# The pack published before the rename carries the old paths and its own game.yml naming
+# them; game-airdrift keeps shims at the old paths for it.
 #
 # NOT TWO GAME IDS. Hungry is here twice because its two modes are two presets of
 # one world. Bhop and surf are not modes -- they are the same game on different
@@ -30,9 +34,9 @@ version: 0.1.0
 kind: pack
 max_players: 32
 
-scene: scenes/g2g_server.tscn
-client_scene: game/g2g.tscn
-module: game/g2g_module.gd
+scene: scenes/airdrift_server.tscn
+client_scene: game/airdrift.tscn
+module: game/airdrift_module.gd
 
 # Set when this game is loaded, and only while it is loaded. These are the module's
 # own cvars in the genre's units, which is the whole point of them: an operator who
@@ -126,7 +130,7 @@ cvars:
 
 # The MAP vote inside this game — what the players pick between when a map ends, and
 # whether they may extend the one they are on. Its defaults are in the game's own
-# game/g2g_vote.gd; anything written here overrides them, and the server's own
+# game/airdrift_vote.gd; anything written here overrides them, and the server's own
 # user://cfg/g2gfast_vote.json, DOT_VOTE_* and --vote-* override this. Keyed exactly as
 # dot-vote's DotVoteRules, enums by name.
 #

@@ -35,7 +35,7 @@ func _init() -> void:
 		ProjectSettings.globalize_path("res://dist")
 	])
 	cloud.manifest_url_template = "{base}/{id}/manifest.json"
-	# `register_service` is the default and is what `G2GGame.ensure_map_content` finds it by --
+	# `register_service` is the default and is what `AirdriftGame.ensure_map_content` finds it by --
 	# `DotCloudClient.SERVICE`, which is what every other duck-typed consumer in the family looks
 	# under.
 	root.add_child(cloud)
@@ -62,22 +62,22 @@ func _init() -> void:
 	var prefix := DotCloudClient.mount_prefix_for(&"g2gfast", version)
 	print("mounted at %s" % prefix)
 
-	var G2GGame: GDScript = load(prefix.path_join("game/g2g_game.gd"))
-	var G2GConfig: GDScript = load(prefix.path_join("game/g2g_config.gd"))
+	var AirdriftGame: GDScript = _load_first(prefix, ["game/airdrift_game.gd", "game/g2g_game.gd"])
+	var AirdriftConfig: GDScript = _load_first(prefix, ["game/airdrift_config.gd", "game/g2g_config.gd"])
 
-	if G2GGame == null or G2GConfig == null:
+	if AirdriftGame == null or AirdriftConfig == null:
 		print("  [FAIL] the pack mounted but its scripts did not load")
 		quit(1)
 		return
 
 	print("-- building the game")
 
-	# Typed Node rather than inferred: `G2GGame` is a GDScript loaded at runtime, so
+	# Typed Node rather than inferred: `AirdriftGame` is a GDScript loaded at runtime, so
 	# `new()` is a Variant and inference on one is an error under this project's warning
-	# settings. A G2GGame IS a Node, which is all this probe touches it as.
-	var game: Node = G2GGame.new()
+	# settings. An AirdriftGame IS a Node, which is all this probe touches it as.
+	var game: Node = AirdriftGame.new()
 	game.name = "Game"
-	game.config = G2GConfig.new()
+	game.config = AirdriftConfig.new()
 	game.config.authoritative = false
 	game.config.initial_map = &""
 	root.add_child(game)
@@ -239,6 +239,16 @@ func _published_ids() -> PackedStringArray:
 
 	out.sort()
 	return out
+
+
+## The first of [param paths] (relative to the mount [param prefix]) that the mounted pack has, loaded.
+## The new Airdrift file names come first; a pack published before the rename has only the old ones.
+func _load_first(prefix: String, paths: Array) -> GDScript:
+	for rel: String in paths:
+		var path := prefix.path_join(rel)
+		if ResourceLoader.exists(path):
+			return load(path) as GDScript
+	return null
 
 
 ## The two duck-typed shapes `DotMapCommands` binds against, in the smallest form that

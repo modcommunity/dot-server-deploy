@@ -15,10 +15,14 @@
 # catalogue needed nothing doing to it. A second pack could add to it without touching
 # this one.
 #
-# THE SCENE IS ALMOST EMPTY, ON PURPOSE. res://scenes/pg_server.tscn is a Playground
-# under a plain Node, and Playground registers itself under `playground` in _ready() --
-# which is what playground_module.gd looks it up by. The operator's surface is the cvars
-# below and the layered PlaygroundConfig, like every DotConfig in the family.
+# THE SCENE IS ALMOST EMPTY, ON PURPOSE. res://scenes/pg_server.tscn is a Playlot
+# under a plain Node, and Playlot registers itself under `playground` (a registry key that
+# keeps the old Playlot name) in _ready() -- which is what playlot_module.gd looks it up by.
+# The operator's surface is the cvars below and the layered PlaylotConfig, like every
+# DotConfig in the family.
+#
+# The pack published before the rename carries the old paths and its own game.yml naming
+# them; game-playlot keeps shims at the old paths for it.
 #
 # ONE GAME ID, THREE MAPS. pg_lobby, pg_surf_intro and pg_bhop_intro are a rotation
 # rather than three games: they are the same game on different geometry, and switching
@@ -34,15 +38,15 @@ kind: pack
 max_players: 32
 
 scene: scenes/pg_server.tscn
-client_scene: game/playground.tscn
-module: game/playground_module.gd
+client_scene: game/playlot.tscn
+module: game/playlot_module.gd
 
 # The custom maps (playlot-maps, published as content/playground_maps). Under
 # `dependencies`, NOT `server_dependencies` like wipeout's and deathrun's courses: a
 # Playlot map is a document of boxes and props that the CLIENT builds too, so every
 # client fetches this pack in the same content sync as the game and adds `<mount>/maps`
-# from DotClientLink.content_extra (PlaygroundClient), as the server does from the game
-# manager's dependency keys (PlaygroundModule._add_delivered_maps). The first game to use
+# from DotClientLink.content_extra (PlaylotClient), as the server does from the game
+# manager's dependency keys (PlaylotModule._add_delivered_maps). The first game to use
 # client dependencies.
 dependencies:
   - tmc/playground_maps@0.1.0
@@ -57,7 +61,7 @@ cvars:
 
 # The MAP vote inside this game — what the players pick between when a map ends, and
 # whether they may extend the one they are on. Its defaults are in the game's own
-# game/playground_vote.gd; anything written here overrides them, and the server's own
+# game/playlot_vote.gd; anything written here overrides them, and the server's own
 # user://cfg/playground_vote.json, DOT_VOTE_* and --vote-* override this. Keyed exactly as
 # dot-vote's DotVoteRules, enums by name.
 #

@@ -412,8 +412,8 @@ Every one of these was published and booted as a pack — mounted, module loaded
 | game.yml | `--source` | pack | `scene:` | `client_scene:` | `module:` |
 | --- | --- | --- | --- | --- | --- |
 | `arena` | `games/game-arena` | `dist/arena` — 140 files, 3.1 MiB | `scenes/arena_server.tscn` | `game/arena.tscn` | `game/arena_module.gd` |
-| `airdrift` | `games/game-airdrift` | `dist/g2gfast` — 171 files, 3.1 MiB | `scenes/g2g_server.tscn` | `game/g2g.tscn` | `game/g2g_module.gd` |
-| `playlot` | `games/game-playlot` | `dist/playground` — 76 files, 755 KiB | `scenes/pg_server.tscn` | `game/playground.tscn` | `game/playground_module.gd` |
+| `airdrift` | `games/game-airdrift` | `dist/g2gfast` — 171 files, 3.1 MiB | `scenes/airdrift_server.tscn` | `game/airdrift.tscn` | `game/airdrift_module.gd` |
+| `playlot` | `games/game-playlot` | `dist/playground` — 76 files, 755 KiB | `scenes/pg_server.tscn` | `game/playlot.tscn` | `game/playlot_module.gd` |
 | `hungry_classic` `hungry_frenzy` `hungry_gauntlet` | `games/game-hungario` | `dist/hungry` — 65 files, 644 KiB | `game/modes/<mode>.tscn` | `game/client/hungry_client.tscn` | `game/hungry_module.gd` |
 
 `exclude_dirs` is `addons`, `examples`, `tools`, `screenshots` everywhere, plus `imported` for Airdrift — `maps/imported/` is 66 MB of converted geometry that is published as its own packs, and a game pack carrying it would deliver every map to every player on connect — and `web` for hungario, which has a browser build of its own in the repository.

@@ -143,20 +143,30 @@ func _says(world: Object) -> Dictionary:
 
 
 ## The CLIENT's Playlot game node: the delivered client scene under the link's `GameRoot`, which holds it
-## as `playground`.
+## as `playlot`.
 func _client_client() -> Object:
 	var root := _link.get_node_or_null(^"GameRoot") if _link != null else null
 	if root == null:
 		return null
 	for child in root.get_children():
-		if child.get("playground") is Object:
+		if _playlot_of(child) != null:
 			return child
 	return null
 
 
 func _client_world() -> Object:
 	var client := _client_client()
-	return client.get("playground") as Object if client != null else null
+	return _playlot_of(client) if client != null else null
+
+
+## The Playlot world a client node holds: `playlot`, or `playground` on a pack published before the
+## rename (the old Playlot name; newer clients keep it as an alias).
+func _playlot_of(client: Object) -> Object:
+	var world: Variant = client.get("playlot")
+	if world is Object:
+		return world
+	world = client.get("playground")
+	return world if world is Object else null
 
 
 
