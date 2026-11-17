@@ -879,21 +879,23 @@ func _needs_of(descriptor: DotGameDescriptor) -> Variant:
 	if descriptor == null:
 		return null
 
-	# A game inside the build runs on the build's addons and needs no game addon.
-	if not descriptor.needs_delivered_content():
-		return {}
-
-	if descriptor.content_id == "":
-		return null
-
-	var own: Variant = _pack_requires.get(descriptor.content_id.get_slice("@", 0))
+	# The game manager's descriptor is the loaded one, whose content id may be empty; the content list's names the pack and its dependencies,
+	# as [method _publish_requires] reads them.
+	var listed: DotGameDescriptor = content.find(descriptor.game_id) if content != null else null
+	var source: DotGameDescriptor = listed if listed != null else descriptor
+	var id := source.effective_content_id().get_slice("@", 0)
+	var own: Variant = _pack_requires.get(id)
 
 	if not (own is Dictionary):
+		# A game inside the build (no pack mounted for it) runs on the build's addons and needs no game addon.
+		if not source.needs_delivered_content() and not _mounted_versions.has(id):
+			return {}
+
 		return null
 
 	var parts: Array = [own]
 
-	for key in descriptor.dependencies + descriptor.server_dependencies:
+	for key in source.dependencies + source.server_dependencies:
 		var needs: Variant = _pack_requires.get(String(key).get_slice("@", 0))
 
 		if needs is Dictionary:
@@ -965,7 +967,7 @@ func _announce_change() -> void:
 
 	# Not known until its pack mounts here: announcing the whole set meanwhile would send every client every addon. Its content_ready runs this again;
 	# a pack that mounted with no requires.json stays unknown, and then the whole set is the safe answer.
-	if _needs_of(_change_to) == null and not _mounted_versions.has(_change_to.content_id.get_slice("@", 0)):
+	if _needs_of(_change_to) == null and not _mounted_versions.has(_change_to.effective_content_id().get_slice("@", 0)):
 		return
 
 	if not _publish_addon_set():
