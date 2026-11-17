@@ -137,7 +137,7 @@ func _stage_friends(shell: Node) -> void:
 		["Ann", "in_game", "Playing Fatal Contact on TMC Deathmatch #1 (EU, 64 tick, long hostname)", 12, "", true],
 		["Bo", "in_game", "Playing Smash Copter", 0, "5123", true],
 		["Cy", "online", "", 0, "", false],
-		["Dee", "in_game", "Playing Surf on g2gfast", 7, "", false],
+		["Dee", "in_game", "Playing Surf on airdrift", 7, "", false],
 		["Eve", "in_game", "Playing Fatal Contact", 3, "", true],
 		["Fin", "offline", "", 0, "", false],
 	]

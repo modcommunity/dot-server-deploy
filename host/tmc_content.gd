@@ -348,8 +348,8 @@ static func flatten_cvars(cvars: Dictionary) -> Dictionary:
 
 
 ## The game an id names: exactly, or by its NAME half while only one owner has it --
-## the same rule as DotGameManager.find_game, so `TMC_GAME=game-g2gfast` keeps booting
-## `gamemann/game-g2gfast` until somebody installs a second `game-g2gfast`.
+## the same rule as DotGameManager.find_game, so `TMC_GAME=game-airdrift` keeps booting
+## `gamemann/game-airdrift` until somebody installs a second `game-airdrift`.
 func find(game_id: String) -> DotGameDescriptor:
 	for descriptor in games:
 		if descriptor.game_id == game_id:

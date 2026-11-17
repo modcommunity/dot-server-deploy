@@ -1107,7 +1107,7 @@ func _game_ref_entries() -> void:
 		"a pin on a retired id is dropped (the old id published no versions) and the old id is kept to log")
 	_check(TmcGameRef.parse("gamemann/game-fatal-contact")["retired"] == "",
 		"a current id is not marked retired")
-	_check(TmcGameRef.dirs_in("gamemann/game-arena, gamemann/game-g2gfast01@1.2.0, game-arena")
+	_check(TmcGameRef.dirs_in("gamemann/game-arena, gamemann/game-airdrift@1.2.0, game-arena")
 			== PackedStringArray(["gamemann/game-fatal-contact", "gamemann/game-airdrift", "game-arena"]),
 		"the host's filter aliases the same ids the installer does; a bare local name is left alone")
 	_check(TmcGameRef.qualify_map("gamemann/arena-dm-maps/*", "")["collection"] == "gamemann/fc-dm-maps",
@@ -1126,21 +1126,21 @@ func _game_ref_entries() -> void:
 	var fork_yml := "kind: pack\nscene: scenes/server.tscn\ncontent_id: %s\nversion: 1.0.0\n"
 	DotPaths.write_text(root + "/asher/game-testing/game.yml", fork_yml % "asher/game-testing")
 	DotPaths.write_text(root + "/bob/game-testing/game.yml", fork_yml % "bob/game-testing")
-	DotPaths.write_text(root + "/gamemann/game-g2gfast/game.yml", fork_yml % "gamemann/game-g2gfast")
+	DotPaths.write_text(root + "/gamemann/game-airdrift/game.yml", fork_yml % "gamemann/game-airdrift")
 	DotPaths.write_text(root + "/arena/game.yml", "kind: pack\nscene: s.tscn\ncontent_id: arena\n")
 	DirAccess.make_dir_recursive_absolute(root + "/emptyowner")
 	var forks := TmcContent.scan(root)
 	var index: TmcContent = forks.value if forks.ok else null
 	_check(index != null and index.ids() == PackedStringArray(
-			["arena", "asher/game-testing", "bob/game-testing", "gamemann/game-g2gfast"]),
+			["arena", "asher/game-testing", "bob/game-testing", "gamemann/game-airdrift"]),
 		"content/<owner>/<name>/ scans as owner/name beside a built-in's content/<name>/",
 		str(index.ids()) if index != null else str(forks))
 	_check(index != null and index.find("game-testing") == null
 			and index.find("bob/game-testing") != null,
 		"a name two owners share needs the owner; the full id always works")
-	_check(index != null and index.find("game-g2gfast") != null
-			and index.find("game-g2gfast").game_id == "gamemann/game-g2gfast",
-		"a name only one owner has still works on its own (TMC_GAME=game-g2gfast)")
+	_check(index != null and index.find("game-airdrift") != null
+			and index.find("game-airdrift").game_id == "gamemann/game-airdrift",
+		"a name only one owner has still works on its own (TMC_GAME=game-airdrift)")
 	DotPaths.remove_tree(root)
 
 
@@ -1333,7 +1333,7 @@ func _owner_game(id: String, maps: PackedStringArray) -> DotGameDescriptor:
 func _test_owner_maps() -> void:
 	_section("a server's settings per game (cfg/content.yml)")
 
-	var g2g := PackedStringArray(["me/a@1", "me/b@1", "me/c@1"])
+	var owner_deps := PackedStringArray(["me/a@1", "me/b@1", "me/c@1"])
 
 	var layered := _game_config("""games:
   game-x:
@@ -1357,7 +1357,7 @@ defaults:
 """)
 	_check(layered != null, "defaults and a game section with every key read")
 	layered.resolved = {"me/d": "4"}
-	var game := _owner_game("owner/game-x", g2g)
+	var game := _owner_game("owner/game-x", owner_deps)
 	var content := TmcContent.new()
 	content.games.append(game)
 	content.games.append(_owner_game("owner/other", PackedStringArray(["me/z@1"])))
@@ -1377,7 +1377,7 @@ defaults:
 		and other.max_players == 16, "another game gets the defaults and nothing else")
 
 	var bare := _game_config("games:\n  owner/game-x:\n    maps:\n      - me/e\n      - me/f@2\n")
-	var game2 := _owner_game("owner/game-x", g2g)
+	var game2 := _owner_game("owner/game-x", owner_deps)
 	bare.apply(game2)
 	_check(
 		game2.maps == PackedStringArray(["me/a@1", "me/b@1", "me/c@1", "me/f@2"]),
@@ -1388,25 +1388,25 @@ defaults:
 		"and the server says which, and why", str(bare.warnings))
 
 	var replaced := _game_config("games:\n  game-x:\n    maps:\n      game_maps: false\n      add:\n        - me/q@3\n")
-	var game3 := _owner_game("owner/game-x", g2g)
+	var game3 := _owner_game("owner/game-x", owner_deps)
 	replaced.apply(game3)
 	_check(game3.maps == PackedStringArray(["me/q@3"]), "game_maps: false replaces the game's list", str(game3.maps))
 
 	var host := _game_config("games:\n  game-x:\n    metadata:\n      module: res://evil.gd\n")
-	var game4 := _owner_game("owner/game-x", g2g)
+	var game4 := _owner_game("owner/game-x", owner_deps)
 	host.apply(game4)
 	_check(game4.metadata["module"] == "res://m.gd" and host.warnings.size() == 1,
 		"the host's own metadata keys are not overridden, and that is reported")
 
 	var delivered := _game_config("games:\n  game-x:\n    maps:\n      - me/docs@5\n")
-	var client_game := _owner_game("owner/game-x", g2g)
+	var client_game := _owner_game("owner/game-x", owner_deps)
 	client_game.metadata["maps_delivery"] = "client"
 	client_game.dependencies = PackedStringArray(["me/a@1"])
 	delivered.apply(client_game)
-	var server_game := _owner_game("owner/game-x", g2g)
+	var server_game := _owner_game("owner/game-x", owner_deps)
 	server_game.metadata["maps_delivery"] = "server"
 	delivered.apply(server_game)
-	var lazy_game := _owner_game("owner/game-x", g2g)
+	var lazy_game := _owner_game("owner/game-x", owner_deps)
 	delivered.apply(lazy_game)
 	_check(client_game.dependencies == PackedStringArray(["me/a@1", "me/b@1", "me/c@1", "me/docs@5"])
 		and client_game.server_dependencies.is_empty()
@@ -1441,7 +1441,7 @@ defaults:
         - me/c
 """)
 	by_key.resolved = {"keyowner/surf_mesa": "7"}
-	var key_game := _owner_game("owner/game-x", g2g)
+	var key_game := _owner_game("owner/game-x", owner_deps)
 	var key_content := TmcContent.new()
 	key_content.games.append(key_game)
 	by_key.apply_all(key_content)
@@ -1498,13 +1498,13 @@ defaults:
 		"and each bare entry is refused with the game and the entry named", str(rank.errors))
 
 	var removal := _game_config("games:\n  game-x:\n    map_owner: me\n    maps:\n      remove:\n        - a\n        - me/b\n")
-	var removed := _owner_game("owner/game-x", g2g)
+	var removed := _owner_game("owner/game-x", owner_deps)
 	removal.apply(removed)
 	_check(removed.maps == PackedStringArray(["me/c@1"]),
 		"remove: matches the bare and the qualified spelling of the same map", str(removed.maps))
 
 	var none := TmcGameConfig.load_from("res://examples/fixtures/nothing", "res://examples/fixtures/nothing")
-	var game5 := _owner_game("owner/game-x", g2g)
+	var game5 := _owner_game("owner/game-x", owner_deps)
 	if _check(none.ok, "no cfg/content.yml is no overrides, not an error"):
 		# The invariant, not the outcome. With `defaults` left as `{}` the script error is
 		# inside _apply_section, which is all it aborts: apply() carries on and returns an
@@ -1517,11 +1517,11 @@ defaults:
 	_check(template.ok, "the template reads", str(template.error) if not template.ok else "")
 	if template.ok:
 		var parsed: TmcGameConfig = template.value
-		var g2g_adds: PackedStringArray = (parsed.games.get("game-g2gfast", {}) as Dictionary).get("maps", {}).get("add", PackedStringArray())
+		var g2g_adds: PackedStringArray = (parsed.games.get("game-airdrift", {}) as Dictionary).get("maps", {}).get("add", PackedStringArray())
 		var every := parsed.all_map_entries()
 		_check(g2g_adds.size() == 26 and g2g_adds.has("gamemann/surf_mesa")
 			and every.has("gamemann/mg-wipeout-maps") and every.has("gamemann/playlot-maps"),
-			"the template offers g2gfast's 26 courses (%d) and every other game's maps pack" % g2g_adds.size())
+			"the template offers Airdrift's 26 courses (%d) and every other game's maps pack" % g2g_adds.size())
 
 	var moved_dir := "res://examples/fixtures/cfg_move"
 	var moved := TmcConfig.load_dir(moved_dir)

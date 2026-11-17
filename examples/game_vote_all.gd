@@ -344,7 +344,7 @@ func _boot() -> bool:
 	# Content from this project's own `dist/`, as `shell_notice` does.
 	_shell._ensure_cloud()
 	# And `dist/maps`, where owned map packs are published (`gamemann/surf_mesa`): the host
-	# searches it too. Without it g2gfast sat on "Joining..." for its whole section.
+	# searches it too. Without it airdrift sat on "Joining..." for its whole section.
 	_shell._cloud.http_base_urls = PackedStringArray([
 		ProjectSettings.globalize_path("res://dist"),
 		ProjectSettings.globalize_path("res://dist/maps"),
@@ -456,7 +456,7 @@ func _test_game(game_id: String, next: String) -> void:
 	var own := _own()
 	row["own"] = "none" if own == null else ("ballot" if own.has_alternatives() else "one choice")
 
-	# Within a rescan: a game may decide it has rounds only once its first map is in (g2gfast
+	# Within a rescan: a game may decide it has rounds only once its first map is in (airdrift
 	# fetches its map after it is running), and TmcVote looks again every RESCAN_SEC.
 	var rounds_now := func() -> bool:
 		var any := false

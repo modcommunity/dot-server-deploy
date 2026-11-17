@@ -12,7 +12,7 @@
 # generated output as a change.
 #
 # textures/ was tracked rather than ignored, which made it the odd one out: it is
-# g2gfast's prototype texture set, byte-identical to the copy in that repository, and
+# Airdrift's prototype texture set, byte-identical to the copy in that repository, and
 # `G2GTextures` reads it through the game's own rebase helper — so the pack carries it
 # and a second copy here is a copy that can drift.
 /game/

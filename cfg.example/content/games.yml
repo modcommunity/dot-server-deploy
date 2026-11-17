@@ -18,7 +18,7 @@
 #     - gamemann/*
 #   rotations:
 #     main:                     if both `games:` and rotations: main are written, main wins
-#       games: [game-fatal-contact, mg-*, gamemann/game-g2gfast]
+#       games: [game-fatal-contact, mg-*, gamemann/game-airdrift]
 #     party:
 #       mode: cycle
 #       games: [mg-wipeout, mg-deathrun, mg-smash-copter]

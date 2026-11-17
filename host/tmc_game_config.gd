@@ -830,7 +830,7 @@ func _section_for(descriptor: DotGameDescriptor) -> Dictionary:
 
 ## [method _section_for] over any `games:` map, because `cfg/addons.yml` keys its games the
 ## same way and a second copy of the lookup would let the two files disagree about which
-## game `g2gfast` means.
+## game `airdrift` means.
 static func section_in(sections: Dictionary, descriptor: DotGameDescriptor) -> Dictionary:
 	for key in spellings(descriptor):
 		if key != "" and sections.has(key):

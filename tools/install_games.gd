@@ -132,8 +132,8 @@ func _init() -> void:
 	var state := _read_state(data_dir)
 	var installed: Dictionary = state["installed"]
 
-	# Every entry taken apart once, through the same reader TmcHost filters with. A
-	# `g2gfast` and a `gamemann/game-g2gfast01@1.2.0` differ in where the descriptor comes
+	# Every entry taken apart once, through the same reader TmcHost filters with. An
+	# `airdrift` and a `gamemann/game-airdrift@1.2.0` differ in where the descriptor comes
 	# from and in nothing else afterwards -- both end up as a directory under content/.
 	var wants: Array[Dictionary] = []
 	var refused := PackedStringArray()
@@ -1686,7 +1686,7 @@ func _prune(
 	keeping: PackedStringArray, installed: Dictionary, content_dir: String
 ) -> void:
 	# [b]Compared against DIRECTORIES, not against the raw list.[/b] `TMC_GAMES` may say
-	# `gamemann/game-g2gfast01@1.2.0` and the thing on disk is `content/game-g2gfast01/`.
+	# `gamemann/game-airdrift@1.2.0` and the thing on disk is `content/game-airdrift/`.
 	for id in installed.keys():
 		if id in keeping:
 			continue

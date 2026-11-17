@@ -523,7 +523,7 @@ echo "hide and seek, the same shape as prop hunt: its maps a server-only pack, i
 timeout 300 "$GODOT" --headless --path . res://examples/hideseek_client.tscn || fails=$((fails + 1))
 timeout 300 "$GODOT" --headless --path . res://examples/zombiezone_client.tscn || fails=$((fails + 1))
 echo "playlot, whose custom maps are a CLIENT dependency: mounted on both ends, built on both"
-timeout 300 "$GODOT" --headless --path . res://examples/playground_client.tscn || fails=$((fails + 1))
+timeout 300 "$GODOT" --headless --path . res://examples/playlot_client.tscn || fails=$((fails + 1))
 # The two delivered games with nobody on foot and with a house of levels, which existed and
 # passed (20 and 18 checks) but ran only when somebody remembered them: a suite that is not
 # in the check is a suite that stops being run the week it would have caught something.

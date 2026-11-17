@@ -17,8 +17,8 @@
 #   ./setup.sh --only-games A,B build ONLY these games; the rest are not cloned,
 #                               imported or published at all
 #   ./setup.sh --skip-games A,B build every game except these. A name may be the
-#                               repository (game-g2gfast), the repository without its
-#                               prefix (g2gfast), or the content directory
+#                               repository (game-airdrift), the repository without its
+#                               prefix (airdrift), or the content directory
 #                               (hungry_classic). Repeatable, and comma- or
 #                               space-separated. The ADDONS are then DERIVED from the
 #                               games that are left -- `--only-games buses` wires in
@@ -232,7 +232,7 @@ GAMES_DIR="${TMC_GAMES_DIR:-}"
 #
 # [b]--only-games is NOT the answer to that, and the reason is the addon list.[/b] The
 # addons this build wires in are DERIVED from the games being built, so `--only-games
-# g2gfast` produces a shell that can parse g2gfast and nothing else -- and the first game
+# airdrift` produces a shell that can parse airdrift and nothing else -- and the first game
 # this server is later told to install mounts, loads, and every script in it is dead. A
 # box that decides at RUNTIME which games it runs cannot answer that question at install
 # time, so it takes the full list, which is exactly what "no game sources at all" already
@@ -1235,8 +1235,8 @@ fi
 #
 # It failed the way a wrong answer fails quietly: two of the three forms were dead and the
 # third, the content directory, is spelled the same as the repository minus its prefix for
-# five of the seven games -- so `--only-games g2gfast` worked, and `--only-games
-# game-g2gfast` (the form the README documents first) was refused as a game this build
+# five of the seven games -- so `--only-games airdrift` worked, and `--only-games
+# game-airdrift` (the form the README documents first) was refused as a game this build
 # does not have.
 game_name_matches() {
     local entry="$1" want="$2"

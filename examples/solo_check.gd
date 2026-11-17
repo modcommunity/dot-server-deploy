@@ -15,14 +15,14 @@ const STOCK_CONTENT := "res://cfg.example/server/content/overrides.yml"
 ## one is a map list the shell deliberately does not copy, so the drift check skips it.
 ## Repos whose pack id was renamed while the directory kept its name (see setup.sh repo_url):
 ## solo.json is keyed by the pack id, overrides.yml by the game.
-const RENAMED_PACK := {"mg-deathrun": "game-deathrun", "mg-prop-hunt": "game-prop-hunt", "game-playground": "game-playlot"}
+const RENAMED_PACK := {"mg-deathrun": "game-deathrun", "mg-prop-hunt": "game-prop-hunt"}
 
 const NOT_PREFETCHED := {
 	# One pack per map, about 50 MB each: the game fetches the one it changes to itself
 	# (`g2g: fetching a map this build does not have`), as a server does.
-	"game-g2gfast": "one large pack per map, fetched by the game when it changes to it",
+	"game-airdrift": "one large pack per map, fetched by the game when it changes to it",
 	"game-fatal-contact": "39 combat surf packs, lazy delivery like game-airdrift: fetched when the game changes to a map",
-	"game-arena": "39 combat surf packs, lazy delivery like game-g2gfast: fetched when the game changes to a map",
+	"game-arena": "39 combat surf packs, lazy delivery like game-airdrift: fetched when the game changes to a map",
 }
 
 var _passed := 0

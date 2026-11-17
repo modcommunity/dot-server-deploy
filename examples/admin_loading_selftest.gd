@@ -132,7 +132,7 @@ func _menu(tree: Dictionary, people: Array) -> TmcAdminMenu:
 	menu.send_fn = func(session: DotClientSession, page: Dictionary) -> bool:
 		sent.append([session, page])
 		return true
-	menu.games_fn = func() -> Array: return [["fc", "Fatal Contact"], ["g2gfast", "Surf"]]
+	menu.games_fn = func() -> Array: return [["fc", "Fatal Contact"], ["airdrift", "Surf"]]
 	menu.maps_fn = func() -> Array: return [["surf_mesa", "Mesa"]]
 	add_child(menu)
 	return menu
@@ -838,7 +838,7 @@ loading_music_volume: 3
 loading_tips: [one, two]
 loading_colour: red
 loading_games:
-  g2gfast:
+  airdrift:
     image: "https://cdn.example.com/surf.jpg"
 loading_maps:
   surf_mesa:
@@ -910,18 +910,18 @@ func _test_loading_client() -> void:
 	screen.adopt({
 		"v": 1,
 		"default": {"images": ["http://127.0.0.1:9/a.jpg"], "music": ["http://127.0.0.1:9/t.ogg"], "tips": ["default tip"], "title": "My Server"},
-		"games": {"g2gfast": {"images": ["http://127.0.0.1:9/surf.jpg"], "tips": ["surf tip"]}},
+		"games": {"airdrift": {"images": ["http://127.0.0.1:9/surf.jpg"], "tips": ["surf tip"]}},
 		"delay": 0.0,
 	})
 	_check(screen.has_document(), "a document is adopted")
 
-	screen.begin(TmcLoadingScreen.REASON_GAME, "g2gfast", "Surf")
+	screen.begin(TmcLoadingScreen.REASON_GAME, "airdrift", "Surf")
 	_check(not screen.is_showing(), "nothing is shown before a game has been played (the first connect)")
 
 	var covers := []
 	screen.cover_changed.connect(func(up: bool) -> void: covers.append(up))
 	in_game[0] = true
-	screen.begin(TmcLoadingScreen.REASON_GAME, "g2gfast", "Surf")
+	screen.begin(TmcLoadingScreen.REASON_GAME, "airdrift", "Surf")
 	_check(screen.is_showing(), "a game change shows it at once")
 	_check(covers == [true], "and says the cover went up, so the shell can fit a phone's window round it", str(covers))
 	var block := screen.fit_card()

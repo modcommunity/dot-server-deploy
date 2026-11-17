@@ -42,7 +42,7 @@ loading_show_delay_sec: 0.25
 # music over its own images.
 #
 # loading_games:
-#   g2gfast:
+#   airdrift:
 #     images: ["https://example.com/loading/surf.jpg"]
 #     tips:
 #       - "Hold space to bunny hop."

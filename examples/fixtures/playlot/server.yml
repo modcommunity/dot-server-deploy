@@ -1,6 +1,6 @@
-# A fixture for examples/playground_client.tscn. Loopback, a port nothing else here uses, and
-# the game booted directly: this suite is about the delivered playground and its maps pack.
-sv_name: "Playground Fixture"
+# A fixture for examples/playlot_client.tscn. Loopback, a port nothing else here uses, and
+# the game booted directly: this suite is about the delivered Playlot and its maps pack.
+sv_name: "Playlot Fixture"
 sv_maxplayers: 8
 game: "playlot"
 
@@ -9,6 +9,6 @@ sv_stdin_console: false
 
 # Off, because this check runs the server and a client in ONE process, and one process has one
 # engine tick rate: a server that hibernates before the client connects (as an empty server now
-# does from boot) puts the engine at 5 Hz, and the client's playground then starts at 5 Hz. Two
+# does from boot) puts the engine at 5 Hz, and the client's Playlot then starts at 5 Hz. Two
 # processes, as in production, do not share it.
 sv_hibernate_when_empty: false

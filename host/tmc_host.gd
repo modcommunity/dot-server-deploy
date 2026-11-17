@@ -359,8 +359,8 @@ func _apply_overrides(args: PackedStringArray) -> void:
 	var offered := _value(args, "--games", "")
 
 	if offered != "":
-		# Through TmcGameRef, because the same string also names things to FETCH: `TMC_GAMES` may say `gamemann/game-g2gfast01@1.2.0`,
-		# which installs into `content/game-g2gfast01/`, so comparing the raw entry against a directory name would offer none of a game just downloaded.
+		# Through TmcGameRef, because the same string also names things to FETCH: `TMC_GAMES` may say `gamemann/game-airdrift@1.2.0`,
+		# which installs into `content/game-airdrift/`, so comparing the raw entry against a directory name would offer none of a game just downloaded.
 		config.games_allow = TmcGameRef.dirs_in(offered)
 
 	# Where content comes from, as an argument, for the same reason the list of games is one (a panel operator has no shell; `cfg/server.yml` is setup.sh's).

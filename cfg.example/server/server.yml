@@ -175,7 +175,7 @@ query_bind_ip: "*"
 # reported at boot and is not fatal.
 #
 #games:
-#  - g2gfast
+#  - airdrift
 #  - fatalcontact
 
 # Where this server fetches content it does not have, tried in order.

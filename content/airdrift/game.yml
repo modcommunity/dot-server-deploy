@@ -5,7 +5,7 @@
 #     changelevel airdrift
 #
 # kind: pack -- delivered, for the reason content/fatalcontact/game.yml sets out.
-# Published with `./server pack airdrift --source games/game-g2gfast`.
+# Published with `./server pack airdrift --source games/game-airdrift`.
 #
 # ITS IMPORTED MAPS ARE NOT IN THIS PACK, and that is deliberate: `maps/imported/` is 66 MB
 # of converted geometry published as one pack per map, so a player downloads the map the

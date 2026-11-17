@@ -8,7 +8,7 @@ extends RefCounted
 static func apply_games(cfg: TmcConfig, file: String, value: Variant) -> void:
 	# A list, or one string, as `content_urls` below takes either (`games: fatalcontact` is what an operator with one game writes).
 	# Not a console line: dot-server has no cvar for the set of games a host offers; `sv_game` picks one OF these, so the two spellings are deliberately unalike.
-	# Each entry through TmcGameRef, as the command-line override is, so `gamemann/game-g2gfast01@1.2.0` in a file means the same directory as in a panel field.
+	# Each entry through TmcGameRef, as the command-line override is, so `gamemann/game-airdrift@1.2.0` in a file means the same directory as in a panel field.
 	# A game listed twice is one game: kept once, and ONE warning naming every repeat, never an error (a panel's list is edited by hand and copied around).
 	var repeats := PackedStringArray()
 	var entries: Array = (value as Array) if value is Array else [value]

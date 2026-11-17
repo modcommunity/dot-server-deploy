@@ -14,7 +14,7 @@ The pack is the game: scenes, scripts, art, signed, mounted at `res://dot_cloud/
 
 ## Names and ids
 
-- `TMC_GAMES=gamemann/game-g2gfast@1.2.0`, `@latest`, or no version. `tmc` is just the owner reserved for first-party content.
+- `TMC_GAMES=gamemann/game-airdrift@1.2.0`, `@latest`, or no version. `tmc` is just the owner reserved for first-party content.
 - **A published game's id is `<owner>/<name>`, and so is its directory** (`content/gamemann/game-fatal-contact/`), so a fork and its original, or two people's games with one name, sit side by side. A bare name still works wherever it is unambiguous (`TmcContent.find`, dot-server's `find_game`); a built-in stays `content/<name>/`. An install from before the owner was part of the path is MOVED into its owner's directory by `install-games`, and the egg's prune keeps such a directory for that one run.
 - **`TmcGameRef` is the one parser.** `install-games` decides what to FETCH and `TmcHost` what to OFFER from the same `TMC_GAMES` string; two parsers would download a game and then fail to find it (and the prune would delete it on every restart).
 - **Descriptors are keyed by directory id, not content id.** Several hungario modes are descriptors over one `tmc/hungry`; keyed by content id they would overwrite each other. Prefetching iterates distinct content ids, or the origin is asked for the same pack once per mode.
@@ -59,9 +59,9 @@ Each entry is `<owner>/<name>` with optional `@<version>`/`@latest`. **`install-
 
 On such a box `setup.sh` would clone, import and publish every game for nothing, and generate a content signing key on a machine that should only consume signed content.
 
-- **`--only-games` is a trap here.** The addon list is derived from the games being built, so `--only-games g2gfast` links g2gfast's addons and unlinks the rest; the first time somebody adds `fatalcontact` to `TMC_GAMES` it downloads, mounts, and fails to compile. A box that decides at runtime which games it runs cannot know at install time which addons they need.
+- **`--only-games` is a trap here.** The addon list is derived from the games being built, so `--only-games airdrift` links Airdrift's addons and unlinks the rest; the first time somebody adds `fatalcontact` to `TMC_GAMES` it downloads, mounts, and fails to compile. A box that decides at runtime which games it runs cannot know at install time which addons they need.
 - **`--no-games` is the right flag.** It sets `GAMES=()` plus `PUBLISHED_GAMES=1`, the existing "publish nothing" statement: no keygen, no import, no pack, and the addon derivation falls back to the full `ADDONS_ALL`.
-- A map nobody published cannot be found: g2gfast's `maps/imported/` travels as one pack per map, so an origin serving the game and not its maps gives a server that logs `could not fetch the map …` and carries on.
+- A map nobody published cannot be found: Airdrift's `maps/imported/` travels as one pack per map, so an origin serving the game and not its maps gives a server that logs `could not fetch the map …` and carries on.
 
 ## A running server picks up new versions by restarting
 

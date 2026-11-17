@@ -1,6 +1,6 @@
 # Voting for the next GAME.
 #
-#     !game_nominate g2gfast     a player asks for it
+#     !game_nominate airdrift    a player asks for it
 #     !game_rtv                  enough players ask to move on
 #     !game_vote 2               the ballot opens and everybody chooses
 #     !game_timeleft  !game_next what a player types to find out

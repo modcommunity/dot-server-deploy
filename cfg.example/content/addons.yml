@@ -9,7 +9,7 @@
 #   defaults:                      every game on this server
 #     add: [owner/pack, owner/pack@1.2.0]
 #   games:
-#     <game>:                      its id (gamemann/game-g2gfast) or its name half
+#     <game>:                      its id (gamemann/game-airdrift) or its name half
 #       add: [owner/other-pack]
 #       remove: [owner/pack]       drop a default for this game only
 #
@@ -33,7 +33,7 @@
 # defaults:
 #   add: [someone/extra-sounds]
 # games:
-#   game-g2gfast:
+#   game-airdrift:
 #     add: [someone/speedrun-hud@1.0.0]
 
 # Creator addons that REPLACE a shell's own addon (rare; read docs/addon-packs.md first):

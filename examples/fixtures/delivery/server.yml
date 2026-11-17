@@ -17,5 +17,5 @@ sv_stdin_console: false
 
 # Off: server and client share ONE process, so one engine tick rate. A server that hibernates
 # before the client connects (as an empty one now does from boot) starts the client's game at
-# the hibernate rate. See examples/fixtures/playground/server.yml.
+# the hibernate rate. See examples/fixtures/playlot/server.yml.
 sv_hibernate_when_empty: false

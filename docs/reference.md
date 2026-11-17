@@ -257,8 +257,8 @@ Exit codes are meaningful, so a supervisor can tell a misconfiguration from a cr
 A server holds the games it is for, and fetches them:
 
 ```bash
-./server --games g2gfast,fatalcontact       # install them if needed, then start
-TMC_GAMES=g2gfast,fatalcontact ./server     # the same thing, for a panel with no shell
+./server --games airdrift,fatalcontact      # install them if needed, then start
+TMC_GAMES=airdrift,fatalcontact ./server    # the same thing, for a panel with no shell
 ./server install-games --games fatalcontact # just the install, no server
 ```
 
@@ -279,7 +279,7 @@ defaults:                         # every game on this server
   cvars:
     sv_alltalk: "1"
 games:
-  game-g2gfast:                   # the game's id, or its name half
+  game-airdrift:                  # the game's id, or its name half
     name: "Surf & Bhop"
     max_players: 24
     cvars:
@@ -319,7 +319,7 @@ A pack you add to a game is delivered to its players with it, for your server on
 defaults:                        # every game on this server
   add: [someone/extra-sounds]
 games:
-  game-g2gfast:                  # a game id, or its name half
+  game-airdrift:                 # a game id, or its name half
     add: [someone/speedrun-hud@1.0.0]
     remove: [someone/extra-sounds]   # drop a default for this game only
 ```
@@ -331,12 +331,12 @@ A pack is `owner/pack`, optionally `@version`. A version left off is pinned to t
 ### Installing somebody else's game
 
 ```bash
-./server --games gamemann/game-g2gfast01@1.2.0     # that version
-./server --games gamemann/game-g2gfast01@latest    # or the newest
-./server --games g2gfast,alice/her-game            # mix freely
+./server --games gamemann/game-airdrift@1.2.0      # that version
+./server --games gamemann/game-airdrift@latest     # or the newest
+./server --games airdrift,alice/her-game           # mix freely
 ```
 
-A published pack is addressed `<owner>/<name>`, and `tmc` is only the owner reserved for first-party content — any member's game installs the same way. The descriptor comes **out of the pack**: a game's repository has its own `game.yml`, so the file that says which scene the server runs is already inside the signed manifest, and it is hash-checked before it is written. It lands in `content/<name>/`, which is the id you type at the console — `changelevel gamemann/game-g2gfast01` is not something anybody should have to type.
+A published pack is addressed `<owner>/<name>`, and `tmc` is only the owner reserved for first-party content — any member's game installs the same way. The descriptor comes **out of the pack**: a game's repository has its own `game.yml`, so the file that says which scene the server runs is already inside the signed manifest, and it is hash-checked before it is written. It lands in `content/<name>/`, which is the id you type at the console — `changelevel gamemann/game-airdrift` is not something anybody should have to type.
 
 `@latest` resolves through `content/<id>/latest.json`, which a publish writes beside the versions. An origin is a bucket behind a CDN: it has no query interface and listing is not public, so the newest version has to be written down rather than asked for.
 
@@ -412,11 +412,11 @@ Every one of these was published and booted as a pack — mounted, module loaded
 | game.yml | `--source` | pack | `scene:` | `client_scene:` | `module:` |
 | --- | --- | --- | --- | --- | --- |
 | `arena` | `games/game-arena` | `dist/arena` — 140 files, 3.1 MiB | `scenes/arena_server.tscn` | `game/arena.tscn` | `game/arena_module.gd` |
-| `airdrift` | `games/game-g2gfast` | `dist/g2gfast` — 171 files, 3.1 MiB | `scenes/g2g_server.tscn` | `game/g2g.tscn` | `game/g2g_module.gd` |
-| `playlot` | `games/game-playground` | `dist/playground` — 76 files, 755 KiB | `scenes/pg_server.tscn` | `game/playground.tscn` | `game/playground_module.gd` |
+| `airdrift` | `games/game-airdrift` | `dist/g2gfast` — 171 files, 3.1 MiB | `scenes/g2g_server.tscn` | `game/g2g.tscn` | `game/g2g_module.gd` |
+| `playlot` | `games/game-playlot` | `dist/playground` — 76 files, 755 KiB | `scenes/pg_server.tscn` | `game/playground.tscn` | `game/playground_module.gd` |
 | `hungry_classic` `hungry_frenzy` `hungry_gauntlet` | `games/game-hungario` | `dist/hungry` — 65 files, 644 KiB | `game/modes/<mode>.tscn` | `game/client/hungry_client.tscn` | `game/hungry_module.gd` |
 
-`exclude_dirs` is `addons`, `examples`, `tools`, `screenshots` everywhere, plus `imported` for g2gfast — `maps/imported/` is 66 MB of converted geometry that is published as its own packs, and a game pack carrying it would deliver every map to every player on connect — and `web` for hungario, which has a browser build of its own in the repository.
+`exclude_dirs` is `addons`, `examples`, `tools`, `screenshots` everywhere, plus `imported` for Airdrift — `maps/imported/` is 66 MB of converted geometry that is published as its own packs, and a game pack carrying it would deliver every map to every player on connect — and `web` for hungario, which has a browser build of its own in the repository.
 
 ### Signing
 
@@ -600,7 +600,7 @@ loading_music: "https://example.com/loading/theme.ogg"
 loading_music_volume: 0.6
 loading_tips: ["Type /admin for the admin menu.", "Say !game_rtv to vote for a different game."]
 loading_games:
-  g2gfast:
+  airdrift:
     image: "https://example.com/loading/surf.jpg"
 loading_maps:
   surf_mesa:
@@ -654,10 +654,10 @@ for d in ../dot-* ../game-*; do git -C "$d" pull --ff-only; done && ./setup.sh -
 ./setup.sh --games-dir /srv/tmc/games       # one set of checkouts, several servers
 ```
 
-**`--only-games` and `--skip-games` choose which of them this build carries at all.** A box that hands out one game spends five clones, five imports and five publishes on games it will never serve, and a developer changing one of them waits for the other five on every run. A name may be the repository (`game-airdrift`), the repository without its prefix (`g2gfast`) or the content directory (`hungry_classic`); both flags are repeatable and take a comma- or space-separated list, and `TMC_ONLY_GAMES` / `TMC_SKIP_GAMES` are the same switches for a unit file or a compose file. Given both, `--only-games` decides the set and `--skip-games` narrows it. A name matching no game is refused with the list of the ones this build has, rather than quietly narrowing the build — and so is a filter that leaves nothing to publish.
+**`--only-games` and `--skip-games` choose which of them this build carries at all.** A box that hands out one game spends five clones, five imports and five publishes on games it will never serve, and a developer changing one of them waits for the other five on every run. A name may be the repository (`game-airdrift`), the repository without its prefix (`airdrift`) or the content directory (`hungry_classic`); both flags are repeatable and take a comma- or space-separated list, and `TMC_ONLY_GAMES` / `TMC_SKIP_GAMES` are the same switches for a unit file or a compose file. Given both, `--only-games` decides the set and `--skip-games` narrows it. A name matching no game is refused with the list of the ones this build has, rather than quietly narrowing the build — and so is a filter that leaves nothing to publish.
 
 ```bash
-./setup.sh --only-games g2gfast             # a timer server, and nothing else
+./setup.sh --only-games airdrift            # a timer server, and nothing else
 ./setup.sh --skip-games hungry_classic      # everything but the one you are not serving
 ```
 
@@ -670,8 +670,8 @@ A game left out is left out *everywhere except `dist/`*: **a pack an earlier run
 | `--only-games buses-from-hell` | 27 |
 | `--only-games hungario` | 42 |
 | `--only-games fatalcontact` | 45 |
-| `--only-games g2gfast` | 46 |
-| `--only-games playground` | 48 |
+| `--only-games airdrift` | 46 |
+| `--only-games playlot` | 48 |
 | all six (the default) | 53 |
 
 **The derivation is reachable only on a run that filtered something**, and for an unfiltered build it reproduces the hand-kept `ADDONS_ALL` list exactly, name for name — so the default path cannot change, and the derivation can never be the reason an ordinary build breaks. A build with no game repositories at all — a release tarball serving the packs already in `dist/` — falls back to the full list, because a published pack does not say which classes it parses against.

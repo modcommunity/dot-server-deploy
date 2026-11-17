@@ -8,7 +8,7 @@
 #     cvars:
 #       sv_alltalk: "1"
 #   games:
-#     <game>:                    its id (gamemann/game-g2gfast) or its name half
+#     <game>:                    its id (gamemann/game-airdrift) or its name half
 #       name: "Surf & Bhop"      what the server list and the game vote call it
 #       max_players: 24
 #       cvars:                   any cvar the game reads; see its game.yml for its own
@@ -77,7 +77,7 @@
 defaults:
 
 games:
-  game-g2gfast:
+  game-airdrift:
     maps:
       # The bhop and surf courses, one pack each, from github.com/zees-games/airdrift-maps.
       # Left out: bhop_eazy, bhop_lego2 and buses_from_hell_fixed have no finish line;
@@ -193,7 +193,7 @@ games:
       add:
         - gamemann/mg-prop-hunt-maps      # the school, the house, the office, the woods
 
-  game-playground:
+  game-playlot:
     maps:
       add:
         - gamemann/playlot-maps            # the custom sandbox maps; sent to every player too

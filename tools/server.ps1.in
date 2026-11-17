@@ -140,7 +140,7 @@ function Show-Usage {
   opens, which is before any game is loaded, so the `map` command it would be
   looking for belongs to a module that does not exist yet.
 
-    .\server.ps1 --game g2gfast -- +map bhop_g2g_intro
+    .\server.ps1 --game airdrift -- +map bhop_g2g_intro
 
   Secrets are deliberately NOT options. argv is readable by every other process on
   the machine and ends up in pasted bug reports, which is why DotConfig refuses

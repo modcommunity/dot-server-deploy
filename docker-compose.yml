@@ -89,9 +89,9 @@ services:
       # TMC_GAMES is the list this server is FOR. An entry is one of three
       # spellings and the spelling decides where the game comes from:
       #
-      #   g2gfast                        a game this image already carries
-      #   gamemann/game-g2gfast01        somebody's published pack, newest version
-      #   gamemann/game-g2gfast01@1.2.0  that version
+      #   airdrift                       a game this image already carries
+      #   gamemann/game-airdrift         somebody's published pack, newest version
+      #   gamemann/game-airdrift@1.2.0   that version
       #
       # It is also a filter: the games listing, `changelevel`, the vote menu and
       # the boot game all read this one set. TMC_GAME must name one of them, by
@@ -103,7 +103,7 @@ services:
       # Pair this with `--build-arg TMC_BUILD_GAMES=none` (see the Dockerfile) for
       # an image that carries no game and installs every one of them, or use the
       # docker-compose.games.yml overlay, which sets both.
-      # TMC_GAMES: "g2gfast,fatalcontact"
+      # TMC_GAMES: "airdrift,fatalcontact"
       # TMC_CONTENT_URL: "https://content.gamespice.net/content"
       # TMC_GAMES_MODE: "hide"
 

@@ -11,7 +11,7 @@ examples/live_switch.gd	32
 examples/lookatme_client.gd	105
 examples/multigame.gd	32
 examples/party_live.gd	30
-examples/playground_client.gd	113
+examples/playlot_client.gd	113
 examples/prophunt_client.gd	208
 examples/reconnect.gd	34
 examples/return_to_game.gd	38

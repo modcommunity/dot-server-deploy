@@ -1,18 +1,18 @@
 extends Node
-# [b]Nothing preloaded out of the game, because no game is in this build.[/b] The playground is a
+# [b]Nothing preloaded out of the game, because no game is in this build.[/b] PLAYLOT is a
 # delivered pack at `res://dot_cloud/tmc/playground/<version>/…`, and its custom maps are a second
 # pack at `res://dot_cloud/tmc/playground_maps/<version>/…`.
 
-## A REAL client, over a REAL socket, in a DELIVERED playground — with its custom maps delivered as
+## A REAL client, over a REAL socket, in a DELIVERED Playlot — with its custom maps delivered as
 ## a `dependencies` pack beside it, mounted on the server AND the client. Exits non-zero on any
 ## failure.
 
-const CONFIG := "res://examples/fixtures/playground"
+const CONFIG := "res://examples/fixtures/playlot"
 
 ## The server in a World3D of its own, away from the client in this process. See the helper.
 const ServerWorld := preload("res://examples/server_world.gd")
 const CONTENT := "res://content"
-const DATA := "user://tmc_playground_client"
+const DATA := "user://tmc_playlot_client"
 
 const GAME := "playlot"
 const CONTENT_ID := "tmc/playground"
@@ -48,15 +48,15 @@ func _ready() -> void:
 
 
 func _run() -> void:
-	print("dot-server-deploy: a real client in a delivered playground, with its maps pack")
+	print("dot-server-deploy: a real client in a delivered Playlot, with its maps pack")
 
 	DotPaths.remove_tree(DATA)
 
 	if not DirAccess.dir_exists_absolute(ProjectSettings.globalize_path("res://dist/tmc/playground")) \
 			or not DirAccess.dir_exists_absolute(ProjectSettings.globalize_path("res://dist/tmc/playground_maps")):
 		print("skipped: dist/tmc/playground and dist/tmc/playground_maps are not published here")
-		print("  ./server pack playground_maps --source games/game-playground-maps")
-		print("  ./server pack playlot --source games/game-playground")
+		print("  ./server pack playground_maps --source games/playlot-maps")
+		print("  ./server pack playlot --source games/game-playlot")
 		get_tree().quit(0)
 		return
 
@@ -142,7 +142,7 @@ func _says(world: Object) -> Dictionary:
 	return world.call("describe") as Dictionary
 
 
-## The CLIENT's playground: the delivered client scene under the link's `GameRoot`, which holds it
+## The CLIENT's Playlot game node: the delivered client scene under the link's `GameRoot`, which holds it
 ## as `playground`.
 func _client_client() -> Object:
 	var root := _link.get_node_or_null(^"GameRoot") if _link != null else null
@@ -249,7 +249,7 @@ func _test_connect() -> bool:
 
 
 func _test_the_packs_mounted() -> void:
-	_section("the playground and its maps pack are mounted on both ends")
+	_section("the Playlot game and its maps pack are mounted on both ends")
 
 	var entry := _server().games.current()
 	_check(entry != null and String(entry.content_id) == CONTENT_ID, "the current game is the delivered one")
@@ -274,7 +274,7 @@ func _test_both_catalogues() -> void:
 
 	var prefix := DotCloudClient.mount_prefix_for(MAPS_ID, MAPS_VERSION)
 	var ready := await _until(func() -> bool: return _client_world() != null, 30.0)
-	_check(ready, "the client built its playground")
+	_check(ready, "the client built its Playlot world")
 
 	for side: Array in [["the server", _world()], ["the client", _client_world()]]:
 		var world: Object = side[1]
