@@ -98,7 +98,7 @@ sv_game: map                 # REMAP an alias an earlier layer made (same name, 
 remove: [sv_games]           # REMOVE aliases an earlier layer made (also `remove: sv_games`)
 ```
 
-`aliases` at the console lists the effective table with the layer and `file:line` each entry came from. Refused loudly, as an ERR naming `file:line` and a failed boot (owner and addon layers): a line that is not `name: target`, a name twice in one file, an alias to itself, an alias to another alias (no chains or loops), an alias shadowing a setting, cvar or command, and a target that is not a setting, cvar or command this server has. `remove:` of a name no earlier layer made is a WARN.
+`aliases` at the console lists the effective table with the layer and `file:line` each entry came from. Refused loudly, as an ERR naming `file:line` and a failed boot (owner and addon layers): a line that is not `name: target`, a name twice in one file, an alias to itself, an alias to another alias (no chains or loops), an alias shadowing a setting, cvar or command (not counted: an alias whose name is the very cvar its target sets, like the default `hostname` for `sv_name`, which hides nothing), and a target that is not a setting, cvar or command this server has. `remove:` of a name no earlier layer made is a WARN.
 
 ## Every startup variable is a `server.yml` key
 

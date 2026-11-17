@@ -11,7 +11,7 @@ const RoundsWithoutMatch := preload("res://examples/fixtures/rounds_without_matc
 
 const Host := preload("res://host/tmc_host.gd")
 
-const CHECKS := 600
+const CHECKS := 605
 
 ## Where the replay section writes. Emptied at the start of every run, so a clip left by the
 ## last one cannot satisfy a check about this one (docs/testing.md, "a suite that writes to
@@ -170,6 +170,21 @@ func _test_aliases() -> void:
 	_check(zo.ok and (zo.value as TmcConfig).initial_game == "gamemann/mg-smash-copter", "`game:` also takes owner/repo")
 	var zh := TmcConfig.load_dir(_alias_cfg("zee_both", "sv_name: \"a\"\nhostname: \"b\"\n", ""))
 	_check(zh.ok and (zh.value as TmcConfig).server.hostname == "a", "`sv_name:` wins over its alias `hostname:`")
+	var zn := TmcConfig.load_dir(_alias_cfg("zee_hostname", "hostname: \"Zee Server\"\n", ""))
+	_check(zn.ok and (zn.value as TmcConfig).server.hostname == "Zee Server", "`hostname:` alone sets the server name")
+	var hc := DotConsole.new()
+	add_child(hc)
+	hc.register_cvar(DotConVar.new("hostname", "x", "name", 0))
+	hc.register_cvar(DotConVar.new("sv_gravity", "800", "g", 0))
+	var rep := TmcAliases.check({
+		"hostname": {"target": "sv_name", "source": "t:1", "layer": "addon"},
+	}, hc)
+	_check(rep["failures"] == 0 and (rep["unknown"] as PackedStringArray).is_empty(), "alias `hostname` -> `sv_name` is not a shadow of the cvar `hostname`")
+	var rep2 := TmcAliases.check({
+		"sv_gravity": {"target": "sv_name", "source": "t:2", "layer": "server"},
+	}, hc)
+	_check(rep2["failures"] == 1, "an alias that hides a DIFFERENT cvar is still a shadow failure")
+	hc.queue_free()
 
 	var bad := {
 		"line": ["not a mapping line", "name: target"],

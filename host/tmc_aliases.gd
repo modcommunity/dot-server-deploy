@@ -106,6 +106,14 @@ static func lines_of(aliases: Dictionary) -> PackedStringArray:
 	return out
 
 
+## True when `alias_name` is the console name of the very setting `target_key` maps to (`hostname` -> `sv_name` -> the cvar `hostname`). That alias hides nothing: typing either name reaches the same setting.
+static func names_own_target(alias_name: String, target_key: String) -> bool:
+	for table: Dictionary in [TmcConfigKeys.BOOT_KEYS, TmcConfigKeys.NET_KEYS, TmcConfigKeys.LOG_KEYS]:
+		if table.has(target_key) and String(table[target_key]) == alias_name:
+			return true
+	return false
+
+
 ## After the console is up: every alias target must be a real setting, command or cvar, and no alias may shadow one. Failures are ERR lines naming the file and line, and entries in the returned `unknown`.
 ## The valid ones are registered on the console too, so the alias works at a prompt and over RCON as well as in a file. Returns `{failures: int, unknown: PackedStringArray}`.
 static func check(aliases: Dictionary, console: DotConsole) -> Dictionary:
@@ -115,7 +123,7 @@ static func check(aliases: Dictionary, console: DotConsole) -> Dictionary:
 		var entry: Dictionary = aliases[alias_name]
 		var first := String(entry["target"]).split(" ")[0]
 		var problem := ""
-		if console.find_cvar(alias_name) != null or console.find_command(alias_name) != null:
+		if (console.find_cvar(alias_name) != null or console.find_command(alias_name) != null) and not names_own_target(alias_name, first):
 			problem = "alias `%s` shadows the console name of the same name" % alias_name
 		elif not (first in TmcConfig.HOST_KEYS or TmcConfigKeys.LOG_KEYS.has(first) or TmcConfigKeys.BOOT_KEYS.has(first) or TmcConfigKeys.NET_KEYS.has(first)
 				or console.find_cvar(first) != null or console.find_command(first) != null):
