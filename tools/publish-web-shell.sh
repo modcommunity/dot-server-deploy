@@ -10,6 +10,10 @@
 # (docs/releases.md, "Publishing the web build"); by hand it is the fallback, and
 # ~/godot/deploy-web-shell.sh on a developer box is a wrapper that passes its .env.
 #
+# The prod content origin is https://content.gamespice.net (pass --origin https://content.gamespice.net,
+# or SHELL_ORIGIN): it serves game/<app>/<build>/ as /<app>/<build>/. dotgames.org no longer serves the
+# shell (it answers 404 since the move to storez), so a read-back against it always fails.
+#
 # Two upload paths: --api SITE (SHELL_API) goes through website-city's web build API (docs/web-shell-api.md) and needs only SHELL_PUBLISH_TOKEN;
 # without it the legacy `aws s3` path runs (GAMES_S3_* variables), which works only while the store is S3.
 # Credentials come from the environment or --env FILE (file < environment < command line), never from an argument, never printed.
