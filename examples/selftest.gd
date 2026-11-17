@@ -818,12 +818,12 @@ func _test_friends() -> void:
 	alice.client.set_process(false)
 	add_child(alice)
 
-	alice.on_playing("203.0.113.7:27015", "12", "Arena", "Fixture Server")
+	alice.on_playing("203.0.113.7:27015", "12", "Fatal Contact", "Fixture Server")
 	alice.client.advance(0.5)
 	await get_tree().process_frame
 	var seen := hub.presence_seen_by("bob", "alice")
 	_check(seen.status == DotPresence.Status.IN_GAME and seen.server_id == 12, "presence reflects a connect: in game, on server 12")
-	_check(seen.joinable and seen.detail == "Playing Arena on Fixture Server", "joinable, with where (%s)" % seen.detail)
+	_check(seen.joinable and seen.detail == "Playing Fatal Contact on Fixture Server", "joinable, with where (%s)" % seen.detail)
 
 	alice.on_disconnected()
 	alice.client.advance(0.5)
@@ -835,7 +835,7 @@ func _test_friends() -> void:
 	)
 
 	# Following: the party when there is one, a server only where this shell has been.
-	alice.on_playing("203.0.113.7:27015", "12", "Arena", "Fixture Server")
+	alice.on_playing("203.0.113.7:27015", "12", "Fatal Contact", "Fixture Server")
 	alice.client.advance(0.5)
 	await get_tree().process_frame
 	var dialled: Array = []
@@ -849,7 +849,7 @@ func _test_friends() -> void:
 		not refused.ok and refused.error.detail == "friends.join.deny.unsupported",
 		"a server this shell has never been on is refused honestly, with the site's key"
 	)
-	bob.on_playing("203.0.113.7:27015", "12", "Arena", "Fixture Server")
+	bob.on_playing("203.0.113.7:27015", "12", "Fatal Contact", "Fixture Server")
 	var followed: DotResult = await bob.join("alice")
 	_check(followed.ok and dialled == ["203.0.113.7:27015"], "one it has is dialled at the address it knows (%s)" % [dialled])
 
@@ -1946,7 +1946,7 @@ func _test_vote_rounds_without_a_match() -> void:
 ## random and announces a second change.
 func _rotation_votes(tree: Dictionary, excluded: Array = [], running: String = "") -> TmcVote:
 	var manager := DotGameManager.new()
-	for id in ["arena", "surf", "bhop", "maze", "deathrun"]:
+	for id in ["fc", "surf", "bhop", "maze", "deathrun"]:
 		var d := DotGameDescriptor.new()
 		d.game_id = id
 		d.content_id = "tmc/" + id
@@ -1981,7 +1981,7 @@ func _rotation_votes(tree: Dictionary, excluded: Array = [], running: String = "
 	votes.set_physics_process(false)
 	add_child(votes)
 	votes.add_child(votes.director)
-	votes.director.begin(StringName(running if running != "" else "arena"))
+	votes.director.begin(StringName(running if running != "" else "fc"))
 	return votes
 
 
@@ -1996,8 +1996,8 @@ func _test_game_rotation() -> void:
 	_section("games.yml decides which games are voted on and played")
 
 	var tree := {"rotation": "small", "rotations": {
-		"small": {"mode": "random", "games": ["arena", "surf", "bhop"]},
-		"loop": {"mode": "cycle", "cooldown": 7, "games": ["bhop", "arena", "surf"]},
+		"small": {"mode": "random", "games": ["fc", "surf", "bhop"]},
+		"loop": {"mode": "cycle", "cooldown": 7, "games": ["bhop", "fc", "surf"]},
 	}}
 	var votes := _rotation_votes(tree)
 	var director := votes.director
@@ -2033,7 +2033,7 @@ func _test_game_rotation() -> void:
 	votes.rotation.switch("loop")
 	votes.apply_rotation()
 	_check(votes.director.rules.end_vote == false, "a cycle turns the end-of-game ballot off")
-	_check(_ids(votes.source.choices()).slice(0, 3) == ["bhop", "arena", "surf"],
+	_check(_ids(votes.source.choices()).slice(0, 3) == ["bhop", "fc", "surf"],
 		"and the offer is in the written order (%s)" % [_ids(votes.source.choices())])
 	votes.rotation.switch("small")
 	votes.apply_rotation()
@@ -2050,7 +2050,7 @@ func _test_game_rotation() -> void:
 	# vote_exclude still works with a rotation: both sets are off the ballot.
 	votes = _rotation_votes(tree, ["surf"])
 	var both := _ids(votes.source.choices())
-	_check(not both.has("surf") and not both.has("maze") and both.has("arena"),
+	_check(not both.has("surf") and not both.has("maze") and both.has("fc"),
 		"vote_exclude and the rotation both apply (%s)" % [both])
 	votes.free()
 
@@ -2060,9 +2060,9 @@ func _test_game_rotation() -> void:
 	votes.free()
 
 	# A rotation matching nothing plays everything, and an unknown entry is only a WARN.
-	votes = _rotation_votes({"games": ["nothing_like_it", "arena", "surf"]})
+	votes = _rotation_votes({"games": ["nothing_like_it", "fc", "surf"]})
 	var some := _ids(votes.source.choices())
-	_check(some.has("arena") and some.has("surf") and not some.has("bhop"),
+	_check(some.has("fc") and some.has("surf") and not some.has("bhop"),
 		"an entry matching no game is skipped and the rest still play (%s)" % [some])
 	votes.free()
 	votes = _rotation_votes({"games": ["nothing_like_it"]})
@@ -2103,9 +2103,9 @@ func _test_game_rotation() -> void:
 	votes.free()
 
 	# Patterns, the same matcher as maps.yml.
-	votes = _rotation_votes({"games": ["tmc/a*", "deathrun"]})
+	votes = _rotation_votes({"games": ["tmc/f*", "deathrun"]})
 	var globbed := _ids(votes.source.choices())
-	_check(globbed.has("arena") and globbed.has("deathrun") and globbed.size() == 2,
+	_check(globbed.has("fc") and globbed.has("deathrun") and globbed.size() == 2,
 		"globs and bare names pick games (%s)" % [globbed])
 	votes.free()
 

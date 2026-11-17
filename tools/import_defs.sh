@@ -2,8 +2,8 @@
 #
 # Push a game's deployment/*.json definition files to the site.
 #
-#   ./server import-defs --game-dir ../game-arena
-#   ./server import-defs --game-dir ../game-arena --dry-run
+#   ./server import-defs --game-dir ../game-fatal-contact
+#   ./server import-defs --game-dir ../game-fatal-contact --dry-run
 #
 # Posts whichever of these exist in <game-dir>/deployment/ (a missing one is skipped):
 #   stat-defs.json         -> /api/integration/v1/stats/defs-import        (STATS_WRITE)

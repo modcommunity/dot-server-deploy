@@ -1,7 +1,7 @@
 # Where a game repository is, for every script here that needs one.
 #
 #   . tools/game_source.sh
-#   game_source game-arena && echo "$GAME_SRC"
+#   game_source game-fatal-contact && echo "$GAME_SRC"
 #
 # SOURCED, never executed. It defines two variables and one function and runs nothing.
 #

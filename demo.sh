@@ -194,7 +194,7 @@ GAME4_TICKRATE="${TMC_DEMO_GAME4_TICKRATE:-128}"
 
 # A FIFTH SERVER, and the one that took the longest to be able to run at all.
 #
-# fatalcontact (formerly arena) is the family's REFERENCE game -- the only place dot-player-controller, dot-combat,
+# fatalcontact (renamed; see its metadata.former_ids) is the family's REFERENCE game -- the only place dot-player-controller, dot-combat,
 # dot-loadout, dot-match and dot-ui are all present at once -- and until now it was the
 # reference game with nothing to sit down at. It had a netcode bridge, a headless suite
 # that played a whole deathmatch, and no camera rig, no input sampling and no renderer.

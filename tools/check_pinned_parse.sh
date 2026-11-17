@@ -3,7 +3,7 @@
 # Addons a game links beyond the lock are added at their newest v* tag (else HEAD) and listed.
 #   tools/check_pinned_parse.sh [GAME...]   default: every games/<dir> that is a git repo with a project.godot
 # A lock older than a game's main fails to compile on the server, and ./server check only
-# sees it at boot (2026-11-03: dot-weapon v0.1.36 under arena calling a v0.1.37 method).
+# sees it at boot (2026-11-03: dot-weapon v0.1.36 under FC calling a v0.1.37 method).
 set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 GODOT="${GODOT:-godot}"

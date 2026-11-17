@@ -134,11 +134,11 @@ func _stage_friends(shell: Node) -> void:
 	shell.set("_friends", stand_in)
 	var list: Array = []
 	var rows := [
-		["Ann", "in_game", "Playing Arena on TMC Deathmatch #1 (EU, 64 tick, long hostname)", 12, "", true],
+		["Ann", "in_game", "Playing Fatal Contact on TMC Deathmatch #1 (EU, 64 tick, long hostname)", 12, "", true],
 		["Bo", "in_game", "Playing Smash Copter", 0, "5123", true],
 		["Cy", "online", "", 0, "", false],
 		["Dee", "in_game", "Playing Surf on g2gfast", 7, "", false],
-		["Eve", "in_game", "Playing Arena", 3, "", true],
+		["Eve", "in_game", "Playing Fatal Contact", 3, "", true],
 		["Fin", "offline", "", 0, "", false],
 	]
 	for r in rows:
@@ -197,14 +197,14 @@ func _stage_loading(shell: Node) -> void:
 	shell.set("_has_spawned", true)
 	var screen: Node = shell.get("loading")
 	var url := "http://127.0.0.1:9/bg.png"
-	var picture := Image.load_from_file(ProjectSettings.globalize_path("res://../game-arena/screenshots/dm_atrium_overview.png"))
+	var picture := Image.load_from_file(ProjectSettings.globalize_path("res://../game-fatal-contact/screenshots/dm_atrium_overview.png"))
 	if picture != null and not picture.is_empty():
 		screen.get("_media")[url] = ImageTexture.create_from_image(picture)
 	screen.call("adopt", {"v": 1, "default": {
 		"images": [url], "title": "TMC Community",
 		"tips": ["Type /admin for the admin menu, if you are an admin."],
 	}})
-	screen.call("begin", &"game", "arena", "Arena")
-	screen.call("set_progress", 0.42, "Downloading Arena…", "23.5 / 63.0 MiB · 3.1 MiB/s")
+	screen.call("begin", &"game", "fatalcontact", "Fatal Contact")
+	screen.call("set_progress", 0.42, "Downloading Fatal Contact…", "23.5 / 63.0 MiB · 3.1 MiB/s")
 	for i in 30:
 		await process_frame

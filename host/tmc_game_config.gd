@@ -90,7 +90,8 @@ static func load_from(config_dir: String, data_dir: String) -> DotResult:
 	var dir := config_dir.rstrip("/")
 
 	for line in TmcGameCfgDirs.migrate_retired_dirs(dir):
-		DotLog.info(CHANNEL, line)
+		# A retired directory name is a WRN naming it, so an operator renames it at the source too.
+		DotLog.warn(CHANNEL, line)
 
 	var path := DotCfgLegacy.find("%s/%s" % [dir, LEGACY_FILE], "%s/%s" % [dir, FILE])
 

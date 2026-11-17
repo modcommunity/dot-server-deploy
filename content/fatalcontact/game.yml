@@ -1,4 +1,4 @@
-# fatalcontact (formerly arena). Zee's Fatal Contact. The default game, which a server runs when nothing names another, and the reference game: a 3D dev-textured deathmatch, and the only place
+# fatalcontact (renamed; its former id is in metadata.former_ids). Zee's Fatal Contact. The default game, which a server runs when nothing names another, and the reference game: a 3D dev-textured deathmatch, and the only place
 # dot-player-controller, dot-combat, dot-loadout, dot-match and dot-ui run in one process.
 #
 #     changelevel fatalcontact
@@ -11,7 +11,7 @@
 # suites could not see:
 #
 #   * `ArenaModule` looked its session up by `peer_id`, which `client_spawn` does not
-#     carry, so NOBODY EVER JOINED a dedicated arena server. Silently: a null session is
+#     carry, so NOBODY EVER JOINED a dedicated FC server. Silently: a null session is
 #     a legitimate thing to find.
 #   * `ArenaPlayerNet._net_state_applied` moved the node on the PREDICTED entity, which
 #     is what reconciliation reads as "what the client is showing". The measured
@@ -35,7 +35,7 @@
 #
 # game-fatal-contact references its own files by relative path and rebases its own res:// strings,
 # which is what makes it correct both in a build and at res://dot_cloud/arena/<version>/.
-# Published with `./server pack fatalcontact --source games/game-arena`.
+# Published with `./server pack fatalcontact --source games/game-fatal-contact`.
 #
 # ONE MAP, AND THAT IS THE GAME. `dm_box` is an ArenaMap -- a list of AABBs that becomes
 # meshes, static bodies and analytic trace geometry from ONE description, so the server's
@@ -68,7 +68,7 @@ cvars:
   # A deathmatch wants two players before a round means anything, and this is a public
   # demonstration server that is empty most of the time. At two, the first person to
   # open it connects, sits in WARMUP for ever, never spawns, and sees a HUD saying
-  # WARMUP over an empty arena -- which is indistinguishable from a broken server and
+  # WARMUP over an empty map -- which is indistinguishable from a broken server and
   # is the only thing most visitors will ever see of it.
   #
   # At one they spawn, walk around a real map with real weapons, and the round starts

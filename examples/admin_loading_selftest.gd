@@ -132,7 +132,7 @@ func _menu(tree: Dictionary, people: Array) -> TmcAdminMenu:
 	menu.send_fn = func(session: DotClientSession, page: Dictionary) -> bool:
 		sent.append([session, page])
 		return true
-	menu.games_fn = func() -> Array: return [["arena", "Arena"], ["g2gfast", "Surf"]]
+	menu.games_fn = func() -> Array: return [["fc", "Fatal Contact"], ["g2gfast", "Surf"]]
 	menu.maps_fn = func() -> Array: return [["surf_mesa", "Mesa"]]
 	add_child(menu)
 	return menu
@@ -576,7 +576,7 @@ class GameStandIn:
 	var metadata: Dictionary = {}
 
 	func display_name_or_id() -> String:
-		return "Arena"
+		return "Fatal Contact"
 
 
 func _test_menu_layers() -> void:
@@ -595,7 +595,7 @@ func _test_menu_layers() -> void:
 	menu.adopt_game(game)
 	sent.clear()
 	_nav(menu, admin, "root")
-	_check(_labels(_last_page()).has("Arena"), "a game's game.yml items get a category named after the game",
+	_check(_labels(_last_page()).has("Fatal Contact"), "a game's game.yml items get a category named after the game",
 		", ".join(_labels(_last_page())))
 	_nav(menu, admin, "c:game")
 	_check(_labels(_last_page()) == PackedStringArray(["Restart the match"]), "holding its unplaced item",
@@ -621,8 +621,8 @@ func _test_menu_layers() -> void:
 	# The code half: a module registering through the registry, and leaving.
 	var module := Node.new()
 	add_child(module)
-	menu.set_layer("arena", {"title": "Arena", "items": {"round": {"label": "End the round", "command": "say {team}", "steps": ["team"]}}}, module)
-	menu.add_list("arena", "team", func() -> Array: return [["red", "Red team"], ["blue", "Blue team"], ["bad value", "x"]], "Which team")
+	menu.set_layer("fc", {"title": "Fatal Contact", "items": {"round": {"label": "End the round", "command": "say {team}", "steps": ["team"]}}}, module)
+	menu.add_list("fc", "team", func() -> Array: return [["red", "Red team"], ["blue", "Blue team"], ["bad value", "x"]], "Which team")
 	sent.clear()
 	_nav(menu, admin, "i:round")
 	var page := _last_page()
@@ -666,8 +666,8 @@ func _test_review_fixes() -> void:
 		(big["images"] as Array).append("https://cdn.example.com/%s/%d.jpg" % ["x".repeat(400), i])
 	for i in 12:
 		(big["tips"] as Array).append("ヒント".repeat(50))
-	var loading := TmcLoading.new().configure({"loading_games": {"arena": big}})
-	var hint := loading._hint({"game": "arena"}, loading.games["arena"], true)
+	var loading := TmcLoading.new().configure({"loading_games": {"fc": big}})
+	var hint := loading._hint({"game": "fc"}, loading.games["fc"], true)
 	_check(TmcLoading.encoded_size(hint) <= TmcLoading.MAX_DOC_BYTES and hint.get("show", false),
 		"an oversized game screen is cut to fit, and keeps the show that matters (%d bytes)" % TmcLoading.encoded_size(hint))
 	_check(Array(loading.problems).any(func(p: String) -> bool: return p.contains("too big to send whole")),
@@ -725,7 +725,7 @@ func _test_review_fixes() -> void:
 	_check(queued_song.size() == 1 and queued_song[0][1] == true, "a hint's song is queued as a song, whenever its turn comes")
 
 	# 8. Nothing of the last server survives a reset.
-	screen.begin(TmcLoadingScreen.REASON_GAME, "arena", "Arena")
+	screen.begin(TmcLoadingScreen.REASON_GAME, "fc", "Fatal Contact")
 	screen.reset()
 	_check(screen.describe()["game"] == "" and screen._queue.is_empty(), "a reset forgets the last server's game and its queue")
 	screen.free()
@@ -978,8 +978,8 @@ func _test_loading_client() -> void:
 	screen.end(TmcLoadingScreen.REASON_WARM)
 	_check(screen._reason_at.is_empty(), "and no longer once it ended")
 
-	screen.adopt({"next": {"game": "arena", "entry": {}}, "show": true})
-	_check(screen.is_showing() and screen.describe()["next"]["game"] == "arena",
+	screen.adopt({"next": {"game": "fc", "entry": {}}, "show": true})
+	_check(screen.is_showing() and screen.describe()["next"]["game"] == "fc",
 		"the server's hint can put it up itself, naming the game")
 	screen.reset()
 	_check(not screen.is_showing() and not screen.has_document(), "a new connection forgets the old server's screen")

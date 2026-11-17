@@ -82,7 +82,7 @@ The solo path in `client/shell.gd` resolves the new id first and falls back to t
 
 dot-cloud's own suite proves the overlay with a run key and separate processes. **The end-to-end proof, an old exported shell meeting a newer server and relaunching onto site-signed addon packs, was done from here:**
 
-- **Desktop**: an exported Linux client whose lock said dot-ui v0.1.4 and dot-audio v0.1.2, against a local `./server` on a newer lock, fetched `modcommunity/dot-ui@0.1.5` and `dot-audio@0.1.3` from the production origin, relaunched, mounted the overlay (2 addons, 29 uids), passed the "the overlay copy is what runs" probe, rejoined by itself and spawned in the arena match.
+- **Desktop**: an exported Linux client whose lock said dot-ui v0.1.4 and dot-audio v0.1.2, against a local `./server` on a newer lock, fetched `modcommunity/dot-ui@0.1.5` and `dot-audio@0.1.3` from the production origin, relaunched, mounted the overlay (2 addons, 29 uids), passed the "the overlay copy is what runs" probe, rejoined by itself and spawned in the FC match.
 - **Browser**: the same build in headless Chromium against a local mirror of the two packs: page 1 updated and reloaded, page 2 mounted, confirmed and rejoined, in exactly two loads. A local page cannot fetch game content from the CDN (CORS), so the browser run stops at content sync; that is the known local limit.
 
 Running it found: the launcher in use was the old generated `./server` (regenerate after editing `tools/server.in`); a desktop relaunch lost `--connect`; the browser reload loop above; a signed-in player returning as a guest. All fixed.

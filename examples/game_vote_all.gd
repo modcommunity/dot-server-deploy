@@ -523,7 +523,7 @@ func _test_game(game_id: String, next: String) -> void:
 	_link().send_chat("/%snominate %s" % [TmcVote.COMMAND_PREFIX, next])
 
 	# The line everybody reads names the player. It named the voter id: "[Server] u1
-	# nominated Arena." in every game, while the ballot beside it drew the name.
+	# nominated Fatal Contact." in every game, while the ballot beside it drew the name.
 	var sessions := _server().sessions() if _server() != null else []
 	var me: DotClientSession = sessions[0] if not sessions.is_empty() else null
 	var nominated_line := func() -> String:
