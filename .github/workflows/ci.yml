@@ -31,7 +31,7 @@ jobs:
     # fresh checkout does not have. The parse pass is the part that catches a lock
     # behind the code -- armed against that night's lock, it fails on host/tmc_vote.gd.
     validate:
-        uses: gamespice-platform/ci/.github/workflows/validate.yml@v1.3.12
+        uses: gamespice-platform/ci/.github/workflows/validate.yml@v1.3.24
         with:
             suites: 'examples/selftest examples/admin_loading_selftest'
             shell-command: 'for f in setup.sh demo.sh upgrade.sh play.sh tools/*.sh deploy/*.sh; do bash -n "$f" || exit 1; done'
