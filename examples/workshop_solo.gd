@@ -5,7 +5,7 @@ extends Node
 const WORK := "user://tmc_workshop_solo"
 const SHELL := "res://client/shell.tscn"
 const GAME := "gamemann/ws-game"
-const CHECKS := 88
+const CHECKS := 90
 const ACCEPTS := {"kinds": ["map", "script"], "map_kinds": ["sandbox"]}
 const ADDON_GAME := "gamemann/ws-addgame"
 const ADDON_ACCEPTS := {"kinds": ["map", "addon"], "map_kinds": ["sandbox"]}
@@ -583,6 +583,11 @@ func _test_subscription_marks() -> void:
 	_check(not (wanted["b"] as Dictionary).has("source"), "one whose id differs (the game's own requirement) is not")
 	_check(not TmcShellSolo.plan_holds_subscription({}) and not TmcShellSolo.plan_holds_subscription({"addons": wanted["b"]}),
 		"an empty or unmarked plan holds none")
+
+	var kept := TmcShellSolo.without_subscribed(wanted)
+	_check(kept.keys() == ["b"] and wanted.has("a"), "dropping the subscription keeps the game's own entry and leaves the input alone")
+	_check(TmcShellSolo.without_subscribed({"a": wanted["a"]}).is_empty() and TmcShellSolo.without_subscribed({}).is_empty(),
+		"a plan of only subscriptions drops to nothing")
 
 	_done()
 
