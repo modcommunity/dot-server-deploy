@@ -31,7 +31,7 @@ dot-matchmaking	v0.1.10
 dot-menu	v0.1.31
 dot-mobile	v0.1.1
 dot-moderation	v0.1.7
-dot-net	v0.1.36
+dot-net	v0.1.37
 dot-npc	v0.1.24
 dot-npc-ai	v0.1.14
 dot-npc-ai-director	v0.1.12
@@ -41,7 +41,7 @@ dot-peer-to-peer	v0.1.6
 dot-physics	v0.1.12
 dot-platform	v0.1.11
 dot-player	v0.1.7
-dot-player-char	v0.1.73
+dot-player-char	v0.1.75
 dot-player-class	v0.1.11
 dot-player-controller	v0.4.15
 dot-procedural-generation	v0.1.6
@@ -71,7 +71,7 @@ dot-vote	v0.1.19
 dot-weapon	v0.1.55
 dot-weather	v0.1.4
 dot-workbench	v0.3.4
-fc-weapons	v1.4.52
+fc-weapons	v1.4.57
 natural-disasters	v0.1.4
 zed-dot-weapons	v0.1.15
 zee-dot-weapons	v0.1.66
