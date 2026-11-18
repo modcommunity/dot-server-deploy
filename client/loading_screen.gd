@@ -274,11 +274,7 @@ func fit_card() -> Vector2:
 	return _block.get_combined_minimum_size() if _block != null else Vector2.ZERO
 
 
-## Whether a fetch or sync that starts while a game is live may put the blocking cover over it.
-## It may not in a solo game, nor for a late sync of suggested packs: the game covers its own
-## map changes with its load gate, and the player must never be walled off from a match that
-## is running because a download is going on behind it. [param live] is "the game is on
-## screen and the menu is hidden".
+## Whether a fetch or sync that starts while a game is live may put the blocking cover over it. It may not in a solo game, nor for a late sync of suggested packs: the game covers its own map changes with its load gate, and the player must never be walled off from a match that is running because a download is going on behind it. [param live] is "the game is on screen and the menu is hidden".
 static func may_block_live_game(live: bool, solo: bool, late_sync: bool) -> bool:
 	return not (live and (solo or late_sync))
 

@@ -145,10 +145,7 @@ func refresh() -> void:
 	_add_site_button()
 
 
-## How the packs the game suggests (its map packs) arrive: one map at a time when it is picked
-## (the default), or all in the background. Shown whenever the game declares some, signed in or
-## not, because it is this device's choice and not a subscription. There is no "ask": a question
-## about a bulk download would land on top of a running game.
+## How the packs the game suggests (its map packs) arrive: one map at a time when it is picked (the default), or all in the background. Shown whenever the game declares some, signed in or not, because it is this device's choice and not a subscription. There is no "ask": a question about a bulk download would land on top of a running game.
 func _add_suggested_row() -> void:
 	if workshop.suggested.is_empty():
 		return

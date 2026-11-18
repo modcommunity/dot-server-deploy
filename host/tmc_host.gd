@@ -299,10 +299,7 @@ static func _absolute(path: String) -> String:
 	return ProjectSettings.globalize_path("res://").path_join(path)
 
 
-## Number flags laid over `config.server`, in this order. The other three ports are derived WRONG on a panel: RCON defaults to game port plus one and both query ports
-## to the game port, but Pterodactyl hands out whatever allocations were free on that node, and a taken `port + 1` fails as "address in use" on a port nobody configured.
-## Not secrets, so argv is fine, unlike `--rcon-password`. A2S before query, because `query_port` DERIVES FROM IT (`effective_query_port()` falls back to
-## `effective_a2s_port()`): setting only `--a2s-port` moves both onto one socket, which the two protocols tell apart by their first four bytes; `--query-port` splits them.
+## Number flags laid over `config.server`, in this order. The other three ports are derived WRONG on a panel: RCON defaults to game port plus one and both query ports to the game port, but Pterodactyl hands out whatever allocations were free on that node, and a taken `port + 1` fails as "address in use" on a port nobody configured. Not secrets, so argv is fine, unlike `--rcon-password`. A2S before query, because `query_port` DERIVES FROM IT (`effective_query_port()` falls back to `effective_a2s_port()`): setting only `--a2s-port` moves both onto one socket, which the two protocols tell apart by their first four bytes; `--query-port` splits them.
 const SERVER_NUMBER_FLAGS := {"--port": "port", "--max-players": "max_players", "--rcon-port": "rcon_port", "--a2s-port": "a2s_port", "--query-port": "query_port"}
 
 

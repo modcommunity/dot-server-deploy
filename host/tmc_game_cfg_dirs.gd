@@ -3,10 +3,7 @@ extends RefCounted
 
 ## The directories under `cfg/game/` and `cfg/server/game/`: moving the ones a renamed game left behind, and writing the base file a game starts with. The settings themselves are read by [TmcGameConfig].
 
-## Directory names under `cfg/game/` and `cfg/server/game/` a game was configured under before it was
-## renamed, and the name it has now. [method migrate_retired_dirs] moves them on boot, and
-## `tools/cfg_sync.sh` does the same before the first boot of an update (the selftest checks that the two
-## lists agree). Exact directory names, no owner.
+## Directory names under `cfg/game/` and `cfg/server/game/` a game was configured under before it was renamed, and the name it has now. [method migrate_retired_dirs] moves them on boot, and `tools/cfg_sync.sh` does the same before the first boot of an update (the selftest checks that the two lists agree). Exact directory names, no owner.
 const RETIRED_DIRS := {
 	"game-arena": "game-fatal-contact",
 	"game-final-contact": "game-fatal-contact",
@@ -19,11 +16,7 @@ const RETIRED_DIRS := {
 }
 
 
-## Moves a directory kept under a retired game name (see [constant RETIRED_DIRS]) to the current name, in both
-## tiers (`cfg/game/` and `cfg/server/game/`), without losing a file: a directory with no successor is renamed,
-## and into one that exists only the files it lacks are moved. A file in both that differs is kept as
-## `<file>.from-<old name>` beside the current one (never read, never deleted) and named in the line returned;
-## an identical one is dropped. Returns one line per directory handled; nothing to do returns nothing.
+## Moves a directory kept under a retired game name (see [constant RETIRED_DIRS]) to the current name, in both tiers (`cfg/game/` and `cfg/server/game/`), without losing a file: a directory with no successor is renamed, and into one that exists only the files it lacks are moved. A file in both that differs is kept as `<file>.from-<old name>` beside the current one (never read, never deleted) and named in the line returned; an identical one is dropped. Returns one line per directory handled; nothing to do returns nothing.
 static func migrate_retired_dirs(config_dir: String) -> PackedStringArray:
 	var lines := PackedStringArray()
 	var base := config_dir.rstrip("/")
@@ -81,13 +74,7 @@ static func _merge_dir(from: String, into: String, old: String, kept: PackedStri
 			kept.append("%s.from-%s" % [file, old])
 
 
-## Writes a commented `cfg/game/<game>/server.yml` for every game in [param content] that has no file for
-## the game in either tier, from what the game declares in its own `game.yml` (name, player count, cvars
-## with the comment above each, the maps it offers), so the folder an owner looks in is never empty. Every
-## setting line is commented out: the file is documentation, and a default the game later changes is not
-## held at the old value. An existing file is left alone. Returns the
-## paths written (relative to [param config_dir]); a directory that cannot be written is a warning, not an
-## error, because a read-only cfg/ is a legitimate way to run.
+## Writes a commented `cfg/game/<game>/server.yml` for every game in [param content] that has no file for the game in either tier, from what the game declares in its own `game.yml` (name, player count, cvars with the comment above each, the maps it offers), so the folder an owner looks in is never empty. Every setting line is commented out: the file is documentation, and a default the game later changes is not held at the old value. An existing file is left alone. Returns the paths written (relative to [param config_dir]); a directory that cannot be written is a warning, not an error, because a read-only cfg/ is a legitimate way to run.
 static func write_base_configs(config_dir: String, content: TmcContent) -> PackedStringArray:
 	var written := PackedStringArray()
 	var base := config_dir.rstrip("/")

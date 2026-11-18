@@ -196,11 +196,7 @@ func _on_game_load_failed(_content_key: String, _error: DotError) -> void:
 	_publish_addon_set()
 
 
-## Announces the current and next games' addons, and tells every client in the game that lacks some of them ([constant TmcAddonGroups.ANNOUNCE_KIND]), before
-## the change sends its content: the shell fetches them, mounts them in place where it can (restarts where it cannot) and rejoins into the new game.
-## Run at `game_changing` and again as each pack of the change mounts here, because the next game's requires.json is only read when its pack is.
-## A client too old for the kind that lacks an addon is kicked, loudly, rather than left to fail loading a game whose scripts it cannot compile; its rejoin
-## gets the new set in the challenge.
+## Announces the current and next games' addons, and tells every client in the game that lacks some of them ([constant TmcAddonGroups.ANNOUNCE_KIND]), before the change sends its content: the shell fetches them, mounts them in place where it can (restarts where it cannot) and rejoins into the new game. Run at `game_changing` and again as each pack of the change mounts here, because the next game's requires.json is only read when its pack is. A client too old for the kind that lacks an addon is kicked, loudly, rather than left to fail loading a game whose scripts it cannot compile; its rejoin gets the new set in the challenge.
 func announce_change() -> void:
 	if change_to == null:
 		return

@@ -131,12 +131,7 @@ func _load_solo_inner(content_id: String, version: String) -> DotResult:
 	shell._solo_version = wanted
 	DotLog.info(shell.CHANNEL, "starting solo", {"content": content_id, "version": wanted})
 
-	# The game addons its pack requires (zee_weapons for Prop Hunt, fc_weapons for Fatal Contact; arena_weapons up to fc-weapons v1.4.51)
-	# are not in this shell: fetched as the overlay a server would announce, then a restart into it.
-	# Asked of the store before the pack is fetched, because the pack's own requirement check refuses
-	# it while one is missing. Returns only when nothing is missing or it cannot be had.
-	# Subscriptions are asked first (their downloads only registered): a game that accepts addon packs gets the
-	# subscribed ones in the same overlay, so one restart covers both.
+	# The game addons its pack requires (zee_weapons for Prop Hunt, fc_weapons for Fatal Contact; arena_weapons up to fc-weapons v1.4.51) are not in this shell: fetched as the overlay a server would announce, then a restart into it. Asked of the store before the pack is fetched, because the pack's own requirement check refuses it while one is missing. Returns only when nothing is missing or it cannot be had. Subscriptions are asked first (their downloads only registered): a game that accepts addon packs gets the subscribed ones in the same overlay, so one restart covers both.
 	var subscribed: Array = await shell._solo_packs._solo_workshop_plan(content_id, wanted)
 	var overlay: int = await _solo_overlay(content_id, await _solo_needs(content_id, wanted), subscribed)
 	if overlay == SoloOverlay.RESTARTING:
@@ -318,10 +313,7 @@ func _add_solo_subscriptions(session: TmcSoloSession, content_id: String, mount:
 		session.workshop_summary = await shell._sync_workshop(content_id)
 
 
-## The server process a solo game started for itself ([method TmcSoloSession.sim_child_args]):
-## the packs the shell that started it mounted, from the same cache, the session registered as
-## that shell registers it, and the game's client scene, which hands over to its server. A
-## failure quits with 1, and the game that started it plays in-process.
+## The server process a solo game started for itself ([method TmcSoloSession.sim_child_args]): the packs the shell that started it mounted, from the same cache, the session registered as that shell registers it, and the game's client scene, which hands over to its server. A failure quits with 1, and the game that started it plays in-process.
 func _start_sim_child() -> void:
 	# The overlay mounted at boot is the parent's: an unconfirmed boot would count against it.
 	DotCloudAddonSet.confirm_boot()
@@ -492,18 +484,7 @@ static func pack_holds_dir(dir: String, id: String, version: String, paths: Pack
 	return "%s %s, the newest published, holds %s, and this game needs addons/%s" % [id, version, ", ".join(holds), dir]
 
 
-## The addons in [param needs] (from [method _solo_needs]) that this shell neither carries nor
-## has mounted, fetched as the overlay a server would announce. When it only adds addons to this process (a first visit, a new shell
-## build) it is mounted here and the game starts ([method _mount_in_place]); otherwise it is restarted into, as
-## [method _update_addons] does for a join. [constant SoloOverlay.RESTARTING] when a restart is under way (the caller stops
-## there); [constant SoloOverlay.NONE] when nothing is missing or it is mounted here; [constant SoloOverlay.BLOCKED] when the addons are missing and
-## cannot be had now: after a failed start on the same overlay in this shell build, after [constant MAX_UPDATE_RESTARTS] restarts for it,
-## or when building it failed. Blocked never plays on: the game's scripts do not parse without its addons, which is the black screen
-## PLAYLOT showed on 2026-11-13. The caller fails the start and the solo button becomes Retry ([member _solo_retry]).
-##
-## [param subscribed] are the Workshop's `summary.addons` (dot-cloud 28): approved addon packs of a game whose
-## `accepts.kinds` has `addon`, already checked against the build's own addons. They join the overlay under
-## their exact ids and are marked `source: "subscription"` in the plan, which [method _restart_for_online] drops.
+## The addons in [param needs] (from [method _solo_needs]) that this shell neither carries nor has mounted, fetched as the overlay a server would announce. When it only adds addons to this process (a first visit, a new shell build) it is mounted here and the game starts ([method _mount_in_place]); otherwise it is restarted into, as [method _update_addons] does for a join. [constant SoloOverlay.RESTARTING] when a restart is under way (the caller stops there); [constant SoloOverlay.NONE] when nothing is missing or it is mounted here; [constant SoloOverlay.BLOCKED] when the addons are missing and cannot be had now: after a failed start on the same overlay in this shell build, after [constant MAX_UPDATE_RESTARTS] restarts for it, or when building it failed. Blocked never plays on: the game's scripts do not parse without its addons, which leaves PLAYLOT on a black screen. The caller fails the start and the solo button becomes Retry ([member _solo_retry]). [param subscribed] are the Workshop's `summary.addons` (dot-cloud 28): approved addon packs of a game whose `accepts.kinds` has `addon`, already checked against the build's own addons. They join the overlay under their exact ids and are marked `source: "subscription"` in the plan, which [method _restart_for_online] drops.
 func _solo_overlay(content_id: String, needs: Dictionary, subscribed: Array = []) -> SoloOverlay:
 	var found := await _collect_solo_announce(content_id, needs, subscribed)
 	var announce: Array = found["announce"]
@@ -559,10 +540,7 @@ func _solo_overlay(content_id: String, needs: Dictionary, subscribed: Array = []
 
 	shell._stamp_plan()
 
-	# A first visit, or the first start on a new shell build, has none of these addons in this process: mount them here and play on,
-	# rather than reload the page and fetch the shell again (the "update" restart a fresh PLAYLOT visit showed on 2026-11-14).
-	# A restart stays for an overlay that would replace a mounted addon: a compiled script is never read again. It also stays
-	# for a workshop subscription (never on a first visit): an online join drops that overlay, and only a restart unmounts it.
+	# A first visit, or the first start on a new shell build, has none of these addons in this process: mount them here and play on, rather than reload the page and fetch the shell again. A restart stays for an overlay that would replace a mounted addon: a compiled script is never read again. It also stays for a workshop subscription (never on a first visit): an online join drops that overlay, and only a restart unmounts it.
 	if shell._overlay_additive(built.value) and not plan_holds_subscription(built.value) \
 			and not plan_holds_subscription({"addons": wanted}):
 		match shell._mount_in_place():

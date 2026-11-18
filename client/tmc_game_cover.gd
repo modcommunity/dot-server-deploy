@@ -23,17 +23,10 @@ const FALLBACK_MAX_SEC := 5.0
 ## Seconds a game on the root contract has, after it is on screen, to say it is ready.
 var warm_wait_sec: float = 20.0
 
-## Seconds the material warm-up may hold the screen, with a warning past it; 0 is no limit. Past it
-## the screen lifts and the warm-up keeps drawing the rest in play, one budgeted round a frame, so
-## nothing is skipped. Checked between frames, so it holds only because [member draw_budget_msec]
-## keeps every frame short.
-## Project setting [code]tmc/cover/draw_max_sec[/code] overrides it.
+## Seconds the material warm-up may hold the screen, with a warning past it; 0 is no limit. Past it the screen lifts and the warm-up keeps drawing the rest in play, one budgeted round a frame, so nothing is skipped. Checked between frames, so it holds only because [member draw_budget_msec] keeps every frame short. Project setting [code]tmc/cover/draw_max_sec[/code] overrides it.
 var draw_max_sec: float = float(ProjectSettings.get_setting("tmc/cover/draw_max_sec", 6.0))
 
-## Milliseconds each round of the warm-up may cost its frame ([member DotRenderWarmup.budget_msec]);
-## 0 puts every item up at once. Unbudgeted, PLAYLOT's 184 items went up in one round: one frame of
-## serial shader compiles some 12 s long, which no time-out between frames could cut and during
-## which the screen did not move. Project setting [code]tmc/cover/draw_budget_msec[/code] overrides it.
+## Milliseconds each round of the warm-up may cost its frame ([member DotRenderWarmup.budget_msec]); 0 puts every item up at once. Unbudgeted, PLAYLOT's 184 items went up in one round: one frame of serial shader compiles some 12 s long, which no time-out between frames could cut and during which the screen did not move. Project setting [code]tmc/cover/draw_budget_msec[/code] overrides it.
 var draw_budget_msec: float = float(ProjectSettings.get_setting("tmc/cover/draw_budget_msec", 50.0))
 
 var loading: TmcLoadingScreen = null

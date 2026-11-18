@@ -732,10 +732,7 @@ func _kept_refused(path: String, cloud: DotCloudClient) -> String:
 	return "" if why == "" else "%s@%s %s" % [id, version, why]
 
 
-## Why dot-cloud's mount will refuse [param manifest], or "". The same rule as
-## DotCloudClient._rescan_for_code, by path alone: a manifest with `provides` that does not declare
-## `runs_code` and lists a code file. Packs signed before the site stamped `runs_code`
-## (website-city 3e0fa9487, 2026-11-13) are exactly that, so they are no fallback.
+## Why dot-cloud's mount will refuse [param manifest], or "". The same rule as DotCloudClient._rescan_for_code, by path alone: a manifest with `provides` that does not declare `runs_code` and lists a code file. Packs signed before the site stamped `runs_code` are exactly that, so they are no fallback.
 static func refused_at_mount(manifest: DotCloudManifest) -> String:
 	if manifest == null or manifest.provides.is_empty() or bool(manifest.provides.get("runs_code", false)):
 		return ""

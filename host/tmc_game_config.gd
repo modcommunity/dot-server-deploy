@@ -888,10 +888,7 @@ static func _content_id(key: String) -> String:
 	return str(TmcGameRef.parse(key)["id"])
 
 
-## The directory name under `cfg/game/` this game's settings live in, e.g. `game-fatal-contact`: its
-## repository name. A game this build carries is named by [constant BUILTIN_CFG_IDS] (a `hungry_<mode>` is
-## `game-hungario-<mode>`), a published one by the name half of its id, with a retired id mapped to the
-## current one.
+## The directory name under `cfg/game/` this game's settings live in, e.g. `game-fatal-contact`: its repository name. A game this build carries is named by [constant BUILTIN_CFG_IDS] (a `hungry_<mode>` is `game-hungario-<mode>`), a published one by the name half of its id, with a retired id mapped to the current one.
 static func cfg_id(descriptor: DotGameDescriptor) -> String:
 	var id := descriptor.game_id
 

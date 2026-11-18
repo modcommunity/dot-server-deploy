@@ -1,9 +1,6 @@
 # FC rename: phase 2 (load-bearing names)
 
-Phase 1 renamed text, comments, docs and test fixtures that named Fatal Contact by its old name. What is left
-are ids other systems resolve: published content ids, directories inside pinned tags, cvars, scene paths and
-database rows. Each keeps working under both names first, and the old one goes only after every pin and
-publish has moved. Below, `OLD` stands for the old FC name.
+Phase 1 renamed text, comments, docs and test fixtures that named Fatal Contact by its old name. What is left are ids other systems resolve: published content ids, directories inside pinned tags, cvars, scene paths and database rows. Each keeps working under both names first, and the old one goes only after every pin and publish has moved. Below, `OLD` stands for the old FC name.
 
 Rule for every lookup: prefer the FC name, fall back to the old one, and log a WRN naming the old one.
 

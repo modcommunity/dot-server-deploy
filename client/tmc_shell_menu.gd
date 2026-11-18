@@ -311,10 +311,7 @@ func _chain_focus(controls: Array) -> void:
 			here.focus_next = here.focus_neighbor_bottom
 
 
-## While the menu or the loading cover shows, lets the window grow its canvas to the screen's shape and
-## scales the canvas so the card reads at a phone's size ([method TmcShellStyle.fit_factor]). Put back
-## as the project had it the moment both are down: a game starting under the cover sees the change only
-## as a resize. Off with [member menu_fit] (a suite, or a build that wants the letterbox).
+## While the menu or the loading cover shows, lets the window grow its canvas to the screen's shape and scales the canvas so the card reads at a phone's size ([method TmcShellStyle.fit_factor]). Put back as the project had it the moment both are down: a game starting under the cover sees the change only as a resize. Off with [member menu_fit] (a suite, or a build that wants the letterbox).
 func _fit_menu() -> void:
 	if shell._menu == null or not shell.is_inside_tree():
 		return

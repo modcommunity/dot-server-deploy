@@ -894,10 +894,7 @@ func _new_cloud() -> DotCloudClient:
 	return cloud
 
 
-## The hashing scheduler [DotCloudClient] finds as its `CloudScheduler` child, made here so the web never hashes on worker threads.
-## On the threaded web engine a worker's `user://` reads are proxied to the browser's main thread one call a frame, so each mount-time
-## [DotHashJob] took ~0.7 s and FC's ~700 objects sat at "Unpacking 0 of 1" for minutes (web-mt-shell-unpack-hang-1).
-## On the main thread the same jobs share the frame budget, as they always have on the single-threaded engine.
+## The hashing scheduler [DotCloudClient] finds as its `CloudScheduler` child, made here so the web never hashes on worker threads. On the threaded web engine a worker's `user://` reads are proxied to the browser's main thread one call a frame, so each mount-time [DotHashJob] took ~0.7 s and FC's ~700 objects sat at "Unpacking 0 of 1" for minutes (web-mt-shell-unpack-hang-1). On the main thread the same jobs share the frame budget, as they always have on the single-threaded engine.
 static func _new_cloud_scheduler() -> DotScheduler:
 	var scheduler := DotScheduler.new()
 	scheduler.name = "CloudScheduler"
@@ -1477,12 +1474,7 @@ func _update_addons(addons: DotCloudAddonSet, wanted: Dictionary, target: String
 		_connect_to(target)
 
 
-## Whether a server's overlay just built ([param plan]) was taken without a restart, so the join goes on now: mounted in this
-## process ([method _clear_update_attempts]), or mounted but stale (the join goes on the build's own addons, as after a failed
-## restart). A first visit, or the first join on a new shell build, has none of these addons in this process; mounting them here
-## skips the IndexedDB wait, the page reload, the second fetch of the shell and the second engine boot (about 20 s of a Fast 4G
-## join measured on 2026-11-17). False leaves the restart: an overlay that would replace a mounted addon (a compiled script is
-## never read again), a workshop subscription (only a restart unmounts it), or a pack the engine refused, as on the solo path.
+## Whether a server's overlay just built ([param plan]) was taken without a restart, so the join goes on now: mounted in this process ([method _clear_update_attempts]), or mounted but stale (the join goes on the build's own addons, as after a failed restart). A first visit, or the first join on a new shell build, has none of these addons in this process; mounting them here skips the IndexedDB wait, the page reload, the second fetch of the shell and the second engine boot (about 20 s of a Fast 4G join). False leaves the restart: an overlay that would replace a mounted addon (a compiled script is never read again), a workshop subscription (only a restart unmounts it), or a pack the engine refused, as on the solo path.
 func _join_in_place(plan: Dictionary, target: String) -> bool:
 	if not _overlay_additive(plan) or TmcShellSolo.plan_holds_subscription(plan):
 		return false
@@ -1536,11 +1528,7 @@ var attempt_storage: Object = null
 var shell_build: String = TmcShellVersion.build_id()
 
 
-## How many times this tab has restarted for [param key] in this shell build. Kept in `sessionStorage`, not `user://`: in a browser files reach IndexedDB only through an asynchronous sync,
-## so a write that did not land is a reload with no plan that updates and reloads for ever (six reloads in seventy seconds measured).
-## A desktop build writes files synchronously and has the plan's own guard; it counts nothing here.
-## The counts are kept under the shell build and its addons.lock, so a redeploy starts them again, and a set's counts go once its addons are running
-## ([method _clear_update_attempts]): a tab that had spent its two restarts on two updates that worked once refused the third and started PLAYLOT without its weapons.
+## How many times this tab has restarted for [param key] in this shell build. Kept in `sessionStorage`, not `user://`: in a browser files reach IndexedDB only through an asynchronous sync, so a write that did not land is a reload with no plan that updates and reloads for ever (six reloads in seventy seconds measured). A desktop build writes files synchronously and has the plan's own guard; it counts nothing here. The counts are kept under the shell build and its addons.lock, so a redeploy starts them again, and a set's counts go once its addons are running ([method _clear_update_attempts]): a tab that had spent its two restarts on two updates that worked once refused the third and started PLAYLOT without its weapons.
 func _update_attempts(key: String) -> int:
 	var counts := _read_update_attempts()
 	return int(counts.get(key, 0))
@@ -1639,10 +1627,7 @@ static func _overlay_additive(plan: Dictionary) -> bool:
 	return true
 
 
-## Mounts the overlay the plan on disk names in this process and confirms it, through [method DotCloudAddonSet.mount_now] (the
-## boot script may name no class, so the shell makes the call). Only for an [method _overlay_additive] plan: mounting
-## refreshes the global class list, and with no compiled copy of these addons in memory their scripts load from it.
-## [constant InPlace.REFUSED] leaves the plan ready for a restart.
+## Mounts the overlay the plan on disk names in this process and confirms it, through [method DotCloudAddonSet.mount_now] (the boot script may name no class, so the shell makes the call). Only for an [method _overlay_additive] plan: mounting refreshes the global class list, and with no compiled copy of these addons in memory their scripts load from it. [constant InPlace.REFUSED] leaves the plan ready for a restart.
 func _mount_in_place() -> InPlace:
 	match DotCloudAddonSet.mount_now():
 		DotCloudAddonSet.MountNow.RUNNING:

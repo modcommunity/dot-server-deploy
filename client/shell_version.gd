@@ -61,10 +61,7 @@ static func label_text() -> String:
 	return "shell " + " · ".join(parts)
 
 
-## A small, dim label in the bottom-left corner of [param parent] (the bottom-right is
-## Powered by TMC's, [TmcPoweredBy]). Added last by the caller so it is drawn over the
-## backdrop; ignores the mouse so it never takes a click. Returns null when there is nothing
-## to say, so an unstamped run shows no label at all.
+## A small, dim label in the bottom-left corner of [param parent] (the bottom-right is Powered by TMC's, [TmcPoweredBy]). Added last by the caller so it is drawn over the backdrop; ignores the mouse so it never takes a click. Returns null when there is nothing to say, so an unstamped run shows no label at all.
 static func add_corner_label(parent: Control) -> Label:
 	var text := label_text()
 

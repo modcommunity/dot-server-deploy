@@ -44,10 +44,7 @@ func _solo_map_packs(content_id: String) -> PackedStringArray:
 	return out
 
 
-## The Workshop sync for a solo launch, before its overlay is decided: a game whose `provides.json` states `accepts`
-## has its subscribed packs planned and registered with the launch job (mounted after [method _prefetch_solo]
-## downloads them, by [method DotCloudWorkshop.mount_pending]). The value is the summary's `addons` (dot-cloud 28),
-## the subscribed addon packs for [method _solo_overlay]; empty for any other game.
+## The Workshop sync for a solo launch, before its overlay is decided: a game whose `provides.json` states `accepts` has its subscribed packs planned and registered with the launch job (mounted after [method _prefetch_solo] downloads them, by [method DotCloudWorkshop.mount_pending]). The value is the summary's `addons` (dot-cloud 28), the subscribed addon packs for [method _solo_overlay]; empty for any other game.
 func _solo_workshop_plan(content_id: String, version: String) -> Array:
 	var game: DotResult = await shell._cloud.resolve_manifest(StringName(content_id), version)
 	if not game.ok:
@@ -207,11 +204,7 @@ static func _in_tooling_dir(path: String) -> bool:
 	return false
 
 
-## Compiles a delivered pack's scripts a slice per frame with dot-cloud's warm_content, then
-## slice-loads its scenes and resources. An addon without warm_content falls back to
-## [method _slice_load] for everything. Both are no-ops natively. On the web they run on the main thread even on the threaded
-## engine: a [method ResourceLoader.load_threaded_request] there never finished (FC's 326 scripts at 0 % for minutes, no frame
-## drawn; web-mt-shell-unpack-hang-1), so warm_content is forced past its own "threads exist" skip.
+## Compiles a delivered pack's scripts a slice per frame with dot-cloud's warm_content, then slice-loads its scenes and resources. An addon without warm_content falls back to [method _slice_load] for everything. Both are no-ops natively. On the web they run on the main thread even on the threaded engine: a [method ResourceLoader.load_threaded_request] there never finished (FC's 326 scripts at 0 % for minutes, no frame drawn; web-mt-shell-unpack-hang-1), so warm_content is forced past its own "threads exist" skip.
 func _warm_pack(keys: Array[String]) -> Variant:
 	if shell._cloud == null or not shell._cloud.has_method("warm_content") or not DotPlatform.is_web():
 		await _slice_load(_pack_script_paths(keys))

@@ -1,9 +1,6 @@
 extends Node
 
-## Subscribed packs in solo play, through the REAL client shell: a solo start mounts what the player
-## subscribed to and the game's map catalogue sees it; an online start of the same game never asks
-## and sees none of it. A game whose accepts name `addon` takes a subscribed addon pack into its solo overlay,
-## and an online join drops that overlay.
+## Subscribed packs in solo play, through the REAL client shell: a solo start mounts what the player subscribed to and the game's map catalogue sees it; an online start of the same game never asks and sees none of it. A game whose accepts name `addon` takes a subscribed addon pack into its solo overlay, and an online join drops that overlay.
 
 const WORK := "user://tmc_workshop_solo"
 const SHELL := "res://client/shell.tscn"

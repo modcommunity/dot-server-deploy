@@ -217,7 +217,7 @@ func _test_security() -> void:
 	_done()
 
 
-## A game older than the list asks for, and a `map:` for a game without a DotMapSession: both used to end in a yellow warning nobody read.
+## A game older than the list asks for, and a `map:` for a game without a DotMapSession: each ends in a logged ERROR, not a yellow warning nobody reads.
 func _test_startup_checks() -> void:
 	_section("startup: an old game and a map path of the game's own")
 

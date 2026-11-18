@@ -1,14 +1,7 @@
 class_name TmcNativeStatus
 extends RefCounted
 
-## One line saying which dot-sim modules run native (the Rust GDExtension) and which run their
-## GDScript twins, for the server's and the shell's startup log. Both give the same results; the
-## twins are slower, which a 32-player server with bots pays for, and nothing else says which
-## one a process got.
-##
-## The native classes are reached only through ClassDB by name, and DotSim itself is loaded by
-## path, so this compiles in a build without dot-sim (the line then says so) and in a web
-## export, where the library is never shipped.
+## One line saying which dot-sim modules run native (the Rust GDExtension) and which run their GDScript twins, for the server's and the shell's startup log. Both give the same results; the twins are slower, which a 32-player server with bots pays for, and nothing else says which one a process got. The native classes are reached only through ClassDB by name, and DotSim itself is loaded by path, so this compiles in a build without dot-sim (the line then says so) and in a web export, where the library is never shipped.
 
 const DOT_SIM_SCRIPT := "res://addons/dot_sim/dot_sim.gd"
 

@@ -69,12 +69,7 @@ func map_dirs(subdir: String) -> PackedStringArray:
 	return out
 
 
-## The user args (after `--`) that start this shell again as the game's own server process:
-## the same game, version and packs, from the same cache, with no menu (see
-## [method TmcSolo.is_sim_child]). A game that hosts its solo session in a second process
-## appends these to its own; one that does not never calls this. Subscribed Workshop packs
-## are not passed, so a start that mounted any returns NOTHING: the game then plays in process, with
-## the packs it has, rather than in a second process that lacks them.
+## The user args (after `--`) that start this shell again as the game's own server process: the same game, version and packs, from the same cache, with no menu (see [method TmcSolo.is_sim_child]). A game that hosts its solo session in a second process appends these to its own; one that does not never calls this. Subscribed Workshop packs are not passed, so a start that mounted any returns NOTHING: the game then plays in process, with the packs it has, rather than in a second process that lacks them.
 func sim_child_args() -> PackedStringArray:
 	if not (workshop_summary.get("mounted", []) as Array).is_empty():
 		return PackedStringArray()

@@ -130,7 +130,7 @@ func _test_cover_gate() -> void:
 
 
 ## The shell's warm-up goes up in budgeted rounds, so its time-out can cut it between frames. Unbudgeted, PLAYLOT's
-## 184 items went up in one round: one 12 s frame of shader compiles that no time-out could cut (2026-11-15).
+## 184 items went up in one round: one 12 s frame of shader compiles that no time-out could cut.
 func _test_cover_draw_budget() -> void:
 	_section("the shell's warm-up is budgeted, and its time-out is a setting")
 	var rig := _cover_rig()

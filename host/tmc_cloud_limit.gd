@@ -1,10 +1,7 @@
 class_name TmcCloudLimit
 extends RefCounted
 
-## How big this server lets its content cache grow: `cache_bytes` in server.yml, `--cache-bytes`, TMC_CACHE_BYTES. 0, the default, is unlimited.
-## A server mounts every map it offers, and dot-cloud never evicts an object mounted content references, so a ceiling below what the offered
-## maps add up to is not a cache policy: it is maps that fail to load ("The content cache is full and everything in it is in use"). dot-cloud's own
-## default (4 GiB) is a player's; a server that wants a ceiling says so here. The disk is the real limit, and every boot logs how much of it is free.
+## How big this server lets its content cache grow: `cache_bytes` in server.yml, `--cache-bytes`, TMC_CACHE_BYTES. 0, the default, is unlimited. A server mounts every map it offers, and dot-cloud never evicts an object mounted content references, so a ceiling below what the offered maps add up to is not a cache policy: it is maps that fail to load ("The content cache is full and everything in it is in use"). dot-cloud's own default (4 GiB) is a player's; a server that wants a ceiling says so here. The disk is the real limit, and every boot logs how much of it is free.
 
 ## Where the setting is written, for refusals and for dot-cloud's own quota message (`DotCloudConfig.limit_hint`, dot-cloud API 31).
 const WHERE := "cache_bytes in cfg/server/server.yml, --cache-bytes or TMC_CACHE_BYTES"

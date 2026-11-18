@@ -5,11 +5,7 @@ extends RefCounted
 ## `tools/install_games.gd` decides what to FETCH and `TmcHost` decides what to OFFER, and both are
 ## handed the same `TMC_GAMES` string.
 
-## Ids a game or pack was configured under before it was renamed, and the id it is published as now.
-## [b]Here, not only on the origin[/b]: a renamed id that was never published (game-final-contact) has
-## no `latest.json` to carry `moved_to`, and the host's filter must agree with the installer's
-## directory, or the game is installed and then hidden. Exact `<owner>/<name>` ids only: a bare name
-## is a local directory on a developer's box and is left alone.
+## Ids a game or pack was configured under before it was renamed, and the id it is published as now. [b]Here, not only on the origin[/b]: a renamed id that was never published (game-final-contact) has no `latest.json` to carry `moved_to`, and the host's filter must agree with the installer's directory, or the game is installed and then hidden. Exact `<owner>/<name>` ids only: a bare name is a local directory on a developer's box and is left alone.
 const RETIRED_IDS := {
 	"gamemann/game-final-contact": "gamemann/game-fatal-contact",
 	"gamemann/game-arena": "gamemann/game-fatal-contact",

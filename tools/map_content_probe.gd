@@ -189,9 +189,9 @@ func _init() -> void:
 	# to go and fetch it -- was ever called.
 	print("-- map <id> for something the catalogue has never held")
 
-	var fresh: Node = G2GGame.new()
+	var fresh: Node = AirdriftGame.new()
 	fresh.name = "Fresh"
-	fresh.config = G2GConfig.new()
+	fresh.config = AirdriftConfig.new()
 	fresh.config.authoritative = false
 	fresh.config.initial_map = &""
 	root.add_child(fresh)
@@ -222,7 +222,7 @@ func _init() -> void:
 
 
 ## Every content id under `dist/` that looks like a published map. Read from the disk rather than
-## listed, for [G2GMapCatalogue]'s own reason: a list in a probe goes stale the first time somebody
+## listed, for AirdriftMapCatalogue's own reason: a list in a probe goes stale the first time somebody
 ## publishes a ninth map, and it goes stale by passing.
 func _published_ids() -> PackedStringArray:
 	var out := PackedStringArray()

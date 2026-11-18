@@ -1,14 +1,7 @@
 class_name TmcPoweredBy
 extends PanelContainer
 
-## "Powered by TMC", small, in the bottom-right corner of the shell's own screens (the menu
-## and the loading screen), as a glass pill like the site's PoweredByTmc. Never over a game:
-## it lives inside views that hide when a game starts, so it cannot take a click, the
-## pointer lock or a gamepad's focus from play.
-##
-## A press opens [member url], the TMC site this build signs in against (client/auth.json's
-## `backbone_url`), never a host written here. With no URL the pill is only text and ignores
-## the mouse.
+## "Powered by TMC", small, in the bottom-right corner of the shell's own screens (the menu and the loading screen), as a glass pill like the site's PoweredByTmc. Never over a game: it lives inside views that hide when a game starts, so it cannot take a click, the pointer lock or a gamepad's focus from play. A press opens [member url], the TMC site this build signs in against (client/auth.json's `backbone_url`), never a host written here. With no URL the pill is only text and ignores the mouse.
 
 ## Turns the pill off for a build that should not show it.
 const SETTING := "tmc/shell/powered_by"

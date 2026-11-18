@@ -77,7 +77,7 @@ func _web_cvars_present() -> bool:
 		printerr("selftest FAILED: sv_web_build is not a NOTIFY cvar reporting the configured pin (%s)" % config.web_build)
 		return false
 
-	print("sv_web_build: %s" % (pinned.get_string() if pinned.get_string() != "" else "(latest shell)"))
+	print("sv_web_build: %s" % (pinned.get_string() if pinned.get_string() != "" else "(latest shell)"))  # check-logging: allow print
 
 	var requires := server.console.find_cvar("sv_web_requires")
 
@@ -113,7 +113,7 @@ func _addons_advertised() -> bool:
 			printerr("selftest FAILED: dot_server is advertised as %s" % str(entry.get("id", "")))
 			return false
 
-	print("addons advertised: %d" % (announced as Array).size())
+	print("addons advertised: %d" % (announced as Array).size())  # check-logging: allow print
 	return true
 
 
@@ -133,7 +133,7 @@ func _web_loader_present() -> bool:
 		])
 		return false
 
-	print("sv_web_loader: %s" % (loader.get_string() if loader.get_string() != "" else "(site default)"))
+	print("sv_web_loader: %s" % (loader.get_string() if loader.get_string() != "" else "(site default)"))  # check-logging: allow print
 	return true
 
 
@@ -157,7 +157,7 @@ func _party_status_answers() -> bool:
 		return false
 
 	for line in answered:
-		print("party_status: %s" % line)
+		print("party_status: %s" % line)  # check-logging: allow print
 
 	return true
 
@@ -174,6 +174,6 @@ func _replay_recording() -> bool:
 
 	if replay != null:
 		for line in replay.describe_lines():
-			print("replay: %s" % line)
+			print("replay: %s" % line)  # check-logging: allow print
 
 	return true

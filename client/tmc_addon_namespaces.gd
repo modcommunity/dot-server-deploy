@@ -1,13 +1,7 @@
 class_name TmcAddonNamespaces
 extends RefCounted
 
-## Whose packs may REPLACE this shell's own `addons/<dir>`: the `namespaces` list [DotCloudAddonSet] takes an overlay from.
-## Shell-shared, so every shell build (web, desktop) and the server's addon announcement read one list.
-##
-## An entry ending in `/` is an owner, anything else one exact content id (the matching [DotCloudAddonSet] does).
-## The defaults are first-party. An operator who exports THEIR OWN shell may add owners in
-## `cfg/addons/namespaces.txt` (one per line, `#` comments), which the export presets already include.
-## It is read from the shell build and never from a server: a server that could extend it could replace the player's code.
+## Whose packs may REPLACE this shell's own `addons/<dir>`: the `namespaces` list [DotCloudAddonSet] takes an overlay from. Shell-shared, so every shell build (web, desktop) and the server's addon announcement read one list. An entry ending in `/` is an owner, anything else one exact content id (the matching [DotCloudAddonSet] does). The defaults are first-party. An operator who exports THEIR OWN shell may add owners in `cfg/addons/namespaces.txt` (one per line, `#` comments), which the export presets already include. It is read from the shell build and never from a server: a server that could extend it could replace the player's code.
 
 ## The organisation's (both its ids), and the game addons published under their author (the weapons packs, natural-disasters).
 ## A shell carries none of those (it is dot-* addons only), so these are what it fetches them under when a server announces them.
@@ -20,11 +14,9 @@ const PUBLISHED_AS := {"arena-weapons": "fc-weapons"}
 ## The `dot-*` addons that are their author's, not the organisation's: published as `gamemann/<repo>` (the repository name, `dot-` kept), like the weapons packs.
 const AUTHOR_DOT_ADDONS: PackedStringArray = ["dot-trail", "dot-radio"]
 
-## Addon directories a repository has renamed, current to legacy. fc-weapons (Fatal Contact's weapons) holds `addons/fc_weapons`;
-## its tags up to [constant LEGACY_LAST] hold the legacy `addons/arena_weapons`. The legacy name is used only where the ref holds it,
-## and every use logs a deprecation warning naming that ref. A game naming one while its ref holds the other is an error, never an
-## alias: `res://` paths name the directory. `tools/check-pinned.sh` reads the pinned ref's own tree, and `setup.sh` links what the
-## checkout holds; move [constant LEGACY_LAST] only with the tag that first holds `addons/fc_weapons`.
+## Addon directories a repository has renamed, current to legacy. fc-weapons (Fatal Contact's weapons) holds `addons/fc_weapons`; its tags up to [constant LEGACY_LAST] hold the legacy `addons/arena_weapons`. The legacy name is used only where the ref holds it, and every use logs a deprecation warning naming that ref.
+## A game naming one while its ref holds the other is an error, never an alias: `res://` paths name the directory.
+## `tools/check-pinned.sh` reads the pinned ref's own tree, and `setup.sh` links what the checkout holds; move [constant LEGACY_LAST] only with the tag that first holds `addons/fc_weapons`.
 const LEGACY_DIRS := {"fc_weapons": "arena_weapons"}
 
 ## The last version of each renamed repository whose tree still holds its legacy directory.
@@ -124,10 +116,7 @@ static func lock_repo(dir: String) -> String:
 	return dir.replace("_", "-")
 
 
-## The addon directory a pack repository (as published or as the lock names it) installs to at [param version]: the inverse of
-## [method lock_repo] and [constant PUBLISHED_AS], so `fc-weapons` is `fc_weapons` and `zee-dot-weapons` is `zee_weapons`.
-## A version at or below the repository's [constant LEGACY_LAST] holds the legacy directory, which is returned with a warning naming
-## the ref. No version means the current name.
+## The addon directory a pack repository (as published or as the lock names it) installs to at [param version]: the inverse of [method lock_repo] and [constant PUBLISHED_AS], so `fc-weapons` is `fc_weapons` and `zee-dot-weapons` is `zee_weapons`. A version at or below the repository's [constant LEGACY_LAST] holds the legacy directory, which is returned with a warning naming the ref. No version means the current name.
 static func dir_for(repo: String, version: String = "") -> String:
 	var lock := str(PUBLISHED_AS.get(repo, repo))
 	var dir := lock.replace("-", "_")

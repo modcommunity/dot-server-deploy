@@ -677,11 +677,7 @@ func _drop_matching(root: String, pattern: String) -> void:
 
 
 
-## Every directory under `content/` that could be a pack.
-## The content directory an id names. A renamed game keeps answering to its old ids (`metadata.former_ids` in its
-## `game.yml`, the same list the server's game index honours), so `./server pack playground` still reaches
-## content/playlot. A directory named exactly `id` always wins; an id nothing claims is returned unchanged so the
-## caller fails loudly with "no content at ...".
+## The content directory an id names. A renamed game keeps answering to its old ids (`metadata.former_ids` in its `game.yml`, the same list the server's game index honours), so `./server pack playground` still reaches content/playlot. A directory named exactly `id` always wins; an id nothing claims is returned unchanged so the caller fails loudly with "no content at ...".
 static func resolve_id(id: String, content_dir: String) -> String:
 	if DirAccess.dir_exists_absolute(content_dir.path_join(id)):
 		return id

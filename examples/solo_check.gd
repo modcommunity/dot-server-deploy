@@ -11,10 +11,7 @@ const CHECKS := 102
 ## The stock per-game map packs a server ships with.
 const STOCK_CONTENT := "res://cfg.example/server/content/overrides.yml"
 
-## Games whose maps are NOT fetched by the shell before a solo game starts, and why. Each
-## one is a map list the shell deliberately does not copy, so the drift check skips it.
-## Repos whose pack id was renamed while the directory kept its name (see setup.sh repo_url):
-## solo.json is keyed by the pack id, overrides.yml by the game.
+## Games whose maps are NOT fetched by the shell before a solo game starts, and why. Each one is a map list the shell deliberately does not copy, so the drift check skips it. Repos whose pack id was renamed while the directory kept its name (see setup.sh repo_url): solo.json is keyed by the pack id, overrides.yml by the game.
 const RENAMED_PACK := {"mg-deathrun": "game-deathrun", "mg-prop-hunt": "game-prop-hunt"}
 
 const NOT_PREFETCHED := {
@@ -480,8 +477,8 @@ class FakeStorage:
 		items.erase(key)
 
 
-## A solo game whose addons did not start must not be started without them (PLAYLOT's black screen of 2026-11-13: two restarts
-## that worked used up the tab's count, and the third visit played on without zee_weapons). It is blocked behind Retry, and the
+## A solo game whose addons did not start must not be started without them (PLAYLOT's black screen: two restarts that
+## worked used up the tab's count, and the third visit played on without zee_weapons). It is blocked behind Retry, and the
 ## count and the failed mark belong to one shell build.
 func _test_overlay_blocked() -> void:
 	_section("a solo game whose addons did not start is blocked behind Retry, per shell build")
@@ -545,7 +542,7 @@ func _test_overlay_blocked() -> void:
 	_done()
 
 
-## A fresh visit must not restart the page (PLAYLOT on 2026-11-14: a first visit fetched the shell, built zee_weapons and
+## A fresh visit must not restart the page (on PLAYLOT a first visit fetched the shell, built zee_weapons and
 ## arena_weapons into an overlay, then reloaded and fetched the shell again). An overlay that only adds addons is mounted in this
 ## process and its classes resolve; one that would replace an addon, or come after another overlay, still restarts.
 func _test_overlay_in_place() -> void:
@@ -580,7 +577,7 @@ func _test_overlay_in_place() -> void:
 	_check(shell.call("_overlay_additive", plan), "a first visit's overlay only adds addons")
 	_check(not shell.call("_overlay_additive", {"addons": {"dot_core": {}, dir: {}}}),
 		"an overlay that would replace an addon the shell carries is not mounted in place")
-	# A server's join takes the same overlay the same way (a Fast 4G join on 2026-11-17 reloaded the page for it, about 20 s).
+	# A server's join takes the same overlay the same way (reloading the page for it cost a Fast 4G join about 20 s).
 	var storage := FakeStorage.new()
 	shell.set("attempt_storage", storage)
 	shell.set("shell_build", "20261117-0400")
