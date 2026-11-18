@@ -2116,19 +2116,64 @@ fi
 # so a stale cache could only affect scripts that were already cached. The flip to packs
 # changed what the import is FOR.
 #
-# The test is the cache against the newest file under addons/ -- one `find`, and it is
-# exactly the question "was anything linked or pulled since this was built".
-import_is_stale() {
-    local cache="$ROOT/.godot/global_script_class_cache.cfg"
+# Two tests, both cheap. The cache against the newest file under addons/ -- one `find`,
+# and exactly the question "was anything linked or pulled since this was built". And
+# every `.import` marker against the files it names in `dest_files`: a marker whose
+# imported file is absent is a model or texture the server cannot load, and nothing
+# else ever puts it back. That happened on FC -- 54 `.glb`/`.jpg` imports missing from
+# .godot/imported/ (a previous import interrupted, or the cache dropped), the marker
+# still beside each source, so the .gd test said "fresh" every boot and the weapons
+# stayed invisible. IMPORT_STALE_WHY says which test fired.
+import_missing_output() {
+    # -L for the same reason as below. Pruned: Godot's own cache, the checkouts behind
+    # the addons/ links, and runtime state that never holds a project source.
+    local f
+    find -L "$ROOT" \( -path "$ROOT/.godot" -o -path "$ROOT/.git" -o -path "$ROOT/addons/.repos" \
+            -o -path "$ROOT/data" -o -path "$ROOT/keys" -o -path "$ROOT/.cache" -o -path "$ROOT/.local" \
+            -o -path "$ROOT/.config" \) -prune -o -name '*.import' -print0 2>/dev/null \
+        | xargs -0 -r grep -h '^dest_files=' 2>/dev/null \
+        | grep -o 'res://[^"]*' \
+        | while IFS= read -r f; do
+            [ -e "$ROOT/${f#res://}" ] || { printf '%s\n' "$f"; }
+        done
+}
 
-    [ -f "$cache" ] || return 0
-    [ -d "$ROOT/addons" ] || return 1
+import_is_stale() {
+    local cache="$ROOT/.godot/global_script_class_cache.cfg" missing
+    IMPORT_STALE_WHY=""
+
+    [ -f "$cache" ] || { IMPORT_STALE_WHY="there is no class cache"; return 0; }
 
     # -L: addons/ is symlinks, and the mtime that matters is the file in the checkout
     # rather than the link. .repos/ is pruned because every file under it is reachable
     # through the link beside it, and walking both halves the answer costs twice.
-    [ -n "$(find -L "$ROOT/addons" -path "$ROOT/addons/.repos" -prune -o \
-            -newer "$cache" -name '*.gd' -print -quit 2>/dev/null)" ]
+    if [ -d "$ROOT/addons" ] && [ -n "$(find -L "$ROOT/addons" -path "$ROOT/addons/.repos" -prune -o \
+            -newer "$cache" -name '*.gd' -print -quit 2>/dev/null)" ]; then
+        IMPORT_STALE_WHY="an addon is newer than the class cache"
+        return 0
+    fi
+
+    missing="$(import_missing_output)"
+    if [ -n "$missing" ]; then
+        IMPORT_STALE_WHY="$(printf '%s' "$missing" | grep -c '') imported file(s) are missing (first: $(printf '%s' "$missing" | head -1))"
+        return 0
+    fi
+    return 1
+}
+
+# The import's own output, kept: a failed or killed import used to leave nothing but a
+# missing file later. Overwritten each run; .godot/ is gitignored.
+IMPORT_LOG="$ROOT/.godot/setup-import.log"
+run_import() {
+    mkdir -p "$ROOT/.godot"
+    local rc=0
+    "$GODOT" --headless --path "$ROOT" --import >"$IMPORT_LOG" 2>&1 || rc=$?
+    local left
+    left="$(import_missing_output | grep -c '')"
+    if [ "$rc" -ne 0 ] || [ "$left" -ne 0 ]; then
+        warn "the import exited $rc and left $left imported file(s) missing; its output is in ${IMPORT_LOG#"$ROOT"/}"
+        tail -n 5 "$IMPORT_LOG" | sed 's/^/       /'
+    fi
 }
 
 if [ "$DO_IMPORT" -eq 1 ]; then
@@ -2136,7 +2181,7 @@ if [ "$DO_IMPORT" -eq 1 ]; then
     # Re-run after ANY script with a new class_name is added. Without it the
     # identifier does not resolve, the scene fails to load, and the process HANGS
     # rather than exiting, because nothing ever reaches get_tree().quit().
-    "$GODOT" --headless --path "$ROOT" --import >/dev/null 2>&1
+    run_import
     ok "class_name globals registered"
 elif [ "${FORCE_IMPORT:-0}" -eq 1 ]; then
     step "importing"
@@ -2147,21 +2192,21 @@ elif [ "${FORCE_IMPORT:-0}" -eq 1 ]; then
     warn "${FORCE_IMPORT_WHY:-a vendored game directory was removed}, so --no-import is being overridden"
     printf '       its class_name entries are still in the class cache, pointing at\n'
     printf '       files that are gone. Only an import rewrites that.\n'
-    "$GODOT" --headless --path "$ROOT" --import >/dev/null 2>&1
+    run_import
     ok "class_name globals registered"
 elif [ -n "$NATIVE_UNLISTED" ]; then
     step "importing"
     warn "$NATIVE_UNLISTED is not in the last import's extension list, so --no-import is being overridden"
-    "$GODOT" --headless --path "$ROOT" --import >/dev/null 2>&1
+    run_import
     ok "native library listed"
 elif import_is_stale; then
     step "importing"
-    warn "an addon is newer than the class cache, so --no-import is being overridden"
+    warn "$IMPORT_STALE_WHY, so --no-import is being overridden"
     printf '       a delivered game parses against that cache; leaving it stale breaks
 '
     printf '       the pack and nothing else, which reads as a broken game.
 '
-    "$GODOT" --headless --path "$ROOT" --import >/dev/null 2>&1
+    run_import
     ok "class_name globals registered"
 fi
 
