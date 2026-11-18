@@ -372,7 +372,7 @@ A game can be **in the build** or **delivered**. Built in is the default and is 
    }
    ```
 
-   Excluding `addons/` is not optional. Without it the pack carries a second copy of every dot-\* addon the host build already has — measured at 768 files and 11.2 MiB for Fatal Contact, against 140 files and 3.1 MiB with them dropped. It is also what keeps the rewrite honest: the publisher moves a `res://` reference onto the mount **only when the file it names is in the pack**, so with `addons/` out, `res://addons/dot_core/…` still means the host's copy and `res://game/arena_client.gd` becomes `res://dot_cloud/arena/0.1.0/game/arena_client.gd`.
+   Excluding `addons/` is not optional. Without it the pack carries a second copy of every dot-\* addon the host build already has — measured at 768 files and 11.2 MiB for Fatal Contact, against 140 files and 3.1 MiB with them dropped. It is also what keeps the rewrite honest: the publisher moves a `res://` reference onto the mount **only when the file it names is in the pack**, so with `addons/` out, `res://addons/dot_core/…` still means the host's copy and `res://game/fc_client.gd` becomes `res://dot_cloud/arena/0.1.0/game/fc_client.gd`.
 
    The pack lands in **`dist/<content id>/`**, which is not always `dist/<directory>`: hungario is three game ids over one `content_id: hungry`, because its modes are three presets of one world. Everything that looks a pack up builds `{base}/{content id}/manifest.json`, and `dist/` is one of those bases, so `dist/hungry_classic/` would be a pack nothing — not even the server that wrote it — could find. `./server verify` takes the content id for the same reason.
 
