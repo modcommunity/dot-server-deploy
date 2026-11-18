@@ -2510,7 +2510,44 @@ copy_template() {
     cat "$PROJECT/cfg.example/$rel" > "$CONFIG_DIR/$rel" \
         && note "wrote $CONFIG_DIR/$rel from the template: $why"
 }
-copy_template server/content/overrides.yml content.yml "this server's settings per game"
+# The seed of cfg/server/content/overrides.yml carries a section per shipped game; a server that installs
+# one game would warn about every other ("names the game ..., which is not on this server"). So the seed
+# keeps only the games on this server: the names in the install list (owner/ and @version dropped) plus
+# what is already in content/. An empty list (a dev box offers everything) keeps every section.
+# overrides_seed_begin
+overrides_seed_games() {
+    local one name d
+    for one in ${OPT_GAMES//,/ }; do
+        name="${one%@*}"; name="${name##*/}"
+        printf '%s\n' "$name"
+    done
+    for d in "$(abs "$CONTENT_DIR")"/*/pack.json "$(abs "$CONTENT_DIR")"/*/*/pack.json; do
+        [ -f "$d" ] || continue
+        d="${d%/pack.json}"; printf '%s\n' "${d##*/}"
+    done
+}
+overrides_seed_filter() {
+    local keep="$1"
+    awk -v keep="$keep" '
+        BEGIN { show = 1; n = split(keep, a, "\n"); for (i = 1; i <= n; i++) if (a[i] != "") want[a[i]] = 1; any = (length(want) > 0) }
+        /^games:/ { ing = 1; show = 1; print; next }
+        ing && /^[A-Za-z_]/ { ing = 0; show = 1 }
+        ing && /^  [A-Za-z0-9_.-]+:[[:space:]]*$/ { k = $1; sub(/:$/, "", k); show = (!any || (k in want)) }
+        show { print }
+    '
+}
+# overrides_seed_end
+seed_overrides() {
+    local rel=server/content/overrides.yml
+    [ -d "$CONFIG_DIR" ] && { [ "$COMMAND" = "run" ] || [ "$COMMAND" = "check" ]; } || return 0
+    [ -f "$CONFIG_DIR/$rel" ] && return 0
+    [ -f "$CONFIG_DIR/content.yml" ] && return 0
+    [ -f "$PROJECT/cfg.example/$rel" ] || return 0
+    mkdir -p "$(dirname "$CONFIG_DIR/$rel")"
+    overrides_seed_filter "$(overrides_seed_games)" < "$PROJECT/cfg.example/$rel" > "$CONFIG_DIR/$rel" \
+        && note "wrote $CONFIG_DIR/$rel from the template (only the games on this server): this server's settings per game"
+}
+seed_overrides
 copy_template server/addon/dot_map/maps.yml maps.yml "which maps play"
 copy_template content/games.yml games.yml "which games play"
 copy_template content/addons.yml addons.yml "extra packs this server adds per game"

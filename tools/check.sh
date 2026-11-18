@@ -110,7 +110,7 @@ done < <(find host client examples -name '*.gd' 2>/dev/null | sort)
 
 echo
 echo "shell scripts"
-for f in setup.sh tools/server.in docker-entrypoint.sh docker-healthcheck.sh tools/content_trust.sh tools/check_content_trust.sh tools/check.sh tools/check_boot_failures.sh tools/check_default_aliases_boot.sh tools/check_lists.sh tools/check_tickrate.sh tools/check_physics_thread.sh tools/check_deploy_modes.sh tools/check_self_update.sh tools/check_supervise.sh tools/check_gs_env.sh tools/gs-env.sh tools/check_channels.sh tools/check_client_host_only.sh tools/check_shell_addons.sh tools/shell_lock.sh tools/check_renamed_dirs.sh tools/import_defs.sh tools/check_import_defs.sh tools/check_game_listing.sh tools/deploy-modes.sh tools/enet_relay_all_games.sh tools/check_mobile.sh tools/fetch-android-sdk.sh; do
+for f in setup.sh tools/server.in docker-entrypoint.sh docker-healthcheck.sh tools/content_trust.sh tools/check_content_trust.sh tools/check.sh tools/check_boot_failures.sh tools/check_default_aliases_boot.sh tools/check_lists.sh tools/check_overrides_seed.sh tools/check_tickrate.sh tools/check_physics_thread.sh tools/check_deploy_modes.sh tools/check_self_update.sh tools/check_supervise.sh tools/check_gs_env.sh tools/gs-env.sh tools/check_channels.sh tools/check_client_host_only.sh tools/check_shell_addons.sh tools/shell_lock.sh tools/check_renamed_dirs.sh tools/import_defs.sh tools/check_import_defs.sh tools/check_game_listing.sh tools/deploy-modes.sh tools/enet_relay_all_games.sh tools/check_mobile.sh tools/fetch-android-sdk.sh; do
     [ -f "$f" ] || continue
     if bash -n "$f" 2>/dev/null; then
         printf '  %sok%s   %s\n' "$GRN" "$OFF" "$f"
@@ -125,6 +125,7 @@ echo "the lists written down twice"
 # setup.ps1's addon list and every copy of addon_repo()'s exceptions against setup.sh.
 bash tools/check_game_listing.sh || fails=$((fails + 1))
 bash tools/check_lists.sh || fails=$((fails + 1))
+bash tools/check_overrides_seed.sh || fails=$((fails + 1))
 bash tools/check_tickrate.sh || fails=$((fails + 1))
 bash tools/check_physics_thread.sh || fails=$((fails + 1))
 bash tools/check_content_trust.sh || fails=$((fails + 1))
