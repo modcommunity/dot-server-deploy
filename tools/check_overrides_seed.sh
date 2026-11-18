@@ -37,4 +37,10 @@ OPT_GAMES=""; CONTENT_DIR="$T/none"
 [ "$(overrides_seed_filter "$(overrides_seed_games)" < "$SRC" | sections | wc -l)" = "$(sections < "$SRC" | wc -l)" ] \
     && good "empty list keeps every game" || bad "empty list dropped sections"
 
+# No section under a retired id (mg-deathrun and mg-prop-hunt are published as game-*).
+for k in $(sections < "$SRC"); do
+    case "$k" in mg-deathrun|mg-prop-hunt) bad "section $k is a retired game id" ;; esac
+done
+good "no section under a retired game id"
+
 [ "$fails" -eq 0 ]

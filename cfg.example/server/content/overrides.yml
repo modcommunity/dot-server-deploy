@@ -183,12 +183,12 @@ games:
       add:
         - gamemann/mg-dangerous-delivery-maps   # the community delivery mountains, one pack
 
-  mg-deathrun:
+  game-deathrun:
     maps:
       add:
         - gamemann/mg-deathrun-maps       # the trap courses, one pack
 
-  mg-prop-hunt:
+  game-prop-hunt:
     maps:
       add:
         - gamemann/mg-prop-hunt-maps      # the school, the house, the office, the woods
