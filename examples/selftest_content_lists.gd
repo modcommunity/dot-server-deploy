@@ -94,6 +94,15 @@ func _test_content_lists() -> void:
 func _test_former_game_id() -> void:
 	_section("a renamed game answers to its former id")
 
+	# A live overrides.yml named a collection without /* and lost its start map to a 404.
+	_check(TmcGameRef.qualify_map("gamemann/fc-dm-maps", "")["id"] == "gamemann/fc-dm-maps/*"
+			and TmcGameRef.qualify_map("gamemann/arena-surf-dm-maps", "")["id"] == "gamemann/fc-surf-dm-maps/*",
+		"a known collection named without /* is read as the whole collection, not a pack that 404s")
+	_check(not bool(TmcGameRef.qualify_map("gamemann/fc-dm-maps@1.0.0", "")["ok"]),
+		"a pin on a bare collection is refused like a pin on its wildcard")
+	_check(TmcGameRef.qualify_map("gamemann/cp-orange-x3", "")["id"] == "gamemann/cp-orange-x3",
+		"an ordinary owner/map is still one pack")
+
 	var all := TmcContent.scan("res://content")
 
 	if not _check(all.ok, "the shipped content scans", str(all.error)):

@@ -1112,13 +1112,6 @@ func _game_ref_entries() -> void:
 		"the host's filter aliases the same ids the installer does; a bare local name is left alone")
 	_check(TmcGameRef.qualify_map("gamemann/arena-dm-maps/*", "")["collection"] == "gamemann/fc-dm-maps",
 		"a retired collection wildcard reads the current collection")
-	_check(TmcGameRef.qualify_map("gamemann/fc-dm-maps", "")["id"] == "gamemann/fc-dm-maps/*"
-			and TmcGameRef.qualify_map("gamemann/arena-surf-dm-maps", "")["id"] == "gamemann/fc-surf-dm-maps/*",
-		"a known collection named without /* is read as the whole collection, not a pack that 404s")
-	_check(not bool(TmcGameRef.qualify_map("gamemann/fc-dm-maps@1.0.0", "")["ok"]),
-		"a pin on a bare collection is refused like a pin on its wildcard")
-	_check(TmcGameRef.qualify_map("gamemann/cp-orange-x3", "")["id"] == "gamemann/cp-orange-x3",
-		"an ordinary owner/map is still one pack")
 	_check(TmcGameRef.parse("alice/demo@vnext")["version"] == "vnext",
 		"a v that is not followed by a digit is part of the version")
 	_check(TmcGameRef.parse("asher/game-testing@v1.0.0")["dir"] == "asher/game-testing",
