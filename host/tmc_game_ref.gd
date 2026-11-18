@@ -25,6 +25,14 @@ const RETIRED_IDS := {
 }
 
 
+## Collections a live `overrides.yml` names bare (`gamemann/fc-dm-maps`) where it means the whole
+## collection (`gamemann/fc-dm-maps/*`). No pack is published under these ids, so the bare spelling
+## could only 404 and leave the server without its maps (a prod server refused its start map,
+## cp_orange_x3, this way). [b]Here, not on the origin[/b], for the reason [constant RETIRED_IDS] is:
+## the installer and the host must read the entry the same way without a fetch.
+const COLLECTION_IDS := ["gamemann/fc-dm-maps", "gamemann/fc-surf-dm-maps"]
+
+
 ## The id [param id] is published as now: itself, or what [constant RETIRED_IDS] maps it to.
 static func current_id(id: String) -> String:
 	return str(RETIRED_IDS.get(id.strip_edges(), id.strip_edges()))
@@ -131,6 +139,14 @@ static func qualify_map(raw: String, owner: String) -> Dictionary:
 	if id == "" or segments.size() > 2 or "" in segments:
 		return {"ok": false, "id": "", "version": "", "wildcard": false,
 			"why": "is not <map>, <owner>/<map> or <owner>/<collection>/*"}
+
+	if segments.size() == 2 and id in COLLECTION_IDS:
+		if str(ref["version"]) != "":
+			return {"ok": false, "id": "", "version": "", "wildcard": false,
+				"why": "pins a collection; a collection cannot take @version (pin a map beside it: owner/map@1.0.0)"}
+
+		return {"ok": true, "id": id + "/*", "version": "", "wildcard": true, "why": "",
+			"collection": id}
 
 	if segments.size() == 2:
 		return {"ok": true, "id": id, "version": str(ref["version"]), "wildcard": false, "why": ""}
