@@ -533,6 +533,21 @@ func _solo_overlay(content_id: String, needs: Dictionary, subscribed: Array = []
 		resume["member"] = shell._auth.identity().uid
 
 	var built: DotResult = await addons.build(wanted, resume)
+	if not built.ok and plan_holds_subscription({"addons": wanted}):
+		# A subscription is optional: one broken pack must not stop solo play. Retry once with the game's own needs.
+		var dropped: Array = []
+		for dir: Variant in wanted:
+			if wanted[dir] is Dictionary and str((wanted[dir] as Dictionary).get("source", "")) == SUBSCRIPTION_SOURCE:
+				dropped.append(str((wanted[dir] as Dictionary).get("id", dir)))
+		DotLog.warn(shell.CHANNEL, "a subscribed addon could not be fetched; playing without the subscribed addons", {
+			"content": content_id, "dropped": dropped, "why": str(built.error),
+		})
+		wanted = without_subscribed(wanted)
+		if wanted.is_empty():
+			shell._clear_update_attempts(target)
+			return SoloOverlay.NONE
+		attempt = shell._attempt_key(target, wanted)
+		built = await addons.build(wanted, resume)
 	if not built.ok:
 		DotLog.error(shell.CHANNEL, "could not fetch this solo game's addons", {"content": content_id, "why": str(built.error)})
 		shell._solo_retry = attempt
@@ -579,6 +594,16 @@ static func mark_subscribed(wanted: Dictionary, from_subscription: Dictionary) -
 		var entry: Variant = wanted[dir]
 		if entry is Dictionary and from_subscription.get(dir, "") == str((entry as Dictionary).get("id", "")) and str(from_subscription.get(dir, "")) != "":
 			(entry as Dictionary)["source"] = SUBSCRIPTION_SOURCE
+
+
+## [param wanted] without the entries a subscription put there (marked by [method mark_subscribed]); a new Dictionary, the entries are shared.
+static func without_subscribed(wanted: Dictionary) -> Dictionary:
+	var kept := {}
+	for dir: Variant in wanted:
+		var entry: Variant = wanted[dir]
+		if not (entry is Dictionary and str((entry as Dictionary).get("source", "")) == SUBSCRIPTION_SOURCE):
+			kept[dir] = entry
+	return kept
 
 
 ## Whether an overlay plan holds an addon a player's subscription put there: such a plan never boots into an online session.
