@@ -6,7 +6,12 @@
 # Text only, no Godot: every non-dot repository addons.lock names is excluded by every
 # preset in export_presets.example.cfg, the shell takes its overlay (TmcAddonNamespaces),
 # and tools/server.in still has the export guards. tools/shell_pck_check.sh proves the
-# same thing on an exported pck. Arm it by deleting `addons/zee_weapons/*` from a preset.
+# same thing on an exported pck. Arm it by deleting `addons/zee_weapons/*` from a preset,
+# or by adding fc-weapons to tools/shell-addons.list.
+#
+# The shell's addons are an explicit list, tools/shell-addons.list, and tools/shell_lock.sh
+# is what the export runs to cut addons.lock (the servers' lock, game addons included) down
+# to it. This runs that script on the real lock and on lists it must refuse.
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
@@ -25,8 +30,55 @@ dir_of() {
     esac
 }
 
-mapfile -t repos < <(awk -F'\t' '!/^[[:space:]]*(#|$)/ && $1 !~ /^dot-/ { print $1 }' addons.lock)
+# Game addons: one game's own, never in a shell (the owner's rule; fc-weapons is Fatal Contact's).
+GAME_ADDONS="fc-weapons arena-weapons zee-dot-weapons zed-dot-weapons natural-disasters"
+
+[ -f tools/shell-addons.list ] && good "tools/shell-addons.list exists" || bad "no tools/shell-addons.list"
+mapfile -t allowed < <(sed 's/#.*//; s/[[:space:]]//g; /^$/d' tools/shell-addons.list 2>/dev/null)
+[ "${#allowed[@]}" -gt 0 ] || bad "tools/shell-addons.list names no addon"
+
+for repo in "${allowed[@]}"; do
+    case "$repo" in dot-*) ;; *) bad "tools/shell-addons.list names $repo, which is not a dot-* addon" ;; esac
+    case " $GAME_ADDONS " in *" $repo "*) bad "tools/shell-addons.list names the game addon $repo" ;; esac
+done
+
+is_allowed() {
+    local r
+    for r in "${allowed[@]}"; do [ "$r" = "$1" ] && return 0; done
+    return 1
+}
+
+# Every lock repository the list leaves out: what each preset must exclude.
+mapfile -t repos < <(awk -F'\t' '!/^[[:space:]]*(#|$)/ { print $1 }' addons.lock | while read -r r; do is_allowed "$r" || echo "$r"; done)
 [ "${#repos[@]}" -gt 0 ] || bad "addons.lock names no game addon; this check reads nothing"
+
+for repo in $(awk -F'\t' '!/^[[:space:]]*(#|$)/ && $1 ~ /^dot-/ { print $1 }' addons.lock); do
+    is_allowed "$repo" || bad "addons.lock names $repo, which tools/shell-addons.list does not (the export would refuse to run)"
+done
+
+# What the export carries: tools/shell_lock.sh on the real lock holds the listed repositories and no other.
+if out="$(tools/shell_lock.sh lock addons.lock)"; then
+    stray="$(printf '%s\n' "$out" | awk -F'\t' '!/^[[:space:]]*(#|$)/ { print $1 }' | while read -r r; do is_allowed "$r" || echo "$r"; done | tr '\n' ' ')"
+    [ -z "$stray" ] && good "the shell's addons.lock holds only listed addons" || bad "the shell's addons.lock holds ${stray% }"
+    printf '%s\n' "$out" | grep -qE '^(fc|arena)-weapons'$'\t' && bad "the shell's addons.lock holds fc-weapons" \
+        || good "the shell's addons.lock holds no fc-weapons (addons.lock does: it is the servers')"
+else
+    bad "tools/shell_lock.sh lock addons.lock failed"
+fi
+
+# It refuses a list naming a game addon, and a lock naming a dot-* addon the list does not.
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT
+{ cat tools/shell-addons.list; echo fc-weapons; } > "$tmp/game.list"
+SHELL_ADDONS_LIST="$tmp/game.list" tools/shell_lock.sh lock addons.lock > /dev/null 2>&1 \
+    && bad "tools/shell_lock.sh took a list naming fc-weapons" || good "tools/shell_lock.sh refuses a list naming fc-weapons"
+grep -vxF dot-core tools/shell-addons.list > "$tmp/short.list"
+SHELL_ADDONS_LIST="$tmp/short.list" tools/shell_lock.sh lock addons.lock > /dev/null 2>&1 \
+    && bad "tools/shell_lock.sh took a lock naming dot-core with a list that does not" \
+    || good "tools/shell_lock.sh refuses a lock naming a dot-* addon the list does not"
+
+grep -qF 'tools/shell_lock.sh" lock' tools/server.in && good "tools/server.in cuts the shell's lock with tools/shell_lock.sh" \
+    || bad "tools/server.in no longer cuts the shell's lock with tools/shell_lock.sh"
 
 presets="$(grep -c '^exclude_filter=' export_presets.example.cfg)"
 [ "$presets" -ge 4 ] || bad "export_presets.example.cfg has $presets exclude filters, expected 4"

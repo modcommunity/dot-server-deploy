@@ -24,7 +24,9 @@
 //   broken    the game started without its addons (the old "playing on this build's", a parse error, a script that did
 //             not load). Always a failure.
 //   started   "solo game started" with no broken sign.
-//   blocked   "not starting it without them": the shell refused and offers Retry.
+//   blocked   "not starting it without them" or "did not start in this tab": the shell refused and offers Retry.
+//   unpublished  no published pack holds an addon the game needs (the shell says which; a publish fixes it, not a client).
+//   client_behind  dot-cloud's requirement check refused the game after the overlay step: an addon it needs never arrived.
 //   none      none of these within --secs.
 // --map <slug> opens the page with &map=<slug> (the site's "Play map": a solo game on one map, fetching only that map's pack).
 // A started game is then watched for --linger seconds (default 8, or 120 with --map: a downloaded map takes longer to load
@@ -195,7 +197,11 @@ try {
     const text = lines.join('\n');
     if (BROKEN.some(r => r.test(text))) return 'broken';
     if (/solo game started/.test(text)) return 'started';
-    if (/not starting it without them/.test(text)) return 'blocked';
+    if (/not starting it without them|did not start in this tab/.test(text)) return 'blocked';
+    // The content store has no pack holding an addon the game needs (2026-11-17: fc-weapons 1.4.50 held only arena_weapons).
+    if (/not published in a pack that holds it/.test(text)) return 'unpublished';
+    // dot-cloud's requirement check refused the game: the overlay did not supply an addon it needs.
+    if (/tmc\.build\.mismatch|client_behind|does not have it\./.test(text)) return 'client_behind';
     return 'none';
   };
 
@@ -204,7 +210,7 @@ try {
   while (Date.now() < deadline) {
     await page.waitForTimeout(2000);
     const v = verdict();
-    if (v === 'broken' || v === 'blocked') break;
+    if (v === 'broken' || v === 'blocked' || v === 'unpublished' || v === 'client_behind') break;
     if (v === 'started') {
       // A started game is given a few seconds more for the parse errors a game without its addons prints,
       // and with --map until its map has loaded.

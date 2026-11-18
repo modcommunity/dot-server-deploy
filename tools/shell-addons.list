@@ -1,0 +1,81 @@
+# The addons a client shell carries: one repository per line, as addons.lock names it, `#` comments.
+#
+# Read by tools/shell_lock.sh, which the shell export (tools/server.in: shell_lock_begin, shell_left_out_addons) and
+# tools/check_shell_addons.sh use. Only these go into a shell build and its addons.lock; every other addons.lock line
+# is for servers only, and its addon reaches a player as a dot-cloud overlay pack (DotCloudAddonSet).
+#
+# OWNER RULE: no game addon here, ever. fc-weapons, zee-dot-weapons, zed-dot-weapons, natural-disasters and anything else one
+# game brings stay out of the shell: baked in, fc-weapons took the web pck from 44 MB to 147 MB, and a shell that carries a
+# game's addon pins every game to that build's copy. tools/check_shell_addons.sh fails when this list names anything but a
+# dot-* addon, or when addons.lock names a dot-* addon this list does not (add it here when the shell should carry it).
+dot-2d
+dot-achievements
+dot-audio
+dot-auth
+dot-bot
+dot-bot-record
+dot-browser
+dot-chat
+dot-cloud
+dot-combat
+dot-console
+dot-core
+dot-economy
+dot-effects
+dot-entity
+dot-flashlight
+dot-friends
+dot-fx
+dot-game
+dot-inventory
+dot-leaderboard
+dot-lighting
+dot-loadout
+dot-locale
+dot-log
+dot-map
+dot-match
+dot-matchmaking
+dot-menu
+dot-mobile
+dot-moderation
+dot-net
+dot-npc
+dot-npc-ai
+dot-npc-ai-director
+dot-objective
+dot-party
+dot-peer-to-peer
+dot-physics
+dot-platform
+dot-player
+dot-player-char
+dot-player-class
+dot-player-controller
+dot-procedural-generation
+dot-profile
+dot-profiler
+dot-props
+dot-radio
+dot-replay
+dot-server
+dot-server-query
+dot-server-security
+dot-settings
+dot-sim
+dot-spawn
+dot-spectate
+dot-sql
+dot-stats
+dot-team
+dot-timer
+dot-trail
+dot-ui
+dot-user
+dot-user-avatar
+dot-vehicle
+dot-voice
+dot-vote
+dot-weapon
+dot-weather
+dot-workbench

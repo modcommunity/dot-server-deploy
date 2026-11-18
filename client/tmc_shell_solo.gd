@@ -11,8 +11,12 @@ func _init(owner_shell: Node) -> void:
 	shell = owner_shell
 
 
-## What [method _solo_overlay] did: nothing was missing, a restart into the addons is under way, or they are missing and cannot be had now.
-enum SoloOverlay { NONE, RESTARTING, BLOCKED }
+## What [method _solo_overlay] did: nothing was missing, a restart into the addons is under way, they are missing and cannot be had now,
+## or the content store publishes no pack that holds one of them ([member _unpublished] says which).
+enum SoloOverlay { NONE, RESTARTING, BLOCKED, UNPUBLISHED }
+
+## Why [constant SoloOverlay.UNPUBLISHED]: dir -> the sentence [method pack_holds_dir] gave, from the last [method _collect_solo_announce].
+var _unpublished: Dictionary = {}
 
 
 ## Runs [param content_id] here, with no server: fetch, verify and mount it as a join does,
@@ -140,6 +144,15 @@ func _load_solo_inner(content_id: String, version: String) -> DotResult:
 	if overlay == SoloOverlay.BLOCKED:
 		return DotResult.fail(DotError.CODE_STATE, shell._text("shell.solo.addons_blocked", {},
 			"this game's addons did not start in this tab, so it was not started without them. Retry fetches them again."))
+	if overlay == SoloOverlay.UNPUBLISHED:
+		# Not the "needs a newer client" panel dot-cloud's requirement check would show next: no shell build can carry a game
+		# addon (only dot-* addons), so the fix is a publish of that addon's pack, never a newer client.
+		var why := "; ".join(PackedStringArray(_unpublished.values()))
+		DotLog.error(shell.CHANNEL, "a game addon this solo game needs is not published in a pack that holds it", {
+			"content": content_id, "version": wanted, "unpublished": _unpublished,
+		})
+		return DotResult.fail(DotError.CODE_STATE, shell._text("shell.solo.addon_unpublished", {"why": why},
+			"this game needs an addon that is not published yet ({why}). Nothing was downloaded.".format({"why": why})))
 
 	# Everything is registered and fetched first, so the total is fixed before a byte moves; mounting follows.
 	await shell._solo_packs._prefetch_solo(content_id, wanted)
@@ -407,10 +420,12 @@ static func solo_addons_in(text: String) -> Dictionary:
 	return out
 
 
-## The addons a solo game needs that this shell does not carry, as the announce a server would send (`announce`), and which of them the player's subscription supplied (`from_subscription`: dir -> id).
+## The addons a solo game needs that this shell does not carry, as the announce a server would send (`announce`), which of them the player's subscription
+## supplied (`from_subscription`: dir -> id), and which no published pack holds (`unpublished`: dir -> why, see [method pack_holds_dir]).
 func _collect_solo_announce(content_id: String, needs: Dictionary, subscribed: Array) -> Dictionary:
 	var announce: Array = []
 	var from_subscription := {}
+	var unpublished := {}
 	for entry: Variant in subscribed:
 		if not (entry is Dictionary):
 			continue
@@ -438,8 +453,43 @@ func _collect_solo_announce(content_id: String, needs: Dictionary, subscribed: A
 			continue
 		# A retired id resolves to the one it moved to, whose name is the repo [DotCloudAddonSet] checks.
 		var id := str(latest.value["id"])
-		announce.append({"dir": dir, "repo": id.get_file(), "id": id, "version": str(latest.value["version"])})
-	return {"announce": announce, "from_subscription": from_subscription}
+		var version := str(latest.value["version"])
+		# The newest published version must hold `addons/<dir>`: fc-weapons up to v1.4.51 holds the legacy arena_weapons, so
+		# Fatal Contact 0.1.70 (fc_weapons 32) fetched 1.4.50, which [DotCloudAddonSet] refused as "not an addon pack".
+		var manifest: DotResult = await shell._cloud.resolve_manifest(StringName(id), version)
+		if manifest.ok:
+			var why := pack_holds_dir(dir, id, version, manifest_paths(manifest.value as DotCloudManifest))
+			if why != "":
+				unpublished[dir] = why
+				continue
+		announce.append({"dir": dir, "repo": id.get_file(), "id": id, "version": version})
+	_unpublished = unpublished
+	return {"announce": announce, "from_subscription": from_subscription, "unpublished": unpublished}
+
+
+## Every path [param manifest] lists.
+static func manifest_paths(manifest: DotCloudManifest) -> PackedStringArray:
+	var out := PackedStringArray()
+	if manifest != null:
+		for f in manifest.files:
+			out.append(f.path)
+	return out
+
+
+## Why the pack [param id] at [param version], whose files are [param paths], cannot supply `addons/<dir>`; empty when it can.
+## It can when it is the addon itself (a `plugin.cfg` at its root) or holds `addons/<dir>/plugin.cfg`, which is what
+## [DotCloudAddonSet] mounts; a pack that holds the addon under another directory (a renamed repository's older tags) cannot.
+static func pack_holds_dir(dir: String, id: String, version: String, paths: PackedStringArray) -> String:
+	if paths.has("plugin.cfg") or paths.has("addons/%s/plugin.cfg" % dir):
+		return ""
+	var holds := PackedStringArray()
+	for path in paths:
+		var parts := path.split("/")
+		if parts.size() == 3 and parts[0] == "addons" and parts[2] == "plugin.cfg":
+			holds.append("addons/" + parts[1])
+	if holds.is_empty():
+		return "%s %s, the newest published, holds no addon, and this game needs addons/%s" % [id, version, dir]
+	return "%s %s, the newest published, holds %s, and this game needs addons/%s" % [id, version, ", ".join(holds), dir]
 
 
 ## The addons in [param needs] (from [method _solo_needs]) that this shell neither carries nor
@@ -458,6 +508,8 @@ func _solo_overlay(content_id: String, needs: Dictionary, subscribed: Array = []
 	var found := await _collect_solo_announce(content_id, needs, subscribed)
 	var announce: Array = found["announce"]
 	var from_subscription: Dictionary = found["from_subscription"]
+	if not (found["unpublished"] as Dictionary).is_empty():
+		return SoloOverlay.UNPUBLISHED
 	if announce.is_empty():
 		return SoloOverlay.NONE
 

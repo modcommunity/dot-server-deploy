@@ -4,7 +4,7 @@ extends Node
 ## `game.yml` reader against the host's, the shell's map list against the stock server one, and the
 ## session a game reads its map packs from. godot --headless --path .
 
-const CHECKS := 94
+const CHECKS := 102
 
 ## Every game repository, beside this project or in games/: the repositories of cfg/content/games.yml (shipped content-lists/games.yml).
 
@@ -42,6 +42,7 @@ func _ready() -> void:
 	_test_skip_maps()
 	_test_sim_child_args()
 	_test_requires_reader()
+	_test_pack_holds_dir()
 	_test_overlay_blocked()
 	# Last: it mounts a pack, which nothing unmounts.
 	_test_overlay_in_place()
@@ -429,6 +430,41 @@ func _test_requires_reader() -> void:
 	_done()
 
 
+## The newest published pack of a game addon must hold the directory the game needs. Fatal Contact 0.1.70 needs fc_weapons and the
+## only published fc-weapons (1.4.50) held the legacy arena_weapons: the shell fetched it, the overlay refused it as "not an addon pack",
+## and an online join went on to dot-cloud's "needs a newer version of the client". Now it is named as unpublished, up front.
+func _test_pack_holds_dir() -> void:
+	_section("a published addon pack is taken only when it holds the directory the game needs")
+	var shell := load("res://client/tmc_shell_solo.gd") as GDScript
+	var legacy := PackedStringArray(["LICENSE", "addons/arena_weapons/plugin.cfg", "addons/arena_weapons/arena_weapons_api.gd", "_imported/a.scn"])
+	var current := PackedStringArray(["LICENSE", "addons/fc_weapons/plugin.cfg", "addons/fc_weapons/fc_weapons_api.gd", "addons/dot_sim/plugin.cfg"])
+	var why: String = shell.pack_holds_dir("fc_weapons", "gamemann/fc-weapons", "1.4.50", legacy)
+	_check(why.contains("addons/arena_weapons") and why.contains("addons/fc_weapons") and why.contains("1.4.50"),
+		"fc-weapons 1.4.50 (legacy arena_weapons) does not supply fc_weapons, and the reason names both and the version", why)
+	_check(shell.pack_holds_dir("fc_weapons", "gamemann/fc-weapons", "1.4.52", current) == "",
+		"fc-weapons 1.4.52 (fc_weapons) supplies it: a game met by its addon's overlay is not refused")
+	_check(shell.pack_holds_dir("arena_weapons", "gamemann/fc-weapons", "1.4.50", legacy) == "",
+		"a game that still needs the legacy directory takes the tag that holds it")
+	_check(shell.pack_holds_dir("dot_trail", "gamemann/dot-trail", "0.1.6", PackedStringArray(["plugin.cfg", "trail.gd"])) == "",
+		"a pack that is the addon itself (plugin.cfg at its root) supplies any directory")
+	_check(shell.pack_holds_dir("zee_weapons", "gamemann/zee-dot-weapons", "0.1.66", PackedStringArray(["README.md"])).contains("holds no addon"),
+		"a pack with no plugin.cfg supplies nothing")
+	# The same rule the overlay mounts by, so the two cannot drift apart.
+	var overlay := load("res://addons/dot_cloud/addon_set/dot_cloud_addon_set_overlay.gd") as GDScript
+	var agree := true
+	for case: Array in [["fc_weapons", legacy], ["fc_weapons", current], ["arena_weapons", legacy], ["x", PackedStringArray(["plugin.cfg"])]]:
+		var manifest := DotCloudManifest.new()
+		for path: String in case[1]:
+			var f := DotCloudFile.new()
+			f.path = path
+			manifest.files.append(f)
+		var mounts: bool = overlay.base(manifest, case[0]) != overlay.NOT_AN_ADDON
+		var takes: bool = shell.pack_holds_dir(case[0], "o/r", "1", shell.manifest_paths(manifest)) == ""
+		agree = agree and mounts == takes
+	_check(agree, "it agrees with the overlay's own rule (DotCloudAddonSet's base) on every case")
+	_done()
+
+
 ## `sessionStorage` for [method _test_overlay_blocked]: getItem, setItem and removeItem.
 class FakeStorage:
 	extends RefCounted
@@ -525,6 +561,13 @@ func _test_overlay_in_place() -> void:
 		DirAccess.remove_absolute(path)
 	var setting_before: Variant = ProjectSettings.get_setting(setting, "")
 
+	# dot-cloud's early requirement check (the "needs a newer version of the client" panel) reads res://addons/<dir>: it refuses a game
+	# needing an addon this shell does not carry, and passes once the addon's overlay is mounted (checked after the mount below).
+	var needs := '{"format": 1, "addons": {"%s": 1}}' % dir
+	var before_mount := DotAddonApi.new().check_text(needs, "client")
+	_check(not before_mount.ok and before_mount.error.message.contains("does not have it"),
+		"before its overlay, a game needing the addon is refused as client_behind", str(before_mount.error) if not before_mount.ok else "passed")
+
 	var built := _build_probe_overlay(dir, root)
 	var plan: Dictionary = built["plan"]
 	var pack: String = built["pack"]
@@ -563,6 +606,9 @@ func _test_overlay_in_place() -> void:
 	var user := load(root.path_join("user.gd")) as GDScript
 	var answer: int = int(user.new().answer()) if user != null and user.can_instantiate() else -1
 	_check(answer == 42, "a script naming the overlay's class_name compiles and runs", "got %d" % answer)
+	var after_mount := DotAddonApi.new().check_text(needs, "client")
+	_check(after_mount.ok, "with its overlay mounted, the same game passes the early requirement check (not client_behind)",
+		str(after_mount.error) if not after_mount.ok else "")
 	_check(not shell.call("_overlay_additive", {"addons": {"solo_check_other": {}}}),
 		"a second overlay after this one restarts")
 

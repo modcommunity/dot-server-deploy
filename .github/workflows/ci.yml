@@ -49,6 +49,16 @@ jobs:
             - name: content-lists/addons.yml pins equal addons.lock
               run: bash tools/addons-lock.sh check-pins
 
+    # A shell carries the addons tools/shell-addons.list names (dot-* only) and no game addon:
+    # fc-weapons and the other game packs reach players as overlays. Text only, no Godot.
+    shell-addons:
+        runs-on: ubuntu-latest
+        timeout-minutes: 2
+        steps:
+            - uses: actions/checkout@v4
+            - name: The shell export carries no game addon
+              run: bash tools/check_shell_addons.sh
+
     # The Godot pin is in two places: tools/fetch-godot.sh here, which is
     # authoritative because it is what the containers, the release tarballs and every
     # developer box are built from, and dot-ci/godot.pin, which is what the family's

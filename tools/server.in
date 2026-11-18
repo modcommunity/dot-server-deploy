@@ -1596,17 +1596,21 @@ check_lock_exported() {
 ## weapons packs, natural_disasters) and their models reach a player as dot-cloud overlay
 ## packs when they join. Baked in, fc-weapons (then arena-weapons) v1.4.28's embedded textures took the web
 ## pck from 44 MB to 147 MB, past the upload limit. These are the folders every export
-## leaves out: everything under addons/ that is not dot_*.
+## leaves out: everything under addons/ that tools/shell-addons.list (the explicit allow
+## list, read by tools/shell_lock.sh) does not name, so a game addon is left out even when
+## its directory starts with dot_.
 shell_left_out_addons() {
-    local d
+    local d keep
+
+    keep="$("$PROJECT/tools/shell_lock.sh" dirs)" || die "tools/shell-addons.list: see above" 5
 
     for d in "$PROJECT"/addons/*/; do
         [ -d "$d" ] || continue
         d="$(basename "$d")"
 
         case "$d" in
-            dot_*|.*) ;;
-            *) printf '%s\n' "$d" ;;
+            .*) ;;
+            *) printf '%s\n' "$keep" | grep -qxF "$d" || printf '%s\n' "$d" ;;
         esac
     done
 }
@@ -1618,6 +1622,8 @@ ensure_shell_excludes() {
     local cfg="$PROJECT/export_presets.cfg" tmp dirs rc
 
     [ -f "$cfg" ] || return 0
+    # The list is read here first: a die inside the substitution below would end only its subshell.
+    "$PROJECT/tools/shell_lock.sh" dirs > /dev/null || die "tools/shell-addons.list: see above" 5
     dirs="$(shell_left_out_addons | tr '\n' ' ')"
     [ -n "$dirs" ] || return 0
 
@@ -1653,8 +1659,10 @@ ensure_shell_excludes() {
 ## [b]The lock an export carries names only the addons it carries.[/b] The client reads it
 ## as "what I already have" (DotCloudAddonSet.plan_for), so a line for an addon the export
 ## left out would stop it from ever fetching that addon's overlay. addons.lock is swapped
-## for a dot-* only copy for the export and put back after it, and at exit if the export
-## dies; a copy left by a run that was killed is put back first.
+## for a copy holding only the repositories tools/shell-addons.list names (tools/shell_lock.sh,
+## which fails when the lock names a dot-* addon the list does not) for the export and put back
+## after it, and at exit if the export dies; a copy left by a run that was killed is put back
+## first. The full lock, game addons included (fc-weapons and the rest), is the servers'.
 SHELL_LOCK_FULL=""
 shell_lock_begin() {
     local lock="$PROJECT/addons.lock"
@@ -1664,8 +1672,8 @@ shell_lock_begin() {
     [ -f "$SHELL_LOCK_FULL" ] && mv -f "$SHELL_LOCK_FULL" "$lock"
     cp "$lock" "$SHELL_LOCK_FULL" || die "could not keep a copy of addons.lock" 5
     trap shell_lock_end EXIT
-    awk -F'\t' '/^[[:space:]]*(#|$)/ || $1 ~ /^dot-/' "$SHELL_LOCK_FULL" > "$lock" \
-        || { shell_lock_end; die "could not write the export's addons.lock" 5; }
+    "$PROJECT/tools/shell_lock.sh" lock "$SHELL_LOCK_FULL" > "$lock" \
+        || { shell_lock_end; die "could not write the export's addons.lock (tools/shell_lock.sh: see above)" 5; }
 }
 
 shell_lock_end() {
@@ -1673,14 +1681,16 @@ shell_lock_end() {
     SHELL_LOCK_FULL=""
 }
 
-## The artifact carries no addon outside dot-*. Read from the pck itself, so a filter that
-## stopped matching is caught before an upload rather than by the upload's size limit.
+## The artifact carries no addon outside tools/shell-addons.list (dot-* only). Read from the
+## pck itself, so a filter that stopped matching is caught before an upload rather than by the
+## upload's size limit.
 check_shell_dot_only() {
-    local found
+    local found keep
 
-    found="$(grep -aoE 'addons/[a-z0-9_]+/' "$1" | sort -u | grep -vE '^addons/dot_' \
-        | sed 's#^addons/##; s#/$##' | tr '\n' ' ')"
-    [ -z "$found" ] || die "the export carries addons that are not dot-* addons: ${found% }.
+    keep="$("$PROJECT/tools/shell_lock.sh" dirs)" || die "tools/shell-addons.list: see above" 3
+    found="$(grep -aoE 'addons/[a-z0-9_]+/' "$1" | sort -u | sed 's#^addons/##; s#/$##' \
+        | grep -vxF -f <(printf '%s\n' "$keep") | tr '\n' ' ')"
+    [ -z "$found" ] || die "the export carries addons tools/shell-addons.list does not name: ${found% }.
 
     A shell carries the dot-* addons only; a game's own addons reach players as overlay
     packs. ensure_shell_excludes adds them to export_presets.cfg's exclude_filter, so if
