@@ -103,6 +103,25 @@ for pair in "net_port:28000:TMC_PORT:--port" "net_bind_ip:10.0.0.1:TMC_BIND:--bi
     out="$(runD "$envname=other")"
     check "$envname applies when no file sets $key" grep -q -- "$flag other" <<<"$out"
 done
+# cache_bytes: flag > file > TMC_CACHE_BYTES like the rest; unset is unlimited (no flag at all); a value that is not a byte count stops the launcher.
+printf 'cache_bytes: 20G\n' > "$D/server/server.yml"
+out="$(runD TMC_CACHE_BYTES=1G)"
+check "cache_bytes: in the file beats TMC_CACHE_BYTES" bash -c '! grep -q -- "--cache-bytes 1G" <<<"$1"' _ "$out"
+check "  and says so" grep -q "INFO cache_bytes: cfg/server/server.yml wins over TMC_CACHE_BYTES" <<<"$out"
+printf 'sv_name: "a"\n' > "$D/server/server.yml"
+out="$(runD TMC_CACHE_BYTES=512M)"
+check "TMC_CACHE_BYTES applies when no file sets cache_bytes" grep -q -- "--cache-bytes 512M" <<<"$out"
+out="$(runD)"
+check "nothing set passes no ceiling (the host's default, unlimited)" bash -c '! grep -q -- "--cache-bytes" <<<"$1"' _ "$out"
+out="$(env TMC_NO_INSTALL=1 TMC_AUTO_UPDATE=never ./server --config "$D" --dry-run --cache-bytes 0 2>&1)"
+check "--cache-bytes 0 on the command line is passed on" grep -q -- "--cache-bytes 0" <<<"$out"
+for badv in lots -5 1.5G; do
+    out="$(runD TMC_CACHE_BYTES="$badv")"
+    check "a bad cache_bytes ($badv) fails loudly" grep -q "cache_bytes.*'$badv', not a whole number of bytes" <<<"$out"
+done
+check "the host summary names it" grep -q '"cache    : %s"' host/tmc_config.gd
+check "the configuration table documents it" grep -q '`TMC_CACHE_BYTES` | `cache_bytes:`' docs/configuration.md
+
 # The launcher's own settings: auto_update, channel, games_mode, no_install, verbose. A bad value is refused naming where it came from.
 printf 'channel: stable\n' > "$D/server/server.yml"
 out="$(runD TMC_CHANNEL=latest)"

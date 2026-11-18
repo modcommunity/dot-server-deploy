@@ -258,3 +258,9 @@ net_max_update_rate: 0
 # plus the current game's requires.json; a voted game's are announced when the vote passes). Anything else refuses
 # boot. --addons-announce or TMC_ADDONS_ANNOUNCE do the same. See docs/addon-packs.md.
 # addons_announce: all
+
+# Ceiling on the content cache (data/content_cache): bytes, or 20G / 512M. 0, the default, is unlimited. A server mounts
+# every map it offers and can never evict a mounted one, so a ceiling below their total fails maps with code=quota
+# ("The content cache is full and everything in it is in use"). Every boot logs the limit and the disk free.
+# --cache-bytes or TMC_CACHE_BYTES do the same.
+# cache_bytes: 0

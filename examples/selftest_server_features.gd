@@ -257,6 +257,48 @@ func _test_startup_checks() -> void:
 	_done()
 
 
+## The content cache ceiling: unlimited by default on a server, a byte count or nothing, and the line that says what it is.
+func _test_cache_limit() -> void:
+	_section("the content cache ceiling (cache_bytes)")
+
+	for pair in [["", 0], ["0", 0], [0, 0], ["1048576", 1048576], ["20G", 20 * 1073741824], ["512 MiB", 512 * 1048576], ["3kb", 3072], [8589934592, 8589934592]]:
+		var got := TmcCloudLimit.parse(pair[0])
+		_check(got.ok and int(got.value) == int(pair[1]), "cache_bytes '%s' is %d bytes (%s)" % [str(pair[0]), int(pair[1]), str(got.value)])
+
+	for bad in ["-1", "lots", "1.5G", "20X", "G"]:
+		var refused := TmcCloudLimit.parse(bad)
+		_check(not refused.ok and str(refused.error).contains("cache_bytes") and str(refused.error).contains(TmcCloudLimit.WHERE), "cache_bytes '%s' refuses boot, naming where it is set" % bad)
+
+	var cfg := TmcConfig.new()
+	_check(TmcConfig.HOST_KEYS.has("cache_bytes"), "cache_bytes is a server.yml host key")
+	_check(cfg.cache_bytes == "" and cfg.describe_lines().has("cache    : unlimited"), "a server with nothing written is unlimited, and ./server config says so")
+	cfg._apply_settings("server.yml", {"cache_bytes": "20G"})
+	_check(cfg.cache_bytes == "20G" and cfg.describe_lines().has("cache    : 20.0 GiB"), "cache_bytes: 20G reaches the config and the summary (%s)" % cfg.cache_bytes)
+	# A loop, not `.any()`: `unknown` is a PackedStringArray, which has none of Array's higher-order methods.
+	var reported := false
+	for entry in cfg.unknown:
+		reported = reported or String(entry).contains("cache_bytes")
+	_check(not reported, "and is not reported unknown")
+
+	var cloud := DotCloudConfig.new()
+	var dir := OS.get_user_data_dir().path_join("selftest-cache-limit")
+	cloud.cache_dir = dir
+	_check(cloud.cache_bytes > 0, "dot-cloud's own default is a ceiling (%d), which is why the server sets one" % cloud.cache_bytes)
+	TmcCloudLimit.apply(cloud, 0, "selftest", dir.path_join("absent.json"))
+	_check(cloud.cache_bytes == 0, "the server's cloud config is unlimited")
+	_check(not ("limit_hint" in cloud) or str(cloud.get("limit_hint")) == TmcCloudLimit.WHERE, "and a dot-cloud that names a hint in its quota refusal names the server's key")
+	var json := dir.path_join("content.json")
+	var f := FileAccess.open(json, FileAccess.WRITE)
+	f.store_string(JSON.stringify({"cache_bytes": 0, "trusted_keys": []}))
+	f.close()
+	_check(TmcCloudLimit._file_override(json).contains("cache_bytes=0"), "a cache_bytes in the cloud config file, which dot-cloud applies over this, is named")
+	_check(TmcCloudLimit._file_override(dir.path_join("absent.json")) == "", "and a file without one is not")
+	DirAccess.remove_absolute(json)
+	DirAccess.remove_absolute(dir)
+
+	_done()
+
+
 class _MapStarter extends Node:
 	func start_on_map(_id: StringName) -> DotResult:
 		return DotResult.success(null)

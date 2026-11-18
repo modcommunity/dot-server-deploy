@@ -23,7 +23,7 @@ const SERVER_DIR_OWNED := ["content.yml", "alias.yml"]
 ## Keys that exist and are handled somewhere other than a config object, listed so they are not reported as unknown (a key silently ignored and not reported looks like it took effect).
 ## `net_public_ip` is here, not in [constant BOOT_KEYS], because dot-server should have no such setting: what a server binds to and what a player types differ, and only the second is behind NAT.
 ## The settings this file reads itself, as named in `server.yml`, i.e. the config keys that exist without a console cvar behind them.
-const HOST_KEYS := ["game", "games", "map", "sv_map", "sv_query_app", "sv_web_loader", "sv_web_build", "content_urls", "addons", "addons_announce", "games_mode", "no_install", "auto_update", "channel", "verbose", "net_public_ip", "sv_tags", "chat_command_prefixes", "log_router"]
+const HOST_KEYS := ["game", "games", "map", "sv_map", "sv_query_app", "sv_web_loader", "sv_web_build", "content_urls", "addons", "addons_announce", "cache_bytes", "games_mode", "no_install", "auto_update", "channel", "verbose", "net_public_ip", "sv_tags", "chat_command_prefixes", "log_router"]
 ## The alias file, under `cfg/server/`. Read before every other file so a key in any of them can use an alias.
 const ALIAS_FILE := "alias.yml"
 
@@ -198,6 +198,11 @@ var games_allow: PackedStringArray = PackedStringArray()
 ## ([method check_addons_announce]). `all`, the default and the old behaviour, announces every installed game's addons; `game` announces the framework's and the
 ## current game's, and a game change announces the next game's before its content is sent (see `TmcHost._announce_change`). [url=docs/addon-packs.md]addon packs[/url]
 var addons_announce: String = ADDONS_ANNOUNCE_ALL
+
+## The content cache's ceiling as written: `cache_bytes` in server.yml, `--cache-bytes`, TMC_CACHE_BYTES. Empty or 0 is unlimited, the server default; checked
+## at boot by [method TmcCloudLimit.parse], which refuses anything that is not a byte count. A server mounts every map it offers and a mounted map's
+## objects are never evicted, so dot-cloud's 4 GiB player default refused maps on a box with the disk to hold them.
+var cache_bytes: String = ""
 
 const ADDONS_ANNOUNCE_ALL := "all"
 const ADDONS_ANNOUNCE_GAME := "game"
@@ -909,6 +914,10 @@ func _apply_settings(file: String, tree: Dictionary) -> DotResult:
 			addons_announce = str(value).strip_edges().to_lower()
 			continue
 
+		if name == "cache_bytes":
+			cache_bytes = str(value).strip_edges()
+			continue
+
 		if name == "game":
 			initial_game = String(value)
 			continue
@@ -1184,6 +1193,9 @@ func describe_lines() -> PackedStringArray:
 	out.append("addons   : %s" % (
 		", ".join(addons_listed) if not addons_listed.is_empty() else "(the lock's)"))
 	out.append("announce : %s" % addons_announce)
+	var limit := TmcCloudLimit.parse(cache_bytes)
+	out.append("cache    : %s" % (
+		("unlimited" if int(limit.value) == 0 else DotPaths.format_bytes(int(limit.value))) if limit.ok else str(limit.error)))
 	out.append("content  : %s" % (
 		", ".join(content_urls) if not content_urls.is_empty() else "(local only)"))
 	out.append("rcon     : %s" % ("on, port %d" % server.effective_rcon_port() if server.rcon_password != "" else "off"))

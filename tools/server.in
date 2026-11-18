@@ -112,6 +112,7 @@ OPT_MAP="${TMC_MAP:-}"
 OPT_WEB_LOADER="${TMC_WEB_LOADER:-}"
 OPT_WEB_BUILD="${TMC_WEB_BUILD:-}"
 OPT_ADDONS_ANNOUNCE="${TMC_ADDONS_ANNOUNCE:-}"
+OPT_CACHE_BYTES="${TMC_CACHE_BYTES:-}"
 AUTO_UPDATE="${TMC_AUTO_UPDATE:-when-needed}"
 CHANNEL="${TMC_CHANNEL:-latest}"
 
@@ -263,6 +264,9 @@ usage() {
                         Which addons joining clients are told to fetch: all (the
                         default) is every installed game's; game is the current
                         game's, and a game change announces the next one's.
+    --cache-bytes N     Ceiling on the content cache: bytes, or with K, M, G or T
+                        (20G). 0, the default, is unlimited; a server mounts
+                        every map it offers and never evicts a mounted one.
     --web-loader LABEL  Ask the site for this version of the web game loader
                         for this server's players (reported as sv_web_loader).
                         For a server on older addons than the site's default.
@@ -359,6 +363,7 @@ usage() {
     TMC_WEB_LOADER      --web-loader          TMC_AUTO_UPDATE   --auto-update
     TMC_WEB_BUILD       --web-build           TMC_ADDONS_ANNOUNCE --addons-announce
     TMC_CHANNEL         --channel             (latest = the branch head, stable = newest v* release)
+    TMC_CACHE_BYTES     --cache-bytes         (0 or empty = unlimited)
 
   So a TMC_PORT left in an environment file never hides an edit to the YAML: the
   file that sets net_port is used and the INFO line names it. deploy/env.example
@@ -415,6 +420,7 @@ while [ $# -gt 0 ]; do
         --web-loader)  [ $# -ge 2 ] || die "$1 needs a value"; OPT_WEB_LOADER="$2";  shift 2 ;;
         --web-build)   [ $# -ge 2 ] || die "$1 needs a value"; OPT_WEB_BUILD="$2";   shift 2 ;;
         --addons-announce) [ $# -ge 2 ] || die "$1 needs a value"; OPT_ADDONS_ANNOUNCE="$2"; shift 2 ;;
+        --cache-bytes) [ $# -ge 2 ] || die "$1 needs a value"; OPT_CACHE_BYTES="$2"; shift 2 ;;
         --auto-update) [ $# -ge 2 ] || die "$1 needs a value"; AUTO_UPDATE="$2";     shift 2 ;;
         --channel)     [ $# -ge 2 ] || die "$1 needs a value"; CHANNEL="$2";         shift 2 ;;
         --base)    ENGINE_BASE="${2:-}"; shift 2 ;;
@@ -646,6 +652,11 @@ yield_to_file OPT_QUERY_BIND query_bind_ip --query-bind TMC_QUERY_BIND
 yield_to_file OPT_WEB_LOADER sv_web_loader --web-loader TMC_WEB_LOADER
 yield_to_file OPT_WEB_BUILD sv_web_build --web-build TMC_WEB_BUILD
 yield_to_file OPT_ADDONS_ANNOUNCE addons_announce --addons-announce TMC_ADDONS_ANNOUNCE
+yield_to_file OPT_CACHE_BYTES cache_bytes --cache-bytes TMC_CACHE_BYTES
+# Fail loudly here as the host does: a ceiling that is not a byte count must not become some other ceiling.
+if [ -n "$OPT_CACHE_BYTES" ] && ! [[ "$(tr -d ' ' <<<"$OPT_CACHE_BYTES")" =~ ^[0-9]+([KkMmGgTt]([Ii]?[Bb])?|[Bb])?$ ]]; then
+    die "cache_bytes / --cache-bytes / TMC_CACHE_BYTES is '$OPT_CACHE_BYTES', not a whole number of bytes (0 for unlimited, or with K, M, G or T)" 2
+fi
 file_setting GAMES_MODE games_mode --games-mode TMC_GAMES_MODE
 file_setting AUTO_UPDATE auto_update --auto-update TMC_AUTO_UPDATE
 file_setting CHANNEL channel --channel TMC_CHANNEL
@@ -705,6 +716,7 @@ fi
 [ -n "$OPT_WEB_LOADER" ]  && OVERRIDES+=(--web-loader "$OPT_WEB_LOADER")
 [ -n "$OPT_WEB_BUILD" ]   && OVERRIDES+=(--web-build "$OPT_WEB_BUILD")
 [ -n "$OPT_ADDONS_ANNOUNCE" ] && OVERRIDES+=(--addons-announce "$OPT_ADDONS_ANNOUNCE")
+[ -n "$OPT_CACHE_BYTES" ] && OVERRIDES+=(--cache-bytes "$OPT_CACHE_BYTES")
 [ -n "$OPT_CONTENT_URL" ] && OVERRIDES+=(--content-url "$OPT_CONTENT_URL")
 
 # [b]The list reaches the SERVER too, and not only the installer.[/b] Installing the two
@@ -1141,6 +1153,7 @@ do_install_games() {
                 --content "$CONTENT_DIR" --data "$DATA_DIR" --config "$CONFIG_DIR")
 
     [ -n "$OPT_CONTENT_URL" ] && args+=(--base "$OPT_CONTENT_URL")
+    [ -n "$OPT_CACHE_BYTES" ] && args+=(--cache-bytes "$OPT_CACHE_BYTES")
     [ "$GAMES_MODE" = "remove" ] && args+=(--prune)
     [ -n "$REFRESH" ] && args+=(--refresh)
     [ -n "$VERBOSE" ] && args+=(--verbose)

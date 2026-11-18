@@ -152,6 +152,13 @@ func _run() -> void:
 		_die(EXIT_CONFIG, str(announce_mode.error))
 		return
 
+	# Same: a ceiling that is not a byte count must not become some other ceiling.
+	var cache_limit := TmcCloudLimit.parse(config.cache_bytes)
+
+	if not cache_limit.ok:
+		_die(EXIT_CONFIG, str(cache_limit.error))
+		return
+
 	if _selftest:
 		# A boot test must not need the live port: `./server check` runs on boxes where one is often already serving, and "already in use" is true but not the question asked.
 		# Port 0 lets the OS pick; RCON goes off with it because `DotServerConfig.validate` refuses an ephemeral game port alongside an RCON password with no explicit port.
@@ -418,6 +425,11 @@ func _apply_web_overrides(args: PackedStringArray) -> void:
 
 	if announce != "":
 		config.addons_announce = announce.strip_edges().to_lower()
+
+	var cache_bytes := _value(args, "--cache-bytes", "")
+
+	if cache_bytes != "":
+		config.cache_bytes = cache_bytes.strip_edges()
 
 
 ## The owner's per-game settings from `cfg/server/content/overrides.yml` (cvars, metadata, player counts, maps), laid over each `game.yml` before any descriptor is read.
@@ -1054,6 +1066,9 @@ func _build_cloud() -> void:
 
 	if not FileAccess.file_exists(cloud.config_file):
 		cloud.config_file = "res://client/content.json"
+
+	# Unlimited unless the operator set a ceiling: dot-cloud's default is a player's 4 GiB, and a server's mounted maps can never be evicted to make room.
+	TmcCloudLimit.apply(cloud.config, int(TmcCloudLimit.parse(config.cache_bytes).value), CHANNEL, cloud.config_file)
 	# The content directory is searched before the network, so a pack beside the game that names it needs no web server (a LAN deployment, every test).
 	# `dist/` too, when there is one: it is where `./server pack` writes, so a server that published a map has it. Absent on a deployment that only consumes.
 	var searched := PackedStringArray([content.root])

@@ -85,6 +85,15 @@ func _init() -> void:
 	if _site == "":
 		_site = site_from_config(config_dir)
 
+	# The same ceiling the server runs with (TmcCloudLimit): a prefetch under dot-cloud's 4 GiB player default
+	# refused packs the server, unlimited, would then have to fetch at boot anyway.
+	var limit := TmcCloudLimit.parse(opts.get("cache-bytes", _cache_bytes_from_config(config_dir)))
+	if not limit.ok:
+		push_error("install-games: %s (%s)" % [str(limit.error), TmcCloudLimit.WHERE])
+		quit(EXIT_USAGE)
+		return
+	_cache_bytes = int(limit.value)
+
 	# No --games: the packs cfg/content/games.yml lists (`pack: owner/name`, optionally pinned) are
 	# what to fetch. Its repository entries are cloned by setup.sh, not fetched here.
 	if wanted.is_empty():
@@ -1654,6 +1663,8 @@ func _build_cloud(
 	if not FileAccess.file_exists(cloud.config_file):
 		cloud.config_file = "res://client/content.json"
 
+	TmcCloudLimit.apply(cloud.config, _cache_bytes, CHANNEL, cloud.config_file)
+
 	# The content directory as it was given, exactly as `TmcContent.root` holds it and exactly as the
 	# server hands it to its own client.
 	var searched := PackedStringArray([content_dir])
@@ -1749,9 +1760,18 @@ func _write_state(data_dir: String, state: Dictionary) -> void:
 
 
 
-## `content_urls` out of `cfg/server.yml`, without loading the whole configuration.
-static func _bases_from_config(config_dir: String) -> PackedStringArray:
-	var out := PackedStringArray()
+## The content cache ceiling for this run, from `--cache-bytes` or `cache_bytes` in server.yml; 0 is unlimited.
+var _cache_bytes: int = 0
+
+
+## `cache_bytes` out of `cfg/server/server.yml` as written, empty when it has none (unlimited).
+static func _cache_bytes_from_config(config_dir: String) -> String:
+	var value: Variant = TmcYaml.at(_server_yml(config_dir), "cache_bytes", null)
+	return "" if value == null else str(value)
+
+
+## `cfg/server/server.yml` (or the old flat `cfg/server.yml`), parsed; empty when there is none or it does not parse.
+static func _server_yml(config_dir: String) -> Dictionary:
 	# The singular layout keeps it in cfg/server/server.yml; the flat cfg/server.yml is the old one.
 	var path := config_dir.path_join("server/server.yml")
 
@@ -1759,7 +1779,7 @@ static func _bases_from_config(config_dir: String) -> PackedStringArray:
 		path = config_dir.path_join("server.yml")
 
 	if not FileAccess.file_exists(path):
-		return out
+		return {}
 
 	var parsed := TmcYaml.parse_file(path)
 
@@ -1767,9 +1787,15 @@ static func _bases_from_config(config_dir: String) -> PackedStringArray:
 		DotLog.warn(CHANNEL, "could not read the server configuration", {
 			"path": path, "why": str(parsed.error),
 		})
-		return out
+		return {}
 
-	var urls: Variant = TmcYaml.at(parsed.value as Dictionary, "content_urls", null)
+	return parsed.value as Dictionary
+
+
+## `content_urls` out of `cfg/server.yml`, without loading the whole configuration.
+static func _bases_from_config(config_dir: String) -> PackedStringArray:
+	var out := PackedStringArray()
+	var urls: Variant = TmcYaml.at(_server_yml(config_dir), "content_urls", null)
 
 	if urls is Array:
 		for entry in (urls as Array):
