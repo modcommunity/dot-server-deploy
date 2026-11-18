@@ -179,7 +179,13 @@ static func addon_set_from(lock_text: String, dirs: PackedStringArray) -> Array:
 			continue
 
 		# The directory is what the installed ref holds; the legacy one (arena_weapons) is announced as it is, and said so.
+		# A legacy directory the locked version no longer holds (fc-weapons 1.4.52+ ships only fc_weapons) is a stale leftover
+		# of an older install: announcing it makes every client's overlay fail ("not an addon pack"), so it is skipped, loudly.
 		if TmcAddonNamespaces.is_legacy_dir(dir):
+			if not TmcAddonNamespaces.holds_legacy(repo, versions[repo]):
+				push_warning("addons: res://addons/%s is a stale legacy directory: %s@%s holds addons/%s, so it is not announced (delete it)" % [dir, repo, versions[repo], TmcAddonNamespaces.dir_for(repo)])
+				continue
+
 			TmcAddonNamespaces.warn_legacy(dir, "%s@%s" % [repo, versions[repo]])
 
 		var pack := TmcAddonNamespaces.announced_pack_for(dir)

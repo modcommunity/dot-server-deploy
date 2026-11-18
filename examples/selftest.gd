@@ -11,7 +11,7 @@ const RoundsWithoutMatch := preload("res://examples/fixtures/rounds_without_matc
 
 const Host := preload("res://host/tmc_host.gd")
 
-const CHECKS := 641
+const CHECKS := 643
 
 ## Where the replay section writes. Emptied at the start of every run, so a clip left by the
 ## last one cannot satisfy a check about this one (docs/testing.md, "a suite that writes to
