@@ -38,6 +38,16 @@ static func parse(raw: Variant) -> DotResult:
 	return DotResult.success(text.substr(0, digits).to_int() * int(_UNITS[unit]))
 
 
+## [param raw] as `--print-config` shows it: "unlimited", a size, or why it would refuse boot.
+static func describe(raw: Variant) -> String:
+	var limit := parse(raw)
+
+	if not limit.ok:
+		return str(limit.error)
+
+	return "unlimited" if int(limit.value) == 0 else DotPaths.format_bytes(int(limit.value))
+
+
 ## Puts [param bytes] on a server's cloud config before it starts and says, once, what the ceiling is and how much disk it has to fill.
 ## A `cache_bytes` in the cloud config file ([param config_file], the client's) or DOT_CLOUD_CACHE_BYTES still wins (dot-cloud applies those at start), and the line says so.
 static func apply(cloud_config: Object, bytes: int, channel: String, config_file: String = "") -> void:

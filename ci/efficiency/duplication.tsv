@@ -3,12 +3,12 @@
 examples/admin_live.gd	32
 examples/admin_loading_selftest.gd	30
 examples/deathrun_client.gd	159
-examples/delivery_client.gd	123
+examples/delivery_client.gd	114
 examples/game_vote_all.gd	58
 examples/game_vote_rounds.gd	47
 examples/hideseek_client.gd	169
 examples/live_switch.gd	32
-examples/lookatme_client.gd	105
+examples/lookatme_client.gd	85
 examples/multigame.gd	32
 examples/party_live.gd	30
 examples/playlot_client.gd	113

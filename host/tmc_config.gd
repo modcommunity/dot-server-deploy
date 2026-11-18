@@ -881,6 +881,19 @@ func _canonical_setting(file: String, name: String, value: Variant) -> String:
 	return target
 
 
+## Settings that are one member each, trimmed, keyed by their name in the file.
+const _STRIPPED_SETTINGS := {"sv_web_loader": "web_loader", "sv_web_build": "web_build", "cache_bytes": "cache_bytes"}
+## Settings kept as written. None is a console line: there is no `map` cvar at this level (the one that exists belongs to whichever game is loaded,
+## none when the startup config runs), and `sv_query_app`'s cvar is registered by the query host, which opens AFTER the startup config runs.
+const _PLAIN_SETTINGS := {"game": "initial_game", "sv_map": "initial_map", "map": "initial_map", "sv_query_app": "app_url", "net_public_ip": "public_address"}
+
+
+## The values refused at boot rather than at read, so the command line has had its say first: the announce mode ([method check_addons_announce]) and the cache ceiling ([method TmcCloudLimit.parse]).
+func check_boot_values() -> DotResult:
+	var announce_mode := check_addons_announce(addons_announce)
+	return announce_mode if not announce_mode.ok else TmcCloudLimit.parse(cache_bytes)
+
+
 ## `server.yml` and `net.yml`: flat keys, three possible destinations.
 func _apply_settings(file: String, tree: Dictionary) -> DotResult:
 	for key in tree.keys():
@@ -901,30 +914,16 @@ func _apply_settings(file: String, tree: Dictionary) -> DotResult:
 				unknown.append("%s: %s (nested blocks are not settings)" % [file, name])
 				continue
 
-		if name == "sv_web_loader":
-			web_loader = str(value).strip_edges()
+		if _STRIPPED_SETTINGS.has(name):
+			set(_STRIPPED_SETTINGS[name], str(value).strip_edges())
 			continue
 
-		if name == "sv_web_build":
-			web_build = str(value).strip_edges()
+		if _PLAIN_SETTINGS.has(name):
+			set(_PLAIN_SETTINGS[name], String(value))
 			continue
 
-		if name == "addons_announce":
-			# Kept as written: [method check_addons_announce] refuses a value it does not know at boot, after the command line has had its say.
+		if name == "addons_announce":  # Checked at boot, not here: see [method check_boot_values].
 			addons_announce = str(value).strip_edges().to_lower()
-			continue
-
-		if name == "cache_bytes":
-			cache_bytes = str(value).strip_edges()
-			continue
-
-		if name == "game":
-			initial_game = String(value)
-			continue
-
-		if name == "sv_map" or name == "map":
-			# Not passed through as a console line, like `sv_query_app`: there is no `map` cvar at this level; the one that exists belongs to whichever game is loaded, which is none when the startup config runs.
-			initial_map = String(value)
 			continue
 
 		if name == "games":
@@ -937,15 +936,6 @@ func _apply_settings(file: String, tree: Dictionary) -> DotResult:
 
 		if name == "content_urls":
 			TmcConfigLists.apply_content_urls(self, file, value)
-			continue
-
-		if name == "sv_query_app":
-			# Not a console line: the cvar of that name is registered by the query host, which opens AFTER the startup config runs, so a generated `sv_query_app` line would be reported unknown.
-			app_url = String(value)
-			continue
-
-		if name == "net_public_ip":
-			public_address = String(value)
 			continue
 
 		if name == "sv_tags":
@@ -1193,9 +1183,7 @@ func describe_lines() -> PackedStringArray:
 	out.append("addons   : %s" % (
 		", ".join(addons_listed) if not addons_listed.is_empty() else "(the lock's)"))
 	out.append("announce : %s" % addons_announce)
-	var limit := TmcCloudLimit.parse(cache_bytes)
-	out.append("cache    : %s" % (
-		("unlimited" if int(limit.value) == 0 else DotPaths.format_bytes(int(limit.value))) if limit.ok else str(limit.error)))
+	out.append("cache    : %s" % TmcCloudLimit.describe(cache_bytes))
 	out.append("content  : %s" % (
 		", ".join(content_urls) if not content_urls.is_empty() else "(local only)"))
 	out.append("rcon     : %s" % ("on, port %d" % server.effective_rcon_port() if server.rcon_password != "" else "off"))

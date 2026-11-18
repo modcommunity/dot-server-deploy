@@ -15,6 +15,9 @@ const EXIT_ADDONS_BEHIND := 4
 
 const CHANNEL := "tmc.install"
 
+## The server-config readers (server.yml, auth.yml), kept apart from the installer itself.
+const InstallCfg := preload("install_games_cfg.gd")
+
 ## The catalogue, at the root of a content origin.
 const INDEX_FILE := "games.json"
 
@@ -53,17 +56,9 @@ var _refresh := false
 const COLLECTION_FILE := "collection.json"
 
 
-## The site an operator already named for sign-in: `backbone_url` in the last auth.yml under [param config_dir], or empty.
-## One key for one value, so `--site` and `TMC_SITE_URL` stay overrides, not a second setting.
+## The site an operator already named for sign-in (see install_games_cfg.gd); selftest asks it here.
 static func site_from_config(config_dir: String) -> String:
-	var site := ""
-	for path in TmcAuth.auth_files(config_dir):
-		var parsed := TmcYaml.parse_file(path)
-		if parsed.ok:
-			var url := str(TmcYaml.at(parsed.value as Dictionary, "backbone_url", "")).strip_edges()
-			if url != "":
-				site = url
-	return site
+	return InstallCfg.site_from(config_dir)
 
 
 func _init() -> void:
@@ -80,19 +75,14 @@ func _init() -> void:
 	var content_dir := str(opts.get("content", "content"))
 	var data_dir := str(opts.get("data", "data"))
 	var config_dir := str(opts.get("config", "cfg"))
+	# [b]One statement of where content comes from, and it is the server's own[/b] (cfg/server.yml), so the
+	# launcher carries no default origin of its own beside it.
 	var bases := _list(str(opts.get("base", "")))
-	_site = str(opts.get("site", OS.get_environment("TMC_SITE_URL"))).strip_edges()
-	if _site == "":
-		_site = site_from_config(config_dir)
-
-	# The same ceiling the server runs with (TmcCloudLimit): a prefetch under dot-cloud's 4 GiB player default
-	# refused packs the server, unlimited, would then have to fetch at boot anyway.
-	var limit := TmcCloudLimit.parse(opts.get("cache-bytes", _cache_bytes_from_config(config_dir)))
-	if not limit.ok:
-		push_error("install-games: %s (%s)" % [str(limit.error), TmcCloudLimit.WHERE])
+	if bases.is_empty():
+		bases = InstallCfg.bases(config_dir)
+	if not _settings_from(opts, config_dir):
 		quit(EXIT_USAGE)
 		return
-	_cache_bytes = int(limit.value)
 
 	# No --games: the packs cfg/content/games.yml lists (`pack: owner/name`, optionally pinned) are
 	# what to fetch. Its repository entries are cloned by setup.sh, not fetched here.
@@ -112,19 +102,11 @@ func _init() -> void:
 		# cfg/server/content/overrides.yml, which still need a version each (see _resolve_owner_maps).
 		print("  no games list; nothing to install")
 
-		if bases.is_empty():
-			bases = _bases_from_config(config_dir)
-
 		await process_frame
 		await _resolve_owner_maps(config_dir, data_dir, bases, content_dir, PackedStringArray())
 		quit(EXIT_OK)
 		return
 
-	# [b]One statement of where content comes from, and it is the server's own.[/b] Without this the
-	# launcher would have to carry a default origin of its own beside the one in `cfg/server.yml`, and
-	# the day somebody repoints a deployment at a mirror they would edit the YAML, restart.
-	if bases.is_empty():
-		bases = _bases_from_config(config_dir)
 	var prune := opts.has("prune")
 	var refresh := opts.has("refresh")
 
@@ -1764,52 +1746,21 @@ func _write_state(data_dir: String, state: Dictionary) -> void:
 var _cache_bytes: int = 0
 
 
-## `cache_bytes` out of `cfg/server/server.yml` as written, empty when it has none (unlimited).
-static func _cache_bytes_from_config(config_dir: String) -> String:
-	var value: Variant = TmcYaml.at(_server_yml(config_dir), "cache_bytes", null)
-	return "" if value == null else str(value)
+## The sign-in site and the cache ceiling for this run; false (after an error) when the ceiling does not parse.
+func _settings_from(opts: Dictionary, config_dir: String) -> bool:
+	_site = str(opts.get("site", OS.get_environment("TMC_SITE_URL"))).strip_edges()
+	if _site == "":
+		_site = InstallCfg.site_from(config_dir)
+	# The same ceiling the server runs with (TmcCloudLimit): a prefetch under dot-cloud's 4 GiB player default
+	# refused packs the server, unlimited, would then have to fetch at boot anyway.
+	var limit := TmcCloudLimit.parse(opts.get("cache-bytes", InstallCfg.cache_bytes(config_dir)))
+	if not limit.ok:
+		push_error("install-games: %s (%s)" % [str(limit.error), TmcCloudLimit.WHERE])
+		return false
+	_cache_bytes = int(limit.value)
+	return true
 
 
-## `cfg/server/server.yml` (or the old flat `cfg/server.yml`), parsed; empty when there is none or it does not parse.
-static func _server_yml(config_dir: String) -> Dictionary:
-	# The singular layout keeps it in cfg/server/server.yml; the flat cfg/server.yml is the old one.
-	var path := config_dir.path_join("server/server.yml")
-
-	if not FileAccess.file_exists(path):
-		path = config_dir.path_join("server.yml")
-
-	if not FileAccess.file_exists(path):
-		return {}
-
-	var parsed := TmcYaml.parse_file(path)
-
-	if not parsed.ok:
-		DotLog.warn(CHANNEL, "could not read the server configuration", {
-			"path": path, "why": str(parsed.error),
-		})
-		return {}
-
-	return parsed.value as Dictionary
-
-
-## `content_urls` out of `cfg/server.yml`, without loading the whole configuration.
-static func _bases_from_config(config_dir: String) -> PackedStringArray:
-	var out := PackedStringArray()
-	var urls: Variant = TmcYaml.at(_server_yml(config_dir), "content_urls", null)
-
-	if urls is Array:
-		for entry in (urls as Array):
-			var url := String(entry).strip_edges()
-
-			if url != "" and not url in out:
-				out.append(url)
-	elif urls != null:
-		var one := String(urls).strip_edges()
-
-		if one != "":
-			out.append(one)
-
-	return out
 
 
 func _descriptor_path(content_dir: String, id: String) -> String:

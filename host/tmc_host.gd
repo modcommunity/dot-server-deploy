@@ -145,18 +145,11 @@ func _run() -> void:
 	config = loaded.value as TmcConfig
 	_apply_overrides(args)
 
-	# Fail loudly: a misspelt mode must not quietly become one of the two.
-	var announce_mode := TmcConfig.check_addons_announce(config.addons_announce)
+	# Fail loudly: a misspelt announce mode or a cache ceiling that is not a byte count must not quietly become another.
+	var checked := config.check_boot_values()
 
-	if not announce_mode.ok:
-		_die(EXIT_CONFIG, str(announce_mode.error))
-		return
-
-	# Same: a ceiling that is not a byte count must not become some other ceiling.
-	var cache_limit := TmcCloudLimit.parse(config.cache_bytes)
-
-	if not cache_limit.ok:
-		_die(EXIT_CONFIG, str(cache_limit.error))
+	if not checked.ok:
+		_die(EXIT_CONFIG, str(checked.error))
 		return
 
 	if _selftest:
@@ -306,14 +299,16 @@ static func _absolute(path: String) -> String:
 	return ProjectSettings.globalize_path("res://").path_join(path)
 
 
+## Number flags laid over `config.server`, in this order. The other three ports are derived WRONG on a panel: RCON defaults to game port plus one and both query ports
+## to the game port, but Pterodactyl hands out whatever allocations were free on that node, and a taken `port + 1` fails as "address in use" on a port nobody configured.
+## Not secrets, so argv is fine, unlike `--rcon-password`. A2S before query, because `query_port` DERIVES FROM IT (`effective_query_port()` falls back to
+## `effective_a2s_port()`): setting only `--a2s-port` moves both onto one socket, which the two protocols tell apart by their first four bytes; `--query-port` splits them.
+const SERVER_NUMBER_FLAGS := {"--port": "port", "--max-players": "max_players", "--rcon-port": "rcon_port", "--a2s-port": "a2s_port", "--query-port": "query_port"}
+
+
 ## `--sv-*` style overrides, for one run without editing a file.
 ## Deliberately narrow (a port, a bind address, a name, a game): a flag is invisible to whoever reads the config file next, and secrets are refused for [method DotConfig.sensitive_keys]'s reason (argv is readable by every process).
 func _apply_overrides(args: PackedStringArray) -> void:
-	var port := _value(args, "--port", "")
-
-	if port != "":
-		config.server.port = port.to_int()
-
 	var bind := _value(args, "--bind", "")
 
 	if bind != "":
@@ -324,31 +319,14 @@ func _apply_overrides(args: PackedStringArray) -> void:
 	if hostname != "":
 		config.server.hostname = hostname
 
-	var players := _value(args, "--max-players", "")
+	# The port and player count, and the other three ports (see [constant SERVER_NUMBER_FLAGS]).
+	for flag: String in SERVER_NUMBER_FLAGS:
+		var number := _value(args, flag, "")
 
-	if players != "":
-		config.server.max_players = players.to_int()
+		if number != "":
+			config.server.set(SERVER_NUMBER_FLAGS[flag], number.to_int())
 
-	# The other three ports, and the interface the query listener binds. All four are derived WRONG on a panel: RCON defaults to game port plus one and both query ports to the game port,
-	# but Pterodactyl hands out whatever allocations were free on that node, and a taken `port + 1` fails as "address in use" on a port nobody configured.
-	# Not secrets, so argv is fine, unlike `--rcon-password`.
-	var rcon_port := _value(args, "--rcon-port", "")
-
-	if rcon_port != "":
-		config.server.rcon_port = rcon_port.to_int()
-
-	# A2S first, because `query_port` DERIVES FROM IT (`effective_query_port()` falls back to `effective_a2s_port()`): setting only `--a2s-port` moves both onto one socket,
-	# which the two protocols tell apart by their first four bytes. Setting `--query-port` as well splits them.
-	var a2s_port := _value(args, "--a2s-port", "")
-
-	if a2s_port != "":
-		config.server.a2s_port = a2s_port.to_int()
-
-	var query_port := _value(args, "--query-port", "")
-
-	if query_port != "":
-		config.server.query_port = query_port.to_int()
-
+	# The interface the query listener binds, derived WRONG on a panel like the ports.
 	# The one setting a reverse-proxied server cannot do without: nginx cannot forward UDP, so with `--bind` on loopback the query listener binds where no tracker can reach it
 	# and looks like a server that is down. `*` puts the query port, and only it, on every interface; RCON deliberately does not follow.
 	var query_bind := _value(args, "--query-bind", "")

@@ -257,6 +257,12 @@ func _test_startup_checks() -> void:
 	_done()
 
 
+## What refuses boot: an old game, a map path that is not the game's, and a cache ceiling that is not a byte count.
+func _test_boot_refusals() -> void:
+	_test_startup_checks()
+	_test_cache_limit()
+
+
 ## The content cache ceiling: unlimited by default on a server, a byte count or nothing, and the line that says what it is.
 func _test_cache_limit() -> void:
 	_section("the content cache ceiling (cache_bytes)")
@@ -279,6 +285,9 @@ func _test_cache_limit() -> void:
 	for entry in cfg.unknown:
 		reported = reported or String(entry).contains("cache_bytes")
 	_check(not reported, "and is not reported unknown")
+	_check(cfg.check_boot_values().ok, "a byte count and the default announce mode pass the boot check")
+	cfg.cache_bytes = "lots"
+	_check(not cfg.check_boot_values().ok and str(cfg.check_boot_values().error).contains("cache_bytes"), "a ceiling that is not a byte count fails it, by name")
 
 	var cloud := DotCloudConfig.new()
 	var dir := OS.get_user_data_dir().path_join("selftest-cache-limit")
