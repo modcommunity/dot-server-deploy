@@ -48,7 +48,7 @@ entries:
   - repo: dot-lighting
     pin: v0.1.13
   - repo: dot-loadout
-    pin: v0.1.15
+    pin: v0.1.16
   - repo: dot-locale
     pin: v0.1.8
   - repo: dot-log
