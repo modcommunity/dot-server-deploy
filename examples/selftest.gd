@@ -1643,9 +1643,9 @@ games:
 	_check((cold["collections"] as Dictionary).is_empty() and (cold["failed"] as PackedStringArray).size() == 1,
 		"an outage with nothing cached leaves the collection out and says so", str(cold))
 	origin_state["up"] = true
-	var refused: Dictionary = await installer.resolve_collections(PackedStringArray(["o/new"]), fetch, {"o/new": ["o/old"]})
-	_check(refused["collections"] == {"o/new": ["o/old"]} and str((refused["failed"] as PackedStringArray)[0]).contains("o/new"),
-		"a newer format is reported by collection and keeps the cache", str(refused))
+	var refused: Dictionary = await installer.resolve_collections(PackedStringArray(["o/missing", "o/new", "o/c"]), fetch, {"o/new": ["o/old"]})
+	_check(refused["collections"] == {"o/new": ["o/old"], "o/c": ["o/m1", "o/m2"]} and str(refused["failed"]).contains("o/missing") and str(refused["failed"]).contains("o/new"),
+		"a 404 or newer-format collection is reported by id, keeps its cache and never drops the others", str(refused))
 
 	# The cache round trip the host reads at boot.
 	var dir := "user://selftest_collections"
