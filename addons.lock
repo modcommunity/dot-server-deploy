@@ -8,7 +8,7 @@ dot-bot	v0.1.31
 dot-bot-record	v0.1.5
 dot-browser	v0.1.10
 dot-chat	v0.1.9
-dot-cloud	v0.1.56
+dot-cloud	v0.1.57
 dot-combat	v0.1.24
 dot-console	v0.1.12
 dot-core	v0.1.48
@@ -71,7 +71,7 @@ dot-vote	v0.1.19
 dot-weapon	v0.1.55
 dot-weather	v0.1.4
 dot-workbench	v0.3.4
-fc-weapons	v1.4.58
+fc-weapons	v1.4.59
 natural-disasters	v0.1.4
 zed-dot-weapons	v0.1.15
 zee-dot-weapons	v0.1.66
