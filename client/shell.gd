@@ -1329,6 +1329,8 @@ func _on_server_info(_challenge: Dictionary, target: String) -> void:
 	if link == null or _addons_updating or _addons_skipped.has(target):
 		return
 
+	# Both the challenge (dot_server's sign-on) and a scoped announce land here.
+	link.server_addons = TmcAddonNamespaces.without_stale_legacy(link.server_addons)
 	var addons := DotCloudAddonSet.new(_cloud)
 	addons.namespaces = TmcAddonNamespaces.load_shell()
 	var decided := addons.plan_for(link.server_addons)
@@ -1383,7 +1385,7 @@ func _on_addons_announced(_peer: int, payload: Variant, target: String) -> void:
 		return
 
 	var announced: Dictionary = payload
-	link.server_addons = TmcAddonNamespaces.without_stale_legacy((announced["addons"] as Array).duplicate(true))
+	link.server_addons = (announced["addons"] as Array).duplicate(true)
 	DotLog.info(CHANNEL, "the server announced addons for its next game", {
 		"server": target, "game": str(announced.get("game", "")), "addons": link.server_addons.size(),
 	})
