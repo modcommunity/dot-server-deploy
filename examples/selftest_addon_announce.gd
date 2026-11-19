@@ -38,6 +38,8 @@ func _test_addon_announce() -> void:
 	_check(current.size() == 1 and current[0]["dir"] == "fc_weapons" and current[0]["id"] == "gamemann/fc-weapons" and current[0]["version"] == "1.5.0", "an installed fc_weapons is announced as fc-weapons")
 	var stale := TmcAddonSet.addon_set_from("fc-weapons\tv1.4.52\nzee-dot-weapons\tv0.1.66\n", PackedStringArray(["arena_weapons", "fc_weapons", "zee_weapons"]))
 	_check(stale.size() == 2 and stale[0]["dir"] == "fc_weapons" and stale[1]["dir"] == "zee_weapons", "a leftover legacy arena_weapons the locked fc-weapons (1.4.52+) no longer holds is not announced", str(stale))
+	var heard := TmcAddonNamespaces.without_stale_legacy([{"dir": "arena_weapons", "id": "gamemann/fc-weapons", "version": "1.4.52"}, {"dir": "fc_weapons", "id": "gamemann/fc-weapons", "version": "1.4.52"}, {"dir": "arena_weapons", "id": "gamemann/fc-weapons", "version": "1.4.51"}])
+	_check(heard.size() == 2 and heard[0]["dir"] == "fc_weapons" and heard[1]["version"] == "1.4.51", "the client drops an announced legacy arena_weapons its version (1.4.52+) no longer holds, and keeps one it does", str(heard))
 	var stale_only := TmcAddonSet.addon_set_from("fc-weapons\tv1.4.54\n", PackedStringArray(["arena_weapons"]))
 	_check(stale_only.is_empty(), "a stale legacy dir alone announces nothing, so no client builds an overlay from a pack that lacks it", str(stale_only))
 	_check(TmcAddonNamespaces._warned.has("arena_weapons@fc-weapons@1.4.11"), "an installed legacy arena_weapons is announced with a warning naming the locked ref")

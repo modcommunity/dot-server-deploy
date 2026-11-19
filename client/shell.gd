@@ -1383,7 +1383,7 @@ func _on_addons_announced(_peer: int, payload: Variant, target: String) -> void:
 		return
 
 	var announced: Dictionary = payload
-	link.server_addons = (announced["addons"] as Array).duplicate(true)
+	link.server_addons = TmcAddonNamespaces.without_stale_legacy((announced["addons"] as Array).duplicate(true))
 	DotLog.info(CHANNEL, "the server announced addons for its next game", {
 		"server": target, "game": str(announced.get("game", "")), "addons": link.server_addons.size(),
 	})

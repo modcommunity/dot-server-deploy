@@ -140,6 +140,28 @@ static func holds_legacy(repo: String, version: String) -> bool:
 	return last != "" and version != "" and DotCloudAddonSet.compare_versions(version.trim_prefix("v"), last) <= 0
 
 
+## [param announced] without a legacy directory its announced version no longer holds. A server-deploy older than
+## the host's own skip announces a stale `arena_weapons` left by an older install as `fc-weapons@1.4.52+`, which holds
+## only `addons/fc_weapons`: the all-or-nothing overlay then fails ("not an addon pack") and the game is refused.
+static func without_stale_legacy(announced: Array) -> Array:
+	var out: Array = []
+
+	for raw: Variant in announced:
+		if raw is Dictionary:
+			var dir := str((raw as Dictionary).get("dir", ""))
+			var version := str((raw as Dictionary).get("version", ""))
+
+			if is_legacy_dir(dir) and not holds_legacy(lock_repo(dir), version):
+				DotLog.warn("tmc.addons", "the server announced a stale legacy directory; not taken", {
+					"dir": dir, "version": version, "holds": dir_for(lock_repo(dir)),
+				})
+				continue
+
+		out.append(raw)
+
+	return out
+
+
 ## Whether [param dir] is a renamed repository's legacy directory (`arena_weapons`).
 static func is_legacy_dir(dir: String) -> bool:
 	return LEGACY_DIRS.values().has(dir)
