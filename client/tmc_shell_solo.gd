@@ -527,20 +527,12 @@ func _solo_overlay(content_id: String, needs: Dictionary, subscribed: Array = []
 	shell._say(shell._text("shell.addons.updating_solo", {}, "Adding this game's addons…"))
 	shell.loading.set_progress(-1.0, shell._text("shell.addons.updating_solo", {}, "Adding this game's addons…"))
 
-	# Where to come back to: the page's `?solo=` names the game too, but a menu launch has no address.
-	var resume := {"solo": content_id, "solo_version": shell._solo_version, "solo_map": shell._solo_map}
-	if shell._auth != null and shell._auth.is_signed_in() and shell._auth.identity() != null:
-		resume["member"] = shell._auth.identity().uid
-
+	var resume := _solo_resume(content_id)
 	var built: DotResult = await addons.build(wanted, resume)
 	if not built.ok and plan_holds_subscription({"addons": wanted}):
 		# A subscription is optional: one broken pack must not stop solo play. Retry once with the game's own needs.
-		var dropped: Array = []
-		for dir: Variant in wanted:
-			if wanted[dir] is Dictionary and str((wanted[dir] as Dictionary).get("source", "")) == SUBSCRIPTION_SOURCE:
-				dropped.append(str((wanted[dir] as Dictionary).get("id", dir)))
 		DotLog.warn(shell.CHANNEL, "a subscribed addon could not be fetched; playing without the subscribed addons", {
-			"content": content_id, "dropped": dropped, "why": str(built.error),
+			"content": content_id, "dropped": subscribed_ids(wanted), "why": str(built.error),
 		})
 		wanted = without_subscribed(wanted)
 		if wanted.is_empty():
@@ -568,6 +560,14 @@ func _solo_overlay(content_id: String, needs: Dictionary, subscribed: Array = []
 
 	shell._note_update_attempt(attempt)
 	return await _restart_for_solo_addons(built.value, resume)
+
+## Where a restart for [param content_id]'s addons comes back to: the page's `?solo=` names the game too, but a menu launch has no address.
+func _solo_resume(content_id: String) -> Dictionary:
+	var resume := {"solo": content_id, "solo_version": shell._solo_version, "solo_map": shell._solo_map}
+	if shell._auth != null and shell._auth.is_signed_in() and shell._auth.identity() != null:
+		resume["member"] = shell._auth.identity().uid
+	return resume
+
 
 ## Restarts into the overlay that carries a solo game's addons, keeping the files [param plan] names and the sign-in token.
 func _restart_for_solo_addons(plan: Dictionary, resume: Dictionary) -> SoloOverlay:
@@ -604,6 +604,16 @@ static func without_subscribed(wanted: Dictionary) -> Dictionary:
 		if not (entry is Dictionary and str((entry as Dictionary).get("source", "")) == SUBSCRIPTION_SOURCE):
 			kept[dir] = entry
 	return kept
+
+
+## The content ids of the entries in [param wanted] a subscription put there (for the log when they are dropped).
+static func subscribed_ids(wanted: Dictionary) -> Array:
+	var ids: Array = []
+	for dir: Variant in wanted:
+		var entry: Variant = wanted[dir]
+		if entry is Dictionary and str((entry as Dictionary).get("source", "")) == SUBSCRIPTION_SOURCE:
+			ids.append(str((entry as Dictionary).get("id", dir)))
+	return ids
 
 
 ## Whether an overlay plan holds an addon a player's subscription put there: such a plan never boots into an online session.
