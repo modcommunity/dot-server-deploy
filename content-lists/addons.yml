@@ -8,7 +8,7 @@ entries:
   - repo: dot-achievements
     pin: v0.1.12
   - repo: dot-audio
-    pin: v0.1.21
+    pin: v0.1.23
   - repo: dot-auth
     pin: v0.1.17
   - repo: dot-bot
@@ -26,7 +26,7 @@ entries:
   - repo: dot-console
     pin: v0.1.12
   - repo: dot-core
-    pin: v0.1.48
+    pin: v0.1.49
   - repo: dot-economy
     pin: v0.1.8
   - repo: dot-effects
@@ -140,7 +140,7 @@ entries:
   - repo: dot-vote
     pin: v0.1.19
   - repo: dot-weapon
-    pin: v0.1.55
+    pin: v0.1.56
   - repo: dot-weather
     pin: v0.1.4
   - repo: dot-workbench
