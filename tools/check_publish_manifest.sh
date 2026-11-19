@@ -28,4 +28,15 @@ git -C "$T/r" add -A; git -C "$T/r" -c user.name=t -c user.email=t@t commit -qm 
 pd=$("$HERE/publish-web-shell.sh" --zip "$T/b.zip" --app godot --build 20261023-0319 --dry-run --pin --no-push --repo "$T/r")
 echo "$pd" | grep -q 'would write game/godot/latest.json' && echo "$pd" | grep -q "$want" \
     && ok "pinned dry run prints the manifest it would write" || bad "pinned dry run manifest"
+# A build with the stock engine: the engine and the pck go under content hashes, not into the build.
+mkdir "$T/e"; printf '    executable: "index",\n    fileSizes: {"index.pck":3,"index.wasm":4},\n' > "$T/e/embed.html"
+for f in index.wasm index.audio.worklet.js index.audio.position.worklet.js index.js; do echo "$f" > "$T/e/$f"; done
+echo pck > "$T/e/index.pck"; ph=$(sha256sum "$T/e/index.pck" | cut -c1-16)
+(cd "$T/e" && python3 -I -c 'import os,zipfile;z=zipfile.ZipFile("../e.zip","w");[z.write(f) for f in sorted(os.listdir("."))]')
+ed=$("$HERE/publish-web-shell.sh" --zip "$T/e.zip" --app godot --build 20261023-0320 --dry-run)
+echo "$ed" | grep -q "^pck *game/godot/engine/$ph/index.pck" && ! echo "$ed" | grep -q '^  index.pck ' \
+    && ok "the pck goes once under its content hash, not into the build" || bad "shared pck: $ed"
+eo=$(SHELL_SHARED_PCK=0 "$HERE/publish-web-shell.sh" --zip "$T/e.zip" --app godot --build 20261023-0320 --dry-run)
+echo "$eo" | grep -q '^  index.pck ' \
+    && ok "SHELL_SHARED_PCK=0 keeps it in the build" || bad "SHELL_SHARED_PCK=0"
 echo "$fail failed"; [ "$fail" = 0 ]

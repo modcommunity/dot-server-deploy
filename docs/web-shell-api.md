@@ -8,7 +8,7 @@ It needs `SHELL_PUBLISH_TOKEN` (env or env file, never an argument; it reaches c
 
 `POST {SITE}/api/app/v1/web/build`, `Authorization: Bearer <SHELL_PUBLISH_TOKEN>`, JSON.
 
-1. `{"op":"begin","app","build","engine","files":[{"key","type","encoding","size","sha256"}]}` answers `{"puts":[{"key","url","headers":{}}]}`. Keys are relative to `game/<app>/`: `<build>/<path>` and the shared `engine/<hash>/<file>`. The headers (content-type, cache-control, content-encoding) are part of the presigned signature and the script sends exactly those.
+1. `{"op":"begin","app","build","engine","files":[{"key","type","encoding","size","sha256"}]}` answers `{"puts":[{"key","url","headers":{}}]}`. Keys are relative to `game/<app>/`: `<build>/<path>` and the shared `engine/<hash>/<file>` (the stock engine, and `index.pck` under its own content hash unless `SHELL_SHARED_PCK=0`). The headers (content-type, cache-control, content-encoding) are part of the presigned signature and the script sends exactly those.
 2. The script PUTs each file (brotli, `Content-Encoding: br`) to its URL.
 3. `{"op":"finalize","app","build","pin":bool,"manifest_json":"..."}` makes the site check the objects exist, and, with `pin`, write `game/<app>/latest.json`.
 

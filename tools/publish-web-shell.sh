@@ -341,6 +341,28 @@ if [ -n "$engine_hash" ]; then
             -e "s#\"index-mt.side.wasm\":#\"$eng-mt.side.wasm\":#" "$work/build/embed.html"
     fi
     echo "engine  game/$APP/engine/$engine_hash/ (shared by every build with this template)"
+    # [b]So is the pck, by its own content[/b]: a republished shell whose pck did not change (a page
+    # or engine change) re-downloads nothing for a returning player, and a CDN holds one copy across
+    # builds. It goes under engine/<hash>/ because that and <build>/ are the two places the site
+    # accepts; a different pck is a different hash, so a build still switches atomically.
+    pck_hash=
+    if [ -f "$work/build/index.pck" ] && [ "${SHELL_SHARED_PCK:-1}" = 1 ]; then
+        pck_hash=$(sha256sum "$work/build/index.pck" | cut -c1-16)
+        pck="../engine/$pck_hash/index.pck"
+        sed -i -e "s#mainPack: \"index.pck\",#mainPack: \"$pck\",#" -e "s#\"index.pck\":#\"$pck\":#" "$work/build/embed.html"
+        mv "$work/build/index.pck" "$work/index.pck"
+        echo "pck     game/$APP/engine/$pck_hash/index.pck (shared by every build with this pck)"
+        if [ "$DRY" = 0 ] && [ -n "$API" ]; then
+            brotli_file "$work/index.pck" "$work/eng-index.pck" || die "cannot brotli index.pck"
+            queue "engine/$pck_hash/index.pck" "$work/eng-index.pck" "$(content_type index.pck)" br
+        elif [ "$DRY" = 0 ] && ! aws s3 ls "s3://$BUCKET/game/$APP/engine/$pck_hash/index.pck" >/dev/null 2>&1; then
+            brotli_file "$work/index.pck" "$work/file.br" || die "cannot brotli index.pck"
+            aws s3 cp "$work/file.br" "s3://$BUCKET/game/$APP/engine/$pck_hash/index.pck" --only-show-errors \
+                --content-type "$(content_type index.pck)" --content-encoding br \
+                --cache-control "public, max-age=31536000, immutable"
+            rm -f "$work/file.br"
+        fi
+    fi
     if [ "$DRY" = 0 ] && [ -n "$API" ]; then
         for e in "${ENGINE_FILES[@]}"; do
             brotli_file "$work/build/$e" "$work/eng-$e" || die "cannot brotli $e"
@@ -417,6 +439,10 @@ if [ "$DRY" = 0 ] && [ -n "$ORIGIN" ]; then
     if [ -n "$engine_hash" ]; then
         code=$(curl -s -o /dev/null -w '%{http_code}' -r 0-0 "$ORIGIN/$APP/engine/$engine_hash/index.wasm" || true)
         [ "$code" = 200 ] || [ "$code" = 206 ] || die "$ORIGIN/$APP/engine/$engine_hash/index.wasm does not answer ($code); not pinning"
+        if [ -n "${pck_hash:-}" ]; then
+            code=$(curl -s -o /dev/null -w '%{http_code}' -r 0-0 "$ORIGIN/$APP/engine/$pck_hash/index.pck" || true)
+            [ "$code" = 200 ] || [ "$code" = 206 ] || die "$ORIGIN/$APP/engine/$pck_hash/index.pck does not answer ($code); not pinning"
+        fi
     fi
     if [ -f "$work/build/shell-inputs.txt" ]; then
         if ! curl -fsS "$url/shell-inputs.txt" -o "$work/served.txt" || ! cmp -s "$work/served.txt" "$work/build/shell-inputs.txt"; then
