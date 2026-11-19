@@ -16,7 +16,7 @@ tbl() ( cd "$(mktemp -d)" && eval "$fn" && game_tickrate "$1" )
 chk "table: fatalcontact 66" '[ "$(tbl fatalcontact)" = 66 ]'
 chk "table: arena (its former id) 66" '[ "$(tbl arena)" = 66 ]'
 chk "table: airdrift 128"  '[ "$(tbl airdrift)" = 128 ]'
-chk "table: g2gfast (its former id) 128" '[ "$(tbl g2gfast)" = 128 ]'
+chk "table: g2gfast (its former id, legacy id) 128" '[ "$(tbl g2gfast)" = 128 ]'
 chk "table: playlot 128" '[ "$(tbl playlot)" = 128 ]'
 chk "table: playground (its former id) 128" '[ "$(tbl playground)" = 128 ]'
 chk "table: unknown 60"    '[ "$(tbl hungario)" = 60 ]'

@@ -105,6 +105,7 @@ func _test_template() -> void:
 ## content/ here (for `./server pack`).
 const REPOSITORIES := {
 	"game-arena": "fatalcontact",
+	# legacy id: the old repository names
 	"game-playground": "playlot",
 	"game-g2gfast": "airdrift",
 	"game-hungario": "hungry_classic",

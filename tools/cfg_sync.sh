@@ -11,6 +11,7 @@ n=0
 # TmcGameCfgDirs.RETIRED_DIRS is the same list, and the selftest compares them.)
 for tier in game; do
     for pair in game-arena:game-fatal-contact game-final-contact:game-fatal-contact arena:game-fatal-contact \
+        # legacy id: the retired names, so a cfg dir written under them is moved
         game-g2gfast:game-airdrift game-g2gfast01:game-airdrift g2gfast:game-airdrift \
         game-playground:game-playlot playground:game-playlot; do
         old="${pair%%:*}"; new="${pair##*:}"

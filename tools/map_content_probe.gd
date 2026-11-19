@@ -1,7 +1,7 @@
 extends SceneTree
 
 # [b]Loaded out of the MOUNT, not preloaded, because the game is not in this build.[/b] game-airdrift
-# is a delivered pack: its scripts exist at `res://dot_cloud/g2gfast/<version>/game/…`, a path no
+# is a delivered pack: its scripts exist at `res://dot_cloud/airdrift/<version>/game/…`, a path no
 # constant here can name, because the version belongs to the game and this file belongs to the host.
 
 ## Does a client with NO maps get one from the content origin? `cloud_fetch_probe.gd` proved fetch-
@@ -40,7 +40,7 @@ func _init() -> void:
 	# under.
 	root.add_child(cloud)
 
-	print("-- mounting g2gfast")
+	print("-- mounting airdrift")
 
 	# The version is read from the descriptor rather than written here: a probe carrying
 	# its own copy of a version number is a probe that keeps passing against last week's
@@ -53,13 +53,13 @@ func _init() -> void:
 
 	var version := String(TmcYaml.at(descriptor.value as Dictionary, "version", ""))
 
-	var mounted: Variant = await cloud.ensure(&"g2gfast", version)
+	var mounted: Variant = await cloud.ensure(&"airdrift", version)
 	if not (mounted is DotResult) or not (mounted as DotResult).ok:
-		print("  [FAIL] could not mount g2gfast: ", str((mounted as DotResult).error))
+		print("  [FAIL] could not mount airdrift: ", str((mounted as DotResult).error))
 		quit(1)
 		return
 
-	var prefix := DotCloudClient.mount_prefix_for(&"g2gfast", version)
+	var prefix := DotCloudClient.mount_prefix_for(&"airdrift", version)
 	print("mounted at %s" % prefix)
 
 	var AirdriftGame: GDScript = _load_first(prefix, ["game/airdrift_game.gd", "game/g2g_game.gd"])

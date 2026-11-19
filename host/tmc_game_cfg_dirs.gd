@@ -8,6 +8,7 @@ const RETIRED_DIRS := {
 	"game-arena": "game-fatal-contact",
 	"game-final-contact": "game-fatal-contact",
 	"arena": "game-fatal-contact",
+	# legacy id: the names these games had before the rename; a directory under one is moved.
 	"game-g2gfast": "game-airdrift",
 	"game-g2gfast01": "game-airdrift",
 	"g2gfast": "game-airdrift",

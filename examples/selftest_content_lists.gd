@@ -143,7 +143,7 @@ func _test_former_game_id() -> void:
 		"a games list naming arena keeps fatalcontact and reports nothing missing",
 		str(dm_kept.ids()) + " missing " + str(dm_kept.missing) if dm_kept != null else str(dm_only.error))
 
-	# g2gfast was renamed airdrift; its pack id stays tmc/g2gfast until a re-publish.
+	# legacy id: g2gfast was renamed airdrift; its pack id stays tmc/g2gfast until a re-publish.
 	var timer := content.find("g2gfast")
 	_check(timer != null and timer.game_id == "airdrift", "find(\"g2gfast\") is airdrift",
 		timer.game_id if timer != null else "null")

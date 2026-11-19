@@ -429,7 +429,7 @@ game_tickrate() {
     done
     case "$g" in
         fatalcontact|arena) printf 66 ;;
-        airdrift|g2gfast|playlot|playground) printf 128 ;;
+        airdrift|g2gfast|playlot|playground) printf 128 ;;  # g2gfast: legacy id (a server still configured under it)
         *)                 printf 60 ;;
     esac
 }
@@ -2042,7 +2042,7 @@ fi
 # the import registers them as globals, and then a DELIVERED game's scripts resolve the
 # same names to the host's stale copy rather than to their own:
 #
-#     Parse Error: Value of type "res://dot_cloud/g2gfast/0.1.0/game/g2g_identity.gd"
+#     Parse Error: Value of type "res://dot_cloud/airdrift/0.1.0/game/g2g_identity.gd"
 #     cannot be assigned to a variable of type "G2GIdentity".
 #     Parse Error: argument 1 should be "G2GCamera.Mode" but is "g2g_camera.gd.Mode".
 #
@@ -2104,7 +2104,7 @@ fi
 # the game, and looks healthy; what fails is the pack:
 #
 #     SCRIPT ERROR: Parse Error: Could not find type "DotTimerRun" in the current scope.
-#     ERROR: Failed to load script "res://dot_cloud/g2gfast/0.1.0/game/g2g_game.gd"
+#     ERROR: Failed to load script "res://dot_cloud/airdrift/0.1.0/game/g2g_game.gd"
 #            with error "Parse error".
 #
 # and three layers up that surfaces as "No G2GGame is registered", a game with no map

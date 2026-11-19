@@ -414,7 +414,7 @@ Every one of these was published and booted as a pack — mounted, module loaded
 | game.yml | `--source` | pack | `scene:` | `client_scene:` | `module:` |
 | --- | --- | --- | --- | --- | --- |
 | `arena` | `games/game-arena` | `dist/arena` — 140 files, 3.1 MiB | `scenes/arena_server.tscn` | `game/arena.tscn` | `game/arena_module.gd` |
-| `airdrift` | `games/game-airdrift` | `dist/g2gfast` — 171 files, 3.1 MiB | `scenes/airdrift_server.tscn` | `game/airdrift.tscn` | `game/airdrift_module.gd` |
+| `airdrift` | `games/game-airdrift` | `dist/airdrift` — 171 files, 3.1 MiB | `scenes/airdrift_server.tscn` | `game/airdrift.tscn` | `game/airdrift_module.gd` |
 | `playlot` | `games/game-playlot` | `dist/playground` — 76 files, 755 KiB | `scenes/pg_server.tscn` | `game/playlot.tscn` | `game/playlot_module.gd` |
 | `hungry_classic` `hungry_frenzy` `hungry_gauntlet` | `games/game-hungario` | `dist/hungry` — 65 files, 644 KiB | `game/modes/<mode>.tscn` | `game/client/hungry_client.tscn` | `game/hungry_module.gd` |
 

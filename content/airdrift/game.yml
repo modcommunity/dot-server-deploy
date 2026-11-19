@@ -1,4 +1,4 @@
-# airdrift (formerly g2gfast). A bunny-hop and surf timer server, in the shape the genre grew up on:
+# airdrift. A bunny-hop and surf timer server, in the shape the genre grew up on:
 # the movement cvars under their own names, a timer counted in ticks with sub-tick
 # zone crossings, styles, records, and a replay bot running the server record.
 #
@@ -28,7 +28,7 @@
 # rather than a mode. Both maps are in the catalogue and `g2g_map` switches them.
 
 name: "Zee's Airdrift"
-# Still the published pack's id: renaming it is a re-publish on the content origin.
+# legacy id: still the published pack's id; renaming it is a re-publish on the content origin.
 content_id: tmc/g2gfast
 version: 0.1.0
 kind: pack
@@ -131,7 +131,7 @@ cvars:
 # The MAP vote inside this game — what the players pick between when a map ends, and
 # whether they may extend the one they are on. Its defaults are in the game's own
 # game/airdrift_vote.gd; anything written here overrides them, and the server's own
-# user://cfg/g2gfast_vote.json, DOT_VOTE_* and --vote-* override this. Keyed exactly as
+# user://cfg/g2gfast_vote.json (legacy id: the saved-data name is kept), DOT_VOTE_* and --vote-* override this. Keyed exactly as
 # dot-vote's DotVoteRules, enums by name.
 #
 # `vote:` beside it is a different thing: how the SERVER's vote for the next game
@@ -149,7 +149,7 @@ cvars:
 #     time_limit_sec: 2400
 
 metadata:
-  # The id this game had before it was renamed. `changelevel g2gfast`, an allow list
+  # legacy id: the id this game had before it was renamed. `changelevel g2gfast`, an allow list
   # or a cfg/game/g2gfast/ written for it still reach this game.
   former_ids: [g2gfast]
 

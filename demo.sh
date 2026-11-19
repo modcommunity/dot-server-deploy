@@ -8,7 +8,7 @@
 #   ./demo.sh servers   the five of them, by name and number
 #
 # Every command below takes a server first, by number (1..5) or by what it runs
-# (buses, hungry, airdrift, playlot, fatalcontact -- surf, sandbox, playground, g2gfast, dm and arena also work).
+# (buses, hungry, airdrift, playlot, fatalcontact -- surf, sandbox, playground, dm and arena also work).
 # Leave it out and it means server 1, which is what these did before they could
 # mean anything else.
 #
@@ -143,7 +143,7 @@ export DOT_CHAT_RELAY_COMMAND_SOURCE="${TMC_DEMO_RELAY_SOURCE:-2}"
 
 # A THIRD SERVER, and the first one in this demonstration that is not a 2D game.
 #
-# airdrift (formerly g2gfast) is the bunny-hop and surf timer: dot-player-controller, dot-timer, dot-map and
+# airdrift is the bunny-hop and surf timer: dot-player-controller, dot-timer, dot-map and
 # dot-leaderboard in one process, which is four addons the other two servers never
 # load. It is here because a server browser showing two games of the same shape proves
 # less than one showing two of different shapes, and because the timer is the part of
@@ -679,7 +679,7 @@ SERVERS=(
 ## be strict about a name only this file uses is a worse script.
 server_alias() {
     case "$1" in
-        surf|bhop|timer|g2gfast) printf 'airdrift' ;;
+        surf|bhop|timer) printf 'airdrift' ;;
         sandbox|props|playground) printf 'playlot' ;;
         dm|deathmatch|arena) printf 'fatalcontact' ;;
         hungry_classic|hungry_frenzy) printf 'hungry' ;;
@@ -844,7 +844,7 @@ do_switch() {
 ## DotMapCommands with default names answers to.
 map_command_for() {
     case "$1" in
-        airdrift|g2gfast) printf 'g2g_map' ;;
+        airdrift) printf 'g2g_map' ;;
         playlot|playground) printf 'pg_map' ;;
         fatalcontact|arena) printf 'arena_map' ;;
         *)          printf 'map' ;;

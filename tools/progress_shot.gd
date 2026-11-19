@@ -85,7 +85,7 @@ func _init() -> void:
 		"failed", "clear":
 			# A join that failed on the content, which is when the clear button is the
 			# answer; "clear" then presses it, to show the question it asks.
-			shell.call("_fail", "Could not mount g2gfast 0.0.0-1f2f144e0c4c: a downloaded "
+			shell.call("_fail", "Could not mount airdrift 0.0.0-1f2f144e0c4c: a downloaded "
 				+ "file does not match its manifest.")
 			if stage == "clear":
 				shell.call("_ask_clear")

@@ -12,6 +12,7 @@ const RETIRED_IDS := {
 	"gamemann/arena-weapons": "gamemann/fc-weapons",
 	"gamemann/arena-dm-maps": "gamemann/fc-dm-maps",
 	"gamemann/arena-surf-dm-maps": "gamemann/fc-surf-dm-maps",
+	# legacy id: published under these names; the origin and live server.yml files still say them.
 	"gamemann/game-g2gfast": "gamemann/game-airdrift",
 	"gamemann/game-g2gfast01": "gamemann/game-airdrift",
 	"gamemann/game-playground": "gamemann/game-playlot",
