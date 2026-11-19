@@ -110,6 +110,7 @@ Exit codes: `2` usage, `3` no runtime, `4` no project (`install-games`: addons b
 
 - Addon release: tag → site publishes the pack → `tools/addons-lock.sh write`, push → restart. Push the lock only after the packs are on the origin. [releases](docs/releases.md#the-release-orders)
 - Game release: tag the addons → lock here and push → the web-shell workflow's tag → tag the game. [releases](docs/releases.md#the-release-orders)
+- Game pack publish: `tools/pack_ready.sh <game-dir>` first (exit 0 = every `requires.floor.json` level is within origin/main's lock). `--prepare` pushes a `lockbump/<game>-<stamp>` branch and prints the tag, merge and shell steps for the supervisor. [releases](docs/releases.md#a-game-pack-against-the-lock)
 - **The shell is built by CI** (`.github/workflows/web-shell.yml`): a push changing a shell input exports, uploads, pins `web/shell-build` (+ `web/shell-build.inputs`) and tags. Never tag a lock bump by hand: `release.yml` refuses a tag whose pinned shell is not its own, dot-ci's server-compat skips it, and `./server` will not update onto it. `tools/publish-web-shell.sh` is the manual fallback. [releases](docs/releases.md#publishing-the-web-build)
 - A new shell is needed for the engine, the boot stage, `client/` code, a signon change, or addon files outside `addons/<dir>/`. [releases](docs/releases.md#what-needs-a-new-shell)
 - `tools/addons-lock.sh check` before any export; check against the tags, not the sibling checkouts. [releases](docs/releases.md#addonslock)

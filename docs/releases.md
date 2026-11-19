@@ -10,6 +10,20 @@ git add addons.lock && git commit -m "Lock dot-vote v0.2.1" && git push  # 3. th
 
 **Never** export, upload or pin a web shell by hand while the workflow is up; the order for a game is in the table below.
 
+## A game pack against the lock
+
+A game pack's `requires.json` is capped at the levels the shell's lock pins, and a `requires.floor.json` level above them stops `publish_pack.sh`, since players' shells would refuse the pack. `tools/pack_ready.sh <game-dir>` judges every floor against **origin/main's** `addons.lock` (not the checkout's) and names one state per floor:
+
+| State | Meaning | What moves it |
+| --- | --- | --- |
+| OK | floor ≤ the lock's level | nothing |
+| LOCKABLE | the addon's newest tag reaches it (also: the locked tag predates the addon's rename) | the lock bump `--prepare` pushes |
+| NEEDS_TAG | only the addon's origin/main reaches it | the printed `git tag` + push (supervisor), then the lock bump |
+| WRONG | no commit has the level | lower the floor in the game |
+| STALE | the lock carries no such addon, so the host never checks it | remove the floor from the game |
+
+`--prepare` commits the lock line and the `content-lists/addons.yml` pin for each LOCKABLE/NEEDS_TAG repository on a worktree branch `lockbump/<game>-<stamp>` off origin/main, pushes the branch, and prints the steps in order: tags, fast-forward main, the shell (the web-shell workflow, else `tools/publish-web-shell.sh`), then rerun. Exit 0 = publishable, 1 = actions printed, 2 = usage or git failure. Test: `tools/test_pack_ready.sh`.
+
 
 This repository is where an addon release, a game release and a shell release meet. The family's release checklist is in the `release-rules` memory; this is what the code here enforces and why.
 
