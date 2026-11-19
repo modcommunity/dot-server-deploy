@@ -444,6 +444,8 @@ So the worst a trusted-but-hostile publisher can do is **be the game you joined*
 
 One key. `data/content.json` and `client/content.json` each carry a single `trusted_keys` entry, the public half of `keys/content.key`, and the private half lives on the publishing machine and is gitignored *before* it is generated so it cannot arrive in a commit by being written first — `setup.sh` generates one on a fresh box, `chmod 600`, because a server with no key publishes nothing at all rather than publishing something that mounts nowhere. **A pack signed by anything else mounts nowhere**, which means a server owner can point a server at any content they like and still cannot deliver code nobody vouched for. That is the right default and it should stay the default.
 
+The browser shell's entry is named `tmc`, the key id our packs are signed under, because the Workshop trusts a subscription only when its manifest names a key in this keyring and that key alone verifies it (`DotCloudWorkshop.trusted_key_ids()`). A dev shell (`tools/dev-shell.sh`) adds `tmc-dev` beside it; a production shell never has it.
+
 The cost is equally plain: a server owner who writes their *own* game cannot deliver it to the stock client. They have three ways round it, in increasing order of how much they are taking on —
 
 1. **Have it signed**, and it works in every client everywhere.
