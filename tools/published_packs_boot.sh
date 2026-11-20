@@ -83,15 +83,17 @@ for id in $IDS; do
     done
 done
 for pin in "${PINS[@]}"; do
-    id="${pin%@*}"; v="${pin##*@}"; id="${id##*/}"
+    id="${pin%@*}"; v="${pin##*@}"; id="${id##*/}"; found=0
     for o in "${ORIGINS[@]}"; do
         tag="$(sed -E 's#^https?://##; s#/.*##' <<<"$o")"
         mkdir -p "$W/$tag"; base="$W/$tag/$id@$v"
         code="$(curl -sS --max-time 30 -o /dev/null -w '%{http_code}' "$o/$OWNER/$id/$v/manifest.json" 2>"$base.pin.log")"
         if [ "$code" = 404 ]; then rows+=("$id	$v	$tag	not published (pinned)"); continue; fi
-        if [ "$code" != 200 ]; then errs=$((errs+1)); rows+=("$id	$v	$tag	PIN-FAILED (http ${code:-none}; $base.pin.log)"); continue; fi
-        boot_one "$id" "$v" "$o" "$tag"
+        if [ "$code" != 200 ]; then errs=$((errs+1)); rows+=("$id	$v	$tag	PIN-FAILED (http ${code:-none}; $base.pin.log)"); found=1; continue; fi
+        found=1; boot_one "$id" "$v" "$o" "$tag"
     done
+    # A pin no origin has (a typo, or its origin left out of --origin) was never judged: not a pass.
+    [ $found -eq 1 ] || { errs=$((errs+1)); rows+=("$id	$v	-	PIN-NOT-FOUND (on no --origin)"); }
 done
 printf '%s\n' "${rows[@]}" | column -t -s $'\t' 2>/dev/null || printf '%s\n' "${rows[@]}"
 echo "published_packs_boot: lock $LOCK: $booted pack(s) booted, $fails do not boot, $errs fetch or host failure(s)"
