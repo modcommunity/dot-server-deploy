@@ -66,8 +66,9 @@ boot_one() {
         why="$(grep -m3 -E '^pack_boot: FAIL|pack_boot: .*(could not|did not)' "$d.boot.log" | sed 's/^pack_boot: //' | paste -sd ';' -)"
         rows+=("$id	$v	$tag	FAIL: ${why:-see $d.boot.log}")
     else
-        # Not a verdict on the pack: the host could not be built or the engine not run (pack_boot_test.sh exit 2).
-        errs=$((errs+1)); rows+=("$id	$v	$tag	HOST-FAILED (exit $rc; $d.boot.log)")
+        # Not a verdict on the pack (pack_boot_test.sh exit 2): the host or engine failed, or the probe could not judge it.
+        why="$(grep -E '^pack_boot: (NOT JUDGED|could not|cannot|the engine|no readable)|could not be judged' "$d.boot.log" | tail -1 | sed 's/^pack_boot: //')"
+        errs=$((errs+1)); rows+=("$id	$v	$tag	NOT-JUDGED (exit $rc: ${why:-host or engine failed}; $d.boot.log)")
     fi
 }
 for id in $IDS; do
