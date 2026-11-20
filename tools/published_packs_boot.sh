@@ -85,12 +85,12 @@ for id in $IDS; do
     done
 done
 # An origin that 404s every game (a wrong --origin, a moved content root, CONTENT_OWNER wrong) judged nothing: not a pass.
-# With --only a game may be on one origin and not yet the other, so there each named game must be on at least one origin.
-if [ -n "$ONLY" ]; then
-    for id in $IDS; do
-        [ -n "${idans[$id]:-}" ] || { errs=$((errs+1)); rows+=("$id	-	-	NOT-PUBLISHED-ANYWHERE (every origin's latest.json 404s)"); }
-    done
-else
+# A game may be on one origin and not yet the other, but every game swept (games.yml's or --only's) must be on at least one:
+# a listed game that 404s everywhere (moved content root, renamed id or owner) was never booted, so it is not a pass (exit 2).
+for id in $IDS; do
+    [ -n "${idans[$id]:-}" ] || { errs=$((errs+1)); rows+=("$id	-	-	NOT-PUBLISHED-ANYWHERE (every origin's latest.json 404s)"); }
+done
+if [ -z "$ONLY" ]; then
     for o in "${ORIGINS[@]}"; do
         tag="$(sed -E 's#^https?://##; s#/.*##' <<<"$o")"
         [ -n "${answered[$tag]:-}" ] || { errs=$((errs+1)); rows+=("-	-	$tag	ORIGIN-EMPTY (every latest.json 404s at $o/$OWNER)"); }
