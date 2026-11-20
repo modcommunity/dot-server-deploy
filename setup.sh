@@ -54,7 +54,7 @@
 #      of it: one pinned version, the sha512 checked into git rather than fetched
 #      from beside the binary, and no path through it that installs something
 #      unverified. `--no-download` keeps the old behaviour of refusing to fetch.
-#   2. Wires in the dot-* addons. Each one is a separate repository and there is no
+#   2. Wires in the gs-* addons. Each one is a separate repository and there is no
 #      way to clone the tree at once, so this is the one place that knowledge lives.
 #      They go INSIDE this project: a missing one is cloned into addons/.repos/ and
 #      addons/<name> is a relative link into it, so the whole build is one directory
@@ -172,7 +172,7 @@ DO_UPDATE=0
 DO_CHECK=0
 VENDOR=0
 
-# Where the dot-* addons come from.
+# Where the gs-* addons come from.
 #
 # [b]Empty is the default, and it means "inside this project".[/b] An addon that is not
 # here is cloned into addons/.repos/<repo> and addons/<name> becomes a RELATIVE link
@@ -975,7 +975,7 @@ repo_url() {
 # tip of its default branch, while the web and desktop shells players connect with are
 # exported once and published. The two drifted by however long it had been since the
 # last export, and a server a few commits ahead of the shell is refused at join --
-# "This server needs a different build of the game client" -- the moment dot-server's
+# "This server needs a different build of the game client" -- the moment GameSpice Server's
 # RPC surface moves, or a game's messages disagree with an addon's.
 #
 # `addons.lock` names a ref per repository (a release tag, normally), and it is only
@@ -1388,7 +1388,7 @@ resolve_games() {
 ## has ONE place to look.
 ##
 ## [b]A link rather than a clone or a copy.[/b] A developer tree has these repositories
-## beside this one because dot-bootstrap put them there; cloning a second copy is the
+## beside this one because GameSpice Bootstrap put them there; cloning a second copy is the
 ## bug where the fix is committed, pulled, and still not running, and copying one is a
 ## tree that goes stale the moment somebody edits the real one. Relative, because the
 ## whole set moves together and an absolute link into /home/somebody is a link that
@@ -1555,7 +1555,7 @@ ADDONS_SHELL=(dot_core dot_log dot_net dot_server dot_server_query dot_server_se
 
 ## The addons one game declares, out of the game's OWN .gitignore.
 ##
-## [b]That file is the declaration, and it is not this project's idea.[/b] dot-bootstrap
+## [b]That file is the declaration, and it is not this project's idea.[/b] GameSpice Bootstrap
 ## reads the same `/addons/<name>` lines to decide what to link into a developer
 ## checkout, so a game that gains a dependency says so in one place and both tools learn
 ## it at once -- which is the opposite of the list above, whose whole history is being
@@ -1769,10 +1769,10 @@ addon_source() {
 
     # A link this machine already has that still resolves -- addons/<name> ->
     # ../../<repo>/addons/<name>, which is every checkout wired by an earlier setup.sh
-    # and every developer tree dot-bootstrap made. [b]Kept exactly as it is.[/b] Cloning
+    # and every developer tree GameSpice Bootstrap made. [b]Kept exactly as it is.[/b] Cloning
     # fifty repositories a box already has, into a second copy, on the run where
     # somebody typed the usual upgrade command, is the one thing a setup script must not
-    # do -- and two copies of dot-cloud on one machine is the bug where the fix is
+    # do -- and two copies of GameSpice Cloud on one machine is the bug where the fix is
     # installed, pulled and still not running. `--addons-dir` repoints them on purpose;
     # nothing else does.
     if [ -L "$ROOT/addons/$name" ] && [ -d "$ROOT/addons/$name" ]; then
@@ -1857,7 +1857,7 @@ resolve_addons() {
                 # Copied, not linked. A symlink is fine where the thing it points at
                 # stays put and breaks the moment the directory is moved somewhere it
                 # is not -- a release tarball, or a container image whose final stage
-                # copies only this project. The symptom is every dot-* class_name
+                # copies only this project. The symptom is every gs-* class_name
                 # unresolved at once, which reads as a broken project rather than as a
                 # dangling link.
                 rm -rf "$link"
@@ -1933,8 +1933,8 @@ if [ "$DO_UPDATE" -eq 1 ]; then
     fi
 fi
 
-# [b]The native library of an addon that has one (dot-sim), unpacked at its locked tag.[/b]
-# tools/fetch-natives.sh lifts dot-bootstrap's fetcher (checksummed, stamped, a local
+# [b]The native library of an addon that has one (GameSpice Sim), unpacked at its locked tag.[/b]
+# tools/fetch-natives.sh lifts GameSpice Bootstrap's fetcher (checksummed, stamped, a local
 # build kept); no zip for this platform, or offline, is a warning and the GDScript twins
 # run. Never reaches export-web: the Web preset excludes the .gdextension.
 if [ -x tools/fetch-natives.sh ]; then
@@ -2352,7 +2352,7 @@ fi
 # configuration was a tracked file an operator edits in place, and `git pull` on the
 # box stopped with "your local changes would be overwritten by merge" -- on the one
 # file that is nobody's but that deployment's. The two copies had drifted apart by
-# then as well: the committed groups.yml carried the real dot-server flag names and
+# then as well: the committed groups.yml carried the real GameSpice Server flag names and
 # the heredoc still had the three that were silently not flags, vote.yml existed only
 # in the checkout so a tarball got none of it, and the committed rcon.yml had a live
 # generated password in it, public, because a first run wrote one where git was

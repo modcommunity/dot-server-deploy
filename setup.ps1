@@ -458,8 +458,8 @@ if (Test-Path -LiteralPath $presets) {
 
 Step "native libraries"
 
-# The native library of an addon that has one (dot-sim), unpacked at its locked tag:
-# tools/fetch-natives.ps1, the twin of tools/fetch-natives.sh, which lifts dot-bootstrap's
+# The native library of an addon that has one (GameSpice Sim), unpacked at its locked tag:
+# tools/fetch-natives.ps1, the twin of tools/fetch-natives.sh, which lifts GameSpice Bootstrap's
 # Fetch-Natives. No zip for this machine, or offline, is a warning and the GDScript twins
 # run. Never reaches export-web: the Web preset excludes the .gdextension.
 $fetchNatives = Join-Path $Root 'tools/fetch-natives.ps1'

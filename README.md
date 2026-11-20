@@ -1,4 +1,4 @@
-Everything a server owner needs to run a game on the [**GameSpice**](https://gamespice.net) platform with one command. It is a Godot project that boots a [dot-server](https://github.com/gamespice-platform/server), reads its settings from `cfg/*.yml`, loads games from `content/` and serves a browser client. It ships no game of its own: games are fetched as signed packs.
+Everything a server owner needs to run a game on the [**GameSpice**](https://gamespice.net) platform with one command. It is a Godot project that boots a [GameSpice Server](https://github.com/gamespice-platform/server), reads its settings from `cfg/*.yml`, loads games from `content/` and serves a browser client. It ships no game of its own: games are fetched as signed packs.
 
 ## Install and run
 

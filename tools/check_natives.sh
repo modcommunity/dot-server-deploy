@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# The dot-sim platform zip is unpacked by setup.sh and export-native (tools/fetch-natives.sh,
-# which reuses dot-bootstrap's fetcher); export-web fetches the web-wasm32 side module and
+# The GameSpice Sim platform zip is unpacked by setup.sh and export-native (tools/fetch-natives.sh,
+# which reuses GameSpice Bootstrap's fetcher); export-web fetches the web-wasm32 side module and
 # ships it with the dlink template. Offline.
 set -uo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
@@ -10,7 +10,7 @@ t() { if [ "$2" = 0 ]; then printf '  %sok%s   %s\n' "$GRN" "$OFF" "$1"; else pr
 
 grep -q 'tools/fetch-natives.sh' setup.sh;               t "setup.sh runs tools/fetch-natives.sh" $?
 grep -q 'tools/fetch-natives.sh' tools/server.in;        t "export-native runs tools/fetch-natives.sh" $?
-# export-native fetches its platforms; export-web fetches web-wasm32 only (dot-sim's side module)
+# export-native fetches its platforms; export-web fetches web-wasm32 only (GameSpice Sim's side module)
 awk '/^do_export_native\(\)/{in_n=1} in_n&&/fetch-natives.sh/{f=1} /^    export-web\)/{in_n=0; w=1} w&&/^        ;;/{w=0} w&&/fetch-natives.sh/{wc=1} w&&/fetch-natives.sh/&&!/--platform web-wasm32/{bad=1} END{exit !(f&&wc&&!bad)}' tools/server.in
 t "fetch-natives.sh: do_export_native, and export-web for web-wasm32 only" $?
 web="$(awk '/^\[preset\.[0-9]+\]$/{p=0} /^name="Web"/{p=1} p&&/^exclude_filter=/' export_presets.example.cfg)"
@@ -29,7 +29,7 @@ grep -q 'addEventListener("unhandledrejection"' web/embed.html && grep -q 'nativ
 t "a side module that 404s or does not compile falls back to ?natives=0 (not only a rejected start)" $?
 grep -q 'ENGINE_FILES+=(index.side.wasm)' tools/publish-web-shell.sh
 t "publish-web-shell ships index.side.wasm beside the shared engine" $?
-# The dlink threads twin: dot-sim's pthread side module (web-wasm32-threads) on the dlink
+# The dlink threads twin: GameSpice Sim's pthread side module (web-wasm32-threads) on the dlink
 # threads engine, picked only where every module has one; a failed threaded start goes ?threads=0.
 grep -q 'fetch-natives.sh" --platform web-wasm32-threads' tools/server.in && grep -q 'web_dlink_release.zip' tools/server.in \
     && grep -q 'GDEXTENSION_LIBS_MT' tools/server.in
@@ -43,7 +43,7 @@ t "fetch-export-templates installs the dlink template" $?
 grep -qP '^dot-sim\tv' addons.lock;                      t "addons.lock pins dot-sim" $?
 
 # The Windows twins: setup.ps1 and server.ps1.in run tools/fetch-natives.ps1 (export-native for
-# the platforms being built, never export-web), which lifts dot-bootstrap's Fetch-Natives.
+# the platforms being built, never export-web), which lifts GameSpice Bootstrap's Fetch-Natives.
 grep -q 'tools/fetch-natives.ps1' setup.ps1;             t "setup.ps1 runs tools/fetch-natives.ps1" $?
 grep -q 'fetch-natives.ps1' tools/server.ps1.in;         t "server.ps1 export-native runs tools\\fetch-natives.ps1" $?
 awk '/^function Invoke-ExportNative/{p=1} p&&/fetch-natives.ps1/{f=1} /^function Get-Tail/{p=0} END{exit !f}' tools/server.ps1.in

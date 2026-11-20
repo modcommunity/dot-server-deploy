@@ -32,7 +32,7 @@ The strongest layer wins. A flat file such as `cfg/party.yml` still works until 
 
 **Change a setting.** Make a party's seats be held for 30 seconds: create `cfg/server/addon/dot_party/party.yml` containing `party_seat_hold_sec: 30`. Only the keys you write change; every other setting keeps its default.
 
-**Replace the map list.** (The replace and `merge: true` rule for `maps.yml` is in dot-core; dot-map adopts it in a follow-up, until then its own file lookup applies.) A list file (a map rotation) is replaced whole by yours, which is what you want when you say "exactly these maps". Create `cfg/server/addon/dot_map/maps.yml` and list only the maps you want.
+**Replace the map list.** (The replace and `merge: true` rule for `maps.yml` is in GameSpice Core; GameSpice Map adopts it in a follow-up, until then its own file lookup applies.) A list file (a map rotation) is replaced whole by yours, which is what you want when you say "exactly these maps". Create `cfg/server/addon/dot_map/maps.yml` and list only the maps you want.
 
 **Two ways to choose the maps.** List only what plays (`maps:`), or keep every installed map and exempt some (`exempt:`). A file with only `exempt:` plays every installed map except those, sorted by name, including maps from workshop or suggested packs that arrive later. Entries are map ids, `owner/map` refs or name globs; quote one that starts with `*`. A pattern that matches nothing logs a warning. An exempt map stays installed: `map <id>` still loads it and the map list marks it "not in rotation".
 

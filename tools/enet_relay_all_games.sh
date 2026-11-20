@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# A real client on ENet through dot-net's lossy relay, in every delivered game, the control, and the table.
+# A real client on ENet through GameSpice Net's lossy relay, in every delivered game, the control, and the table.
 #
 #   tools/enet_relay_all_games.sh [--no-control] [game ...]
 #
 # Runs examples/enet_relay.tscn once per game (one process each: a game boots a whole host), then
 # again with --stock-throttle, which puts ENet's packet throttle back as the engine ships it and
 # MUST fail: its throttle checks have to see the throttle fall below 32 somewhere, or the pass
-# above proved nothing about dot-core's fix. Needs each game's pack in dist/
+# above proved nothing about GameSpice Core's fix. Needs each game's pack in dist/
 # (./server pack <id> --source games/<repo>); a game without one is listed as skipped.
 # dot-game-template is packaged from its HEAD by the suite itself (needs ../dot-ci).
 # Exit 0 when every game that ran held and every control failed, 1 otherwise. About 30 s a run.

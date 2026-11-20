@@ -44,7 +44,7 @@ const MAX_PAGE_BYTES := 7900
 ## Step kinds this file fills itself. Any other kind is the name of a list.
 const BUILTIN_KINDS := ["player", "anyone", "game", "map", "item", "text"]
 
-## `DotPunishment.Kind.WARN`, as a number: this host has dot-moderation in its build, but
+## `DotPunishment.Kind.WARN`, as a number: this host has GameSpice Moderation in its build, but
 ## the manager is found in the registry and spoken to by duck type, for the reason
 ## [TmcReplay] gives.
 const PUNISHMENT_WARN := 4
@@ -201,7 +201,7 @@ const GAME_CATEGORY := "game"
 ## this one finds nothing and carries on. See [method set_layer] and [method add_list].
 const SERVICE := &"admin_menu"
 
-## The group targets a player step with `groups: true` offers, as dot-moderation's live
+## The group targets a player step with `groups: true` offers, as GameSpice Moderation's live
 ## tool commands spell them. Their own immunity rule skips anybody the admin cannot outrank.
 const GROUPS := [["@all", "Everyone"], ["@others", "Everyone else"]]
 
@@ -266,7 +266,7 @@ var games_fn: Callable = Callable()
 ## `func() -> Array` of `[id, label]`: the maps a `map` step offers.
 var maps_fn: Callable = Callable()
 
-## `func() -> Object`: dot-moderation's manager, or null.
+## `func() -> Object`: GameSpice Moderation's manager, or null.
 var moderation_fn: Callable = Callable()
 
 ## The owner's `admin_menu.yml`, kept so a game's layer can be merged UNDER it on every
@@ -689,7 +689,7 @@ static func _option_label(format: String, value: String) -> String:
 	return value
 
 
-## `90` is "1 minute 30 seconds", `86400` is "1 day". Words rather than dot-server's
+## `90` is "1 minute 30 seconds", `86400` is "1 day". Words rather than GameSpice Server's
 ## compact `1d`, because a menu row is read by somebody deciding, not typed.
 static func human_duration(seconds: int) -> String:
 	var parts := PackedStringArray()
@@ -770,7 +770,7 @@ func register_commands() -> void:
 	).with_chat().as_hidden()
 	_claim(nav, NAV_COMMAND)
 
-	# `warn` is in the default menu and nothing in the family registered one: dot-moderation
+	# `warn` is in the default menu and nothing in the family registered one: GameSpice Moderation
 	# has had a WARN record since it was written and no command that issues it. A server
 	# whose game brings its own keeps that one.
 	if console.find_command("warn") == null:
@@ -847,7 +847,7 @@ func _cmd_warn(ctx: DotCmdContext) -> void:
 		reason = "Warned by an admin"
 
 	# Told to them twice: on the HUD, which they cannot miss, and in chat, which they can
-	# scroll back to. Never naming the admin, dot-moderation's rule for every player message.
+	# scroll back to. Never naming the admin, GameSpice Moderation's rule for every player message.
 	var line := "Warning from an admin: %s" % reason
 	if server != null:
 		server.send_notice(session, DotNotice.make(&"", line, -1.0, &"admin_warning"))
@@ -961,7 +961,7 @@ func supports(item: Dictionary) -> bool:
 	return true
 
 
-## dot-moderation's `DotModTools` behind a command, or null: the handler's object's `tools`.
+## GameSpice Moderation's `DotModTools` behind a command, or null: the handler's object's `tools`.
 static func _tools_of(cmd: DotConCommand) -> Object:
 	if cmd == null or not cmd.handler.is_valid():
 		return null

@@ -44,9 +44,9 @@ This repository is where an addon release, a game release and a shell release me
 An addon release reaches players by a server restart ([addon-packs.md](addon-packs.md)). A new shell (web and native) is still needed for:
 
 - the engine version;
-- the boot stage (`client/boot.tscn`, dot-cloud's `dot_cloud_boot.gd`);
+- the boot stage (`client/boot.tscn`, GameSpice Cloud's `dot_cloud_boot.gd`);
 - the shell's own `client/` code (the admin menu, loading screen, notice overlay, party and friends UI);
-- a dot-server signon revision change (an older shell is refused with "This server needs a different build of the game client");
+- a GameSpice Server signon revision change (an older shell is refused with "This server needs a different build of the game client");
 - an addon release that adds or changes files outside its own `addons/<dir>/` (the weapons pack's art is in `res://assets/`).
 - a change to the page the engine runs in (`web/embed.html`, or an addon's page script such as dot-audio's `web/dot_audio_ceiling.js`, which `export-web` copies beside the build): an overlay lays files under `res://`, never next to `index.html`.
 

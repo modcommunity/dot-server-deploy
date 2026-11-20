@@ -377,7 +377,7 @@ func _test_change_under_the_player() -> void:
 	_check(tipped[0], "and the new game's own tip over the default's")
 	_check(not _screen().is_showing(), "and it is gone once the game is on screen")
 
-	# The same menu in a game whose module installed dot-moderation's live tools: what it
+	# The same menu in a game whose module installed GameSpice Moderation's live tools: what it
 	# supports is asked of its real DotModTools, through the command's own handler.
 	_shell.link.send_chat("/admin")
 	await _until(func() -> bool: return _panel().is_open() and not _row("Fun commands").is_empty(), 10.0)

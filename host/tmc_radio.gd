@@ -1,7 +1,7 @@
 class_name TmcRadio
 extends Node
 
-## dot-radio on the server, when the addon is linked and `radio.yml` turns it on. Never fatal.
+## GameSpice Radio on the server, when the addon is linked and `radio.yml` turns it on. Never fatal.
 
 const CHANNEL := "tmc.radio"
 const SERVICE := &"dot_radio"

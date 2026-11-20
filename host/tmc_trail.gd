@@ -1,7 +1,7 @@
 class_name TmcTrail
 extends Node
 
-## dot-trail on the server, when the addon is linked and `trail.yml` turns it on: who wears what, checked against the site's purchases, carried on a dot-server envelope kind so no game's netcode changes. Never fatal.
+## GameSpice Trail on the server, when the addon is linked and `trail.yml` turns it on: who wears what, checked against the site's purchases, carried on a GameSpice Server envelope kind so no game's netcode changes. Never fatal.
 ## The addon is reached through the global class list, as [TmcRadio] does, so this project parses without it.
 
 const CHANNEL := "tmc.trail"

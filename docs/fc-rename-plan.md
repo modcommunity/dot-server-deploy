@@ -13,15 +13,15 @@ Rule for every lookup: prefer the FC name, fall back to the old one, and log a W
 | `gamemann/OLD-weapons`, `-dm-maps`, `-surf-dm-maps` | host/tmc_game_ref.gd:16-18, client/tmc_addon_namespaces.gd:18 | read as `fc-*`; map wildcards too | selftest.gd `qualify_map` check |
 | addon dir `addons/OLD_weapons` | setup.sh:1506-1834, tools/addons-lock.sh:129-138, tools/check-pinned.sh:21-30, setup.ps1:234-254; dot-ci resolve-deps.sh, server-compat.sh; dot-bootstrap bootstrap.sh/.ps1; dot-core dot_addon_api.gd:492 | used only when the pinned fc-weapons ref (<= v1.4.51) holds it, with a WRN | tools/check_renamed_dirs.sh, dot-ci tests/test_resolve_deps_renamed_dir.py, dot-bootstrap tests/test_renamed_addon_dir_sh.sh |
 | game id `OLD` (changelevel, allow lists, TMC_GAMES) | content/fatalcontact/game.yml:109 `former_ids`, demo.sh:684,849, setup.sh:431 | resolves to fatalcontact | examples/selftest_content_lists.gd:126-134, examples/pack_requires.gd:192, tools/check_tickrate.sh:17 |
-| repo/short names | dot-bootstrap projects.tsv:121 alias column | `fc`, `final-contact` and `game-OLD` all reach game-fatal-contact | dot-bootstrap tests/test_rename_dirs_sh.sh |
-| profiler system prefix `OLD.` | dot-game addons/dot_game/tools/dot_game_perf_bench_compare.py `RENAMED_PREFIXES` | an old bench read as `fc.`, WRN on stderr | dot_game_perf_bench_compare_test.py |
+| repo/short names | GameSpice Bootstrap projects.tsv:121 alias column | `fc`, `final-contact` and `game-OLD` all reach game-fatal-contact | GameSpice Bootstrap tests/test_rename_dirs_sh.sh |
+| profiler system prefix `OLD.` | GameSpice Game addons/dot_game/tools/dot_game_perf_bench_compare.py `RENAMED_PREFIXES` | an old bench read as `fc.`, WRN on stderr | dot_game_perf_bench_compare_test.py |
 
 ## Still the old name, in this order
 
 1. **Game code (fcr-game, game-fatal-contact).** Scene, module and class names (`scenes/OLD_server.tscn`,
    `game/OLD.tscn`, `game/OLD_module.gd`, `OLD_vote.gd`), cvars (`OLD_timelimit`, `OLD_scorelimit`,
    `OLD_warmup`, `OLD_restart`, `OLD_vote`, `OLD_stats_report`) and profiler zones `OLD.*`. Cvars keep the old
-   name as a registered alias (as `OLD_stats_report` already is, dot-game docs/services.md:50). Then update
+   name as a registered alias (as `OLD_stats_report` already is, GameSpice Game docs/services.md:50). Then update
    content/fatalcontact/game.yml:54-56, docs/reference.md:373-414,566-572, docs/testing.md:33 and
    examples/fixtures/game_vote_rounds/content.yml:7-9 in the same push as the game.
 2. **Pack content id `tmc/OLD`** (content/fatalcontact/game.yml:48; examples/burst_probe.gd:35,

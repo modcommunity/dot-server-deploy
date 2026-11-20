@@ -23,7 +23,7 @@ func _init() -> void:
 	var cloud := DotCloudClient.new()
 	cloud.name = "Cloud"
 	cloud.config = DotCloudConfig.new()
-	# A client's fetch, run headless: dot-cloud's `auto` would read that as a server and
+	# A client's fetch, run headless: GameSpice Cloud's `auto` would read that as a server and
 	# leave a pack's client-only files (API 8) behind.
 	cloud.config.side = "client"
 	cloud.config_file = CONTENT_CONFIG

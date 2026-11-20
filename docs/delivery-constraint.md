@@ -12,7 +12,7 @@ preload("res://path.gd")                    works
 extends "res://path.gd"                     works
 ```
 
-The pack mounts, its scenes load, and every script in it is dead, with no error until something tries to run one. It is a property of the engine and will not go away. It is the same shape as dot-cloud's rule for avatar packs ("the pack is data, the code ships in the build"), reached from further along.
+The pack mounts, its scenes load, and every script in it is dead, with no error until something tries to run one. It is a property of the engine and will not go away. It is the same shape as GameSpice Cloud's rule for avatar packs ("the pack is data, the code ships in the build"), reached from further along.
 
 ## The seven forms, all closed
 
@@ -37,7 +37,7 @@ The seventh exists because the second and third are both closed. The publisher r
 - **Only a first segment the game actually ships is moved.** `res://audio` in a game with no `audio/` names the HOST's directory; rebasing it would point into a pack where nothing exists.
 - **A form is closed when every game closes it, not when the mechanism exists.** The seventh was first fixed in one game and written up as closed; six others carried the unguarded `rebase()` until a review across all of them.
 - **A delivered module may name only base classes the host build carries.** A module that `extends DotGameModule` needs `addons/dot_game` here; without it the symptom is "Could not find base class" once, then a server admitting players into a game with no netcode.
-- **This build cannot name a type a pack declares**, so anything here that inspects a delivered game does it by duck typing and `describe()`, the same bargain every module makes with dot-game.
+- **This build cannot name a type a pack declares**, so anything here that inspects a delivered game does it by duck typing and `describe()`, the same bargain every module makes with GameSpice Game.
 
 ## What `tools/check.sh` counts
 

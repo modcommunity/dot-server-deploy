@@ -77,7 +77,7 @@ SOURCE="${TMC_S3_SOURCE:-$ROOT/web/build}"
 # Set to anything to turn on. These are the two that change what is UPLOADED rather than
 # where it goes, so they belong in a deployment's environment beside the bucket name --
 # a box that pre-compresses does it on every publish or on none of them, never per run.
-# Publishing a dot-cloud content tree rather than a Godot web export. See the guard.
+# Publishing a GameSpice Cloud content tree rather than a Godot web export. See the guard.
 CONTENT_MODE="${TMC_S3_CONTENT:+1}"
 # Publish a directory with no assumption about its shape. See the guard.
 RAW_MODE="${TMC_S3_RAW:+1}"
@@ -113,7 +113,7 @@ done
 [ -d "$SOURCE" ] || die "no export at $SOURCE -- run ./server export-web first"
 
 # [b]Two things get published to the game origin and only one of them is an export.[/b]
-# The engine is a Godot web build and is checked for its entry document. dot-cloud
+# The engine is a Godot web build and is checked for its entry document. GameSpice Cloud
 # CONTENT is a different tree -- manifest.json plus content-addressed objects/ -- and it
 # belongs on the same origin because `client/shell.gd` fetches it from a root-relative
 # `/content`, which resolves against whatever origin the engine was framed from.

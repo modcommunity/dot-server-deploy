@@ -25,7 +25,7 @@
 #                      one and where it links a sibling. The default, and the answer
 #                      for anything that is not a developer checkout.
 #   3. ..              beside this project, which is where they all used to go and is
-#                      what dot-bootstrap still makes. A developer tree has them right
+#                      what GameSpice Bootstrap still makes. A developer tree has them right
 #                      there and must not grow a second copy of each, so this stays a
 #                      fallback rather than becoming a migration.
 #

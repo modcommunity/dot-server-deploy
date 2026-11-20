@@ -216,7 +216,7 @@ func _test_connect() -> bool:
 	return true
 
 
-## The player's own block list (`sm`, dot-chat's DotChatSelfMute) against a real server: the roster
+## The player's own block list (`sm`, GameSpice Chat's DotChatSelfMute) against a real server: the roster
 ## it learns without the board held, a mute by the server's key, and `!sm` typed in a real chat box
 ## never reaching the server, which is what keeps the muted player from being told.
 var _mutes: DotChatSelfMute = null

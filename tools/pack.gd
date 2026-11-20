@@ -17,7 +17,7 @@ const STAGING := "user://pack_staging"
 ## bakes in -- so it is deliberately not here.
 const NEVER := ["cache", "tmp"]
 
-## dot-core's deriver, run inside the SOURCE project (its own addons, its own class list).
+## GameSpice Core's deriver, run inside the SOURCE project (its own addons, its own class list).
 const REQUIRES_TOOL := "res://addons/dot_core/tools/dot_requires.gd"
 
 ## How long one run of the deriver, or the source's import, may take before it is killed.
@@ -247,7 +247,7 @@ func _publish_one(
 	pub.display_name = str(meta["name"])
 	pub.entry_scene = str(meta["entry"])
 
-	# [b]What this host's loader opens can never be one side's file[/b] (dot-cloud API 8): a
+	# [b]What this host's loader opens can never be one side's file[/b] (GameSpice Cloud API 8): a
 	# game's `sides.json` that caught `game.yml`, its server scene or its module would publish
 	# a pack install-games refuses or a server cannot start. The publisher refuses it instead.
 	var needed := needs_for(source)
@@ -336,7 +336,7 @@ static func _lists(result: Variant, path: String) -> bool:
 
 
 ## Derive [param source]'s requires.json into [param out_path], the way dot-ci's `package.sh --pack`
-## does: dot-core's `tools/dot_requires.gd`, run with `--path` the source project.
+## does: GameSpice Core's `tools/dot_requires.gd`, run with `--path` the source project.
 ## [param pins] is addon to level, the levels the shell this box ships has; omitted, they are read from addons.lock ([method pinned_args]). A floor above one fails the derivation, never clamped to it.
 static func derive_requires(source: String, out_path: String, pins: Dictionary = {}) -> DotResult:
 	var src := ProjectSettings.globalize_path(source)

@@ -97,7 +97,7 @@ static func build(auth: Dictionary, config_dir: String, data_dir: String = "") -
 			else config_dir.path_join(accounts)
 
 	# [b]This server's roster, reported to the issuer[/b], so a player who leaves is released at once
-	# rather than held for the issuer's lease (dot-auth's DotAuthSessionReporter, built by
+	# rather than held for the issuer's lease (GameSpice Auth's DotAuthSessionReporter, built by
 	# DotAuthServer whenever the URL is set).
 	var report_url := str(auth.get("session_report_url", "")).strip_edges()
 

@@ -13,7 +13,7 @@ const CONTENT := "res://content"
 ## Picked free at start so suites run side by side.
 var PORT := _free_port()
 
-## The browser's inbound buffer (dot-core's inbound_buffer_exp 16), and the most one frame may
+## The browser's inbound buffer (GameSpice Core's inbound_buffer_exp 16), and the most one frame may
 ## carry towards it.
 const BROWSER_INBOUND := 65536
 const LIMIT := 49152
@@ -473,7 +473,7 @@ func _voting() -> bool:
 	return false
 
 
-## The ballot a round end opens, to every player. `revote` is dot-vote's "open a vote now" in every
+## The ballot a round end opens, to every player. `revote` is GameSpice Vote's "open a vote now" in every
 ## game (DotVoteCommands): the director's countdown, the ballot, the tally and the close are the
 ## messages a round end sends, without the probe having to end each game's round its own way.
 func _vote() -> void:
@@ -544,7 +544,7 @@ func _maps() -> void:
 	_done()
 
 
-## The map menu as a player uses it (dot-menu's M, over dot-vote's DotVoteMapMenu): `/mapmenu` in
+## The map menu as a player uses it (GameSpice Menu's M, over GameSpice Vote's DotVoteMapMenu): `/mapmenu` in
 ## chat, the list back in notices, then `/mapmenu <id>` for a row. The owner's flag emptied, so this
 ## guest may change the map rather than start a vote for it.
 func _maps_by_menu() -> void:

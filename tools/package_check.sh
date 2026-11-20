@@ -157,7 +157,7 @@ mv "$STAGE/dot-server-deploy" "$SHIP/tmc-server" || exit 1
 rm -rf "$STAGE"
 TREE="$SHIP/tmc-server"
 
-# The whole point. A dangling link here is every dot-* class_name unresolved at once.
+# The whole point. A dangling link here is every gs-* class_name unresolved at once.
 dangling="$(find "$TREE" -xtype l | sed "s|^$TREE/||")"
 if [ -z "$dangling" ]; then
     pass "nothing in the tree points outside it"

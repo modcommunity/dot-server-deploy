@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Put TLS in front of one dot-server.
+# Put TLS in front of one GameSpice Server.
 #
 #   ./deploy/install-server-tls.sh --domain example.net --port 6065 --backend 127.0.0.1:6071
 #
@@ -55,7 +55,7 @@ NAME="server-tls-$LOG_NAME"
 # was writing, and did not define it anywhere else either. Nothing in this
 # repository did.
 #
-# So the documented way to put TLS in front of a dot-server worked only on a box
+# So the documented way to put TLS in front of a GameSpice Server worked only on a box
 # that already had the map from some unrelated vhost, and failed everywhere else
 # with `unknown "connection_upgrade" variable` -- which reads as a broken template
 # rather than as a missing prerequisite. Found by running it on a server that had
@@ -72,7 +72,7 @@ if [ -z "$DRY_RUN" ] \
             | grep -qE 'map[[:space:]]+\$http_upgrade[[:space:]]+\$connection_upgrade'; then
     map_file="$(mktemp)"
     cat > "$map_file" <<'MAP'
-# Written by dot-server-deploy's install-server-tls.sh.
+# Written by GameSpice Server Deploy's install-server-tls.sh.
 #
 # `Connection: upgrade` for a WebSocket handshake, `Connection: close` for anything
 # else. Hardcoding "upgrade" instead would send that header on ordinary requests to

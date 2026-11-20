@@ -127,7 +127,7 @@ func _until(condition: Callable, seconds: float = 20.0) -> bool:
 	return bool(condition.call())
 
 
-## The server's world, through the module's `game` — dot-game's own name for it.
+## The server's world, through the module's `game` — GameSpice Game's own name for it.
 func _world() -> Node:
 	var module: DotModule = _server().modules.get_module(MODULE)
 	return module.get("game") as Node if module != null else null
@@ -325,8 +325,8 @@ func _test_the_client_builds_the_course() -> void:
 
 
 ## net_stat in a delivered game, over a real socket: typed at the game's console (which is dot-
-## console's kit), drawn by the game's menu (dot-menu), reading the link's meter (dot-server's peer,
-## wrapped by dot-core).
+## console's kit), drawn by the game's menu (GameSpice Menu), reading the link's meter (GameSpice Server's peer,
+## wrapped by GameSpice Core).
 func _test_net_stat() -> void:
 	_section("net_stat, typed at the delivered game's console, reads the link's meter")
 
@@ -412,7 +412,7 @@ func _test_still_serving() -> void:
 	_done()
 
 
-## [b]dot-combat's `mp_teammate_passthrough` on the delivered client.[/b] The client traces its own
+## [b]GameSpice Combat's `mp_teammate_passthrough` on the delivered client.[/b] The client traces its own
 ## shots for tracers and impacts; on its default 1 against a server on 0 or 2 they ended in, or went
 ## through, a team-mate where the server's shot did the opposite.
 func _test_teammate_cvar_reaches_the_client() -> void:

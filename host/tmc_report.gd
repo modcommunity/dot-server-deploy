@@ -33,7 +33,7 @@ static func install(
 
 func _build() -> void:
 	_config = DotAuthConfig.new()
-	# The listing borrows dot-auth's config for its backbone URL and token and never authenticates a
+	# The listing borrows GameSpice Auth's config for its backbone URL and token and never authenticates a
 	# player, so the strategy means nothing here -- but it is VALIDATED, and the default (`ticket`)
 	# demands a server_id and a public key.
 	_config.strategy = DotAuthConfig.Strategy.INTROSPECT

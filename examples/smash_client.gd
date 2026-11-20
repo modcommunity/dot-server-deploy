@@ -471,8 +471,8 @@ func _test_two_builds_on_one_socket() -> void:
 
 
 ## [b]The one refusal a delivered game makes by itself.[/b] A client whose message schema lacks the
-## types this game requires is told so and disconnected, by dot-game's wiring -- over the real
-## socket, with dot-net's sentence as the reason, as CODE_VERSION.
+## types this game requires is told so and disconnected, by GameSpice Game's wiring -- over the real
+## socket, with GameSpice Net's sentence as the reason, as CODE_VERSION.
 func _test_a_client_the_game_cannot_play_with() -> void:
 	_section("a client that cannot play this game's messages is disconnected in words")
 
@@ -559,7 +559,7 @@ func _test_still_serving() -> void:
 	_done()
 
 
-## [b]dot-combat's `mp_teammate_passthrough` on the delivered client.[/b] The client traces its own
+## [b]GameSpice Combat's `mp_teammate_passthrough` on the delivered client.[/b] The client traces its own
 ## shots for tracers and impacts; on its default 1 against a server on 0 or 2 they ended in, or went
 ## through, a team-mate where the server's shot did the opposite.
 func _test_teammate_cvar_reaches_the_client() -> void:

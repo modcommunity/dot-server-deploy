@@ -140,8 +140,8 @@ func _load_solo_inner(content_id: String, version: String) -> DotResult:
 		return DotResult.fail(DotError.CODE_STATE, shell._text("shell.solo.addons_blocked", {},
 			"this game's addons did not start in this tab, so it was not started without them. Retry fetches them again."))
 	if overlay == SoloOverlay.UNPUBLISHED:
-		# Not the "needs a newer client" panel dot-cloud's requirement check would show next: no shell build can carry a game
-		# addon (only dot-* addons), so the fix is a publish of that addon's pack, never a newer client.
+		# Not the "needs a newer client" panel GameSpice Cloud's requirement check would show next: no shell build can carry a game
+		# addon (only gs-* addons), so the fix is a publish of that addon's pack, never a newer client.
 		var why := "; ".join(PackedStringArray(_unpublished.values()))
 		DotLog.error(shell.CHANNEL, "a game addon this solo game needs is not published in a pack that holds it", {
 			"content": content_id, "version": wanted, "unpublished": _unpublished,
@@ -153,7 +153,7 @@ func _load_solo_inner(content_id: String, version: String) -> DotResult:
 	await shell._solo_packs._prefetch_solo(content_id, wanted)
 	shell._cloud.job_begin_unpack()
 
-	# "*" asks for every download group (dot-cloud 22): a solo host serves any map. Older dot-cloud reads it as
+	# "*" asks for every download group (GameSpice Cloud 22): a solo host serves any map. Older GameSpice Cloud reads it as
 	# a group no file has, which is what an empty list already fetched there.
 	var got: DotResult = await shell._cloud.ensure(StringName(content_id), wanted, PackedStringArray(["*"]))
 	if not got.ok:
@@ -484,7 +484,7 @@ static func pack_holds_dir(dir: String, id: String, version: String, paths: Pack
 	return "%s %s, the newest published, holds %s, and this game needs addons/%s" % [id, version, ", ".join(holds), dir]
 
 
-## The addons in [param needs] (from [method _solo_needs]) that this shell neither carries nor has mounted, fetched as the overlay a server would announce. When it only adds addons to this process (a first visit, a new shell build) it is mounted here and the game starts ([method _mount_in_place]); otherwise it is restarted into, as [method _update_addons] does for a join. [constant SoloOverlay.RESTARTING] when a restart is under way (the caller stops there); [constant SoloOverlay.NONE] when nothing is missing or it is mounted here; [constant SoloOverlay.BLOCKED] when the addons are missing and cannot be had now: after a failed start on the same overlay in this shell build, after [constant MAX_UPDATE_RESTARTS] restarts for it, or when building it failed. Blocked never plays on: the game's scripts do not parse without its addons, which leaves PLAYLOT on a black screen. The caller fails the start and the solo button becomes Retry ([member _solo_retry]). [param subscribed] are the Workshop's `summary.addons` (dot-cloud 28): approved addon packs of a game whose `accepts.kinds` has `addon`, already checked against the build's own addons. They join the overlay under their exact ids and are marked `source: "subscription"` in the plan, which [method _restart_for_online] drops.
+## The addons in [param needs] (from [method _solo_needs]) that this shell neither carries nor has mounted, fetched as the overlay a server would announce. When it only adds addons to this process (a first visit, a new shell build) it is mounted here and the game starts ([method _mount_in_place]); otherwise it is restarted into, as [method _update_addons] does for a join. [constant SoloOverlay.RESTARTING] when a restart is under way (the caller stops there); [constant SoloOverlay.NONE] when nothing is missing or it is mounted here; [constant SoloOverlay.BLOCKED] when the addons are missing and cannot be had now: after a failed start on the same overlay in this shell build, after [constant MAX_UPDATE_RESTARTS] restarts for it, or when building it failed. Blocked never plays on: the game's scripts do not parse without its addons, which leaves PLAYLOT on a black screen. The caller fails the start and the solo button becomes Retry ([member _solo_retry]). [param subscribed] are the Workshop's `summary.addons` (GameSpice Cloud 28): approved addon packs of a game whose `accepts.kinds` has `addon`, already checked against the build's own addons. They join the overlay under their exact ids and are marked `source: "subscription"` in the plan, which [method _restart_for_online] drops.
 func _solo_overlay(content_id: String, needs: Dictionary, subscribed: Array = []) -> SoloOverlay:
 	var found := await _collect_solo_announce(content_id, needs, subscribed)
 	var announce: Array = found["announce"]
@@ -582,7 +582,7 @@ func _restart_for_solo_addons(plan: Dictionary, resume: Dictionary) -> SoloOverl
 	if await shell._restart(keep):
 		return SoloOverlay.RESTARTING
 	# Without its addons the game's scripts do not parse: say so rather than start a grey screen.
-	# A browser that cannot store the overlay (a full quota; before dot-cloud 0.1.47 any overlay over 127 MiB) stops here.
+	# A browser that cannot store the overlay (a full quota; before GameSpice Cloud 0.1.47 any overlay over 127 MiB) stops here.
 	shell.loading.set_progress(-1.0, shell._text("shell.addons.unsaved_solo", {}, "This browser could not keep the addons this game needs, so it cannot start here yet."))
 	return SoloOverlay.RESTARTING
 
@@ -631,5 +631,5 @@ const SUBSCRIPTION_SOURCE := "subscription"
 
 
 ## Where a game's pack names the addons it needs (and their API floors): the hard requirements
-## dot-cloud checks before mounting, and the floors it was built against.
+## GameSpice Cloud checks before mounting, and the floors it was built against.
 const SOLO_REQUIRE_FILES: PackedStringArray = ["requires.json", "requires.floor.json"]

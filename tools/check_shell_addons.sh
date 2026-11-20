@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# A shell carries the dot-* addons and nothing else. The game addons (the weapons packs,
-# natural_disasters) reach a player as dot-cloud overlay packs when they join; baked in,
+# A shell carries the gs-* addons and nothing else. The game addons (the weapons packs,
+# natural_disasters) reach a player as GameSpice Cloud overlay packs when they join; baked in,
 # fc-weapons (then arena-weapons) v1.4.28's embedded textures took the web pck from 44 MB to 147 MB.
 #
 # Text only, no Godot: every non-dot repository addons.lock names is excluded by every
@@ -66,7 +66,7 @@ else
     bad "tools/shell_lock.sh lock addons.lock failed"
 fi
 
-# It refuses a list naming a game addon, and a lock naming a dot-* addon the list does not.
+# It refuses a list naming a game addon, and a lock naming a gs-* addon the list does not.
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 { cat tools/shell-addons.list; echo fc-weapons; } > "$tmp/game.list"

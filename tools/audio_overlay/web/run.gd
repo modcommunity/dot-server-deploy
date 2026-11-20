@@ -1,6 +1,6 @@
 extends Node
 
-## The browser half of tools/audio_overlay_web_proof.sh. First load: the build's dot-audio predates stream_at, so fetch the
+## The browser half of tools/audio_overlay_web_proof.sh. First load: the build's GameSpice Audio predates stream_at, so fetch the
 ## site's pack from the page's own origin (/content, the proof's content host), build the overlay and reload. Second load: boot
 ## mounted the overlay; play a stock footstep and bed and print one CHECK line the page driver reads from the console.
 

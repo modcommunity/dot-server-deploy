@@ -44,14 +44,14 @@ have_packs() {
 # [b]Prerequisites of a clean worktree.[/b] A fresh worktree gets addons/ as copies or links
 # of whatever the main checkout holds, which can be stale (an old dot_cloud makes client/shell.gd
 # fail to parse). When the sibling dot-* repositories exist, relink addons/ to them, and let
-# the natives check find dot-bootstrap. Skipped with TMC_CHECK_NO_RELINK=1.
+# the natives check find GameSpice Bootstrap. Skipped with TMC_CHECK_NO_RELINK=1.
 if [ -z "${TMC_CHECK_NO_RELINK:-}" ]; then
     for d in "$(cd .. && pwd)" "${TMC_REPOS_DIR:-$HOME/godot}"; do
         [ -d "$d/dot-core" ] && { REPOS_DIR="$d"; break; }
     done
     if [ -n "${REPOS_DIR:-}" ]; then
         [ -z "${GS_BOOTSTRAP:-${DOT_BOOTSTRAP:-}}" ] && [ -d "$REPOS_DIR/dot-bootstrap" ] && export GS_BOOTSTRAP="$REPOS_DIR/dot-bootstrap"
-        # stale = addons/dot_core is not (a link into) the dot-core repository
+        # stale = addons/dot_core is not (a link into) the GameSpice Core repository
         stale=0
         case "$(readlink -f addons/dot_core 2>/dev/null)" in */dot-core/addons/dot_core) ;; *) stale=1 ;; esac
         if [ "$stale" = 1 ] || [ ! -e addons/dot_core ]; then
@@ -94,7 +94,7 @@ echo "importing"
 # clean scripts as parse failures, which is the way a guard stops being read.
 # Hence ( were )? rather than the literal 4.4 wording.
 echo "parsing"
-# A loaded GDExtension (dot-sim, tools/fetch-natives.sh) prints its "Initialize godot-rust" banner
+# A loaded GDExtension (GameSpice Sim, tools/fetch-natives.sh) prints its "Initialize godot-rust" banner
 # on every run; it is not a script's output.
 while read -r f; do
     out="$("$GODOT" --headless --path . --check-only --script "res://${f#./}" 2>&1 \
@@ -332,7 +332,7 @@ fi
 echo
 # --- No game may declare a class_name -------------------------------------
 #
-# [b]A mounted dot-cloud pack's globals are NOT registered in the host.[/b] So a game
+# [b]A mounted GameSpice Cloud pack's globals are NOT registered in the host.[/b] So a game
 # that is delivered rather than compiled in has every cross-file type reference fail --
 # and fail the way that costs the most to find: the pack mounts, its scenes load, and
 # nothing says a word until something tries to run one of its scripts.
@@ -476,7 +476,7 @@ echo "a pack this box publishes for itself carries requires.json"
 timeout 900 "$GODOT" --headless --path . res://examples/pack_requires.tscn || fails=$((fails + 1))
 
 # The other suite: a real DotServer, and an admin changing the game under it. It is the
-# only place the module swap runs -- dot-server changes the scene and tells the modules
+# only place the module swap runs -- GameSpice Server changes the scene and tells the modules
 # already loaded, it does not load one, so a multi-game server that got this wrong would
 # boot perfectly and have no netcode on its second game.
 echo
@@ -543,7 +543,7 @@ if have_packs buses; then "$GODOT" --headless --path . res://examples/reconnect.
 
 # Back to a game this process already ran: its own RPC link must carry inputs and snapshots,
 # for the client that followed and for a fresh joiner. Every other suite asks only whether
-# the client is "in" the game, which a dead game link passes. Armed: with dot-server's
+# the client is "in" the game, which a dead game link passes. Armed: with GameSpice Server's
 # retire of the last game's link disabled, every return's netcode checks fail.
 echo
 echo "returning to a game: its netcode for the client and a fresh joiner"
@@ -588,7 +588,7 @@ echo "the game vote plays a round out"
 timeout 600 "$GODOT" --headless --path . res://examples/game_vote_rounds.tscn < /dev/null || fails=$((fails + 1))
 
 # Parties on a real server. The booking chains onto dot_ban_source, and a game's module
-# puts dot-moderation there when it loads -- so the first `changelevel` after boot took
+# puts GameSpice Moderation there when it loads -- so the first `changelevel` after boot took
 # every booking off the seam, in silence, until the host started putting it back. Armed:
 # with the rechain disabled, two of its checks fail.
 echo
@@ -631,7 +631,7 @@ tools/check_default_aliases_boot.sh || fails=$((fails + 1))
 # And the boots that must NOT pass. `./server check` printed "selftest ok" over a game
 # module that never compiled, because a parse failure takes no exit path; this builds two
 # such boots and requires both to be refused. Armed: with the host's script watch off the
-# scene case fails, and with dot-server's can_instantiate guard off as well so does the
+# scene case fails, and with GameSpice Server's can_instantiate guard off as well so does the
 # module case.
 if [ -x ./server ]; then
     echo
@@ -640,7 +640,7 @@ if [ -x ./server ]; then
 fi
 
 # The long suites: one process per delivered game, too slow for every run. A real client on ENet
-# through dot-net's lossy relay in every game, then each game again with ENet's stock packet
+# through GameSpice Net's lossy relay in every game, then each game again with ENet's stock packet
 # throttle, which must fail (docs/testing.md). Armed: see that script's suite.
 if [ "${1:-}" = "--long" ]; then
     echo

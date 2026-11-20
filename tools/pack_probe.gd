@@ -38,7 +38,7 @@ func _init() -> void:
 	if packer.flush(false) != OK:
 		print("[probe] could not flush the pack"); quit(1); return
 
-	# Mounted the way dot-cloud mounts: a path nothing in the host uses, so a hit
+	# Mounted the way GameSpice Cloud mounts: a path nothing in the host uses, so a hit
 	# cannot be the host's own copy of the file answering.
 	if not ProjectSettings.load_resource_pack(OUT, false):
 		print("[probe] the pack did not mount"); quit(1); return

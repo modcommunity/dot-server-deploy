@@ -356,7 +356,7 @@ func _games(checked_out := true) -> PackedStringArray:
 	return out
 
 
-## games/<repo>, then beside this project; under any name dot-bootstrap's projects.tsv gives the repo.
+## games/<repo>, then beside this project; under any name GameSpice Bootstrap's projects.tsv gives the repo.
 func _source(repo: String) -> String:
 	var here := ProjectSettings.globalize_path("res://")
 	for name in _names(repo):
@@ -429,7 +429,7 @@ func _test_requires_reader() -> void:
 
 ## The newest published pack of a game addon must hold the directory the game needs. Fatal Contact 0.1.70 needs fc_weapons and the
 ## only published fc-weapons (1.4.50) held the legacy arena_weapons: the shell fetched it, the overlay refused it as "not an addon pack",
-## and an online join went on to dot-cloud's "needs a newer version of the client". Now it is named as unpublished, up front.
+## and an online join went on to GameSpice Cloud's "needs a newer version of the client". Now it is named as unpublished, up front.
 func _test_pack_holds_dir() -> void:
 	_section("a published addon pack is taken only when it holds the directory the game needs")
 	var shell := load("res://client/tmc_shell_solo.gd") as GDScript

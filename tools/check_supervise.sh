@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # On a Pterodactyl panel the launcher restarts the engine itself when it exits 75
-# (dot-cloud auto-update), and passes every other status through.
+# (GameSpice Cloud auto-update), and passes every other status through.
 #
 #   tools/check_supervise.sh      exit 0 when it holds, 1 naming each failure
 #

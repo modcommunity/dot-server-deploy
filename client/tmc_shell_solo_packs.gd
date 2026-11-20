@@ -204,7 +204,7 @@ static func _in_tooling_dir(path: String) -> bool:
 	return false
 
 
-## Compiles a delivered pack's scripts a slice per frame with dot-cloud's warm_content, then slice-loads its scenes and resources. An addon without warm_content falls back to [method _slice_load] for everything. Both are no-ops natively. On the web they run on the main thread even on the threaded engine: a [method ResourceLoader.load_threaded_request] there never finished (FC's 326 scripts at 0 % for minutes, no frame drawn; web-mt-shell-unpack-hang-1), so warm_content is forced past its own "threads exist" skip.
+## Compiles a delivered pack's scripts a slice per frame with GameSpice Cloud's warm_content, then slice-loads its scenes and resources. An addon without warm_content falls back to [method _slice_load] for everything. Both are no-ops natively. On the web they run on the main thread even on the threaded engine: a [method ResourceLoader.load_threaded_request] there never finished (FC's 326 scripts at 0 % for minutes, no frame drawn; web-mt-shell-unpack-hang-1), so warm_content is forced past its own "threads exist" skip.
 func _warm_pack(keys: Array[String]) -> Variant:
 	if shell._cloud == null or not shell._cloud.has_method("warm_content") or not DotPlatform.is_web():
 		await _slice_load(_pack_script_paths(keys))

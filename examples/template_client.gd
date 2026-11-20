@@ -8,7 +8,7 @@ const Installer := preload("res://tools/install_games.gd")
 ## The server in a World3D of its own, away from the client in this process. See the helper.
 const ServerWorld := preload("res://examples/server_world.gd")
 
-## A game made from dot-game-template, delivered the way a third-party developer's is. Exits non-
+## A game made from GameSpice Game Template, delivered the way a third-party developer's is. Exits non-
 ## zero on any failure, and exits 0 with a line saying so when the template or dot-ci is not beside
 ## this project (a release tarball, a container), because there is then nothing to deliver.
 

@@ -17,7 +17,7 @@
 # And cfg/content/games.yml, the list of games setup.sh publishes, against what it describes: every
 # content/<dir>/pack.json is published by an entry (directly, or by a directory sharing its
 # content id, as hungario's do), every line names a content directory with a pack.json,
-# and every game repository beside this one (a zees-games line in dot-bootstrap's
+# and every game repository beside this one (a zees-games line in GameSpice Bootstrap's
 # projects.tsv whose checkout has a game.yml) has a line. Six finished games were missing
 # from the old hand-written array, which nothing could see.
 #

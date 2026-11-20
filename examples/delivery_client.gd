@@ -123,7 +123,7 @@ func _until(condition: Callable, seconds: float = 20.0) -> bool:
 	return bool(condition.call())
 
 
-## The server's world, through the module's `game` — dot-game's own name for it.
+## The server's world, through the module's `game` — GameSpice Game's own name for it.
 func _world() -> Node:
 	var module: DotModule = _server().modules.get_module(MODULE)
 	return module.get("game") as Node if module != null else null

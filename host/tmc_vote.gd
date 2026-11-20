@@ -12,7 +12,7 @@ const COMMAND_PREFIX := "game_"
 
 ## The two roles whose default name would be a lie on a vote about games. `nextmap` is not a map
 ## here, and `votefor` next to `game_` reads as a verb phrase nobody types twice. Everything else
-## keeps dot-vote's own name behind the prefix.
+## keeps GameSpice Vote's own name behind the prefix.
 const COMMAND_NAMES := {"nextmap": "next", "vote": "vote"}
 
 ## The HUD line this vote owns on every client. See the class notes.
@@ -194,7 +194,7 @@ static func install(
 	if p_server.config != null and not p_server.config.chat_command_prefixes.is_empty():
 		votes.commands.chat_prefix = p_server.config.chat_command_prefixes[0]
 	# The server's vote is over GAMES, and the map menu (M) is the game's own director's: a
-	# second `mapmenu` here would offer the game list as maps. By name, because a dot-vote
+	# second `mapmenu` here would offer the game list as maps. By name, because a GameSpice Vote
 	# older than API 5 has no such property.
 	if "with_map_menu" in votes.commands:
 		votes.commands.set(&"with_map_menu", false)
@@ -286,7 +286,7 @@ func _wire() -> void:
 		return session != null and session.has_permission(DotAdminFlags.CHANGEMAP)
 
 	# A votekick on screen, or the loaded game's own ballot: a ballot opened on top of either would be
-	# two menus fighting for the same number keys. The due vote waits, through dot-vote's own retry.
+	# two menus fighting for the same number keys. The due vote waits, through GameSpice Vote's own retry.
 	director.busy_fn = func() -> bool:
 		return (server.votes != null and server.votes.is_active()) or game_ballot_up()
 
@@ -615,7 +615,7 @@ func _on_game_round_ended(_played: int, _limit: int) -> void:
 	var _over := director.note_round_end()
 
 
-## Whether the loaded game is playing a round right now: its dot-match match is LIVE. Asked by the
+## Whether the loaded game is playing a round right now: its GameSpice Match match is LIVE. Asked by the
 ## director under [code]time_up: finish_round[/code] once the clock has run out.
 func round_in_progress() -> bool:
 	var found := _rounds_match()
@@ -656,7 +656,7 @@ func _rounds_match() -> DotMatch:
 	return null
 
 
-## Forgets a player who left. Their rock-the-vote goes and their nominations stay — dot-vote's
+## Forgets a player who left. Their rock-the-vote goes and their nominations stay — GameSpice Vote's
 ## asymmetry, and the reason for it is that a rock-the-vote is a fraction of the people who are
 ## here.
 func _on_client_left(session: DotClientSession, _reason: String) -> void:

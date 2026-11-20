@@ -8,11 +8,11 @@
 #      block, `provides.runs_code` (a game pack's is computed at publish; absent means it was published by a path
 #      that skips the scan, so the shell does not know the pack runs code), and requires.json (or requires.uses.json).
 #      A map pack must carry a bundle. A game without requires.json only warns (it then asks nothing of the host's addons
-#      beyond their baseline, and older publishers wrote none); the browser run is the verdict on that. A pack with a gap is republished with dot-cloud's tools/publish_pack.sh,
-#      never the site's own upload path (dot-cloud docs/cdn-publish.md).
+#      beyond their baseline, and older publishers wrote none); the browser run is the verdict on that. A pack with a gap is republished with GameSpice Cloud's tools/publish_pack.sh,
+#      never the site's own upload path (GameSpice Cloud docs/cdn-publish.md).
 #   2. BROWSER: tools/browser_solo_overlay_check.mjs --state fresh --expect started against the live shell
 #      (web/shell-build unless --shell), and again with --map <first map of the game's map pack> for map games.
-#      Through dot-bootstrap's gpu.sh cdp-run (a real GPU: dev02's software WebGL gives a black frame), or --local for
+#      Through GameSpice Bootstrap's gpu.sh cdp-run (a real GPU: dev02's software WebGL gives a black frame), or --local for
 #      a plain headless chromium. gpu.sh exit 75 (no box free) is retried with a back-off, three times.
 #
 # --audit-only --quiet is the cron/CI form: reads the content origin only (no browser, no playwright, no token), prints nothing

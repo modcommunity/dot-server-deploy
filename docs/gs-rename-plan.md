@@ -17,7 +17,7 @@ Every rename below therefore goes in one of three ways:
 
 - **GitHub repos** already live in `gamespice-platform/<name-without-dot->` (addons) and `zees-games/...` (games). GitHub redirects the old URLs. Nightly item `gamespice-rename-1` has the history.
 - **Pack ids** use the `gamespice-platform/<name>` namespace. `modcommunity/dot-<name>` stays a mirrored alias (`TmcAddonNamespaces` in `client/tmc_addon_namespaces.gd`, and website-city `RetiredPackId.mirror`). Keep the alias for as long as any 0.1.x server announces old ids.
-- **Log channels (dot-core API 36).** `DotLog.display_channel` prints and ships a legacy `dot.`/`dot_`/`dot-` channel as `gs.`/`gs_`/`gs-`, in console lines, JSON and every dot-log sink. `set_channel_level` and dot-log gate patterns accept either spelling, and records keep the caller's channel. A source `CHANNEL` constant can therefore move to `gs.*` at any time without breaking a selftest or an operator's filter.
+- **Log channels (GameSpice Core API 36).** `DotLog.display_channel` prints and ships a legacy `dot.`/`dot_`/`dot-` channel as `gs.`/`gs_`/`gs-`, in console lines, JSON and every GameSpice Log sink. `set_channel_level` and GameSpice Log gate patterns accept either spelling, and records keep the caller's channel. A source `CHANNEL` constant can therefore move to `gs.*` at any time without breaking a selftest or an operator's filter.
 
 ## Phase 2, in order
 
@@ -27,15 +27,15 @@ Each step is one repo at a time, on its own branch, with that repo's suites gree
 
 There are about 120 distinct `DOT_*` names, in `DotConfig.apply_env` prefixes (e.g. `DOT_SERVER_`, `DOT_RANDOM_`) and direct `OS.get_environment("DOT_...")` reads (29 files).
 
-- **Done (dot-core API 37):** `DotConfig.gs_env(name)` and `DotConfig.gs_env_name(name)` read `GS_<rest>` first, then fall back to `DOT_<rest>`. `apply_env`, per-addon config keys, `DotHttpBase`, `DotShotSeq` and `DotParallel` already use them (`examples/env_rename_selftest`).
+- **Done (GameSpice Core API 37):** `DotConfig.gs_env(name)` and `DotConfig.gs_env_name(name)` read `GS_<rest>` first, then fall back to `DOT_<rest>`. `apply_env`, per-addon config keys, `DotHttpBase`, `DotShotSeq` and `DotParallel` already use them (`examples/env_rename_selftest`).
 - Then, one repo at a time, replace the direct `OS.get_environment("DOT_X")` reads with `DotConfig.gs_env("DOT_X")`.
-- Shell scripts and `docker-compose*.yml` in dot-server-deploy follow the same rule: `${GS_X:-${DOT_X:-default}}`.
+- Shell scripts and `docker-compose*.yml` in GameSpice Server Deploy follow the same rule: `${GS_X:-${DOT_X:-default}}`.
 - The Pterodactyl egg (`deploy/pterodactyl-egg.json`) gains `GS_*` variables. Its startup line passes both until the next egg version.
 - Back-compat: old names keep working indefinitely. The fallback costs one extra `has_environment` call at boot.
 
 ### 2. ProjectSettings keys `dot/...` and `dot_cloud/...` (safe with a shim)
 
-- Add `DotConfig.setting(key, default)` to dot-core. It reads `gs/<rest>` (or `gs_cloud/...`) first, then the old key.
+- Add `DotConfig.setting(key, default)` to GameSpice Core. It reads `gs/<rest>` (or `gs_cloud/...`) first, then the old key.
 - Existing `project.godot` files and packs keep the old keys and still work.
 - New docs show the `gs/` keys.
 
@@ -52,7 +52,7 @@ GDScript allows only one `class_name` per script, and 0.1.x packs reference `Dot
 - Order:
   1. Static-only utility classes first (`DotLog`, `DotResult`, `DotJson`, `DotParallel`, `DotRandom`).
   2. Then leaf addons that no pack extends.
-  3. dot-core's node and resource classes last.
+  3. GameSpice Core's node and resource classes last.
 - Each addon bumps its API level and records the rename in its `docs/addon-api.md`.
 - Tool to write: `dot-ci/tools/gs_rename_class.py`. It rewrites the declarations and references in one repo, generates the legacy shims, and refuses any class with an `is`/`as` use in published packs (the scan list comes from the content origin's pack index).
 
@@ -69,7 +69,7 @@ Published packs carry `res://addons/dot_x/...` paths in their `.tscn`/`.tres` `e
 The prefix comes from `DotCloudManifest.mount_root` (default `"dot_cloud"`, serialized in every manifest) and `DotCloudClient.mount_prefix_for()`. Game `game.yml` entry scenes in `content/*/game.yml` hard-code `res://dot_cloud/<id>/<ver>/...`.
 
 - A manifest's own `mount_root` wins, so old packs keep `dot_cloud`.
-- New packs may say `gs_cloud` only after every deployed client understands it. That is a dot-cloud release that maps both roots, followed by the owner deploying it.
+- New packs may say `gs_cloud` only after every deployed client understands it. That is a GameSpice Cloud release that maps both roots, followed by the owner deploying it.
 - Then:
   - The publisher's default becomes `gs_cloud`.
   - `content/*/game.yml` entries move as each game republishes.
@@ -77,7 +77,7 @@ The prefix comes from `DotCloudManifest.mount_root` (default `"dot_cloud"`, seri
 
 ### 6. Wire and storage names (keep, alias only)
 
-- **Protocol keys** (e.g. `"dot": "dot-inventory"`), the SQL table `dot_log`, the Elastic index `dot-logs-*`, the Sentry client name `dot-log`, and service names (`&"dot_cloud_client"`) are read by deployed servers and the website.
+- **Protocol keys** (e.g. `"dot": "dot-inventory"`), the SQL table `dot_log`, the Elastic index `dot-logs-*`, the Sentry client name `gs-log`, and service names (`&"dot_cloud_client"`) are read by deployed servers and the website.
 - New readers accept both spellings. Writers keep the old spelling until every reader is on the new release.
 - The Elastic index moves by alias (`gs-logs` alias over `dot-logs-*`). The SQL table moves by view.
 
@@ -100,11 +100,11 @@ The prefix comes from `DotCloudManifest.mount_root` (default `"dot_cloud"`, seri
 
 There is one item per group, each with "done when" set to "suites green, old names still accepted":
 
-- **gs-rename-env:** step 1, across dot-core, then each dot-* repo, then dot-server-deploy and the egg.
+- **gs-rename-env:** step 1, across GameSpice Core, then each gs-* repo, then GameSpice Server Deploy and the egg.
 - **gs-rename-settings:** step 2.
-- **gs-rename-classes-core:** step 3 for dot-core and dot-log.
-- **gs-rename-classes-addons:** step 3 for the other dot-* addons, one per branch.
+- **gs-rename-classes-core:** step 3 for GameSpice Core and GameSpice Log.
+- **gs-rename-classes-addons:** step 3 for the other gs-* addons, one per branch.
 - **gs-rename-classes-games:** step 3 references in the game-* repos.
-- **gs-rename-mount:** step 5, with the dot-cloud alias release first.
+- **gs-rename-mount:** step 5, with the GameSpice Cloud alias release first.
 - **gs-rename-wire:** step 6.
 - **gs-rename-dirs:** steps 4 and 7, which wait for 0.2.

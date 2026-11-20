@@ -322,7 +322,7 @@ if [ -f "$work/build/index-mt.wasm" ] && grep -q '"index-mt";' "$work/build/embe
     # The dlink threads twin's engine side module, fetched at <executable>.side.wasm like index.side.wasm.
     [ -f "$work/build/index-mt.side.wasm" ] && ENGINE_FILES+=(index-mt.side.wasm)
 fi
-# A dlink build (dot-sim native on the web) adds the engine's side module: Godot fetches it
+# A dlink build (GameSpice Sim native on the web) adds the engine's side module: Godot fetches it
 # at <executable>.side.wasm, so it must sit beside the shared index.wasm. Its own natives
 # (dot_sim.wasm) are fetched beside the page and go with the build below.
 [ -f "$work/build/index.side.wasm" ] && ENGINE_FILES+=(index.side.wasm)

@@ -1,7 +1,7 @@
 class_name TmcShellStyle
 extends RefCounted
 
-## The shell's look: GameSpice's tokens, in one place, for every view the shell draws (menu, loading screen, notices, admin menu, dialogs). The values are the site's own (website-gs src/app/globals.css and docs/brand.md, hue 14): the shell runs inside the site's game stage, which is dark in both of the site's themes, so the shell is dark only. A [DotUiTheme] configured here, not a fork of it: dot-ui builds the Theme, this file only chooses the palette and adds the few styleboxes a palette cannot express (the glass card, the primary button's glow, the focus ring).
+## The shell's look: GameSpice's tokens, in one place, for every view the shell draws (menu, loading screen, notices, admin menu, dialogs). The values are the site's own (website-gs src/app/globals.css and docs/brand.md, hue 14): the shell runs inside the site's game stage, which is dark in both of the site's themes, so the shell is dark only. A [DotUiTheme] configured here, not a fork of it: GameSpice UI builds the Theme, this file only chooses the palette and adds the few styleboxes a palette cannot express (the glass card, the primary button's glow, the focus ring).
 
 ## The site's accent (SITE_ACCENT).
 const ACCENT := Color(0.949, 0.329, 0.176)
@@ -66,7 +66,7 @@ static func theme() -> Theme:
 	return dress(palette().build())
 
 
-## Adds the shell's own pieces to a Theme dot-ui built. Public so a view that changed the
+## Adds the shell's own pieces to a Theme GameSpice UI built. Public so a view that changed the
 ## palette first ([method palette]) gets the same card and focus ring.
 static func dress(t: Theme) -> Theme:
 	t.set_stylebox("panel", "PanelContainer", card())

@@ -15,7 +15,7 @@ const SlowTcpRelay := preload("res://examples/slow_tcp_relay.gd")
 ## The second player's link: 1 Mbit/s from the server.
 const SLOW_RATE := 125000.0
 
-## A browser's WebSocket inbound buffer (dot-core's `inbound_buffer_exp` 16). The house may have
+## A browser's WebSocket inbound buffer (GameSpice Core's `inbound_buffer_exp` 16). The house may have
 ## at most half of it unacknowledged: the page fills it between frames, and snapshots and chat
 ## need the rest. Fixed here rather than read from the game, so a widened window fails.
 const BROWSER_INBOUND := 65536
@@ -139,7 +139,7 @@ func _until(condition: Callable, seconds: float = 20.0) -> bool:
 	return bool(condition.call())
 
 
-## The server's world, through the module's `game` — dot-game's own name for it.
+## The server's world, through the module's `game` — GameSpice Game's own name for it.
 func _world() -> Node:
 	var module: DotModule = _server().modules.get_module(MODULE)
 	return module.get("game") as Node if module != null else null
@@ -334,7 +334,7 @@ func _test_a_second_over_a_slow_websocket() -> void:
 	_section("a second player joins over a slow WebSocket while the first walks")
 	var bridge: Object = _server().modules.get_module(MODULE).get("bridge")
 	var window := BROWSER_INBOUND / 2
-	# Both clients in this process are one guest (dot-server's device id is per install), and the house
+	# Both clients in this process are one guest (GameSpice Server's device id is per install), and the house
 	# keys progress by account, so the second would take the player and the first would be dropped
 	# (that is _test_the_same_guest_in_a_second_tab).
 	var key_fn: Callable = bridge.get("key_fn")

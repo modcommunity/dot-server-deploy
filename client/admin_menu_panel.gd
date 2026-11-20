@@ -370,7 +370,7 @@ func _build_view() -> void:
 	add_child(root)
 
 	# Left and middle: the right-hand side is where ballots go, and the middle is where the
-	# player is aiming. Offsets after anchors, every one, for the reason dot-ui gives.
+	# player is aiming. Offsets after anchors, every one, for the reason GameSpice UI gives.
 	_panel = PanelContainer.new()
 	_panel.name = "Panel"
 	_panel.anchor_left = 0.0

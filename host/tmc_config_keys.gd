@@ -4,7 +4,7 @@ extends RefCounted
 ## The key tables [TmcConfig] reads the `cfg/` files by: which setting lands on which property, and which file belongs to which addon.
 
 ## Operator-facing name -> boot config property, for what the console cannot reach. Two vocabularies are paid for deliberately:
-## an operator writes `net_port`, dot-server calls it `port`, and the alternative is renaming a published cvar.
+## an operator writes `net_port`, GameSpice Server calls it `port`, and the alternative is renaming a published cvar.
 const BOOT_KEYS := {
 	"net_port": "port",
 	"net_bind_ip": "bind_address",
@@ -40,7 +40,7 @@ const BOOT_KEYS := {
 	# A server whose stdin carries something other than commands needs it, and so does anything running two servers in one process:
 	# [DotStdinConsole] is a thread blocked in a read the engine cannot cancel, so the second keeps the process alive.
 	"sv_stdin_console": "stdin_console_enabled",
-	# And whether a PIPE counts (dot-server 5f46687): off by default, because a reader blocked on a pipe whose writer never closes keeps the process from exiting.
+	# And whether a PIPE counts (GameSpice Server 5f46687): off by default, because a reader blocked on a pipe whose writer never closes keeps the process from exiting.
 	# TMC's panel talks RCON and neither the Docker image nor the systemd unit gives the server a stdin, so the default stands.
 	"sv_stdin_console_pipes": "stdin_console_pipes",
 	# log.yml. The level is the one an operator changes most often and the one they most
@@ -74,7 +74,7 @@ const NET_KEYS := {
 }
 
 ## Operator-facing name -> [code]DotLogConfig[/code] property, only what dot-log adds: the level, channels, mirror threshold and file settings are in [constant BOOT_KEYS]
-## already (a server without dot-log has them through dot-core's sink) and are copied across in [method build_log_router]; two lists for one fact is this tree's most repeated bug.
+## already (a server without GameSpice Log has them through GameSpice Core's sink) and are copied across in [method build_log_router]; two lists for one fact is this tree's most repeated bug.
 ## [code]log_router[/code] is NOT here: it decides whether the router is built, and is handled by name in [method _apply_settings].
 const LOG_KEYS := {
 	"log_ring": "memory_enabled",

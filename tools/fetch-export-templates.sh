@@ -96,7 +96,7 @@ DEST="$DEST_ROOT/$VERSION_DIR"
 # thread support, which is `DotScheduler`'s whole reason for slicing on the main
 # thread -- and those are separate files from the threaded ones. Checking for the
 # wrong one is an install that passes its own check and fails the export. The Web
-# preset exports with Extensions Support (the dlink template, so dot-sim's side module
+# preset exports with Extensions Support (the dlink template, so GameSpice Sim's side module
 # loads); TMC_WEB_NATIVE=0 exports with the plain one. Both are checked.
 templates_present() {
     [ -d "$DEST" ] || return 1

@@ -1,4 +1,4 @@
-# dot-server-deploy docs
+# GameSpice Server Deploy docs
 
 **Start with** the [README](../README.md) (install, quick start, what to edit). Operators: [setup.md](setup.md), [operator-config.md](operator-config.md), [content-lists.md](content-lists.md), [releases.md](releases.md). Editors of this tool: the rest. Long-form reference: [reference.md](reference.md).
 

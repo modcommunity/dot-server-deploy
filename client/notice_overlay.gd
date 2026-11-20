@@ -395,7 +395,7 @@ func _build_view() -> void:
 	add_child(_root)
 
 	# One column down the right-hand side: the lines, then the ballots. See the class notes.
-	# Offsets set after the anchors, every one, for the reason dot-ui's docs/hud.md gives;
+	# Offsets set after the anchors, every one, for the reason GameSpice UI's docs/hud.md gives;
 	# the width is [method _fit_column]'s.
 	_column = VBoxContainer.new()
 	_column.name = "Column"

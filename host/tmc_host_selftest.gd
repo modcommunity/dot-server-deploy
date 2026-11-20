@@ -30,7 +30,7 @@ func scripts_loaded() -> bool:
 
 
 ## The operator's console, asserted on a REAL server rather than on a fixture.
-## These addons were installed and reached no console at all (dot-log's commands could not plug into a server console, the guard was instantiated nowhere), and an absent command reports nothing.
+## These addons were installed and reached no console at all (GameSpice Log's commands could not plug into a server console, the guard was instantiated nowhere), and an absent command reports nothing.
 ## Checked here and not in `examples/selftest.tscn` because a fixture has no console.
 func operator_surface() -> bool:
 	return _commands_present() and _web_cvars_present() and _addons_advertised() \
@@ -95,7 +95,7 @@ func _web_cvars_present() -> bool:
 
 
 ## The addon versions a joining client is told about. Empty on a box with a lock means every player keeps the addons their shell was exported with, however old.
-## Through `get`, not the property: a box's dot-server may predate it, and a typed access would stop this whole script compiling there.
+## Through `get`, not the property: a box's GameSpice Server may predate it, and a typed access would stop this whole script compiling there.
 func _addons_advertised() -> bool:
 	var announced: Variant = (host.server as DotServer).get("addon_set")
 
@@ -162,7 +162,7 @@ func _party_status_answers() -> bool:
 	return true
 
 
-## [b]The ring, recording on the server that booted.[/b] dot-replay was the other addon
+## [b]The ring, recording on the server that booted.[/b] GameSpice Replay was the other addon
 ## linked here and built nowhere; an absent `replay` command is caught above, and a ring
 ## that was built and never started is the same failure one layer down.
 func _replay_recording() -> bool:

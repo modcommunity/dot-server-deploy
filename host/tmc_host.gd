@@ -1,7 +1,7 @@
 extends Node
 
 ## Boots a [DotServer] from `cfg/` and `content/` and prints an address a friend can paste; this is what `./server` runs, and it decides nothing a config file could have said.
-## The boot order is dot-server's and load-bearing: console lines run inside `boot()` (the only window where `sv_tickrate` and the port can still be set), then the listener opens and locks,
+## The boot order is GameSpice Server's and load-bearing: console lines run inside `boot()` (the only window where `sv_tickrate` and the port can still be set), then the listener opens and locks,
 ## then games register, because [method DotGameManager.change_game] needs a known game, then the default game and its module load.
 
 const CHANNEL := "tmc.host"
@@ -19,7 +19,7 @@ var content: TmcContent = null
 var admins: TmcAdmins = null
 var server: DotServer = null
 
-## The query responder. Answers A2S and DQP; see dot-server-query.
+## The query responder. Answers A2S and DQP; see GameSpice Server Query.
 var query_host: DotQueryHost = null
 
 ## The sink layer, when `log_router` is not `off`. See [method _build_logging].
@@ -56,9 +56,9 @@ var parties: TmcParty = null
 ## [TmcReplay].
 var replay: TmcReplay = null
 
-## dot-radio, when the addon is linked and `radio.yml` turns it on; null otherwise. See [TmcRadio].
+## GameSpice Radio, when the addon is linked and `radio.yml` turns it on; null otherwise. See [TmcRadio].
 var radio: TmcRadio = null
-## dot-trail, likewise from `trail.yml`. See [TmcTrail].
+## GameSpice Trail, likewise from `trail.yml`. See [TmcTrail].
 var trail: TmcTrail = null
 
 var _config_dir := "cfg"
@@ -490,7 +490,7 @@ func _boot() -> bool:
 	config.load_game_aliases(_content_dir, wanted)
 
 	if wanted == "":
-		# Legitimate, and said out loud. dot-server supports a server with no game and a
+		# Legitimate, and said out loud. GameSpice Server supports a server with no game and a
 		# player who connects to one sees nothing, which is indistinguishable from a
 		# broken server unless somebody says so.
 		DotLog.warn(CHANNEL, "no game to load; the server will run empty", {
@@ -550,7 +550,7 @@ func _current_game_id(wanted: String) -> String:
 ## False once the boot has been given up on.
 func _build_server_node() -> bool:
 	# Everything the server writes goes under one directory. Set before `boot()` because
-	# dot-server reads them during it: the admin file is loaded, a template is written if
+	# GameSpice Server reads them during it: the admin file is loaded, a template is written if
 	# there is none, and the audit log is opened.
 	config.server.admins_path = "%s/admins.json" % _data_dir
 	config.server.bans_path = "%s/bans.json" % _data_dir
@@ -559,7 +559,7 @@ func _build_server_node() -> bool:
 	# Before the server exists, because the first line this boot emits is the interesting one: the router registers itself as a DotLog sink on entering the tree,
 	# so what is built before it is not covered, and a log is most wanted for why the boot went wrong.
 	_build_logging()
-	# Which dot-sim modules run native and which run their GDScript twins (same results, slower).
+	# Which GameSpice Sim modules run native and which run their GDScript twins (same results, slower).
 	DotLog.info(CHANNEL, TmcNativeStatus.line())
 
 	server = DotServer.new()
@@ -569,16 +569,16 @@ func _build_server_node() -> bool:
 	server.auto_boot = false
 
 	if log_router != null:
-		# dot-server duck-types this: a `DotLogSink` for a rotating file or a dot-log
+		# GameSpice Server duck-types this: a `DotLogSink` for a rotating file or a GameSpice Log
 		# router for the whole sink layer, recognised by what it can do rather than by
 		# what it is called. Pointed at the router, it does not make a second file writer.
 		server.log_sink_ref = DotNodeRef.of_path(NodePath("../DotLogRouter"))
-	# Both config slots are named absolutely, so dot-server's search path cannot reach the `server.cfg` and `autoexec.cfg` its own addon ships,
+	# Both config slots are named absolutely, so GameSpice Server's search path cannot reach the `server.cfg` and `autoexec.cfg` its own addon ships,
 	# which would run after the operator's YAML and silently override it. `cfg/autoexec.cfg` is still honoured, and runs after the listener opens.
 	config.server.autoexec_config = "%s/autoexec.cfg" % _config_dir
-	# The operator's net_max_* as ceilings on whatever game loads: dot-game's
+	# The operator's net_max_* as ceilings on whatever game loads: GameSpice Game's
 	# DotGameModule reads this meta before its netcode starts. The name is spelled out
-	# (it is DotGameNetcode.CEILING_META) so the host does not need dot-game linked to boot.
+	# (it is DotGameNetcode.CEILING_META) so the host does not need GameSpice Game linked to boot.
 	server.set_meta(&"dot_net_ceiling", config.net_ceiling())
 	add_child(server)
 
@@ -590,7 +590,7 @@ func _build_server_node() -> bool:
 	query_host.server_ref = DotNodeRef.of_path(NodePath("../Server"))
 	add_child(query_host)
 
-	# The YAML's console lines are compiled to a `.cfg` and handed to dot-server's own
+	# The YAML's console lines are compiled to a `.cfg` and handed to GameSpice Server's own
 	# startup-config path, which runs after the console exists and before the listener
 	# opens — the only window in which a FLAG_STARTUP_ONLY cvar is still settable.
 	var generated := "%s/from_yaml.cfg" % _data_dir
@@ -685,7 +685,7 @@ func _install_services() -> void:
 	votes = TmcVote.install(self, server, config.vote, config.vote_exclude, games_rotation)
 
 	# After the listing, because that is where the backbone client is: a second client for the same token would be two rate limiters for one budget.
-	# With no token there is no client and bookings still come from the console. After the first game too: the booking chains onto `dot_ban_source`, which the game's module registers dot-moderation on, and would be displaced.
+	# With no token there is no client and bookings still come from the console. After the first game too: the booking chains onto `dot_ban_source`, which the game's module registers GameSpice Moderation on, and would be displaced.
 	parties = TmcParty.install(
 		self, server, config,
 		listing.backbone if listing != null else null,
@@ -693,7 +693,7 @@ func _install_services() -> void:
 	)
 
 	# After the first game, so the first header names a game and the first keyframe has a roster to hold; before any player can be kicked.
-	# It watches the registry for each game's dot-moderation itself, so it need not precede the module that registers one.
+	# It watches the registry for each game's GameSpice Moderation itself, so it need not precede the module that registers one.
 	replay = TmcReplay.install(self, server, config, _data_dir)
 
 	# The recorder's settings for whichever game declares a schema; it builds the recorder.
@@ -937,7 +937,7 @@ func _register_web_loader() -> void:
 		DotLog.info(CHANNEL, "this server asks the site for a web loader version", {"version": wanted})
 
 
-## Puts `log` on the console. dot-log's console object could only plug into a CLIENT console until dot-server grew `add_source`, so the one process with a log worth tailing could not reach it;
+## Puts `log` on the console. GameSpice Log's console object could only plug into a CLIENT console until GameSpice Server grew `add_source`, so the one process with a log worth tailing could not reach it;
 ## `DotConsole.add_source` wraps each name in a real `DotConCommand`, so `log` gets the permission check, RCON gate and audit line.
 ## GENERIC, not root: reading back what the server has said is what being staff is for, and `log test` is the only thing here that writes.
 func _register_log_commands() -> void:
@@ -974,8 +974,8 @@ func _build_security() -> void:
 	server.add_child(guard)
 
 	# One node rather than five. Every source it watches is optional and every one it
-	# cannot find simply does nothing, so a deployment without dot-chat loses the router
-	# half and keeps dot-server's own chat path.
+	# cannot find simply does nothing, so a deployment without GameSpice Chat loses the router
+	# half and keeps GameSpice Server's own chat path.
 	var watch := DotSecurityWatch.new()
 	watch.name = "SecurityWatch"
 	watch.guard_ref = DotNodeRef.of_path(NodePath("../Security"))
@@ -1025,12 +1025,12 @@ func _build_auth() -> bool:
 func _build_cloud() -> void:
 	var cloud := DotCloudClient.new()
 	cloud.name = "Cloud"
-	# Who a pack's requires.json refusal names: "This game needs dot-net API level 3 or
+	# Who a pack's requires.json refusal names: "This game needs GameSpice Net API level 3 or
 	# newer; this SERVER has level 2" -- the operator's to fix, not the player's.
 	cloud.host_role = "server"
 	cloud.config = DotCloudConfig.new()
 	cloud.config.cache_dir = "%s/content_cache" % _data_dir
-	# A pack's client-only files (a game's baked light, dot-cloud API 8) are never fetched
+	# A pack's client-only files (a game's baked light, GameSpice Cloud API 8) are never fetched
 	# here: this process never draws. Said outright rather than left to `auto`, which reads
 	# the same on a headless box and would read wrong on a server started with a window.
 	cloud.config.side = "server"
@@ -1042,7 +1042,7 @@ func _build_cloud() -> void:
 	if not FileAccess.file_exists(cloud.config_file):
 		cloud.config_file = "res://client/content.json"
 
-	# Unlimited unless the operator set a ceiling: dot-cloud's default is a player's 4 GiB, and a server's mounted maps can never be evicted to make room.
+	# Unlimited unless the operator set a ceiling: GameSpice Cloud's default is a player's 4 GiB, and a server's mounted maps can never be evicted to make room.
 	TmcCloudLimit.apply(cloud.config, int(TmcCloudLimit.parse(config.cache_bytes).value), CHANNEL, cloud.config_file)
 	# The content directory is searched before the network, so a pack beside the game that names it needs no web server (a LAN deployment, every test).
 	# `dist/` too, when there is one: it is where `./server pack` writes, so a server that published a map has it. Absent on a deployment that only consumes.
@@ -1078,7 +1078,7 @@ func _build_cloud() -> void:
 			"hint": "set content_urls in cfg/server.yml to fetch maps and packs",
 		})
 
-	# The published layout is `{id}/{version}/`, dot-cloud's own default: the site publishes `content/<owner>/<name>/<version>/manifest.json` (a member may have four versions of one game up at once).
+	# The published layout is `{id}/{version}/`, GameSpice Cloud's own default: the site publishes `content/<owner>/<name>/<version>/manifest.json` (a member may have four versions of one game up at once).
 	# The flat form stays as a FALLBACK because an origin holds both: imported map packs were published under it, and re-publishing everything is not a precondition for starting.
 	cloud.manifest_url_template = "{base}/{id}/{version}/manifest.json"
 	cloud.manifest_url_fallbacks = PackedStringArray(["{base}/{id}/manifest.json"])
@@ -1209,7 +1209,7 @@ func _attach_addon_entries() -> void:
 	TmcAddonEntry.attach(server, cloud, keys, "server")
 
 
-## Keeps the right module loaded as the game changes: dot-server does not load modules, so without this `changelevel` leaves the previous game's module driving the new world, or none at all.
+## Keeps the right module loaded as the game changes: GameSpice Server does not load modules, so without this `changelevel` leaves the previous game's module driving the new world, or none at all.
 ## Paths are compared, not ids: a different module is unloaded first (two [DotNetManager]s would tick one world), the same module under another game id rebinds itself
 ## through [method DotModule._module_game_changed] (reloading would drop every player), and no module is legitimate.
 func _load_game_module() -> void:
@@ -1358,7 +1358,7 @@ func _ensure_map_content(id: StringName, root: Variant = null) -> void:
 	var got: Variant = await cloud.call("ensure", id)
 
 	if got is DotResult and not (got as DotResult).ok:
-		# Info, not a warning: a map that ships in the build is not in dot-cloud and
+		# Info, not a warning: a map that ships in the build is not in GameSpice Cloud and
 		# never will be, so this is the ordinary answer for most servers.
 		DotLog.info(CHANNEL, "no delivered content for this map; using what is here", {
 			"map": String(id),

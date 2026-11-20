@@ -420,7 +420,7 @@ func _test_game(game_id: String, next: String) -> void:
 	_check(arrived, "the server is running %s" % game_id)
 
 	# The last game's modules are torn down: none of the instances it ran is still loaded. By
-	# instance, because a module several games load (dot-platform's) has the same name in both.
+	# instance, because a module several games load (GameSpice Platform's) has the same name in both.
 	var loaded := _server().modules.loaded_names()
 	var leftover := PackedStringArray()
 	for name: String in _previous_modules:

@@ -90,7 +90,7 @@ WorkingDirectory=$ROOT
 ExecStart=$ROOT/server
 Restart=on-failure
 RestartSec=5s
-# 75 is dot-cloud's auto-update asking for a restart (docs/auto-update.md in dot-cloud);
+# 75 is GameSpice Cloud's auto-update asking for a restart (docs/auto-update.md in GameSpice Cloud);
 # restarted whatever Restart= says, since the next start installs the update.
 RestartForceExitStatus=75
 

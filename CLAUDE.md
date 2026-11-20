@@ -1,4 +1,4 @@
-# dot-server-deploy
+# GameSpice Server Deploy
 
 TMC's server tool: boots a dot-server from `cfg/` and `content/`, serves games as signed dot-cloud packs, and exports the client shell for the browser and the desktop. **It ships no game.** It is also the release machinery: `addons.lock`, the shell builds, `setup.sh`, the Pterodactyl egg.
 
@@ -68,7 +68,7 @@ Exit codes: `2` usage, `3` no runtime, `4` no project (`install-games`: addons b
 - The shell's `project.godot` carries no comments (the editor drops them); its reasons are in [web](docs/web-client.md#the-shells-projectgodot).
 
 - Both web pages load dot-core's `dot_web.js` (the named functions `DotWeb` calls; the game origin's CSP has no `unsafe-eval`, so nothing may `JavaScriptBridge.eval`) before the ceiling; `install_dot_web` in `tools/server.in` patches exported pages. `Install-DotWeb` in `tools/server.ps1.in` is its twin (untested: no pwsh here); that file has no `install_ceiling` twin yet. [web](docs/web-client.md#the-csp-safe-page-script)
-- Both web pages load dot-audio's `dot_audio_ceiling.js` before `index.js`, the browser player's only limiter; a change needs a new shell. [web](docs/web-client.md#the-browsers-audio-ceiling)
+- Both web pages load GameSpice Audio's `dot_audio_ceiling.js` before `index.js`, the browser player's only limiter; a change needs a new shell. [web](docs/web-client.md#the-browsers-audio-ceiling)
 - A delivered game references its own files by relative path; no `class_name`, and every `res://` string through `<Game>Paths.rebase()`. [delivery](docs/delivery-constraint.md#rules-that-follow)
 - `rebase()` is one line over `rebase_onto(path, root)`, so a suite can test with a mount prefix; tested against `res://` it passes with the bug in. [delivery](docs/delivery-constraint.md#rules-that-follow)
 - A form of the mount constraint is closed when every game closes it. [delivery](docs/delivery-constraint.md#rules-that-follow)
@@ -80,7 +80,7 @@ Exit codes: `2` usage, `3` no runtime, `4` no project (`install-games`: addons b
 
 - `cfg/` is never overwritten and never tracked; change a default in `cfg.example/`, and remember existing boxes keep their copy. [config](docs/configuration.md#cfg-is-written-by-setup-cfgexample-is-tracked)
 - Layers: defaults < `cfg/*.yml` < `GS_SERVER_*` < argv. `TMC_*` become arguments, so they outrank the YAML. [config](docs/configuration.md#layers)
-- `cfg/*.yml` reaches dot-server as console lines; a setting whose cvar does not exist yet at that point is a config field the host applies. [config](docs/configuration.md#the-configuration-is-a-surface-not-a-second-parser)
+- `cfg/*.yml` reaches GameSpice Server as console lines; a setting whose cvar does not exist yet at that point is a config field the host applies. [config](docs/configuration.md#the-configuration-is-a-surface-not-a-second-parser)
 - `TmcYaml` reads `on`/`off` as bools; a word-valued setting must accept a bool. [config](docs/configuration.md#the-configuration-is-a-surface-not-a-second-parser)
 - The game vote's prefix is `GS_GAME_VOTE_*`, never `GS_VOTE_*` (the loaded game's map vote). [config](docs/configuration.md#prefixes-that-keep-two-copies-of-an-addon-apart)
 - `cfg/server/content/overrides.yml` refuses identity keys and unknown keys by name; unpinned maps resolve per start into `data/content-maps.json`, never per join. [config](docs/configuration.md#a-server-owners-settings-per-game-cfgservercontentoverridesyml)
@@ -151,5 +151,5 @@ Exit codes: `2` usage, `3` no runtime, `4` no project (`install-games`: addons b
 ## Deliberately not here
 
 - **A package** (.deb/.rpm): `./setup.sh --full` is the installer, because the engine is pinned per checkout and two servers on a box should be two clones.
-- **A server browser**: dot-server-query answers both query protocols; nothing here asks. `sv_query_app` is display only.
+- **A server browser**: GameSpice Server Query answers both query protocols; nothing here asks. `sv_query_app` is display only.
 - **TLS in the host or client**: it is deployment, in `deploy/`.

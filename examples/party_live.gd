@@ -40,7 +40,7 @@ class FakeBackbone extends RefCounted:
 		return DotResult.success({"ok": true})
 
 
-## What a session reads its uid from. dot-auth's identity has more; this is what is asked.
+## What a session reads its uid from. GameSpice Auth's identity has more; this is what is asked.
 class FakeIdentity extends RefCounted:
 	var uid: String = ""
 	var display_name: String = ""

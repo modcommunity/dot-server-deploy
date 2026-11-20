@@ -6,7 +6,7 @@ extends Node
 
 const CHANNEL := "tmc.party"
 
-## The seam dot-server asks on every join. See [method _rechain].
+## The seam GameSpice Server asks on every join. See [method _rechain].
 const BAN_SOURCE := &"dot_ban_source"
 
 ## Every chat router a game registers is under this name, or a scoped form of it.
@@ -43,7 +43,7 @@ var _warned_fetch: bool = false
 
 ## Builds everything `cfg/party.yml` and `cfg/matchmaking.yml` ask for and attaches it
 ## to [param p_server]. [param backbone] is any object with `post_integration` and
-## `get_integration` — dot-auth's backbone client — or null.
+## `get_integration` — GameSpice Auth's backbone client — or null.
 static func install(
 	host: Node,
 	p_server: DotServer,
@@ -121,7 +121,7 @@ func _build_reservations(backbone: Object) -> void:
 		return Vector2i(occupied, server.config.max_players)
 
 	# An owner locked out of their own server by a party is a support ticket. Admins are
-	# resolved before dot-server asks the ban seam, so the flag is already on the session.
+	# resolved before GameSpice Server asks the ban seam, so the flag is already on the session.
 	reservations.bypass_fn = func(uid: String) -> bool:
 		for session in server.sessions():
 			if session.uid() == uid and session.has_permission(DotAdminFlags.RESERVATION):
@@ -137,11 +137,11 @@ func _build_reservations(backbone: Object) -> void:
 	reservations.reservation_ended.connect(_on_booking_ended)
 
 	# Added under this node, so its `_ready` captures whatever already holds the ban seam
-	# -- dot-moderation, from the game that is loaded -- and chains to it.
+	# -- GameSpice Moderation, from the game that is loaded -- and chains to it.
 	add_child(reservations)
 
 
-## `GET party/reservation` is served by the site since its game-backbone routes merged (dot-party's
+## `GET party/reservation` is served by the site since its game-backbone routes merged (GameSpice Party's
 ## docs/backbone-contract.md).
 func _quiet_first_fetch_failure() -> void:
 	var fetch := reservations.fetch_fn
@@ -227,7 +227,7 @@ static func _absolute(path: String) -> String:
 
 
 
-## A game's module registers dot-moderation under `dot_ban_source` when it loads, and the registry
+## A game's module registers GameSpice Moderation under `dot_ban_source` when it loads, and the registry
 ## is last-wins — so the first `changelevel` after boot would quietly take the booking out of every
 ## admission. Re-registering on top, chained to whoever just arrived, keeps both asked.
 func _on_service_registered(service: StringName, instance: Object) -> void:
@@ -253,7 +253,7 @@ func _rechain() -> void:
 	if holder == reservations:
 		return
 
-	# Already asked, somewhere down a chain that itself chains (dot-server-security's
+	# Already asked, somewhere down a chain that itself chains (GameSpice Server Security's
 	# feeds do). Putting this on top again would make the chain a loop and every
 	# admission would recurse until the stack gave out.
 	if _chain_reaches(holder, reservations):
@@ -578,7 +578,7 @@ func _cmd_say(ctx: DotCmdContext) -> void:
 			ctx.reply((sent as DotResult).error.message)
 		return
 
-	# A game with no dot-chat router. dot-server's own chat has no channels, so the line
+	# A game with no GameSpice Chat router. GameSpice Server's own chat has no channels, so the line
 	# goes to each party member as a system line — the same audience, a plainer look.
 	if server.chat == null:
 		ctx.reply("This game has no chat.")

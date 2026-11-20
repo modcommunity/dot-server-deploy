@@ -1,6 +1,6 @@
 extends Node
 
-## A real client on ENet, through dot-net's lossy UDP relay, in a DELIVERED game: do its commands
+## A real client on ENet, through GameSpice Net's lossy UDP relay, in a DELIVERED game: do its commands
 ## reach the server, do the server's snapshots reach it, and does ENet's packet throttle leave both
 ## alone?
 
@@ -10,7 +10,7 @@ const Relay := preload("res://addons/dot_net/testing/dot_net_udp_relay.gd")
 
 const CONTENT := "res://content"
 
-## game id (game) -> the packs it needs in dist/. dot-game-template is packaged by this run.
+## game id (game) -> the packs it needs in dist/. GameSpice Game Template is packaged by this run.
 const PACKS := {
 	"fatalcontact": ["tmc/arena"],
 	"buses": ["tmc/buses"],
@@ -58,7 +58,7 @@ const SECTIONS := 2 + 2
 const CHECKS := 3 + 3 + 2 * WINDOW_CHECKS
 
 ## How far the server's player must be carried in a window, where it can be seen: metres, or
-## pixels in a 2D game (dot-game-template's player drifts about 2 px a second with no key held).
+## pixels in a 2D game (GameSpice Game Template's player drifts about 2 px a second with no key held).
 const MIN_MOVE := 1.0
 const MIN_MOVE_2D := 64.0
 ## A step longer than this in one physics frame is a teleport, not a walk: metres, and pixels for
@@ -421,7 +421,7 @@ func _net(root: Node, server: bool) -> DotNetManager:
 func _probe_ready() -> bool:
 	if _game_link(_server(), "inputs_received") != null and _game_link(_link, "snapshots_received") != null:
 		return true
-	# No counters (dot-game-template): dot-net's own, at both ends.
+	# No counters (GameSpice Game Template): GameSpice Net's own, at both ends.
 	return _net(_host, true) != null and _net(_client_side, false) != null \
 		and _game_link(_server(), "inputs_received") == null
 
@@ -438,7 +438,7 @@ func _measure() -> Dictionary:
 			"snaps_sent": int(server_link.get("snapshots_sent")),
 			"snaps_got": int(client_link.get("snapshots_received")),
 		}
-	# dot-net's: the client's snapshots received against those it knows it lost, and the server's
+	# GameSpice Net's: the client's snapshots received against those it knows it lost, and the server's
 	# input buffer for this peer, ticks it played with no command against ticks it played.
 	var sn := _net(_host, true)
 	var cn := _net(_client_side, false)
@@ -508,7 +508,7 @@ func _physics_process(_delta: float) -> void:
 	if not _watching or _client_side == null:
 		return
 	# The control: ENet's own throttle back at both ends, from the frame each end has the peer,
-	# before the join's reliable traffic. Each end's own connect sets dot-core's and sends it to the
+	# before the join's reliable traffic. Each end's own connect sets GameSpice Core's and sends it to the
 	# far end, which can land after this; so it is put back whenever either end says otherwise.
 	if _stock:
 		_stock_back(_client_side.multiplayer.multiplayer_peer, 1, _client_side.multiplayer.get_peers().has(1))
@@ -536,7 +536,7 @@ func _stock_back(mp: Object, peer_id: int, connected: bool) -> void:
 			DotTransportENet.ENET_DEFAULT_THROTTLE_ACCELERATION, DotTransportENet.ENET_DEFAULT_THROTTLE_DECELERATION)
 
 
-## Where the server has the client's player: the first entity dot-net's registry says the client's
+## Where the server has the client's player: the first entity GameSpice Net's registry says the client's
 ## peer owns that is a Node2D or a Node3D in the tree. Null where the game keeps none.
 func _server_player() -> Node:
 	var sn := _net(_host, true)

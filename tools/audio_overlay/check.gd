@@ -1,6 +1,6 @@
 extends Node
 
-## Process 2 of tools/audio_overlay_proof.sh: started through dot-cloud's boot scene, plays a stock footstep and a bed.
+## Process 2 of tools/audio_overlay_proof.sh: started through GameSpice Cloud's boot scene, plays a stock footstep and a bed.
 ## Names no DotAudio class in typed code: the build's own copy predates stream_at, and the overlay supplies it.
 
 const FOOTSTEP := "res://addons/dot_audio/stock/footsteps/footstep_carpet_0.ogg"

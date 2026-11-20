@@ -1,7 +1,7 @@
 class_name TmcYaml
 extends RefCounted
 
-## The server's name for dot-core's [DotYaml], the family's one YAML subset reader. Kept as a
+## The server's name for GameSpice Core's [DotYaml], the family's one YAML subset reader. Kept as a
 ## wrapper rather than replaced at every call site so TmcConfig, TmcContent, install_games and the
 ## rest keep one name for "read an operator's file", and so a second parser cannot grow back here.
 

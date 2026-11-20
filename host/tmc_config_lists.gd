@@ -43,7 +43,7 @@ static func apply_addons(cfg: TmcConfig, file: String, value: Variant) -> void:
 ## `content_urls`: where the server (and, through it, the clients) fetch content from.
 static func apply_content_urls(cfg: TmcConfig, file: String, value: Variant) -> void:
 	# A list, or one string for the common case of a single origin. Not passed
-	# through as a console line: this is dot-cloud's, and dot-server's console
+	# through as a console line: this is GameSpice Cloud's, and GameSpice Server's console
 	# has no cvar for it.
 	if value is Array:
 		for entry in (value as Array):

@@ -64,7 +64,7 @@ var _solo_retry: String = ""
 ## What [method _mount_in_place] did: the overlay runs; the engine refused it (restart onto it instead); or it is mounted but an
 ## addon still runs a compiled copy (blocked, as a failed boot is).
 enum InPlace { RUNNING, REFUSED, STALE }
-## Where dot-cloud's boot script records the overlay it mounted ([method DotCloudAddonSet.mounted_this_boot] reads it).
+## Where GameSpice Cloud's boot script records the overlay it mounted ([method DotCloudAddonSet.mounted_this_boot] reads it).
 const OVERLAY_SETTING := "dot_cloud/addon_overlay"
 ## Whether to fetch this game's maps pack in solo; see [method TmcSolo.skip_maps].
 var _solo_maps_check: CheckBox = null
@@ -150,9 +150,9 @@ var admin_menu: TmcAdminMenuPanel = null
 ## The server owner's screen over a game or map change. See [TmcLoadingScreen].
 var loading: TmcLoadingScreen = null
 
-## dot-radio's client, made when a server that runs a station says where it is. See [TmcRadioLink].
+## GameSpice Radio's client, made when a server that runs a station says where it is. See [TmcRadioLink].
 var radio_link: TmcRadioLink = null
-## dot-trail's client and menu page. See [TmcTrailLink].
+## GameSpice Trail's client and menu page. See [TmcTrailLink].
 var trail_link: TmcTrailLink = null
 var inventory_link: TmcInventoryLink = null
 
@@ -504,7 +504,7 @@ func _explain(error: DotError) -> String:
 
 
 ## The player's party, followed wherever it goes. Only when signed in, because the site only knows signed-in players.
-## The site does not serve party routes yet (dot-party's docs/backbone-contract.md), so the first 404 switches polling off for the session.
+## The site does not serve party routes yet (GameSpice Party's docs/backbone-contract.md), so the first 404 switches polling off for the session.
 ## [code]connect_fn[/code] is this shell's Connect path, so following the party is what the player would have done by hand.
 func _build_party(identity: DotAuthIdentity) -> void:
 	if _auth == null or identity == null:
@@ -526,7 +526,7 @@ func _build_party(identity: DotAuthIdentity) -> void:
 	_party.refresh()
 
 
-## The player's friends list and presence, built with the party client over the same dot-auth client. See [TmcFriends].
+## The player's friends list and presence, built with the party client over the same GameSpice Auth client. See [TmcFriends].
 ## Quitting waits two seconds for "offline" (see [method _notification]): a presence lives two minutes and would show a closed game joinable; a closed tab never asks and expires.
 func _build_friends() -> void:
 	if _auth == null:
@@ -747,7 +747,7 @@ func _on_party_request_failed(what: String, error: DotError) -> void:
 
 
 ## Tells the server which party this player is in, once per party per connection, as a chat command (see `TmcParty` on the server).
-## A slash command, which dot-server runs before any game's chat hook and never broadcasts; the server checks the roster before believing it.
+## A slash command, which GameSpice Server runs before any game's chat hook and never broadcasts; the server checks the roster before believing it.
 func _claim_party() -> void:
 	if _party == null or _party.party == null or link == null or not link.is_connected_to_server():
 		return
@@ -838,7 +838,7 @@ func _ensure_cloud() -> void:
 
 	_cloud = _new_cloud()
 
-	# Straight off the content client, not the link: the link forwards a fraction and a sentence, but dot-cloud's payload carries file, rate and estimate.
+	# Straight off the content client, not the link: the link forwards a fraction and a sentence, but GameSpice Cloud's payload carries file, rate and estimate.
 	_cloud.phase_changed.connect(_on_cloud_phase)
 	_cloud.failed.connect(_on_cloud_failed)
 	_cloud.progress_changed.connect(_on_cloud_progress_detail)
@@ -855,7 +855,7 @@ func _new_cloud() -> DotCloudClient:
 	# player's cue that this shell, not the server, is the one to update.
 	cloud.host_role = "client"
 	cloud.config = DotCloudConfig.new()
-	# The shell is a player's client even headless, where dot-cloud's `auto` would read "server" and leave client-only files (API 8) behind.
+	# The shell is a player's client even headless, where GameSpice Cloud's `auto` would read "server" and leave client-only files (API 8) behind.
 	# A solo game runs its server here too, so [method _start_solo] widens this to both.
 	cloud.config.side = "client"
 	cloud.add_child(_new_cloud_scheduler())
@@ -903,7 +903,7 @@ static func _new_cloud_scheduler() -> DotScheduler:
 
 
 ## A pack this client is too old to run (CODE_VERSION), told plainly and passed to the page.
-## Branches on the code, never the sentence; before dot-cloud API 3 the refusal came after the download, and either way the fix is a newer client.
+## Branches on the code, never the sentence; before GameSpice Cloud API 3 the refusal came after the download, and either way the fix is a newer client.
 func _on_cloud_failed(error: DotError) -> void:
 	if error == null or error.code != DotError.CODE_VERSION:
 		return
@@ -1259,7 +1259,7 @@ func _connect_to(address: String) -> void:
 	_enter_online_session()
 
 	link = DotClientLink.new()
-	# "Server", because Godot routes an RPC by the receiver's node path and dot-server's node is called that; a wrong name fails every RPC, handshake included, with only a timeout to show.
+	# "Server", because Godot routes an RPC by the receiver's node path and GameSpice Server's node is called that; a wrong name fails every RPC, handshake included, with only a timeout to show.
 	link.name = "Server"
 	link.player_name = _name.text.strip_edges()
 	# `--udp host:port` joins over ENet (the launcher passes enet_port); `--transport auto|udp|ws` overrides. See DotClientLink.
@@ -1342,7 +1342,7 @@ func _on_server_info(_challenge: Dictionary, target: String) -> void:
 	var wanted: Dictionary = decided["wanted"]
 	var plan := DotCloudAddonSet.read_plan()
 	var running: Dictionary = plan if DotCloudAddonSet.mounted_this_boot(plan) else {}
-	# A dot-cloud before download groups (0.1.47) has no `groups` and takes every group.
+	# A GameSpice Cloud before download groups (0.1.47) has no `groups` and takes every group.
 	var grouped := "groups" in addons
 
 	if wanted.is_empty() and grouped:
@@ -1691,7 +1691,7 @@ func _restart(keep: PackedStringArray = PackedStringArray()) -> bool:
 		var location: Variant = DotWeb.get_global("location")
 		if location == null:
 			return false
-		# dot-game's DotGameClient arms a "Leave site?" prompt while a game is live; this reload is ours, so it is disarmed (by property, not eval, same CSP reason).
+		# GameSpice Game's DotGameClient arms a "Leave site?" prompt while a game is live; this reload is ours, so it is disarmed (by property, not eval, same CSP reason).
 		# The flag is absent when no game client installed it.
 		var tab_guard: Variant = DotWeb.get_global("__dotTabGuard")
 		if tab_guard != null:
@@ -1728,7 +1728,7 @@ func _enter_solo_session() -> void:
 
 ## This process is joining a server: nothing subscribed is visible from here, and what the
 ## server's game mounts is tagged `online` (a pack already mounted at the same id and version
-## is reused and tagged, by dot-cloud, not downloaded again).
+## is reused and tagged, by GameSpice Cloud, not downloaded again).
 func _enter_online_session() -> void:
 	DotContentIndex.shared().set_session(DotContentIndex.SESSION_ONLINE)
 	if _cloud != null:
@@ -1956,7 +1956,7 @@ func _adopt_content_url_arg() -> void:
 		_cloud.http_base_urls = bases
 
 
-## Every menu a solo game builds leaves to the shell: dot-menu's stock Leave disconnects `leave_link` when connected, and offline in a browser hides itself.
+## Every menu a solo game builds leaves to the shell: GameSpice Menu's stock Leave disconnects `leave_link` when connected, and offline in a browser hides itself.
 ## Pointed at the session it reads "Back to menu" and comes here; watched with `node_added` because games build menus when they like.
 func _on_solo_node_added(node: Node) -> void:
 	if _solo_session == null or not (node is DotMenu) or not _game_root.is_ancestor_of(node):
@@ -2063,7 +2063,7 @@ func _on_spawned() -> void:
 
 	if not BUILTIN_CLIENTS.has(content_id):
 		# Say which side is behind, because the symptom points at neither: with an empty BUILTIN_CLIENTS the likely cause is a server older than this client,
-		# or a deployment whose dot-server addon was not pulled with its host; "named a game and sent nothing" is what a `kind: builtin` descriptor looks like from here.
+		# or a deployment whose GameSpice Server addon was not pulled with its host; "named a game and sent nothing" is what a `kind: builtin` descriptor looks like from here.
 		DotLog.error(CHANNEL, "the server sent no content for the game it named", {
 			"content_id": content_id,
 			"builtin_clients": BUILTIN_CLIENTS.size(),
@@ -2233,7 +2233,7 @@ func _hide_content_failed() -> void:
 ## Where a "clear downloaded content" waits for the next start. See [method request_clear].
 const CLEAR_PENDING := "user://dot_cloud_clear_pending"
 
-## dot-cloud's default cache. Cleared as well as whichever one this session uses, so a
+## GameSpice Cloud's default cache. Cleared as well as whichever one this session uses, so a
 ## player who switched "keep downloaded games" off is not left with the kept ones.
 const DEFAULT_CACHE := "user://dot_cloud"
 
@@ -2321,7 +2321,7 @@ func request_clear() -> void:
 func clear_pending() -> int:
 	var freed := downloaded_bytes()
 
-	# The store first, through dot-cloud, so its index agrees with the empty disk; then
+	# The store first, through GameSpice Cloud, so its index agrees with the empty disk; then
 	# the directories whole, for the caches this session is not using.
 	_ensure_cloud()
 	var started: DotResult = await _cloud.start()

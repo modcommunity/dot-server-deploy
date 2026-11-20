@@ -16,7 +16,7 @@
 # Game packs carry no addons: a game runs on the addon code compiled into the shell, and
 # a pack that needs a newer addon API level than the shell has is refused at Play. So a
 # release whose addons.lock moved and whose web/shell-build still names the previous
-# shell is a release no new game can be played on. On 2026-10-20 a dot-combat API bump
+# shell is a release no new game can be played on. On 2026-10-20 a GameSpice Combat API bump
 # was locked and released while the live shell predated it, and every game built on it
 # was refused until a shell was exported and pinned by hand.
 #

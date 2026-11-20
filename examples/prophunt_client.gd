@@ -127,7 +127,7 @@ func _until(condition: Callable, seconds: float = 20.0) -> bool:
 	return bool(condition.call())
 
 
-## The server's world, through the module's `game` — dot-game's own name for it.
+## The server's world, through the module's `game` — GameSpice Game's own name for it.
 func _world() -> Node:
 	var module: DotModule = _server().modules.get_module(MODULE)
 	return module.get("game") as Node if module != null else null
@@ -366,7 +366,7 @@ func _test_a_broken_prop_reaches_the_client() -> void:
 	_done()
 
 
-## [b]dot-props API level 4, drawn by the delivered client.[/b] A stand-in hides as the tallest Food
+## [b]GameSpice Props API level 4, drawn by the delivered client.[/b] A stand-in hides as the tallest Food
 ## or Survival kit piece (models whose texture is an external `Textures/colormap.png` beside them,
 ## which must load from inside the mount) and is turned on its nose.
 func _test_a_leant_prop_is_drawn_on_the_floor() -> void:
@@ -490,7 +490,7 @@ func _test_still_serving() -> void:
 	_done()
 
 
-## [b]dot-combat's `mp_teammate_passthrough` on the delivered client.[/b] The client traces its own
+## [b]GameSpice Combat's `mp_teammate_passthrough` on the delivered client.[/b] The client traces its own
 ## shots for tracers and impacts; on its default 1 against a server on 0 or 2 they ended in, or went
 ## through, a team-mate where the server's shot did the opposite.
 func _test_teammate_cvar_reaches_the_client() -> void:

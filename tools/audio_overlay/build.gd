@@ -1,6 +1,6 @@
 extends Node
 
-## Process 1 of tools/audio_overlay_proof.sh: fetch the site's dot-audio pack the way the shell does and build the overlay.
+## Process 1 of tools/audio_overlay_proof.sh: fetch the site's GameSpice Audio pack the way the shell does and build the overlay.
 
 const CONTENT_CONFIG := "res://content.json"
 

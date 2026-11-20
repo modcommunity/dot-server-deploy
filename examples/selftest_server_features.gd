@@ -97,8 +97,8 @@ func _test_party() -> void:
 	_done()
 
 
-## dot-replay was linked here and built nowhere. What this asserts: the ring is built by default and
-## bounded, `replay save` writes a file dot-replay's own reader calls complete, and a ban or a kick
+## GameSpice Replay was linked here and built nowhere. What this asserts: the ring is built by default and
+## bounded, `replay save` writes a file GameSpice Replay's own reader calls complete, and a ban or a kick
 ## carries the hash of a clip that is really on disk.
 func _test_bot_record() -> void:
 	_section("the bot demonstration recorder")

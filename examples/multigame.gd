@@ -524,7 +524,7 @@ func _test_vote_changes_the_game() -> void:
 	)
 
 	# Opened through the real console command, which is how an operator does it — and which fails if
-	# dot-vote's commands stopped being registered on this server.
+	# GameSpice Vote's commands stopped being registered on this server.
 	var revote := "%srevote" % TmcVote.COMMAND_PREFIX
 
 	# [b]What the shells are told, heard at the server.[/b] Nobody is connected, so every notice

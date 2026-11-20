@@ -26,14 +26,14 @@ const ADDONS_LOCK := "res://addons.lock"
 
 
 ## Tells every joining client which addon versions this server runs, so an addon release can skip the client build: an older shell fetches the newer addons as packs
-## (`modcommunity/dot-<name>@<version>`, the alias of `gamespice-platform/<name>`; [method TmcAddonNamespaces.announced_pack_for] says why), lays them over its own and restarts into them (dot-cloud's `DotCloudAddonSet`).
+## (`modcommunity/dot-<name>@<version>`, the alias of `gamespice-platform/<name>`; [method TmcAddonNamespaces.announced_pack_for] says why), lays them over its own and restarts into them (GameSpice Cloud's `DotCloudAddonSet`).
 ## The lock, not a guess at the checkout: setup.sh puts every clone at the locked ref. `TMC_ADDONS_LOCK=off` advertises nothing, because then the lock is not true.
 func advertise() -> void:
 	if OS.get_environment("TMC_ADDONS_LOCK") == "off":
 		DotLog.info(CHANNEL, "addons are not at the lock (TMC_ADDONS_LOCK=off); none advertised")
 		return
 
-	# [b]A box runs the dot-server its lock names, which may predate the field.[/b] Assigning
+	# [b]A box runs the GameSpice Server its lock names, which may predate the field.[/b] Assigning
 	# a property an older DotServer does not declare is a script error at boot, so the
 	# question is asked of the object rather than assumed.
 	if not ("addon_set" in host.server):

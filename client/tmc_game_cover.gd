@@ -3,12 +3,12 @@ extends Node
 
 ## Keeps the shell's loading screen over a game until it is ready to be seen, then draws its
 ## materials once under it so their shaders compile there and not in the middle of play. Three kinds
-## of game, best first: [b]1. A game with a [DotLoadGate][/b] (dot-core).
+## of game, best first: [b]1. A game with a [DotLoadGate][/b] (GameSpice Core).
 
 const CHANNEL := "tmc.game_cover"
 
 ## The metadata a [DotLoadGate] looks for on an ancestor; spelled out so this file does not
-## depend on the gate's class being present (dot-core's own constant is the same string,
+## depend on the gate's class being present (GameSpice Core's own constant is the same string,
 ## and the suite checks they agree).
 const HOST_META := &"dot_load_gate_host"
 ## The metadata a gate puts on its parent.
@@ -305,7 +305,7 @@ func _draw_once(items: Array) -> void:
 			state["deferred"] = true
 			# In play a frame matters more than the finish: hold every dear item seen, so cheap rounds never grow
 			# back onto a compile (decay 0.5 let one 32-item round take 2.7 s on staging02). Checked with `in`:
-			# a pinned dot-core from before dear_decay lacks it.
+			# a pinned GameSpice Core from before dear_decay lacks it.
 			if &"dear_decay" in warm:
 				warm.set(&"dear_decay", 1.0)
 			DotLog.warn(CHANNEL, "the material warm-up did not finish under the loading screen; lifting it and drawing the rest in play", took)

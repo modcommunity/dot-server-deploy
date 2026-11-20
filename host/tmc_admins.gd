@@ -1,7 +1,7 @@
 class_name TmcAdmins
 extends RefCounted
 
-## `groups.yml` and `permissions.yml`, as a [DotAdminManager] source. dot-server's permission model
+## `groups.yml` and `permissions.yml`, as a [DotAdminManager] source. GameSpice Server's permission model
 ## is **flags, not roles** — deliberately, because operators do not agree on what a "moderator" is,
 ## and because a game adds `slay` or `noclip` without coordinating with anybody.
 
@@ -13,7 +13,7 @@ var _group_flags: Dictionary = {}
 ## Group name -> immunity.
 var _group_immunity: Dictionary = {}
 
-## Permission names written in the config that dot-server does not recognise. Reported once at boot,
+## Permission names written in the config that GameSpice Server does not recognise. Reported once at boot,
 ## never enforced. See the warning in [method from] for why this is a warning rather than a refusal,
 ## and for the three names that made it worth having.
 var unknown_flags: PackedStringArray = PackedStringArray()
@@ -42,7 +42,7 @@ static func from(groups: Dictionary, users: Dictionary) -> DotResult:
 		var flags := PackedStringArray()
 
 		# `is_root: true` is every flag there is, present and future.
-		# [constant DotAdminFlags.ROOT] is what dot-server checks, and expanding it into a
+		# [constant DotAdminFlags.ROOT] is what GameSpice Server checks, and expanding it into a
 		# list here would silently stop covering a flag added later.
 		if bool(row.get("is_root", false)):
 			flags.append(DotAdminFlags.ROOT)
@@ -121,8 +121,8 @@ static func from(groups: Dictionary, users: Dictionary) -> DotResult:
 
 
 ## `DotAdminManager`'s duck-typed contract: `lookup(identity) -> DotResult`. [param identity] is the
-## object dot-server holds for the player — `DotAuthIdentity` on an authenticated server,
-## `DotGuestIdentity` without dot-auth — and both carry `uid`, `username` and `display_name`.
+## object GameSpice Server holds for the player — `DotAuthIdentity` on an authenticated server,
+## `DotGuestIdentity` without GameSpice Auth — and both carry `uid`, `username` and `display_name`.
 func lookup(identity: Object) -> DotResult:
 	if identity == null:
 		return DotResult.fail(DotError.CODE_STATE, "No identity.")
@@ -192,7 +192,7 @@ func describe_lines() -> PackedStringArray:
 	return out
 
 
-## Records any flag in [param flags] that is not one dot-server defines. Deduplicated, because one
+## Records any flag in [param flags] that is not one GameSpice Server defines. Deduplicated, because one
 ## misspelling in a group is repeated by every user in it and a warning naming `change` four times
 ## is a warning nobody reads to the end of.
 func _note_unknown(_who: String, flags: PackedStringArray) -> void:

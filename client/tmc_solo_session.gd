@@ -43,12 +43,12 @@ var cache_dir: String = ""
 var content_url: String = ""
 
 
-## dot-menu's Leave calls this on its [member DotMenu.leave_link].
+## GameSpice Menu's Leave calls this on its [member DotMenu.leave_link].
 func disconnect_from_server(_reason: String = "") -> void:
 	leave()
 
 
-## Always true while the session exists, so dot-menu shows Leave and routes it here.
+## Always true while the session exists, so GameSpice Menu shows Leave and routes it here.
 func is_connected_to_server() -> bool:
 	return true
 

@@ -1,6 +1,6 @@
 # Playing it in a browser
 
-The whole reason the client shell exists: **a link is the lowest-friction way to get somebody into a game**, and everything in the dot-* family that is awkward is awkward because of the browser.
+The whole reason the client shell exists: **a link is the lowest-friction way to get somebody into a game**, and everything in the gs-* family that is awkward is awkward because of the browser.
 
 ```bash
 ./server export-web           # writes web/build/
@@ -41,7 +41,7 @@ A site-published build lives in its own immutable prefix `game/<app>/<build id>/
 
 ## What the browser costs you
 
-Every one of these is encoded somewhere in dot-core already; they are collected here because they are what a deployment has to answer for.
+Every one of these is encoded somewhere in GameSpice Core already; they are collected here because they are what a deployment has to answer for.
 
 | Constraint | What it means here |
 | --- | --- |
@@ -112,13 +112,13 @@ Then every subresource from another origin must answer with CORS (`Access-Contro
 
 Missing any one of them is not an error: the frame is simply not isolated and gets the single-threaded engine.
 
-**The shell reads and loads content on the main thread on both engines.** On `index-mt` a worker thread's `user://` reads are proxied to the browser's main thread about one per frame, and a `ResourceLoader.load_threaded_request` never finished: FC sat at "Unpacking 0 of 1" for minutes while dot-cloud hashed ~700 downloaded objects on `DotScheduler` threads (0.7 s each), then at 0 % compiling its scripts (web-mt-shell-unpack-hang-1, 2026-11-14). So `client/shell.gd` gives the content client a `CloudScheduler` with `use_threads` off on the web, and warms a pack with dot-cloud's sliced, unthreaded loader there. A game's own threads (FC's `bot_threads`) are untouched. Check: `node tools/browser_solo_overlay_check.mjs --serve web/build --url http://x/godot/<build>/embed.html?solo=gamemann/game-fatal-contact --threads 1 --expect started` (serves COOP/COEP and fails unless the page ran `index-mt` and the game started).
+**The shell reads and loads content on the main thread on both engines.** On `index-mt` a worker thread's `user://` reads are proxied to the browser's main thread about one per frame, and a `ResourceLoader.load_threaded_request` never finished: FC sat at "Unpacking 0 of 1" for minutes while GameSpice Cloud hashed ~700 downloaded objects on `DotScheduler` threads (0.7 s each), then at 0 % compiling its scripts (web-mt-shell-unpack-hang-1, 2026-11-14). So `client/shell.gd` gives the content client a `CloudScheduler` with `use_threads` off on the web, and warms a pack with GameSpice Cloud's sliced, unthreaded loader there. A game's own threads (FC's `bot_threads`) are untouched. Check: `node tools/browser_solo_overlay_check.mjs --serve web/build --url http://x/godot/<build>/embed.html?solo=gamemann/game-fatal-contact --threads 1 --expect started` (serves COOP/COEP and fails unless the page ran `index-mt` and the game started).
 
-## Native modules (dot-sim in the browser)
+## Native modules (GameSpice Sim in the browser)
 
 `./server export-web` builds on Godot's **dlink** web template when dot-sim's web side module is installed (`fetch-natives.sh --platform web-wasm32`, from the dot-sim release's `dot_sim-<v>-web-wasm32.zip`): the preset gets Extensions Support, the build carries `index.side.wasm` (the engine's side half, 44 MB, fetched as `<executable>.side.wasm`) and `dot_sim.wasm` beside `index.wasm`, and `embed.html` is stamped with `gdextensionLibs: ["dot_sim.wasm"]`. The shell then logs `dot-sim native: bots=yes motor=yes snapshot=yes`. godot-sqlite and any other extension without a web build stay out of the pck; export-web refuses a pck `.gdextension` with no side module beside it.
 
-- **`?natives=0`** starts the same build without the side module: dot-sim's GDScript paths run, as on the plain template. A start with native modules that fails retries once with `?natives=0` on its own. `window.__TMC_NATIVES__` says which (`"native"` or `"script"`).
+- **`?natives=0`** starts the same build without the side module: GameSpice Sim's GDScript paths run, as on the plain template. A start with native modules that fails retries once with `?natives=0` on its own. `window.__TMC_NATIVES__` says which (`"native"` or `"script"`).
 - **`TMC_WEB_NATIVE=0 ./server export-web`** builds the plain script-only client (the threaded twin comes back with it).
 - **Threads with native modules.** When dot-sim's pthread side module is installed too (`fetch-natives.sh --platform web-wasm32-threads`, the release's `dot_sim-<v>-web-wasm32-threads.zip`, which export-web fetches), export-web puts the **dlink threads** engine beside the build as `index-mt.{js,wasm,side.wasm,worklets}` (from `web_dlink_release.zip`) and copies `dot_sim.threads.wasm` beside the page. The one pck serves both engines: dot-sim's `.gdextension` has a `web.threads.wasm32` line the threaded engine picks by its `threads` feature tag. `embed.html` runs it where the page is cross-origin isolated and every side module has a threads build (`/*GDEXTENSION_LIBS_MT*/`); a threaded native start that fails retries `?threads=0` (single-threaded, same modules), then `?natives=0`. A side module with no threads build means no threaded twin: a threaded engine has shared memory and cannot link a single-threaded module. Measured in headless Chromium (SwiftShader, COOP/COEP): dot-sim's sight scan 9.8 us native against 65 us GDScript on the threads engine, 8.2 against 63 single-threaded. `TMC_WEB_THREADS=0` turns the twin off.
 - **Serving**: `index.side.wasm` and `dot_sim.wasm` must go out as `application/wasm` like `index.wasm`, or the browser refuses to compile them. `publish-web-shell.sh` uploads `index.side.wasm` (and the twin's `index-mt.side.wasm`) with the engine files; `dot_sim.threads.wasm` goes with the build.

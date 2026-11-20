@@ -1,6 +1,6 @@
 extends Node
 
-## dot-trail's install: trail.yml, TmcTrail on an unstarted DotServer, and TmcTrailLink in a shell. Without the addon linked only the off paths run.
+## GameSpice Trail's install: trail.yml, TmcTrail on an unstarted DotServer, and TmcTrailLink in a shell. Without the addon linked only the off paths run.
 
 const SECTIONS := 3
 const CHECKS := 14

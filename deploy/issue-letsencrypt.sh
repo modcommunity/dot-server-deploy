@@ -54,7 +54,7 @@
 #      `certbot renew` has been succeeding all along. This is the single most
 #      common way TLS breaks here.
 #   4. It can COPY the pair somewhere a non-root process can read. Everything under
-#      /etc/letsencrypt/archive is 0700 root, so a dot-server that terminates TLS
+#      /etc/letsencrypt/archive is 0700 root, so a GameSpice Server that terminates TLS
 #      itself, or one in a container with its own mounts, cannot read privkey.pem
 #      no matter what the config says. --install-to.
 #   5. It hands you the next command -- install-server-tls.sh with these paths

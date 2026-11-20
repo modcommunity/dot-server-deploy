@@ -4,7 +4,7 @@ extends RefCounted
 ## Whose packs may REPLACE this shell's own `addons/<dir>`: the `namespaces` list [DotCloudAddonSet] takes an overlay from. Shell-shared, so every shell build (web, desktop) and the server's addon announcement read one list. An entry ending in `/` is an owner, anything else one exact content id (the matching [DotCloudAddonSet] does). The defaults are first-party. An operator who exports THEIR OWN shell may add owners in `cfg/addons/namespaces.txt` (one per line, `#` comments), which the export presets already include. It is read from the shell build and never from a server: a server that could extend it could replace the player's code.
 
 ## The organisation's (both its ids), and the game addons published under their author (the weapons packs, natural-disasters).
-## A shell carries none of those (it is dot-* addons only), so these are what it fetches them under when a server announces them.
+## A shell carries none of those (it is gs-* addons only), so these are what it fetches them under when a server announces them.
 ## `modcommunity/` and `gamemann/arena-weapons` (fc-weapons' old id) stay for servers that still announce the old ids.
 const DEFAULTS: PackedStringArray = ["gamespice-platform/", "modcommunity/", "gamemann/zee-dot-weapons", "gamemann/zed-dot-weapons", "gamemann/fc-weapons", "gamemann/arena-weapons", "gamemann/natural-disasters", "gamemann/dot-trail", "gamemann/dot-radio"]
 

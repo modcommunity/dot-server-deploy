@@ -2,7 +2,7 @@ extends SceneTree
 
 ## Installs the games this server was told to run, from the content origin. Driven by `./server
 ## install-games`, and by `./server run` when TMC_GAMES is set (a panel with no shell). The pack is
-## a signed dot-cloud pack; the descriptor (`content/<id>/game.yml`) is fetched beside it.
+## a signed GameSpice Cloud pack; the descriptor (`content/<id>/game.yml`) is fetched beside it.
 
 const EXIT_OK := 0
 const EXIT_USAGE := 1
@@ -35,7 +35,7 @@ const DESCRIPTOR := "game.yml"
 
 ## The descriptor lists that name published packs, all pinned at install the same way.
 ## `dependencies` (server and every client mount them at load), `server_dependencies` (the server
-## only), `maps` (the game fetches each when it changes to it). See DotGameDescriptor in dot-server.
+## only), `maps` (the game fetches each when it changes to it). See DotGameDescriptor in GameSpice Server.
 const PACK_LISTS: PackedStringArray = ["dependencies", "server_dependencies", "maps"]
 
 ## The pointer a publish writes beside a pack's versions, naming the newest.
@@ -166,7 +166,7 @@ func _init() -> void:
 	var behind := PackedStringArray()
 	# The same, by content id, written to the install state as `behind` so the host can say so when that game loads.
 	var behind_ids := {}
-	# Of those, the ones whose installed version dot-cloud will refuse to mount: "<raw>: <why>".
+	# Of those, the ones whose installed version GameSpice Cloud will refuse to mount: "<raw>: <why>".
 	var unusable := PackedStringArray()
 	var index := {}
 	# The origin the catalogue came from. Descriptor paths in it are relative and must resolve against
@@ -608,7 +608,7 @@ func _prefetch(
 
 		print("  fetching %s@%s" % [content_id, version])
 
-		# "*" is every download group (dot-cloud 22): a server may switch to any map. Older builds fetch the ungrouped set.
+		# "*" is every download group (GameSpice Cloud 22): a server may switch to any map. Older builds fetch the ungrouped set.
 		var res: DotResult = await cloud.ensure(StringName(content_id), version, PackedStringArray(["*"]))
 
 		if not res.ok:
@@ -732,7 +732,7 @@ func _kept_refused(path: String, cloud: DotCloudClient) -> String:
 	return "" if why == "" else "%s@%s %s" % [id, version, why]
 
 
-## Why dot-cloud's mount will refuse [param manifest], or "". The same rule as DotCloudClient._rescan_for_code, by path alone: a manifest with `provides` that does not declare `runs_code` and lists a code file. Packs signed before the site stamped `runs_code` are exactly that, so they are no fallback.
+## Why GameSpice Cloud's mount will refuse [param manifest], or "". The same rule as DotCloudClient._rescan_for_code, by path alone: a manifest with `provides` that does not declare `runs_code` and lists a code file. Packs signed before the site stamped `runs_code` are exactly that, so they are no fallback.
 static func refused_at_mount(manifest: DotCloudManifest) -> String:
 	if manifest == null or manifest.provides.is_empty() or bool(manifest.provides.get("runs_code", false)):
 		return ""
@@ -849,7 +849,7 @@ func _install_from_pack(
 	# (DotAddonApi.check) is applied here.
 	var able := await _check_requirements(manifest, prefix, bases)
 
-	# Not wrapped: the check's own sentence ("This game needs dot-platform API level 3 or
+	# Not wrapped: the check's own sentence ("This game needs GameSpice Platform API level 3 or
 	# newer; this server has level 2") is the whole report, and wrap() would push it down
 	# into the detail behind a content id the log already carries.
 	if not able.ok:
@@ -879,7 +879,7 @@ func _install_from_pack(
 	var bytes := got.value as PackedByteArray
 
 	# [b]The hash is checked HERE and not left to the mounter.[/b] Everything else in a pack is
-	# verified when dot-cloud syncs it; this one file is pulled out early, by a different path, and is
+	# verified when GameSpice Cloud syncs it; this one file is pulled out early, by a different path, and is
 	# then WRITTEN TO DISK as configuration the server obeys.
 	var digest := _sha256_hex(bytes)
 
@@ -1630,7 +1630,7 @@ func _build_cloud(
 	cloud.config = DotCloudConfig.new()
 	cloud.config.cache_dir = "%s/content_cache" % data_dir
 	# The side TmcHost._build_cloud fetches as, so a prefetch does not cache a game's
-	# client-only files (dot-cloud API 8) that the server would then never mount.
+	# client-only files (GameSpice Cloud API 8) that the server would then never mount.
 	cloud.config.side = "server"
 	# Says "this server" in a refusal: a pack needing a newer addon API than this box has
 	# is an operator's problem to fix, and the sentence should say whose build it is.
@@ -1693,7 +1693,7 @@ func _prune(
 		installed.erase(id)
 		DotLog.info(CHANNEL, "game removed", {"game": id})
 
-	# [b]The cached PACK is deliberately left alone.[/b] dot-cloud's store is content-addressed and
+	# [b]The cached PACK is deliberately left alone.[/b] GameSpice Cloud's store is content-addressed and
 	# objects are shared between packs, so deleting the objects of one game can take files another game
 	# is using with it — the store has its own quota and its own eviction.
 
@@ -1748,7 +1748,7 @@ func _settings_from(opts: Dictionary, config_dir: String) -> bool:
 	_site = str(opts.get("site", OS.get_environment("TMC_SITE_URL"))).strip_edges()
 	if _site == "":
 		_site = InstallCfg.site_from(config_dir)
-	# The same ceiling the server runs with (TmcCloudLimit): a prefetch under dot-cloud's 4 GiB player default
+	# The same ceiling the server runs with (TmcCloudLimit): a prefetch under GameSpice Cloud's 4 GiB player default
 	# refused packs the server, unlimited, would then have to fetch at boot anyway.
 	var limit := TmcCloudLimit.parse(opts.get("cache-bytes", InstallCfg.cache_bytes(config_dir)))
 	if not limit.ok:

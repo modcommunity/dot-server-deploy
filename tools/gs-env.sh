@@ -3,7 +3,7 @@
 #   . "$ROOT/tools/gs-env.sh"; gs_env_alias BOOTSTRAP NATIVES NATIVES_BASE
 #
 # For each NAME: when GS_NAME is set, DOT_NAME is exported with its value, so everything below
-# (including dot-bootstrap, which still reads DOT_*) sees the GS value. When only DOT_NAME is set
+# (including GameSpice Bootstrap, which still reads DOT_*) sees the GS value. When only DOT_NAME is set
 # one deprecation line goes to stderr. Silence with GS_QUIET_DEPRECATION=1.
 gs_env_alias() {
     local n gs old

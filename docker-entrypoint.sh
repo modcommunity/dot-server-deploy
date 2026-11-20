@@ -54,7 +54,7 @@ exec 3<>"$FIFO"
 # The environment layer of DotServerConfig, not a `+sv_stdin_console_pipes` console line:
 # the line runs after the stdin reader has already decided, and it is too late. Exported
 # only for the child, and only on this path (see the mkfifo fallback above).
-# GS_ first; DOT_ too for a server pinned to a dot-core older than the GS_ names.
+# GS_ first; DOT_ too for a server pinned to a GameSpice Core older than the GS_ names.
 GS_SERVER_STDIN_CONSOLE_PIPES=1 DOT_SERVER_STDIN_CONSOLE_PIPES=1 ./server "$@" <"$FIFO" 3>&- &
 CHILD=$!
 

@@ -1,8 +1,8 @@
 class_name TmcTrailLink
 extends Node
 
-## The shell's half of dot-trail: fetches the server's trail pack before the join, carries wear requests on the link's envelope, draws ribbons on figures and adds a Trails page to the game's menu.
-## Every dot-trail and dot-game class is reached by name, so a shell built without dot-trail parses and simply has no trails.
+## The shell's half of GameSpice Trail: fetches the server's trail pack before the join, carries wear requests on the link's envelope, draws ribbons on figures and adds a Trails page to the game's menu.
+## Every GameSpice Trail and GameSpice Game class is reached by name, so a shell built without GameSpice Trail parses and simply has no trails.
 
 const CHANNEL := "tmc.trail"
 const CLASSES := ["DotTrailRegistry", "DotTrailClient", "DotTrailEnvelope", "DotTrailMenu", "DotTrailBackendHttp", "DotTrailBackendStub"]

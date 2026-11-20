@@ -10,4 +10,4 @@ What is not built, published or verified yet. Each is unfinished work, not a des
 - The iOS export has never run: it needs a Mac with Xcode and a developer team id. [native-client](native-client.md#phones---platform-android-and---platform-ios)
 - No phone build has been installed on a real phone, and the site's publisher has no Android or iOS platform. [native-client](native-client.md#phones---platform-android-and---platform-ios)
 - `server.ps1 export-native --platform android` has only been parse-checked, never run on Windows. [native-client](native-client.md#phones---platform-android-and---platform-ios)
-- No dot-* addon publishes an android or ios native library, so phones run the GDScript twins. [native-client](native-client.md#phones---platform-android-and---platform-ios)
+- No gs-* addon publishes an android or ios native library, so phones run the GDScript twins. [native-client](native-client.md#phones---platform-android-and---platform-ios)

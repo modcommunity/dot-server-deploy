@@ -178,7 +178,7 @@ static func _allowed_by_former_id(root_dir: String, name: String, allow: PackedS
 
 
 ## True when [param game_id] is one of the descriptor's `metadata.former_ids`, exactly or by its
-## name half -- the rule dot-server's DotGameManagerState.find_game applies.
+## name half -- the rule GameSpice Server's DotGameManagerState.find_game applies.
 static func answers_to_former(descriptor: DotGameDescriptor, game_id: String) -> bool:
 	var former: Variant = descriptor.metadata.get("former_ids", [])
 
@@ -305,7 +305,7 @@ func _build(name: String, tree: Dictionary) -> DotResult:
 		"directory": "%s/%s" % [root, name],
 	}
 
-	# [b]The operator's own `metadata:` block, which nothing was reading.[/b] dot-vote's README, its
+	# [b]The operator's own `metadata:` block, which nothing was reading.[/b] GameSpice Vote's README, its
 	# game source and cfg/vote.yml all tell an operator to write a game's time limit under `metadata:
 	# vote:` in game.yml, and DotVoteGameSource reads `descriptor.metadata.vote`.
 	var extra: Variant = TmcYaml.at(tree, "metadata", {})

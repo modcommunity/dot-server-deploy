@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # The game origin revalidates the engine (no-cache, not no-store), compresses the .pck, and serves
-# dot-cloud bundles/<hash>.zip as immutable content beside objects/ while manifest.json stays no-cache.
+# GameSpice Cloud bundles/<hash>.zip as immutable content beside objects/ while manifest.json stays no-cache.
 #
 #   tools/check_game_origin.sh      exit 0 when it holds, 1 naming each failure
 #

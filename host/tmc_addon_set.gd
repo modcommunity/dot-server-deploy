@@ -5,7 +5,7 @@ extends RefCounted
 ## Pure functions, so the selftest drives them without a host.
 
 
-## [param entries] with a `groups` list on each entry whose dir [param groups] names: the download groups (dot-cloud's `groups.json`) a client
+## [param entries] with a `groups` list on each entry whose dir [param groups] names: the download groups (GameSpice Cloud's `groups.json`) a client
 ## needs of that pack for this game. An entry the game does not name gets no field, which a client reads as everything.
 static func with_groups(entries: Array, groups: Dictionary) -> Array:
 	var out: Array = []
@@ -147,7 +147,7 @@ static func merge_overlays(base: Array, extra: Array) -> Array:
 
 
 ## One `{dir, repo, id, version}` per installed addon the lock names. A game addon's pack (fc-weapons, the zee/zed weapons) carries its code at
-## `addons/<dir>/`, which [DotCloudAddonSet] (dot-cloud 0.1.46+) overlays like a dot-* pack, so every one is announced.
+## `addons/<dir>/`, which [DotCloudAddonSet] (GameSpice Cloud 0.1.46+) overlays like a gs-* pack, so every one is announced.
 static func addon_set_from(lock_text: String, dirs: PackedStringArray) -> Array:
 	var versions := {}
 

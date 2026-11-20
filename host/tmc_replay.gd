@@ -13,13 +13,13 @@ const EVIDENCE := "evidence"
 
 const EXTENSION := ".dreplay"
 
-## dot-moderation's `DotPunishment.Kind.BAN` and `.KICK`. Numbers rather than the enum,
-## because this project does not link dot-moderation for its own scripts -- a game does,
-## and the manager is reached through [DotRegistry] like dot-server-security reaches it.
+## GameSpice Moderation's `DotPunishment.Kind.BAN` and `.KICK`. Numbers rather than the enum,
+## because this project does not link GameSpice Moderation for its own scripts -- a game does,
+## and the manager is reached through [DotRegistry] like GameSpice Server Security reaches it.
 const MOD_KIND_BAN := 0
 const MOD_KIND_KICK := 1
 
-## The service a game's dot-moderation registers under.
+## The service a game's GameSpice Moderation registers under.
 const MODERATION_SERVICE := &"dot_moderation"
 
 var recorder: DotReplayRecorder = null
@@ -282,7 +282,7 @@ func evidence_clip(why: String) -> DotResult:
 	return saved
 
 
-## dot-server's own bans: the record is the Dictionary it just stored, emitted by reference.
+## GameSpice Server's own bans: the record is the Dictionary it just stored, emitted by reference.
 func _on_ban_added(ban: Dictionary) -> void:
 	if not clip_on_punish:
 		return
@@ -302,7 +302,7 @@ func _on_ban_added(ban: Dictionary) -> void:
 	_audit(target, got.value as Dictionary)
 
 
-## A kick is not a record in dot-server -- it is an audit line and a closed socket -- so the
+## A kick is not a record in GameSpice Server -- it is an audit line and a closed socket -- so the
 ## evidence is a second audit line, naming the same target.
 func _on_audit(entry: Dictionary) -> void:
 	if not clip_on_punish or str(entry.get("action", "")) != "kick":
@@ -347,8 +347,8 @@ func watch_moderation(manager: Object) -> void:
 	manager.connect("punished", _on_punished)
 
 
-## dot-moderation's bans and kicks, whoever issued them: a game's `sm_ban`, a moderator tool, or
-## dot-server-security acting outside dry run.
+## GameSpice Moderation's bans and kicks, whoever issued them: a game's `sm_ban`, a moderator tool, or
+## GameSpice Server Security acting outside dry run.
 func _on_punished(punishment: Object) -> void:
 	if not clip_on_punish or punishment == null:
 		return

@@ -1,7 +1,7 @@
 extends Node
 # [b]Nothing preloaded out of a game, because no game is in this build.[/b] Every game is a
 # delivered pack; each one's match is reached through the module's `game` and its
-# `match_node`, a dot-match DotMatch, which this build does carry.
+# `match_node`, a GameSpice Match DotMatch, which this build does carry.
 
 ## The game vote's `time_up: finish_round`, through REAL round ends in four delivered games. Exits
 ## non-zero on any failure.
@@ -44,7 +44,7 @@ const PER_GAME := 10
 ## watch and the two totals.
 const CHECKS := 4 + PER_GAME * 4 + 1 + 2 + 3
 
-## dot-match's `State.LIVE`: the round is being played.
+## GameSpice Match's `State.LIVE`: the round is being played.
 const LIVE := DotMatch.State.LIVE
 
 var _passed := 0

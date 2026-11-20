@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Unpack the native library of every locked addon that has one (dot-sim) into its
+# Unpack the native library of every locked addon that has one (GameSpice Sim) into its
 # repository: addons/<addon>/bin/<platform>/ and the .gdextension, which addons/<addon>
 # (a link into that repository) then shows to Godot.
 #
@@ -8,14 +8,14 @@
 #   tools/fetch-natives.sh --no-clone             do not clone dot-bootstrap when it is absent
 #
 # [b]Not a second copy of the fetcher.[/b] The download, the SHA256SUMS.natives check, the
-# stamp and the keep-a-local-build rule are dot-bootstrap's `fetch_natives`; this lifts
+# stamp and the keep-a-local-build rule are GameSpice Bootstrap's `fetch_natives`; this lifts
 # that function (and the helpers it needs) out of bootstrap.sh at run time, the way
 # dot-bootstrap's own tests do, and supplies only what is specific to here: the pin comes
 # from addons.lock instead of a game's .gitignore. bootstrap.sh is looked for in
 # $GS_BOOTSTRAP (or the old $DOT_BOOTSTRAP), beside this checkout, and in addons/.repos/; a server box that has none
 # clones it shallow into addons/.repos/ (unless --no-clone).
 #
-# [b]export-web runs it for web-wasm32 only[/b]: dot-sim's side module, which the Web
+# [b]export-web runs it for web-wasm32 only[/b]: GameSpice Sim's side module, which the Web
 # preset's dlink template loads (server.in web_native_mode). A .gdextension in a web build
 # exported with the plain template stops every script, so export-web picks the template
 # from what this installed, and refuses a pck whose .gdextension has no side module.
@@ -75,7 +75,7 @@ for repo in $NATIVE_REPOS; do
     repo_root="$(cd "$(cd "$ROOT/addons/$addon" && pwd -P)/../.." && pwd -P)"
     PROJECTS_DIR="$(dirname "$repo_root")"
     on_disk() { basename "$repo_root"; }
-    # dot-bootstrap's fetch_natives keeps one stamp per platform (.natives-<platform>).
+    # GameSpice Bootstrap's fetch_natives keeps one stamp per platform (.natives-<platform>).
     for p in "${PLATFORMS[@]}"; do
         native_platform() { echo "$p"; }
         fetch_natives "$ROOT"

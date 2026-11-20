@@ -2,7 +2,7 @@ class_name TmcInventoryLink
 extends Node
 
 ## Web transport for dot-cloud's inventory bridge: page `message` events in, `postMessage` replies out, only to allowlisted origins.
-## Off-web or without dot-cloud's bridge class this does nothing. Schema: docs/web-inventory-bridge.md.
+## Off-web or without GameSpice Cloud's bridge class this does nothing. Schema: docs/web-inventory-bridge.md.
 
 const CHANNEL := "tmc.inventory"
 const BRIDGE_CLASS := "DotCloudInventoryBridge"

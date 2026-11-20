@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Web half of audio_overlay_proof.sh: an exported web build whose dot-audio predates the stock sounds, behind dot_audio_ceiling.js,
+# Web half of audio_overlay_proof.sh: an exported web build whose GameSpice Audio predates the stock sounds, behind dot_audio_ceiling.js,
 # builds the site's modcommunity/dot-audio overlay in the browser, reloads onto it and plays a stock footstep and bed in headless Chromium.
 # Local only: serves the export and /content (cached from the real content origin) on 127.0.0.1; deploys and pins nothing.
 #   heavy -- tools/audio_overlay_web_proof.sh [--content-url URL] [--version 0.1.14] [--port 8791]

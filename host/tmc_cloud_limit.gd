@@ -1,9 +1,9 @@
 class_name TmcCloudLimit
 extends RefCounted
 
-## How big this server lets its content cache grow: `cache_bytes` in server.yml, `--cache-bytes`, TMC_CACHE_BYTES. 0, the default, is unlimited. A server mounts every map it offers, and dot-cloud never evicts an object mounted content references, so a ceiling below what the offered maps add up to is not a cache policy: it is maps that fail to load ("The content cache is full and everything in it is in use"). dot-cloud's own default (4 GiB) is a player's; a server that wants a ceiling says so here. The disk is the real limit, and every boot logs how much of it is free.
+## How big this server lets its content cache grow: `cache_bytes` in server.yml, `--cache-bytes`, TMC_CACHE_BYTES. 0, the default, is unlimited. A server mounts every map it offers, and GameSpice Cloud never evicts an object mounted content references, so a ceiling below what the offered maps add up to is not a cache policy: it is maps that fail to load ("The content cache is full and everything in it is in use"). GameSpice Cloud's own default (4 GiB) is a player's; a server that wants a ceiling says so here. The disk is the real limit, and every boot logs how much of it is free.
 
-## Where the setting is written, for refusals and for dot-cloud's own quota message (`DotCloudConfig.limit_hint`, dot-cloud API 31).
+## Where the setting is written, for refusals and for GameSpice Cloud's own quota message (`DotCloudConfig.limit_hint`, GameSpice Cloud API 31).
 const WHERE := "cache_bytes in cfg/server/server.yml, --cache-bytes or TMC_CACHE_BYTES"
 
 const _UNITS := {"": 1, "B": 1, "K": 1024, "KB": 1024, "KIB": 1024, "M": 1048576, "MB": 1048576, "MIB": 1048576,
@@ -46,11 +46,11 @@ static func describe(raw: Variant) -> String:
 
 
 ## Puts [param bytes] on a server's cloud config before it starts and says, once, what the ceiling is and how much disk it has to fill.
-## A `cache_bytes` in the cloud config file ([param config_file], the client's) or DOT_CLOUD_CACHE_BYTES still wins (dot-cloud applies those at start), and the line says so.
+## A `cache_bytes` in the cloud config file ([param config_file], the client's) or DOT_CLOUD_CACHE_BYTES still wins (GameSpice Cloud applies those at start), and the line says so.
 static func apply(cloud_config: Object, bytes: int, channel: String, config_file: String = "") -> void:
 	cloud_config.cache_bytes = bytes
 
-	# dot-cloud API 31 names this in a quota refusal; an older dot-cloud has no such property and gets nothing.
+	# GameSpice Cloud API 31 names this in a quota refusal; an older GameSpice Cloud has no such property and gets nothing.
 	if "limit_hint" in cloud_config:
 		cloud_config.limit_hint = WHERE
 
@@ -75,7 +75,7 @@ static func apply(cloud_config: Object, bytes: int, channel: String, config_file
 	DotLog.info(channel, "content cache limit", fields)
 
 
-## The cloud config file's own `cache_bytes`, which dot-cloud applies over this one, as "<file> cache_bytes=<n>"; empty when it has none.
+## The cloud config file's own `cache_bytes`, which GameSpice Cloud applies over this one, as "<file> cache_bytes=<n>"; empty when it has none.
 static func _file_override(path: String) -> String:
 	if path == "" or not FileAccess.file_exists(path):
 		return ""

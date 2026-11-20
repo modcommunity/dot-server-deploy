@@ -21,7 +21,7 @@ const SERVER_DIR_OWNED := ["content.yml", "alias.yml"]
 
 
 ## Keys that exist and are handled somewhere other than a config object, listed so they are not reported as unknown (a key silently ignored and not reported looks like it took effect).
-## `net_public_ip` is here, not in [constant BOOT_KEYS], because dot-server should have no such setting: what a server binds to and what a player types differ, and only the second is behind NAT.
+## `net_public_ip` is here, not in [constant BOOT_KEYS], because GameSpice Server should have no such setting: what a server binds to and what a player types differ, and only the second is behind NAT.
 ## The settings this file reads itself, as named in `server.yml`, i.e. the config keys that exist without a console cvar behind them.
 const HOST_KEYS := ["game", "games", "map", "sv_map", "sv_query_app", "sv_web_loader", "sv_web_build", "content_urls", "addons", "addons_announce", "cache_bytes", "games_mode", "no_install", "auto_update", "channel", "verbose", "net_public_ip", "sv_tags", "chat_command_prefixes", "log_router"]
 ## The alias file, under `cfg/server/`. Read before every other file so a key in any of them can use an alias.
@@ -46,7 +46,7 @@ var net: DotNetConfig = DotNetConfig.new()
 ## does not pass off a DotNetConfig default as an operator limit.
 var _net_written: PackedStringArray = []
 
-## What dot-log adds on top of the file every server already writes. Only the router-only half is read into it, see [constant LOG_KEYS];
+## What GameSpice Log adds on top of the file every server already writes. Only the router-only half is read into it, see [constant LOG_KEYS];
 ## the rest is copied out of [member server] by [method build_log_router], so there is one list.
 var log: DotLogConfig = DotLogConfig.new()
 
@@ -154,13 +154,13 @@ var admin_menu: Dictionary = {}
 ## `loading.yml`, as parsed. Handed to [TmcLoading], for the same reason.
 var loading: Dictionary = {}
 
-## `radio.yml` (dot-radio, optional): the `radio_*` keys, validated by [method _apply_radio]. Off by default; handed to [TmcRadio].
+## `radio.yml` (GameSpice Radio, optional): the `radio_*` keys, validated by [method _apply_radio]. Off by default; handed to [TmcRadio].
 var radio: Dictionary = {}
 var radio_enabled: bool = false
-## `trail.yml` (dot-trail, optional): the `trail_*` keys, read by [method TmcTrail.apply_config].
+## `trail.yml` (GameSpice Trail, optional): the `trail_*` keys, read by [method TmcTrail.apply_config].
 var trail: Dictionary = {}
 
-## Game ids `vote.yml` says are never on a ballot. Not a [DotVoteRules] setting: which things in `content/` count as games a player would choose is this deployment's question, and dot-vote should not have an opinion.
+## Game ids `vote.yml` says are never on a ballot. Not a [DotVoteRules] setting: which things in `content/` count as games a player would choose is this deployment's question, and GameSpice Vote should not have an opinion.
 var vote_exclude: PackedStringArray = PackedStringArray()
 
 ## The game to load at boot, or "" for whatever the content directory says is first.
@@ -176,7 +176,7 @@ var _written_keys: Dictionary = {}
 var alias_failures: int = 0
 
 ## The site's web loader version this server's browser players should get, or "" for the site's default. Reported as the NOTIFY cvar `sv_web_loader` (see `TmcHost._register_web_loader`).
-## A host field and not a console line, as `sv_game` is: the cvar is registered after dot-server boots, and the YAML's console lines run during that boot, so it would be dropped as unknown.
+## A host field and not a console line, as `sv_game` is: the cvar is registered after GameSpice Server boots, and the YAML's console lines run during that boot, so it would be dropped as unknown.
 ## Like `sv_web_build`, it is the operator's pin for a server deliberately behind the site's default.
 var web_loader: String = ""
 
@@ -201,7 +201,7 @@ var addons_announce: String = ADDONS_ANNOUNCE_ALL
 
 ## The content cache's ceiling as written: `cache_bytes` in server.yml, `--cache-bytes`, TMC_CACHE_BYTES. Empty or 0 is unlimited, the server default; checked
 ## at boot by [method TmcCloudLimit.parse], which refuses anything that is not a byte count. A server mounts every map it offers and a mounted map's
-## objects are never evicted, so dot-cloud's 4 GiB player default refused maps on a box with the disk to hold them.
+## objects are never evicted, so GameSpice Cloud's 4 GiB player default refused maps on a box with the disk to hold them.
 var cache_bytes: String = ""
 
 const ADDONS_ANNOUNCE_ALL := "all"
@@ -352,7 +352,7 @@ func _warn_legacy_keys(path: String, tree: Dictionary) -> void:
 		path, DotCfgLegacy.REMOVE_AFTER, ", ".join(moved)], {"path": path})
 
 
-## DotConfig.apply_env with the GS_ spelling too, so GS_X wins over DOT_X even on a dot-core older than gs_env_name (pinned addons).
+## DotConfig.apply_env with the GS_ spelling too, so GS_X wins over DOT_X even on a GameSpice Core older than gs_env_name (pinned addons).
 func _apply_env_both(cfg: DotConfig, prefix: String = "") -> void:
 	var p := prefix if prefix != "" else cfg.env_prefix()
 	cfg.apply_env(p)
@@ -360,7 +360,7 @@ func _apply_env_both(cfg: DotConfig, prefix: String = "") -> void:
 		cfg.apply_env("GS_" + p.substr(4))
 
 
-## The environment and the command line over `vote.yml`, under GS_GAME_VOTE_* and --game-vote-*, not dot-vote's own prefixes:
+## The environment and the command line over `vote.yml`, under GS_GAME_VOTE_* and --game-vote-*, not GameSpice Vote's own prefixes:
 ## a game loaded from `content/` runs its own MAP vote in this process under `GS_VOTE_*`, and one prefix for both would make a flag change two votes. The server-level vote's commands are `game_*` for the same reason.
 func _layer_vote_overrides() -> void:
 	var before := vote.unknown_keys.size()
@@ -384,7 +384,7 @@ func _layer_party_overrides() -> void:
 			unknown.append("%s: %s" % [cfg.cli_prefix(), cfg.unknown_keys[i]])
 
 
-## The environment and the command line over `replay.yml`: dot-replay's own `GS_REPLAY_*` and `--replay-*`, as with the party (one recorder per process);
+## The environment and the command line over `replay.yml`: GameSpice Replay's own `GS_REPLAY_*` and `--replay-*`, as with the party (one recorder per process);
 ## `--replay-ring-seconds 300` for one tournament is the case the prefix exists for. A layered value the addon refuses is caught when [TmcReplay] validates again: the ring is not built, said at ERROR.
 func _layer_replay_overrides() -> void:
 	var before := replay.unknown_keys.size()
@@ -1000,7 +1000,7 @@ func _apply_settings(file: String, tree: Dictionary) -> DotResult:
 
 
 ## The sink layer this configuration describes, or null when it is switched off (the server then makes its own [code]DotLogSink[/code]).
-## The shared settings are copied out of [member server] rather than read twice: a deployment with no dot-log has them through dot-core's sink, so `log.yml` names each once; a second set of keys is a shape this project was bitten by twice.
+## The shared settings are copied out of [member server] rather than read twice: a deployment with no GameSpice Log has them through GameSpice Core's sink, so `log.yml` names each once; a second set of keys is a shape this project was bitten by twice.
 func build_log_router() -> DotLogRouter:
 	if log_router == "off":
 		return null
@@ -1073,7 +1073,7 @@ static func _console_line(name: String, value: Variant) -> String:
 	return "%s %s" % [name, text]
 
 
-## Writes the console lines to a `.cfg` for dot-server to execute at boot, through its own startup-config path: `DotServer.boot()` runs it after the console exists and *before* the listener opens,
+## Writes the console lines to a `.cfg` for GameSpice Server to execute at boot, through its own startup-config path: `DotServer.boot()` runs it after the console exists and *before* the listener opens,
 ## the only window where a `FLAG_STARTUP_ONLY` cvar (`sv_tickrate`) is still settable, and a hook of our own would be a second ordering to keep in step.
 ## Generated and overwritten every boot (it is derived; the YAML is the authored file) and written rather than kept in memory so an operator can read what their configuration became.
 func write_cfg(path: String) -> DotResult:
@@ -1097,7 +1097,7 @@ func write_cfg(path: String) -> DotResult:
 	return DotResult.success(path)
 
 
-## Reports what dot-server made of the generated config, after boot. A line the console refused is a warning, for [member unknown]'s reason, but one that names the line.
+## Reports what GameSpice Server made of the generated config, after boot. A line the console refused is a warning, for [member unknown]'s reason, but one that names the line.
 func note_console_result(console: DotConsole) -> void:
 	check_aliases(console)
 	for line in console_lines:

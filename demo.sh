@@ -32,7 +32,7 @@
 #
 # WHAT IT STARTS
 #
-#   the game server   dot-server, loopback :6070, serving games out of content/
+#   the game server   GameSpice Server, loopback :6070, serving games out of content/
 #   game server 2     the same build on :6080, running hungry_classic
 #   game server 3     the same build on :6090, running airdrift at 128 ticks
 #   game server 4     the same build on :6100, running playlot at 128 ticks
@@ -92,11 +92,11 @@ PUBLIC_PORT="${TMC_DEMO_PUBLIC_PORT:-6064}"
 # A SECOND SERVER, so the demonstration has more than one thing in the list and the
 # server browser is doing something rather than showing a row.
 #
-# It runs a different game from the first, which is the point: a dot-server is not
+# It runs a different game from the first, which is the point: a GameSpice Server is not
 # "a Hungry server", it is a server currently running Hungry, and two of them side
 # by side is what makes that visible. Set TMC_DEMO_GAME2 empty to run only one.
 #
-# The port is 6080 and NOT 6071, which is the mistake to avoid: dot-server puts RCON
+# The port is 6080 and NOT 6071, which is the mistake to avoid: GameSpice Server puts RCON
 # on its game port + 1, so a second server one port along collides with the first
 # one's RCON and fails to bind with "Already in use" -- naming a port that is free
 # as far as `ss` is concerned, because the conflict is with a listener the first
@@ -143,13 +143,13 @@ export DOT_CHAT_RELAY_COMMAND_SOURCE="${TMC_DEMO_RELAY_SOURCE:-2}"
 
 # A THIRD SERVER, and the first one in this demonstration that is not a 2D game.
 #
-# airdrift is the bunny-hop and surf timer: dot-player-controller, dot-timer, dot-map and
-# dot-leaderboard in one process, which is four addons the other two servers never
+# airdrift is the bunny-hop and surf timer: GameSpice Player Controller, GameSpice Timer, GameSpice Map and
+# GameSpice Leaderboard in one process, which is four addons the other two servers never
 # load. It is here because a server browser showing two games of the same shape proves
 # less than one showing two of different shapes, and because the timer is the part of
 # this platform with a number a player can compare against somebody else's.
 #
-# 6090, again not 6081: dot-server puts RCON on its game port + 1, so servers one port
+# 6090, again not 6081: GameSpice Server puts RCON on its game port + 1, so servers one port
 # apart collide on a listener `ss` cannot see.
 GAME3_PORT="${TMC_DEMO_GAME3_PORT:-6090}"
 GAME3_PUBLIC_PORT="${TMC_DEMO_GAME3_PUBLIC_PORT:-6066}"
@@ -163,7 +163,7 @@ GAME3_NAME="${TMC_DEMO_GAME3_NAME:-TMC Bhop/Surf Server}"
 # 128 also divides the netcode's snapshot rate of 32, which 60 does not -- an uneven
 # send spacing that arrives as jitter no interpolator can remove.
 #
-# It goes through `+sv_tickrate`, dot-server's own command-line cvar half, which runs
+# It goes through `+sv_tickrate`, GameSpice Server's own command-line cvar half, which runs
 # before the listener opens and is therefore inside the window a FLAG_STARTUP_ONLY
 # cvar is still settable. `./server --tickrate` deliberately does not exist: TmcHost
 # keeps its override flags to a port, a bind, a name and a game, and everything else
@@ -172,15 +172,15 @@ GAME3_TICKRATE="${TMC_DEMO_GAME3_TICKRATE:-128}"
 
 # A FOURTH SERVER, and the first one here that is not a race against a clock.
 #
-# playlot is the physics sandbox: dot-props, dot-player-controller, dot-timer, dot-map
-# and dot-leaderboard in one process. It is here because the three servers above are all
+# playlot is the physics sandbox: GameSpice Props, GameSpice Player Controller, GameSpice Timer, GameSpice Map
+# and GameSpice Leaderboard in one process. It is here because the three servers above are all
 # somebody trying to WIN something, and a server browser that only ever shows competitive
 # games says nothing about whether this platform can carry the other kind. It is also the
 # only one of the four whose entities are server-authoritative rigid bodies, which is a
 # different netcode shape from the other three and therefore the one most likely to be
 # where the next bug is.
 #
-# 6100, again not 6091: dot-server puts RCON on its game port + 1, so servers one port
+# 6100, again not 6091: GameSpice Server puts RCON on its game port + 1, so servers one port
 # apart collide on a listener `ss` cannot see.
 GAME4_PORT="${TMC_DEMO_GAME4_PORT:-6100}"
 GAME4_PUBLIC_PORT="${TMC_DEMO_GAME4_PUBLIC_PORT:-6067}"
@@ -194,8 +194,8 @@ GAME4_TICKRATE="${TMC_DEMO_GAME4_TICKRATE:-128}"
 
 # A FIFTH SERVER, and the one that took the longest to be able to run at all.
 #
-# fatalcontact (renamed; see its metadata.former_ids) is the family's REFERENCE game -- the only place dot-player-controller, dot-combat,
-# dot-loadout, dot-match and dot-ui are all present at once -- and until now it was the
+# fatalcontact (renamed; see its metadata.former_ids) is the family's REFERENCE game -- the only place GameSpice Player Controller, GameSpice Combat,
+# GameSpice Loadout, GameSpice Match and GameSpice UI are all present at once -- and until now it was the
 # reference game with nothing to sit down at. It had a netcode bridge, a headless suite
 # that played a whole deathmatch, and no camera rig, no input sampling and no renderer.
 #
@@ -204,7 +204,7 @@ GAME4_TICKRATE="${TMC_DEMO_GAME4_TICKRATE:-128}"
 # most of dot-combat exists for and the only one that exercises lag compensation on a
 # real link. It is also the only server here whose hits are rewound.
 #
-# 6110, again not 6101: dot-server puts RCON on its game port + 1, so servers one port
+# 6110, again not 6101: GameSpice Server puts RCON on its game port + 1, so servers one port
 # apart collide on a listener `ss` cannot see.
 GAME5_PORT="${TMC_DEMO_GAME5_PORT:-6110}"
 GAME5_PUBLIC_PORT="${TMC_DEMO_GAME5_PUBLIC_PORT:-6068}"
@@ -422,7 +422,7 @@ do_up() {
     # Pointing it at the game origin would send the site's own handoff codes to the
     # domain the sandbox exists to keep them away from.
     #
-    # Without this the demo signed in against dot-auth's exported default, which is the
+    # Without this the demo signed in against GameSpice Auth's exported default, which is the
     # production site -- so a development page was starting an auth flow against
     # production, and did so on every load.
     # The shell asks the site which servers are first-party; FIRST_PARTY_AUDIENCES
@@ -838,7 +838,7 @@ do_switch() {
 ## no way at all to do the second.
 ##
 ## The command's NAME differs per game, which is why this is a table rather than a
-## single `map`: dot-server deliberately gave the plain name to dot-map, and each game
+## single `map`: GameSpice Server deliberately gave the plain name to GameSpice Map, and each game
 ## registers its own under its own prefix so two games' map changes cannot collide in
 ## one console. An unknown game gets plain `map`, which is what an addon that installs
 ## DotMapCommands with default names answers to.

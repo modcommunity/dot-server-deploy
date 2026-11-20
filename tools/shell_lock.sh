@@ -5,7 +5,7 @@
 #   tools/shell_lock.sh dirs                 the addon directories a shell carries (dot-x is addons/dot_x), one per line
 #   tools/shell_lock.sh check <addons.lock>  only the list's own rules (below); prints nothing when they hold
 #
-# Fails (exit 3, the reason on stderr) when the list names anything but a dot-* addon, or when the lock names a dot-* addon
+# Fails (exit 3, the reason on stderr) when the list names anything but a gs-* addon, or when the lock names a gs-* addon
 # the list does not: the shell would leave out an addon nobody decided to leave out. A non-dot lock line (a game addon such
 # as fc-weapons) is for servers and is dropped from the shell's lock. SHELL_ADDONS_LIST names another list (the
 # check's own tests).

@@ -2,7 +2,7 @@ class_name TmcMapGame
 extends RefCounted
 
 ## Finds the parts of the loaded game that handle maps. Duck-typed, like everything that crosses into a game: `has_method` and `call` rather than `is DotMapSession`,
-## because this host has no business requiring dot-map (dot-vote's map source uses the same contract). The game is a scene loaded from a pack, not a type this host may name.
+## because this host has no business requiring GameSpice Map (GameSpice Vote's map source uses the same contract). The game is a scene loaded from a pack, not a type this host may name.
 
 
 ## The loaded game's map session, or null: the node under [param root] that answers `change_to` and `change_to_map`.
