@@ -48,7 +48,7 @@ if [ -n "$KEEP" ]; then W="$KEEP"; mkdir -p "$W"; else W="$(mktemp -d)"; trap 'r
 # Each origin's pack is booted on its own, even at a version the other origin also has: dev and prod publish separately, so
 # one version string can carry different content. Only a 404 for latest.json is "not published"; any other answer (an
 # outage, a TLS failure, a 5xx, a page that is not the JSON) is a fetch failure, so an unreachable origin cannot pass.
-fails=0; errs=0; booted=0; rows=(); declare -A seen=() answered=()
+fails=0; errs=0; booted=0; rows=(); declare -A seen=() answered=() idans=()
 # Fetches and boots one origin's copy of one version; the outcome is one row.
 boot_one() {
     local id="$1" v="$2" o="$3" tag="$4" d="$W/$4/$1@$2" rc why
@@ -77,7 +77,7 @@ for id in $IDS; do
         mkdir -p "$W/$tag"; base="$W/$tag/$id"
         code="$(curl -sS --max-time 30 -o "$base.latest.json" -w '%{http_code}' "$o/$OWNER/$id/latest.json" 2>"$base.fetch.log")"
         if [ "$code" = 404 ]; then rows+=("$id	-	$tag	not published"); continue; fi
-        answered[$tag]=1
+        answered[$tag]=1; idans[$id]=1
         v=""
         [ "$code" = 200 ] && v="$(python3 -I -c 'import json,sys; print(json.load(sys.stdin)["version"])' <"$base.latest.json" 2>>"$base.fetch.log")"
         if [ -z "$v" ]; then errs=$((errs+1)); rows+=("$id	-	$tag	LATEST-FAILED (http ${code:-none}; $base.fetch.log)"); continue; fi
@@ -85,10 +85,17 @@ for id in $IDS; do
     done
 done
 # An origin that 404s every game (a wrong --origin, a moved content root, CONTENT_OWNER wrong) judged nothing: not a pass.
-for o in "${ORIGINS[@]}"; do
-    tag="$(sed -E 's#^https?://##; s#/.*##' <<<"$o")"
-    [ -n "${answered[$tag]:-}" ] || { errs=$((errs+1)); rows+=("-	-	$tag	ORIGIN-EMPTY (every latest.json 404s at $o/$OWNER)"); }
-done
+# With --only a game may be on one origin and not yet the other, so there each named game must be on at least one origin.
+if [ -n "$ONLY" ]; then
+    for id in $IDS; do
+        [ -n "${idans[$id]:-}" ] || { errs=$((errs+1)); rows+=("$id	-	-	NOT-PUBLISHED-ANYWHERE (every origin's latest.json 404s)"); }
+    done
+else
+    for o in "${ORIGINS[@]}"; do
+        tag="$(sed -E 's#^https?://##; s#/.*##' <<<"$o")"
+        [ -n "${answered[$tag]:-}" ] || { errs=$((errs+1)); rows+=("-	-	$tag	ORIGIN-EMPTY (every latest.json 404s at $o/$OWNER)"); }
+    done
+fi
 for pin in "${PINS[@]}"; do
     id="${pin%@*}"; v="${pin##*@}"; id="${id##*/}"; found=0
     for o in "${ORIGINS[@]}"; do
