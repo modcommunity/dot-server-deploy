@@ -10,7 +10,7 @@
 // draws no canvas, or the renderer is software (SwiftShader / llvmpipe) while GPU_CDP_URL was set.
 import fs from 'node:fs';
 
-const tries = [process.env.PLAYWRIGHT_CORE, '/home/christian/stack/website-city/node_modules/playwright-core/index.js'].filter(Boolean);
+const tries = [process.env.PLAYWRIGHT_CORE, '/home/gamedev/pw/node_modules/playwright-core/index.js', '/home/christian/stack/website-city/node_modules/playwright-core/index.js'].filter(Boolean);
 const found = tries.find(t => fs.existsSync(t));
 if (!found) { console.error(`playwright-core not found; set PLAYWRIGHT_CORE. Tried: ${tries.join(', ')}`); process.exit(2); }
 const { chromium } = (await import(found)).default;
