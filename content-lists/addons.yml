@@ -41,6 +41,8 @@ entries:
     pin: v0.3.14
   - repo: dot-game
     pin: v0.1.60
+  - repo: dot-input
+    pin: v0.2.0
   - repo: dot-inventory
     pin: v0.1.7
   - repo: dot-leaderboard
@@ -128,7 +130,7 @@ entries:
   - repo: dot-timer
     pin: v0.1.13
   - repo: dot-ui
-    pin: v0.1.22
+    pin: v0.2.0
   - repo: dot-user
     pin: v0.1.7
   - repo: dot-user-avatar

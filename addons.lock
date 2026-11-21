@@ -19,6 +19,7 @@ dot-flashlight	v0.1.5
 dot-friends	v0.1.8
 dot-fx	v0.3.14
 dot-game	v0.1.60
+dot-input	v0.2.0
 dot-inventory	v0.1.7
 dot-leaderboard	v0.3.5
 dot-lighting	v0.1.13
@@ -62,7 +63,7 @@ dot-stats	v0.1.20
 dot-team	v0.1.11
 dot-timer	v0.1.13
 dot-trail	v0.1.6
-dot-ui	v0.1.22
+dot-ui	v0.2.0
 dot-user	v0.1.7
 dot-user-avatar	v0.1.12
 dot-vehicle	v0.1.12
