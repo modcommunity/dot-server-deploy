@@ -51,6 +51,7 @@ dot-profiler	v0.1.5
 dot-props	v0.1.17
 dot-radio	v0.1.4
 dot-replay	v0.1.21
+dot-save	v0.2.1
 dot-server	v0.1.34
 dot-server-query	v0.1.10
 dot-server-security	v0.1.8

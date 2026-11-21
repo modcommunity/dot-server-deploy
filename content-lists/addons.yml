@@ -105,6 +105,8 @@ entries:
     pin: v0.1.4
   - repo: dot-trail
     pin: v0.1.6
+  - repo: dot-save
+    pin: v0.2.1
   - repo: dot-replay
     pin: v0.1.21
   - repo: dot-server

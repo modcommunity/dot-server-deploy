@@ -1551,7 +1551,7 @@ done <<< "$_sa_out"
 # no game names either.
 ADDONS_SHELL=(dot_core dot_log dot_net dot_server dot_server_query dot_server_security
               dot_auth dot_cloud dot_map dot_input dot_ui dot_vote dot_chat
-              dot_party dot_matchmaking dot_locale dot_replay dot_friends)
+              dot_party dot_matchmaking dot_locale dot_replay dot_save dot_friends)
 
 ## The addons one game declares, out of the game's OWN .gitignore.
 ##
