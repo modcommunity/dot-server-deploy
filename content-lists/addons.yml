@@ -6,7 +6,7 @@ entries:
   - repo: dot-2d
     pin: v0.1.9
   - repo: dot-achievements
-    pin: v0.1.12
+    pin: v0.1.13
   - repo: dot-audio
     pin: v0.1.23
   - repo: dot-auth
@@ -26,7 +26,7 @@ entries:
   - repo: dot-console
     pin: v0.1.12
   - repo: dot-core
-    pin: v0.1.52
+    pin: v0.1.53
   - repo: dot-economy
     pin: v0.1.8
   - repo: dot-effects
@@ -50,11 +50,11 @@ entries:
   - repo: dot-lighting
     pin: v0.1.13
   - repo: dot-loadout
-    pin: v0.1.17
+    pin: v0.1.18
   - repo: dot-locale
     pin: v0.1.8
   - repo: dot-log
-    pin: v0.1.9
+    pin: v0.1.10
   - repo: dot-map
     pin: v0.1.93
   - repo: dot-match
@@ -106,7 +106,7 @@ entries:
   - repo: dot-trail
     pin: v0.1.6
   - repo: dot-replay
-    pin: v0.1.20
+    pin: v0.1.21
   - repo: dot-server
     pin: v0.1.34
   - repo: dot-server-query
@@ -114,7 +114,7 @@ entries:
   - repo: dot-server-security
     pin: v0.1.8
   - repo: dot-settings
-    pin: v0.1.8
+    pin: v0.1.9
   - repo: dot-sim
     pin: v0.2.10
   - repo: dot-spawn
@@ -124,7 +124,7 @@ entries:
   - repo: dot-sql
     pin: v0.1.8
   - repo: dot-stats
-    pin: v0.1.20
+    pin: v0.1.21
   - repo: dot-team
     pin: v0.1.11
   - repo: dot-timer
@@ -132,9 +132,9 @@ entries:
   - repo: dot-ui
     pin: v0.2.0
   - repo: dot-user
-    pin: v0.1.7
+    pin: v0.1.8
   - repo: dot-user-avatar
-    pin: v0.1.12
+    pin: v0.1.13
   - repo: dot-vehicle
     pin: v0.1.12
   - repo: dot-voice
