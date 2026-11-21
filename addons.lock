@@ -18,7 +18,7 @@ dot-entity	v0.1.11
 dot-flashlight	v0.1.5
 dot-friends	v0.1.8
 dot-fx	v0.3.14
-dot-game	v0.1.60
+dot-game	v0.1.61
 dot-input	v0.2.0
 dot-inventory	v0.1.7
 dot-leaderboard	v0.3.5
@@ -26,7 +26,7 @@ dot-lighting	v0.1.13
 dot-loadout	v0.1.18
 dot-locale	v0.1.8
 dot-log	v0.1.10
-dot-map	v0.1.93
+dot-map	v0.1.94
 dot-match	v0.1.8
 dot-matchmaking	v0.1.10
 dot-menu	v0.1.34

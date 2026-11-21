@@ -40,7 +40,7 @@ entries:
   - repo: dot-fx
     pin: v0.3.14
   - repo: dot-game
-    pin: v0.1.60
+    pin: v0.1.61
   - repo: dot-input
     pin: v0.2.0
   - repo: dot-inventory
@@ -56,7 +56,7 @@ entries:
   - repo: dot-log
     pin: v0.1.10
   - repo: dot-map
-    pin: v0.1.93
+    pin: v0.1.94
   - repo: dot-match
     pin: v0.1.8
   - repo: dot-matchmaking
